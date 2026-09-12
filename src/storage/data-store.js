@@ -578,6 +578,14 @@ export function appendMessage(
     };
   }
 
+  if (options?.quote && typeof options.quote === 'object') {
+    message.quote = {
+      messageId: String(options.quote.messageId || ''),
+      senderName: String(options.quote.senderName || ''),
+      content: String(options.quote.content || ''),
+    };
+  }
+
   conv.messages.push(message);
   conv.updatedAt = Date.now();
 
