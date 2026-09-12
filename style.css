@@ -209,3 +209,15 @@
 #moli-phone-panel .moli-form-field textarea{width:100%;border:1px solid #ddd;border-radius:7px;background:#fafafa;padding:10px 11px;outline:none;font:inherit;font-size:14px;line-height:1.5;resize:vertical}
 #moli-phone-panel .moli-form-field input:focus,
 #moli-phone-panel .moli-form-field textarea:focus{border-color:#aaa;background:#fff}
+
+/* 群聊创建与群头像 */
+#moli-phone-panel .moli-group-create{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff}
+#moli-phone-panel .moli-group-name-field{margin:0;padding:14px 14px 12px;border-bottom:1px solid #eee}
+#moli-phone-panel .moli-group-member-title{padding:10px 14px 7px;font-size:13px;color:#777;background:#f7f7f7;border-bottom:1px solid #eee}
+#moli-phone-panel .moli-group-member-list{flex:1;min-height:0;overflow:auto;background:#fff}
+#moli-phone-panel .moli-group-avatar{display:grid!important;grid-template-columns:repeat(var(--moli-group-grid,2),1fr);grid-template-rows:repeat(var(--moli-group-grid,2),1fr);gap:2px;padding:3px!important;background:#d8d8d8!important;overflow:hidden}
+#moli-phone-panel .moli-group-avatar-cell{min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;background:#666;color:#fff;font-size:10px;font-weight:600;overflow:hidden}
+#moli-phone-panel .moli-group-avatar-cell img{width:100%;height:100%;display:block;object-fit:cover}
+#moli-phone-panel .moli-msg-content{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+#moli-phone-panel .moli-msg.user .moli-msg-content{align-items:flex-end}
+#moli-phone-panel .moli-msg-name{margin:0 0 3px 2px;font-size:11px;color:#888;line-height:1.2}
