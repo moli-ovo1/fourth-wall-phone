@@ -315,8 +315,15 @@
 #moli-phone-panel .moli-forward-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee}
 #moli-phone-panel .moli-forward-targets{overflow:auto;padding:6px 10px 14px}
 #moli-phone-panel .moli-forward-target{width:100%;display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:9px 6px;text-align:left;border-bottom:1px solid #f2f2f2}
-#moli-phone-panel .moli-forwarded-message{min-width:180px;border:1px solid rgba(0,0,0,.1);border-radius:8px;overflow:hidden;background:rgba(255,255,255,.35)}
-#moli-phone-panel .moli-forwarded-title{font-size:12px;font-weight:600;padding:6px 8px;border-bottom:1px solid rgba(0,0,0,.08);color:#555}
-#moli-phone-panel .moli-forwarded-item{padding:6px 8px;font-size:12px;line-height:1.4;border-bottom:1px solid rgba(0,0,0,.06);white-space:pre-wrap;overflow-wrap:anywhere}
-#moli-phone-panel .moli-forwarded-item:last-child{border-bottom:0}
-#moli-phone-panel .moli-forwarded-sender{font-weight:600;color:#555;margin-bottom:2px}
+#moli-phone-panel .moli-forwarded-message{display:block;width:220px;max-width:68vw;border:0;border-radius:7px;background:#fff;padding:0;overflow:hidden;text-align:left;color:#222;font:inherit;box-shadow:0 0 0 1px rgba(0,0,0,.06)}
+#moli-phone-panel .moli-forwarded-title{padding:10px 11px 7px;font-size:14px;font-weight:600;color:#222}
+#moli-phone-panel .moli-forwarded-preview{padding:0 11px 8px}
+#moli-phone-panel .moli-forwarded-preview-line{font-size:12px;line-height:1.65;color:#777;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#moli-phone-panel .moli-forwarded-preview-line span{color:#666}
+#moli-phone-panel .moli-forwarded-footer{padding:7px 11px;border-top:1px solid #eee;font-size:11px;color:#aaa}
+#moli-phone-panel .moli-forward-detail{flex:1;min-height:0;overflow:auto;background:#ededed;padding:12px}
+#moli-phone-panel .moli-forward-detail-list{background:#fff;border-radius:8px;overflow:hidden}
+#moli-phone-panel .moli-forward-detail-item{padding:12px 14px;border-bottom:1px solid #eee}
+#moli-phone-panel .moli-forward-detail-item:last-child{border-bottom:0}
+#moli-phone-panel .moli-forward-detail-sender{font-size:12px;font-weight:600;color:#666;margin-bottom:5px}
+#moli-phone-panel .moli-forward-detail-content{font-size:14px;line-height:1.55;color:#222;white-space:pre-wrap;overflow-wrap:anywhere}
