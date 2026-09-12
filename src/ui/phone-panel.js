@@ -9,6 +9,7 @@ export function createPhonePanel({
   windowRef = window,
   uiState,
   onUiStateChange,
+  getScopeKey,
 }) {
   documentRef.getElementById('moli-phone-panel')?.remove();
 
@@ -220,6 +221,7 @@ export function createPhonePanel({
 
   function renderChatList() {
     const contacts = getContacts();
+    const scopeKey = getScopeKey?.();
 
     if (!contacts.length) {
       chatList.innerHTML = `
@@ -231,35 +233,31 @@ export function createPhonePanel({
     }
 
     const rows = contacts.map(item => {
-      const last = getLastMessage(item.id);
-      const avatar = getContactAvatar(item);
+      const conversation = scopeKey
+        ? getConversation(scopeKey, item.id)
+        : null;
+
+      const messages = conversation?.messages || [];
+      const last = messages[messages.length - 1];
 
       return `
         <button
           class="moli-chat-item"
-          data-contact-id="${escapeHtml(item.id)}"
+          data-contact-id="${item.id}"
         >
           <div class="moli-avatar">
-            ${avatar}
+            ${item.avatarText || '◉'}
           </div>
 
           <div class="moli-item-main">
             <div class="moli-item-top">
               <div class="moli-name">
-                ${escapeHtml(item.remark || item.name)}
-              </div>
-
-              <div class="moli-time">
-                ${last ? formatListTime(last.createdAt) : ''}
+                ${item.remark || item.name}
               </div>
             </div>
 
             <div class="moli-preview">
-              ${
-                last
-                  ? escapeHtml(last.content)
-                  : '暂无消息'
-              }
+              ${last ? last.content : '暂无消息'}
             </div>
           </div>
         </button>
@@ -295,8 +293,13 @@ export function createPhonePanel({
     chatTitle.textContent =
       item.remark || item.name;
 
+    const scopeKey = getScopeKey?.();
+
     const conversation =
-      getConversation(currentContactId);
+      getConversation(
+        scopeKey,
+        currentContactId
+      );
 
     const messages =
       conversation?.messages || [];
@@ -317,7 +320,7 @@ export function createPhonePanel({
 
         const avatar = isUser
           ? '我'
-          : getContactAvatar(item);
+          : (item.avatarText || '◉');
 
         return `
           <div class="moli-msg ${
@@ -350,13 +353,14 @@ export function createPhonePanel({
       return;
     }
 
-    addMessage(currentContactId, {
-      role: 'user',
-      content: text,
-      createdAt: Date.now(),
-    });
+    const scopeKey = getScopeKey?.();
 
-    touchConversation(currentContactId);
+    appendMessage(
+      scopeKey,
+      currentContactId,
+      'user',
+      text
+    );
 
     input.value = '';
 
@@ -685,31 +689,7 @@ export function createPhonePanel({
     }
   );
 
-  /*
-   * 当前 scope 只用于确认当前酒馆聊天档。
-   * 数据层本身负责按照 scope 隔离聊天记录。
-   */
-  try {
-    getCurrentScopeId();
-  } catch (error) {
-    console.warn(
-      '[moli小手机] scope unavailable:',
-      error
-    );
-  }
 
-  /*
-   * 预热酒馆角色读取。
-   * 这一阶段暂时不显示角色选择页。
-   */
-  try {
-    getTavernCharacters();
-  } catch (error) {
-    console.warn(
-      '[moli小手机] tavern characters unavailable:',
-      error
-    );
-  }
 
   renderChatList();
 
