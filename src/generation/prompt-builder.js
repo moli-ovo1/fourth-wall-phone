@@ -57,6 +57,100 @@ function formatOtherConversation(source, contact) {
   return `【其他会话来源：${label}】\n${lines.join('\n')}`;
 }
 
+function clip(value, max = 12000) {
+  const text = clean(value);
+  if (!text) return '';
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\n[内容过长，已截断]`;
+}
+
+function roleFidelityBlocks(contact) {
+  if (contact?.kind !== 'tavern') return [];
+
+  const fidelity = contact?.source?.roleFidelity;
+  if (!fidelity || typeof fidelity !== 'object') return [];
+
+  const blocks = [];
+
+  const identityParts = [
+    fidelity.description
+      ? `【角色设定 / Description】\n${clip(fidelity.description)}`
+      : '',
+    fidelity.personality
+      ? `【性格 / Personality】\n${clip(fidelity.personality)}`
+      : '',
+    fidelity.scenario
+      ? `【场景 / Scenario】\n${clip(fidelity.scenario)}`
+      : '',
+  ].filter(Boolean);
+
+  if (identityParts.length) {
+    blocks.push(
+      '【Role Fidelity Pack：角色身份与硬设定】\n'
+      + identityParts.join('\n\n')
+    );
+  }
+
+  if (fidelity.systemPrompt) {
+    blocks.push(
+      `【角色卡 System Prompt】\n${clip(fidelity.systemPrompt)}`
+    );
+  }
+
+  if (fidelity.postHistoryInstructions) {
+    blocks.push(
+      `【角色卡 Post-History Instructions】\n${clip(
+        fidelity.postHistoryInstructions
+      )}`
+    );
+  }
+
+  if (fidelity.mesExample) {
+    blocks.push(
+      '【Example Dialogue：语言声纹参考】\n'
+      + clip(fidelity.mesExample)
+      + '\n\n只学习这个角色的措辞、节奏、称呼和表达习惯；不要机械复读示例台词。'
+    );
+  }
+
+  return blocks;
+}
+
+function recentBodyBlock(recentBody) {
+  const messages = Array.isArray(recentBody?.messages)
+    ? recentBody.messages
+    : [];
+
+  if (!messages.length) return '';
+
+  const lines = messages
+    .map(message => {
+      const content = clean(message?.content);
+      if (!content) return '';
+
+      const who = clean(message?.name)
+        || (
+          message?.role === 'user'
+            ? '用户'
+            : message?.role === 'system'
+              ? '系统'
+              : '角色'
+        );
+
+      return `${who}：${content}`;
+    })
+    .filter(Boolean);
+
+  if (!lines.length) return '';
+
+  return (
+    '【当前 SillyTavern 存档最近正文】\n'
+    + '以下是当前正文近期原文，用来判断最近发生了什么、关系现在走到哪里，以及角色最近真实的语言声纹。'
+    + '保留正文事实，但在手机里回复时使用自然聊天口吻，不要照抄第三人称小说叙述格式。\n\n'
+    + lines.join('\n')
+  );
+}
+
 function pendingUserCount(messages = []) {
   let count = 0;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -73,6 +167,7 @@ export function buildPrivateGenerationRequest({
   contact,
   conversation,
   otherContextSources = [],
+  recentBody = null,
   historyLimit = 60,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
@@ -99,8 +194,17 @@ export function buildPrivateGenerationRequest({
     systemBlocks.push(`【角色简介】\n${intro}`);
   }
 
+  systemBlocks.push(...roleFidelityBlocks(contact));
+
   if (prompt) {
-    systemBlocks.push(`【人格提示词】\n${prompt}`);
+    systemBlocks.push(
+      `【用户追加的人格提示词】\n${prompt}`
+    );
+  }
+
+  const bodyBlock = recentBodyBlock(recentBody);
+  if (bodyBlock) {
+    systemBlocks.push(bodyBlock);
   }
 
   const otherBlocks = (Array.isArray(otherContextSources) ? otherContextSources : [])
@@ -131,6 +235,12 @@ export function buildPrivateGenerationRequest({
       contactName: name,
       pendingUserCount: pendingUserCount(messages),
       otherContextCount: otherBlocks.length,
+      recentBodyMessageCount: Array.isArray(recentBody?.messages)
+        ? recentBody.messages.length
+        : 0,
+      roleFidelityEnabled:
+        contact.kind === 'tavern'
+        && Boolean(contact?.source?.roleFidelity),
     },
   };
 }
