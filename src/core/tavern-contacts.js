@@ -45,6 +45,49 @@ function sourceIdFor(character, index) {
   );
 }
 
+
+function textField(character, ...keys) {
+  for (const key of keys) {
+    const value = character?.[key];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+  return '';
+}
+
+function roleFidelityFor(character) {
+  const data = character?.data && typeof character.data === 'object'
+    ? character.data
+    : {};
+
+  const pick = (...keys) => {
+    for (const key of keys) {
+      const direct = textField(character, key);
+      if (direct) return direct;
+
+      const nested = data?.[key];
+      if (nested !== undefined && nested !== null && String(nested).trim()) {
+        return String(nested).trim();
+      }
+    }
+    return '';
+  };
+
+  return {
+    description: pick('description'),
+    personality: pick('personality'),
+    scenario: pick('scenario'),
+    mesExample: pick('mes_example', 'mesExample'),
+    systemPrompt: pick('system_prompt', 'systemPrompt'),
+    postHistoryInstructions: pick(
+      'post_history_instructions',
+      'postHistoryInstructions'
+    ),
+    firstMessage: pick('first_mes', 'firstMessage'),
+  };
+}
+
 export function getTavernCharactersSnapshot() {
   const ctx = getContext();
   const arrays = candidateCharacterArrays(ctx);
@@ -79,6 +122,7 @@ export function getTavernCharactersSnapshot() {
       name,
       avatar,
       avatarUrl: getAvatarUrl(ctx, avatar),
+      roleFidelity: roleFidelityFor(character),
     });
   });
 
@@ -90,4 +134,14 @@ export function getTavernCharactersSnapshot() {
 
 export function listTavernCharacters() {
   return getTavernCharactersSnapshot().characters;
+}
+
+
+export function getTavernCharacterSnapshot(sourceId) {
+  const target = String(sourceId || '');
+  if (!target) return null;
+
+  return getTavernCharactersSnapshot().characters
+    .find(item => String(item.sourceId) === target)
+    || null;
 }
