@@ -1,14 +1,18 @@
-# fourth-wall-phone SPEC
+# moli小手机 SPEC
 
-> 当前状态：设计阶段  
-> 版本：v0.3  
+> GitHub 仓库技术名：`fourth-wall-phone`  
+> 正式产品名称：`moli小手机`  
+> 产品形态：SillyTavern 前端 Extension  
+> 当前仓库源码是代码执行基线，本文件是产品设计基线。  
+> “第四面墙”只是系统内置联系人之一，不是整个产品名称。  
+> 早期 Fourth Wall Lite / 酒馆助手脚本只作为历史逻辑参考，不作为当前实现基线。  
 > 原则：本文件只记录当前确认后的最终规则。旧方案若被推翻，直接以本文件最新内容为准。
 
 ---
 
 ## 1. 项目定位
 
-`fourth-wall-phone` 是一个面向 SillyTavern / 酒馆助手环境的“场外通讯系统”。
+`moli小手机` 是一个面向 SillyTavern 的前端扩展，是独立于正文主剧情之外的场外通讯系统。
 
 它不是正文聊天本身，而是一个独立于主剧情之外的手机式通讯层，用来让：
 
@@ -26,27 +30,39 @@
 
 1. 像微信一样管理私聊和群聊。
 2. 场外内容默认不进入正文。
-3. 用户需要时可通过“采纳”把建议注入下一轮正文。
 4. 酒馆角色必须尽量保持正文中的人设、关系状态、语言风格与长期记忆。
 5. 场外系统使用独立 API，不干扰正文主 API。
 6. 多存档严格隔离，避免不同剧情档互相串线。
 
 ---
 
-## 2. 当前基础
+## 2. 当前实现基线
 
-现有 Lite 原型已经具备：
+当前正式实现是 SillyTavern 前端 Extension。
 
-- 可拖拽悬浮球
-- 简单聊天窗口
-- 手动聊天
-- 读取当前 SillyTavern 上下文
-- 独立聊天历史
-- 简化版提示词
-- `generateRaw` / `generateQuietPrompt`
-- 上下文层数等基础设置
+当前仓库已经具备部分基础能力，包括但不限于：
 
-后续开发保留悬浮球入口，但逐步替换 Lite 的简单聊天结构。
+- 可拖动悬浮球
+- 悬浮球位置持久化
+- 可拖动手机面板
+- 面板位置持久化
+- 点击面板外关闭
+- 点击悬浮球打开 / 关闭
+- 微信式聊天首页基础结构
+- 内置联系人
+- 自定义联系人
+- 酒馆角色来源资料
+- 群聊基础结构
+- 群成员增加 / 删除
+- 群头像拼接
+- 部分聊天信息页
+- 当前档会话隔离基础
+
+每次开发仍必须以本次最新仓库源码为准。
+
+早期 `Fourth Wall Lite` / 酒馆助手脚本只允许作为历史逻辑参考，禁止把旧脚本重新当成当前代码基线。
+
+已验收的悬浮球、手机面板拖动以及移动端触摸防穿透逻辑，除非专门修复相关 Bug，否则不得在后续重构中随意替换。
 
 ---
 
@@ -109,11 +125,19 @@
 
 可以：
 
-- 隐藏
-- 停用
 - 恢复默认提示词
 
 但不能像普通联系人一样彻底删除系统定义。
+
+---
+
+### 4.1 第一版删除与状态规则
+
+内置联系人不可物理删除。
+
+第一版暂不实现“隐藏 / 停用”，因为这两个行为的业务语义尚未正式设计。
+
+内置人格可以恢复默认人格提示词。
 
 ---
 
@@ -138,8 +162,6 @@
 - 头像
 - 简介 / 一句话描述
 - 人格提示词
-
-头像第一版从手机相册 / 本地图片选择。图片只在浏览器本地读取并压缩后保存，不需要提交给语言模型，也不会因为选择头像本身消耗对话 Token。
 
 不提供：
 
@@ -339,7 +361,7 @@
 在每个新存档第一次进入时，都自动创建当前档私聊并显示在首页。
 
 ---
-
+\n## 8A. Scope 生命周期与异步安全\n\n联系人 / 人格配置属于全局数据。私聊会话、群聊、消息历史、未读、置顶、自动吐槽状态、自动点评状态与计数、当前档上下文及当前档相关异步生成任务属于当前 SillyTavern 聊天存档 Scope，不同存档不得共享。\n\n### 8A.1 稳定 Scope\n\n只有取得能够稳定区分当前 SillyTavern 存档的信息后，当前 Scope 才可以正式持久化。稳定 Scope 由统一的 `tavern-scope` 模块生成，优先使用当前角色 / 群组稳定标识与当前 `chatId` / 聊天文件稳定标识。其他业务模块不得自行拼接 Scope Key。\n\n### 8A.2 Fallback Scope\n\n初始化期间暂时无法取得稳定 `chatId` 时，可以产生临时 fallback scope，用于暂时显示 UI、构造临时内存对象、等待上下文准备和防止初始化报错。Fallback Scope 不得持久化正式消息、正式群聊、自动行为进度，不得作为永久存档 ID，也不得创建会被用户视为正式数据的持久化会话。\n\n**fallback 可以有临时内存状态，但不能产生之后看起来“突然消失”的正式用户数据。** 一旦取得稳定 Scope，应切换到稳定 Scope。\n\n### 8A.3 Scope Change Contract\n\n当 SillyTavern 当前聊天 / 存档切换时：\n\n1. 获取新的稳定 Scope Key；\n2. 页面回到聊天列表首页；\n3. 当前联系人 / 群聊选择清空；\n4. 首页重新加载新 Scope 会话；\n5. 未读、置顶、自动行为计数等全部切换；\n6. 旧 Scope AI 请求应尽可能 Abort，但不得依赖 Abort 一定成功；\n7. 每个异步任务启动时保存 `requestScopeKey`；\n8. 异步结果写入前再次核对原始 Scope；\n9. 旧请求绝不能写入新 Scope；\n10. 无法中止或晚到的旧请求最多只能写回原 Scope。\n\n### 8A.4 UI 临时状态隔离\n\n`currentContactId`、`currentConversationId`、当前群聊选择、当前引用消息、当前多选集合、当前会话临时操作状态以及未来可能存在的草稿，不得直接跨 Scope 复用。切换 Scope 时要么清理，要么明确按 Scope 独立保存。\n\n### 8A.5 打开手机的页面规则\n\n每次重新打开 `moli小手机` 默认进入当前 Scope 聊天列表首页，不恢复上一次联系人 / 群聊子页面。已验收的移动端触摸防穿透必须保留：打开悬浮球的同一次 pointer / touch / click 事件不得穿透到刚出现的聊天列表项目。\n\n---\n\n## 8B. 公共数据契约\n\nContact、Conversation、Message、Scope 属于跨模块公共契约，功能节点不得自行建立平行结构。\n\n### 8B.1 ID 类型严格区分\n\n- `contactId`：联系人 / 人格\n- `conversationId`：私聊或群聊会话\n- `scopeKey`：SillyTavern 聊天存档数据空间\n- `messageId`：场外消息\n\n禁止混用。\n\n### 8B.2 Conversation ID\n\n跨模块传递聊天会话统一使用 `conversationId`。私聊使用 `private:<contactId>` 命名空间，例如 `builtin:meta` 对应 `private:builtin:meta`；群聊使用独立命名空间，例如 `group:<stable-id>`。\n\n### 8B.3 Conversation Schema\n\n公共 Schema 规定字段含义和能力，不强制不同会话保存无意义的相同设置字段。示意：\n\n```js\n{\n  id: "private:..." | "group:...",\n  type: "private" | "group",\n  contactId: null,\n  memberIds: [],\n  title: "",\n  pinned: false,\n  unreadCount: 0,\n  settings: {},\n  messages: []\n}\n```\n\n私聊 `settings` 可包含自动吐槽；群聊可包含自动吐槽与自动点评。具体默认值以对应业务章节为准。\n\n### 8B.4 Message Schema\n\n正式消息至少需要能够表达：\n\n```js\n{\n  id: "...",\n  senderType: "user" | "contact" | "system",\n  senderId: null,\n  content: "",\n  ts: 0,\n  source: "manual" | "commentary" | "review" | "forward" | "system",\n  senderSnapshot: { name: "", avatarRef: null },\n  quote: null,\n  forward: null\n}\n```\n\n`quote` / `forward` 子结构由对应消息节点设计，新增时不得破坏旧消息兼容。\n\n### 8B.5 senderSnapshot\n\n联系人产生消息时保存足以还原发送当时身份的快照，至少能还原当时显示名和头像的可恢复引用 / 信息。不要求每条消息复制完整 base64；可使用 `avatarRef`、`avatarUrl`、`avatarKey` 或其他可恢复引用。联系人删除、踢出群聊、改名、换头像或来源失效后，旧消息仍须知道当时是谁发送的。\n\n历史消息的 `senderSnapshot` 不被联系人后续名称、备注或头像修改反向改写。\n\n---\n\n## 8C. 存储版本与迁移契约\n\n### 8C.1 Data Store 是业务持久化统一入口\n\n除 Storage / Data Store 自身外，UI、API / Generation、Automation、Group Orchestrator、Prompt、Role Fidelity、Integrations 不得直接依赖具体 localStorage Key 或底层布局。业务持久化统一通过 Data Store / Storage 接口，以便未来从 localStorage 迁移到 IndexedDB 等实现而无需整体重写上层。\n\n### 8C.2 schemaVersion\n\n主要持久化数据结构必须保存明确 `schemaVersion`；联系人全局数据也必须有明确版本规则。禁止只靠 Storage Key 名称猜版本。\n\n### 8C.3 Migration Chain\n\n数据升级使用明确迁移链，例如 `v1 → v2 → v3`，禁止假设旧数据天然符合最新 Schema。\n\n### 8C.4 数据兼容铁律\n\n修改 scopeKey、contactId、conversationId、Storage Key、Contact / Conversation / Message / Group Schema 时，必须检查真实旧数据并提供兼容读取或一次性迁移。禁止内部重构导致已有联系人、私聊、群聊、消息或设置看起来突然消失。\n\n### 8C.5 保留未知字段\n\nStorage 层读取再保存对象时必须保留未知字段，例如：\n\n```js\n{ ...storedData, conversations: storedData.conversations || {} }\n```\n\n而不是只重建当前认识的字段，以免未来的 `schemaVersion`、`scopeMeta`、`eventLedger` 等被旧读写逻辑静默删除。\n\n---\n
 ## 9. 聊天首页
 
 首页采用微信式聊天列表。
@@ -405,18 +427,6 @@
 - 发送按钮可切换为停止按钮
 - 用户可随时取消当前场外生成请求
 
-### 10.1A 连续发送与生成触发
-
-私聊与群聊统一采用“连续发送，空输入触发回复”的交互：
-
-- 输入框有内容时点击“发送”，只保存并显示当前用户消息，不立即调用 AI。
-- 用户可以连续发送多条独立消息气泡。
-- 输入框为空时再次点击“发送”，才触发一次 AI 生成。
-- 自上一条 AI 回复之后连续产生的所有用户消息，共同作为本轮用户输入。
-- 多条消息在聊天记录中保持独立，不合并成一个气泡。
-- API 请求失败或被停止时，已发送的用户消息继续保留，可再次空输入触发生成。
-- 没有待回复用户消息时，空输入点击“发送”不发起请求。
-
 ### 10.2 消息显示
 
 - 用户与人格消息均采用聊天气泡
@@ -480,8 +490,6 @@
 - 无业务意义
 
 ### 11.3 群聊消息 UI
-
-群聊同样遵循 10.1A 的“连续发送，空输入触发回复”规则。
 
 采用真实微信式群聊布局：
 
@@ -667,6 +675,14 @@ AI 根据：
 
 - “删除并退出群聊”只删除当前存档中的该群聊及其群聊历史
 - 不删除任何群成员联系人
+
+### 12A.6 删除普通联系人对所有存档的影响
+
+删除普通联系人属于全局删除动作：删除全局 Contact；删除其在所有 Scope 下的私聊；从所有 Scope 现存群聊的当前 `memberIds` 中移除；但不删除过去已经产生的群消息。历史群消息依靠 `senderSnapshot` 保留当时姓名、头像身份、文本和时间。
+
+删除后若群剩余成员不足以继续作为正常群聊，如何处理由群聊模块另行确认，Storage 层不得自行决定。内置联系人第一版不可删除，因此不适用此规则。
+
+---
 
 ## 13. 群聊 API 生成策略
 
@@ -1600,23 +1616,25 @@ https://github.com/baibai-git/ST-BaiBai-Book
 
 ---
 
-## 29. 当前已确认的开发顺序
+## 29. 当前开发顺序
 
-建议顺序：
+1. 补全 Scope 生命周期与公共数据契约
+2. 联系人 / 通讯录 / 酒馆角色同步完善
+3. 聊天信息页完善
+4. 私聊消息操作完善
+5. API / Generation 公共层
+6. 第四面墙完整 Prompt
+7. 自动吐槽
+8. Role Fidelity
+9. 世界书 / 柏宝书长期记忆
+10. 提示词与预设
+11. 群聊轻编排 + 逐人生成
+12. 自动点评
+13. 统一 QA
+14. 最终 iPhone / 微信 UI 美化
+15. 发布整理
 
-1. 数据结构与存档隔离
-2. 联系人与同步酒馆角色
-3. 私聊会话
-4. 群聊与成员管理
-5. 群聊轻编排 + 逐人生成
-6. 自动吐槽
-7. 自动点评
-8. Role Fidelity Pack
-9. 柏宝书 Memory Provider
-10. 场外 API
-11. 提示词与预设
-12. 转发 / 多选
-13. 最终 iPhone / 微信 UI 美化
+若后续出现明确依赖，可以调整实际施工顺序；但依赖统一 Generation Contract 的复杂 AI 功能，不应先各自实现临时生成接口。
 
 ---
 
