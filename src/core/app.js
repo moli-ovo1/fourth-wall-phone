@@ -21,23 +21,9 @@ export function initApp() {
 
   const uiState = loadUiState();
 
-  let panelController;
+  let panelController = null;
 
-  const handleController = createFloatingBall({
-    uiState,
-
-    onClick: () => {
-      panelController?.toggle(
-        handleController.element,
-      );
-    },
-
-    onUiStateChange: () => {
-      saveUiState(uiState);
-    },
-  });
-
-  panelController = createPhonePanel({
+  const createPanelController = () => createPhonePanel({
     uiState,
 
     onUiStateChange: () => {
@@ -47,8 +33,34 @@ export function initApp() {
     getScopeKey: getCurrentScopeKey,
   });
 
+  const destroyPanelController = () => {
+    panelController?.element?.remove();
+    panelController = null;
+  };
+
+  const handleController = createFloatingBall({
+    uiState,
+
+    onClick: () => {
+      if (panelController?.isOpen()) {
+        destroyPanelController();
+        return;
+      }
+
+      destroyPanelController();
+      panelController = createPanelController();
+      panelController.open(
+        handleController.element,
+      );
+    },
+
+    onUiStateChange: () => {
+      saveUiState(uiState);
+    },
+  });
+
   const outsidePointerHandler = event => {
-    if (!panelController.isOpen()) return;
+    if (!panelController?.isOpen()) return;
 
     if (
       panelController.element.contains(event.target)
@@ -62,12 +74,12 @@ export function initApp() {
       return;
     }
 
-    panelController.close();
+    destroyPanelController();
   };
 
   const resizeHandler = () => {
     handleController.clampToViewport();
-    panelController.clampToViewport();
+    panelController?.clampToViewport();
 
     saveUiState(uiState);
   };
@@ -96,7 +108,7 @@ export function initApp() {
         resizeHandler,
       );
 
-      panelController.element.remove();
+      destroyPanelController();
       handleController.element.remove();
     },
   };
