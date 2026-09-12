@@ -6,6 +6,7 @@ import {
   findTavernContact,
   refreshTavernContacts,
   syncTavernContacts,
+  createCustomContact,
   appendMessage,
 } from '../storage/data-store.js';
 import {
@@ -36,7 +37,7 @@ export function createPhonePanel({
       <main class="moli-chat-list"></main>
       <div class="moli-add-menu" data-add-menu hidden>
         <button data-action="sync-tavern">同步酒馆角色</button>
-        <button data-action="add-contact-placeholder">添加联系人</button>
+        <button data-action="add-contact">添加联系人</button>
         <button data-action="group-placeholder">发起群聊</button>
       </div>
     </section>
@@ -53,6 +54,44 @@ export function createPhonePanel({
       <footer class="moli-sync-footer">
         <button class="moli-secondary-btn" data-action="sync-cancel">取消</button>
         <button class="moli-primary-btn" data-action="sync-confirm">添加</button>
+      </footer>
+    </section>
+
+    <section class="moli-page" data-page="add-contact">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="add-contact-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">添加联系人</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-contact-form">
+        <div class="moli-contact-avatar-row">
+          <button type="button" class="moli-contact-avatar-picker" data-action="pick-contact-avatar" aria-label="选择头像">
+            <span data-contact-avatar-preview>＋</span>
+          </button>
+          <div class="moli-contact-avatar-help">从手机相册选择头像</div>
+          <input type="file" accept="image/*" data-contact-avatar-input hidden>
+        </div>
+
+        <label class="moli-form-field">
+          <span>名称</span>
+          <input type="text" data-contact-name maxlength="80" placeholder="联系人名称">
+        </label>
+
+        <label class="moli-form-field">
+          <span>简介 / 一句话描述</span>
+          <textarea data-contact-intro rows="3" placeholder="简单介绍这个人"></textarea>
+        </label>
+
+        <label class="moli-form-field">
+          <span>人格提示词</span>
+          <textarea data-contact-prompt rows="7" placeholder="描述这个人的身份、性格、说话方式等"></textarea>
+        </label>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="add-contact-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="add-contact-save">创建</button>
       </footer>
     </section>
 
@@ -119,9 +158,15 @@ export function createPhonePanel({
   const input = panel.querySelector('.moli-input');
   const addMenu = panel.querySelector('[data-add-menu]');
   const syncList = panel.querySelector('.moli-sync-list');
+  const contactAvatarInput = panel.querySelector('[data-contact-avatar-input]');
+  const contactAvatarPreview = panel.querySelector('[data-contact-avatar-preview]');
+  const contactNameInput = panel.querySelector('[data-contact-name]');
+  const contactIntroInput = panel.querySelector('[data-contact-intro]');
+  const contactPromptInput = panel.querySelector('[data-contact-prompt]');
 
   let currentContactId = null;
   let syncSnapshot = [];
+  let pendingContactAvatar = '';
 
   const escapeHtml = value => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -159,6 +204,99 @@ export function createPhonePanel({
       </div>
     `;
   };
+
+  function resetAddContactForm() {
+    pendingContactAvatar = '';
+    contactNameInput.value = '';
+    contactIntroInput.value = '';
+    contactPromptInput.value = '';
+    contactAvatarInput.value = '';
+    contactAvatarPreview.innerHTML = '＋';
+  }
+
+  function fileToCompressedAvatar(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.type?.startsWith('image/')) {
+        reject(new Error('请选择图片文件'));
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onerror = () => reject(new Error('读取头像失败'));
+      reader.onload = () => {
+        const image = new Image();
+
+        image.onerror = () => reject(new Error('无法读取这张图片'));
+        image.onload = () => {
+          const maxSize = 512;
+          const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+          const width = Math.max(1, Math.round(image.width * scale));
+          const height = Math.max(1, Math.round(image.height * scale));
+          const canvas = documentRef.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+
+          const context = canvas.getContext('2d');
+          if (!context) {
+            reject(new Error('无法处理头像图片'));
+            return;
+          }
+
+          context.drawImage(image, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+
+        image.src = String(reader.result || '');
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleContactAvatar(file) {
+    try {
+      pendingContactAvatar = await fileToCompressedAvatar(file);
+      contactAvatarPreview.innerHTML = `<img src="${escapeHtml(pendingContactAvatar)}" alt="">`;
+    } catch (error) {
+      console.error('[moli小手机] avatar failed:', error);
+      toast(error?.message || '头像处理失败');
+    }
+  }
+
+  function saveCustomContact() {
+    const name = contactNameInput.value.trim();
+
+    if (!name) {
+      toast('请填写联系人名称');
+      contactNameInput.focus();
+      return;
+    }
+
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey) {
+      toast('无法识别当前酒馆聊天档');
+      return;
+    }
+
+    try {
+      const newContact = createCustomContact({
+        name,
+        customAvatar: pendingContactAvatar,
+        intro: contactIntroInput.value,
+        prompt: contactPromptInput.value,
+      });
+
+      ensureConversation(scopeKey, newContact.id);
+      currentContactId = newContact.id;
+      resetAddContactForm();
+      toast('联系人已创建');
+      show('chat');
+    } catch (error) {
+      console.error('[moli小手机] create contact failed:', error);
+      toast(error?.message || '创建联系人失败');
+    }
+  }
 
   const show = name => {
     if (addMenu) addMenu.hidden = true;
@@ -868,11 +1006,39 @@ export function createPhonePanel({
     show('sync-tavern');
 
   panel.querySelector(
-    '[data-action="add-contact-placeholder"]'
+    '[data-action="add-contact"]'
   ).onclick = () => {
     addMenu.hidden = true;
-    toast('添加联系人将在后续阶段接入');
+    resetAddContactForm();
+    show('add-contact');
   };
+
+  panel.querySelector(
+    '[data-action="pick-contact-avatar"]'
+  ).onclick = () => contactAvatarInput.click();
+
+  contactAvatarInput.onchange = () => {
+    const file = contactAvatarInput.files?.[0];
+    if (file) handleContactAvatar(file);
+  };
+
+  panel.querySelector(
+    '[data-action="add-contact-back"]'
+  ).onclick = () => {
+    resetAddContactForm();
+    show('home');
+  };
+
+  panel.querySelector(
+    '[data-action="add-contact-cancel"]'
+  ).onclick = () => {
+    resetAddContactForm();
+    show('home');
+  };
+
+  panel.querySelector(
+    '[data-action="add-contact-save"]'
+  ).onclick = saveCustomContact;
 
   panel.querySelector(
     '[data-action="group-placeholder"]'
