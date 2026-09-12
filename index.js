@@ -1,4 +1,4 @@
-import { initApp } from './SRC/core/app.js';
+import { initApp } from './scr/core/app.js';
 
 jQuery(async () => {
     console.log('[moli小手机] extension entry loaded');
