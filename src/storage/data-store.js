@@ -32,6 +32,38 @@ const SCOPE_PREFIX = 'moli-phone:scope:v1:';
 const SCOPE_MIGRATIONS_KEY = 'moli-phone:scope-migrations:v1';
 const SCOPE_SCHEMA_VERSION = 1;
 
+function applyConversationDefaults(conversation) {
+  if (!conversation || typeof conversation !== 'object') return conversation;
+
+  if (typeof conversation.pinned !== 'boolean') {
+    conversation.pinned = false;
+  }
+
+  if (!Number.isFinite(Number(conversation.unreadCount))) {
+    conversation.unreadCount = 0;
+  } else {
+    conversation.unreadCount = Math.max(0, Number(conversation.unreadCount));
+  }
+
+  if (!Array.isArray(conversation.messages)) {
+    conversation.messages = [];
+  }
+
+  return conversation;
+}
+
+function createPrivateConversation(contactId) {
+  const now = Date.now();
+  return applyConversationDefaults({
+    id: `private:${contactId}`,
+    type: 'private',
+    contactId,
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
 function migrateScopeData(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
   let version = Number(source.schemaVersion) || 0;
@@ -214,14 +246,7 @@ export function ensureBuiltins(scopeKey) {
     )
   ) {
     if (!data.conversations[c.id]) {
-      data.conversations[c.id] = {
-        id: `private:${c.id}`,
-        type: 'private',
-        contactId: c.id,
-        messages: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      data.conversations[c.id] = createPrivateConversation(c.id);
     }
   }
 
@@ -243,19 +268,11 @@ export function ensureConversation(
   const data = ensureBuiltins(scopeKey);
 
   if (!data.conversations[contactId]) {
-    data.conversations[contactId] = {
-      id: `private:${contactId}`,
-      type: 'private',
-      contactId,
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
+    data.conversations[contactId] = createPrivateConversation(contactId);
     saveScope(scopeKey, data);
   }
 
-  return data.conversations[contactId];
+  return applyConversationDefaults(data.conversations[contactId]);
 }
 
 export function getConversation(
@@ -462,7 +479,7 @@ export function createGroupConversation(
     `group:${Date.now()}:` +
     Math.random().toString(36).slice(2, 8);
 
-  const conversation = {
+  const conversation = applyConversationDefaults({
     id: groupId,
     type: 'group',
     name: trimmedName,
@@ -470,7 +487,7 @@ export function createGroupConversation(
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  };
+  });
 
   data.conversations[groupId] = conversation;
   saveScope(scopeKey, data);
@@ -529,21 +546,16 @@ export function appendMessage(
   scopeKey,
   contactId,
   role,
-  content
+  content,
+  options = {}
 ) {
   const data = ensureBuiltins(scopeKey);
 
-  const conv =
-    data.conversations[contactId] || {
-      id: `private:${contactId}`,
-      type: 'private',
-      contactId,
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+  const conv = applyConversationDefaults(
+    data.conversations[contactId] || createPrivateConversation(contactId)
+  );
 
-  conv.messages.push({
+  const message = {
     id:
       `msg:${Date.now()}:` +
       Math.random()
@@ -553,8 +565,20 @@ export function appendMessage(
     role,
     content,
     ts: Date.now(),
-  });
+  };
 
+  if (options?.senderId) {
+    message.senderId = String(options.senderId);
+  }
+
+  if (options?.senderSnapshot && typeof options.senderSnapshot === 'object') {
+    message.senderSnapshot = {
+      name: String(options.senderSnapshot.name || ''),
+      avatar: String(options.senderSnapshot.avatar || ''),
+    };
+  }
+
+  conv.messages.push(message);
   conv.updatedAt = Date.now();
 
   data.conversations[contactId] = conv;
@@ -562,4 +586,41 @@ export function appendMessage(
   saveScope(scopeKey, data);
 
   return conv;
+}
+
+export function setConversationPinned(scopeKey, conversationKey, pinned) {
+  const data = ensureBuiltins(scopeKey);
+  const conversation = data.conversations[conversationKey];
+  if (!conversation) throw new Error('会话不存在');
+
+  applyConversationDefaults(conversation);
+  conversation.pinned = Boolean(pinned);
+  conversation.updatedAt = Date.now();
+  saveScope(scopeKey, data);
+
+  return conversation;
+}
+
+export function markConversationRead(scopeKey, conversationKey) {
+  const data = ensureBuiltins(scopeKey);
+  const conversation = data.conversations[conversationKey];
+  if (!conversation) return null;
+
+  applyConversationDefaults(conversation);
+  conversation.unreadCount = 0;
+  saveScope(scopeKey, data);
+
+  return conversation;
+}
+
+export function incrementConversationUnread(scopeKey, conversationKey, amount = 1) {
+  const data = ensureBuiltins(scopeKey);
+  const conversation = data.conversations[conversationKey];
+  if (!conversation) return null;
+
+  applyConversationDefaults(conversation);
+  conversation.unreadCount += Math.max(0, Number(amount) || 0);
+  saveScope(scopeKey, data);
+
+  return conversation;
 }
