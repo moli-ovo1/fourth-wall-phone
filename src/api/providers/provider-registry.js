@@ -1,14 +1,17 @@
 import {
   OPENAI_COMPATIBLE_DEFAULT_BASE_URL,
   listModels as listOpenAiCompatibleModels,
+  generateText as generateOpenAiCompatibleText,
 } from './openai-compatible.js';
 import {
   CLAUDE_DEFAULT_BASE_URL,
   listModels as listClaudeModels,
+  generateText as generateClaudeText,
 } from './claude.js';
 import {
   GEMINI_DEFAULT_BASE_URL,
   listModels as listGeminiModels,
+  generateText as generateGeminiText,
 } from './gemini.js';
 
 const PROVIDERS = Object.freeze({
@@ -16,16 +19,19 @@ const PROVIDERS = Object.freeze({
     label: 'OpenAI Compatible',
     defaultBaseUrl: OPENAI_COMPATIBLE_DEFAULT_BASE_URL,
     listModels: listOpenAiCompatibleModels,
+    generateText: generateOpenAiCompatibleText,
   },
   claude: {
     label: 'Claude',
     defaultBaseUrl: CLAUDE_DEFAULT_BASE_URL,
     listModels: listClaudeModels,
+    generateText: generateClaudeText,
   },
   gemini: {
     label: 'Gemini',
     defaultBaseUrl: GEMINI_DEFAULT_BASE_URL,
     listModels: listGeminiModels,
+    generateText: generateGeminiText,
   },
 });
 
@@ -61,6 +67,35 @@ async function withTimeout(run, timeoutMs = 20000) {
   }
 }
 
+
+async function withTimeoutAndExternalSignal(run, externalSignal, timeoutMs = 90000) {
+  const controller = new AbortController();
+  let timedOut = false;
+
+  const abortFromExternal = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener('abort', abortFromExternal, { once: true });
+  }
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await run(controller.signal);
+  } catch (error) {
+    if (error?.name === 'AbortError' && timedOut) {
+      throw new Error(`请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    externalSignal?.removeEventListener?.('abort', abortFromExternal);
+  }
+}
+
 export async function listProviderModels(config, options = {}) {
   if (config?.source === 'tavern') {
     throw new Error('酒馆当前 API 的模型读取将在 Generation 兼容层接入');
@@ -83,4 +118,23 @@ export async function testProviderConnection(config, options = {}) {
     models,
     modelCount: models.length,
   };
+}
+
+
+export async function generateProviderText(config, request, options = {}) {
+  if (config?.source === 'tavern') {
+    throw new Error('酒馆当前 API 的生成将在 Generation 兼容层接入');
+  }
+
+  const definition = getProviderDefinition(config?.provider);
+
+  return withTimeoutAndExternalSignal(
+    signal => definition.generateText(config, request, {
+      fetchImpl: options.fetchImpl || fetch,
+      signal,
+      onDelta: options.onDelta,
+    }),
+    options.signal,
+    options.timeoutMs || 90000,
+  );
 }

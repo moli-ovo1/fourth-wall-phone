@@ -43,3 +43,52 @@ export function uniqueSortedModels(values = []) {
       .filter(Boolean)
   )].sort((a, b) => a.localeCompare(b));
 }
+
+export async function readSseJson(response, onData) {
+  if (!response?.body?.getReader) {
+    throw new Error('当前环境不支持流式响应读取');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() || '';
+
+    for (const event of events) {
+      const dataLines = event
+        .split(/\r?\n/)
+        .filter(line => line.startsWith('data:'))
+        .map(line => line.slice(5).trim());
+
+      for (const dataLine of dataLines) {
+        if (!dataLine || dataLine === '[DONE]') continue;
+        let parsed;
+        try {
+          parsed = JSON.parse(dataLine);
+        } catch {
+          continue;
+        }
+        await onData?.(parsed);
+      }
+    }
+  }
+
+  const tail = `${buffer}${decoder.decode()}`.trim();
+  if (tail) {
+    for (const line of tail.split(/\r?\n/)) {
+      if (!line.startsWith('data:')) continue;
+      const dataLine = line.slice(5).trim();
+      if (!dataLine || dataLine === '[DONE]') continue;
+      try {
+        await onData?.(JSON.parse(dataLine));
+      } catch {}
+    }
+  }
+}

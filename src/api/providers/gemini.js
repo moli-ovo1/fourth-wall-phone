@@ -3,6 +3,7 @@ import {
   requireApiKey,
   trimTrailingSlashes,
   uniqueSortedModels,
+  readSseJson,
 } from './shared.js';
 
 export const GEMINI_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
@@ -39,4 +40,63 @@ export async function listModels(config, { fetchImpl = fetch, signal } = {}) {
       })
       .map(item => String(item?.name || '').replace(/^models\//, ''))
   );
+}
+
+export async function generateText(config, request, { fetchImpl = fetch, signal, onDelta } = {}) {
+  const apiKey = requireApiKey(config?.apiKey);
+  const model = String(config?.model || '').trim();
+  if (!model) throw new Error('请先填写模型 ID');
+
+  const streaming = config?.stream !== false;
+  const action = streaming ? 'streamGenerateContent' : 'generateContent';
+  const url = new URL(`${baseUrl(config?.baseUrl)}/models/${encodeURIComponent(model)}:${action}`);
+  url.searchParams.set('key', apiKey);
+  if (streaming) url.searchParams.set('alt', 'sse');
+
+  const contents = (Array.isArray(request?.messages) ? request.messages : []).map(item => ({
+    role: item?.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: String(item?.content || '') }],
+  }));
+
+  const response = await fetchImpl(url.toString(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: streaming ? 'text/event-stream' : 'application/json',
+    },
+    body: JSON.stringify({
+      ...(request?.system
+        ? { systemInstruction: { parts: [{ text: String(request.system) }] } }
+        : {}),
+      contents,
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, '生成请求失败'));
+  }
+
+  if (streaming) {
+    let text = '';
+    await readSseJson(response, data => {
+      const chunk = (data?.candidates?.[0]?.content?.parts || [])
+        .map(part => String(part?.text || ''))
+        .join('');
+      if (!chunk) return;
+      text += chunk;
+      onDelta?.(chunk, text);
+    });
+    if (!text.trim()) throw new Error('接口返回了空回复');
+    return { text: text.trim(), raw: null };
+  }
+
+  const data = await response.json();
+  const text = (data?.candidates?.[0]?.content?.parts || [])
+    .map(part => String(part?.text || ''))
+    .join('')
+    .trim();
+
+  if (!text) throw new Error('接口返回了空回复');
+  return { text, raw: data };
 }
