@@ -31,6 +31,7 @@ import {
   listProviderModels,
   testProviderConnection,
 } from '../api/providers/provider-registry.js';
+import { generatePrivateReply } from '../generation/generation-service.js';
 import { extensionTypes } from '../../../../../extensions.js';
 
 export function createPhonePanel({
@@ -344,6 +345,7 @@ export function createPhonePanel({
   const chatBody = panel.querySelector('.moli-chat-body');
   const chatTitle = panel.querySelector('[data-chat-title]');
   const input = panel.querySelector('.moli-input');
+  const sendButton = panel.querySelector('[data-action="send"]');
   const addMenu = panel.querySelector('[data-add-menu]');
   const syncList = panel.querySelector('.moli-sync-list');
   const contactAvatarInput = panel.querySelector('[data-contact-avatar-input]');
@@ -394,6 +396,8 @@ export function createPhonePanel({
   let messagePressPointerId = null;
   let messagePressStartX = 0;
   let messagePressStartY = 0;
+  let generationController = null;
+  let generationConversationKey = null;
 
   panel.addEventListener(
     'click',
@@ -2147,14 +2151,160 @@ export function createPhonePanel({
     if (quoteDraftText) quoteDraftText.textContent = '';
   });
 
+  function clearGenerationPreview() {
+    chatBody.querySelector('[data-generation-preview]')?.remove();
+  }
+
+  function updateGenerationPreview(contactItem, text) {
+    if (!contactItem || !chatBody) return;
+
+    let row = chatBody.querySelector('[data-generation-preview]');
+    if (!row) {
+      chatBody.querySelector('.moli-empty')?.remove();
+      row = documentRef.createElement('div');
+      row.className = 'moli-msg assistant moli-generation-preview';
+      row.dataset.generationPreview = 'true';
+      row.innerHTML = `
+        ${avatarMarkup(contactItem, 'moli-mini-avatar')}
+        <div class="moli-msg-content">
+          <div class="moli-bubble" data-generation-preview-text></div>
+        </div>
+      `;
+      chatBody.appendChild(row);
+    }
+
+    const bubble = row.querySelector('[data-generation-preview-text]');
+    if (bubble) bubble.textContent = String(text || '');
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+
+  function setGenerationBusy(busy) {
+    if (!sendButton) return;
+    sendButton.textContent = busy ? '停止' : '发送';
+    sendButton.classList.toggle('is-generating', Boolean(busy));
+  }
+
+  function stopGeneration() {
+    if (!generationController) return false;
+    generationController.abort();
+    return true;
+  }
+
+  async function requestReply() {
+    if (!currentContactId) return;
+
+    if (generationController) {
+      stopGeneration();
+      return;
+    }
+
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey) {
+      toast('无法识别当前酒馆聊天档');
+      return;
+    }
+
+    const conversation = currentConversation();
+    if (!conversation) {
+      toast('当前会话不存在');
+      return;
+    }
+
+    if (conversation.type !== 'private') {
+      toast('群聊回复将在轻编排层接入');
+      return;
+    }
+
+    const trailingUserMessages = (conversation.messages || [])
+      .slice()
+      .reverse()
+      .findIndex(message => message?.role !== 'user');
+
+    const pendingCount = trailingUserMessages === -1
+      ? (conversation.messages || []).length
+      : trailingUserMessages;
+
+    if (!pendingCount) {
+      toast('先发送一条消息，再空输入触发回复');
+      return;
+    }
+
+    const controller = new AbortController();
+    const requestScopeKey = scopeKey;
+    const requestContact = contact(conversation.contactId);
+    generationController = controller;
+    generationConversationKey = currentContactId;
+    clearGenerationPreview();
+    setGenerationBusy(true);
+    toast('正在生成回复…');
+
+    try {
+      const result = await generatePrivateReply({
+        scopeKey,
+        conversationKey: currentContactId,
+        signal: controller.signal,
+        onDelta: (_chunk, fullText) => {
+          if (controller.signal.aborted) return;
+          if (getScopeKey?.() !== requestScopeKey) return;
+          if (currentContactId !== generationConversationKey) return;
+          updateGenerationPreview(requestContact, fullText);
+        },
+      });
+
+      if (controller.signal.aborted) return;
+
+      clearGenerationPreview();
+
+      appendMessage(
+        requestScopeKey,
+        generationConversationKey,
+        'assistant',
+        result.text,
+        {
+          source: 'generation',
+          senderId: result.contact.id,
+          senderSnapshot: {
+            name: displayName(result.contact),
+            avatar: avatarUrl(result.contact),
+          },
+        }
+      );
+
+      if (
+        getScopeKey?.() === requestScopeKey
+        && currentContactId === generationConversationKey
+      ) {
+        renderChat();
+      }
+    } catch (error) {
+      clearGenerationPreview();
+      if (error?.name === 'AbortError' || controller.signal.aborted) {
+        toast('已停止生成');
+      } else {
+        console.error('[moli小手机] generation failed:', error);
+        toast(error?.message || '生成失败，可再次空输入重试');
+      }
+    } finally {
+      if (generationController === controller) {
+        generationController = null;
+        generationConversationKey = null;
+        setGenerationBusy(false);
+      }
+    }
+  }
+
   function sendMessage() {
-    if (!currentContactId) {
+    if (!currentContactId) return;
+
+    if (generationController) {
+      stopGeneration();
       return;
     }
 
     const text = input.value.trim();
 
     if (!text) {
+      requestReply();
       return;
     }
 
