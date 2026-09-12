@@ -35,21 +35,30 @@ function getAvatarUrl(ctx, avatar) {
 
 function sourceIdFor(character, index) {
   return (
-    character?.avatar ||
+    character?.id ||
+    character?.character_id ||
     character?.filename ||
     character?.file_name ||
-    character?.id ||
+    character?.avatar ||
     character?.chid ||
     `${character?.name || 'character'}:${index}`
   );
 }
 
-export function listTavernCharacters() {
+export function getTavernCharactersSnapshot() {
   const ctx = getContext();
   const arrays = candidateCharacterArrays(ctx);
-  const source = arrays[0] || [];
+  const source = arrays[0];
+
+  if (!source) {
+    return {
+      available: false,
+      characters: [],
+    };
+  }
+
   const seen = new Set();
-  const result = [];
+  const characters = [];
 
   source.forEach((character, index) => {
     const name = String(character?.name || '').trim();
@@ -65,7 +74,7 @@ export function listTavernCharacters() {
       character?.avatar_url ||
       '';
 
-    result.push({
+    characters.push({
       sourceId,
       name,
       avatar,
@@ -73,5 +82,12 @@ export function listTavernCharacters() {
     });
   });
 
-  return result;
+  return {
+    available: true,
+    characters,
+  };
+}
+
+export function listTavernCharacters() {
+  return getTavernCharactersSnapshot().characters;
 }
