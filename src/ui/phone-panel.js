@@ -16,6 +16,7 @@ import {
   getMessageById,
   deleteMessage,
   deleteMessages,
+  clearConversationMessages,
 } from '../storage/data-store.js';
 import {
   getTavernCharactersSnapshot,
@@ -154,6 +155,20 @@ export function createPhonePanel({
       </footer>
     </section>
 
+    <section class="moli-page" data-page="message-search">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="message-search-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">查找聊天记录</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <div class="moli-message-search-box">
+        <input type="search" data-message-search-input placeholder="搜索聊天记录">
+      </div>
+      <main class="moli-message-search-results" data-message-search-results></main>
+    </section>
+
     <section class="moli-page" data-page="forward-detail">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -262,6 +277,8 @@ export function createPhonePanel({
   const forwardSheet = panel.querySelector('[data-forward-sheet]');
   const forwardTargets = panel.querySelector('[data-forward-targets]');
   const forwardDetail = panel.querySelector('[data-forward-detail]');
+  const messageSearchInput = panel.querySelector('[data-message-search-input]');
+  const messageSearchResults = panel.querySelector('[data-message-search-results]');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -453,6 +470,107 @@ export function createPhonePanel({
     return getConversation(scopeKey, currentContactId);
   }
 
+
+  function messageSenderName(message, conversation) {
+    if (message?.role === 'user') return '我';
+    if (message?.senderSnapshot?.name) {
+      return String(message.senderSnapshot.name);
+    }
+    if (conversation?.type === 'group' && message?.senderId) {
+      const item = contact(message.senderId);
+      if (item) return displayName(item);
+    }
+    return conversationDisplayTitle(conversation) || '联系人';
+  }
+
+  function renderMessageSearch(query = '') {
+    if (!messageSearchResults) return;
+
+    const conversation = currentConversation();
+    if (!conversation) {
+      messageSearchResults.innerHTML = '<div class="moli-empty">当前会话不存在。</div>';
+      return;
+    }
+
+    const keyword = String(query || '').trim().toLowerCase();
+    if (!keyword) {
+      messageSearchResults.innerHTML = '<div class="moli-empty">输入关键词查找聊天记录。</div>';
+      return;
+    }
+
+    const results = (conversation.messages || [])
+      .filter(message => String(message?.content || '').toLowerCase().includes(keyword))
+      .slice()
+      .reverse();
+
+    if (!results.length) {
+      messageSearchResults.innerHTML = '<div class="moli-empty">没有找到相关聊天记录。</div>';
+      return;
+    }
+
+    messageSearchResults.innerHTML = results.map(message => {
+      const sender = messageSenderName(message, conversation);
+      const ts = Number(message?.ts || 0);
+      const time = ts ? new Date(ts).toLocaleString() : '';
+
+      return `
+        <button type="button" class="moli-search-result" data-search-message-id="${escapeHtml(message.id || '')}">
+          <div class="moli-search-result-top">
+            <strong>${escapeHtml(sender)}</strong>
+            <span>${escapeHtml(time)}</span>
+          </div>
+          <div class="moli-search-result-text">${escapeHtml(message.content || '')}</div>
+        </button>
+      `;
+    }).join('');
+  }
+
+  function openMessageSearch() {
+    if (messageSearchInput) messageSearchInput.value = '';
+    renderMessageSearch('');
+    show('message-search');
+    setTimeout(() => messageSearchInput?.focus(), 0);
+  }
+
+  function clearCurrentChatHistory() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    if (!scopeKey || !conversation || !currentContactId) return;
+
+    const count = Array.isArray(conversation.messages)
+      ? conversation.messages.length
+      : 0;
+
+    if (!count) {
+      toast('当前没有聊天记录');
+      return;
+    }
+
+    const confirmed = windowRef.confirm?.(
+      `确定清空这段聊天记录吗？\n\n将删除当前会话中的 ${count} 条消息，联系人/群聊和会话设置会保留。`
+    ) ?? true;
+
+    if (!confirmed) return;
+
+    const cleared = clearConversationMessages(scopeKey, currentContactId);
+    if (!cleared) {
+      toast('清空失败');
+      return;
+    }
+
+    pendingQuote = null;
+    activeForwardMessageId = null;
+    multiSelectMode = false;
+    selectedMessageIds = new Set();
+
+    if (quoteDraft) quoteDraft.hidden = true;
+    if (quoteDraftText) quoteDraftText.textContent = '';
+
+    updateMultiSelectUi();
+    toast('聊天记录已清空');
+    show('chat');
+  }
+
   function renderChatInfo() {
     const conversation = currentConversation();
 
@@ -483,6 +601,14 @@ export function createPhonePanel({
         <button type="button" class="moli-info-setting-row" data-action="toggle-pin">
           <span>置顶聊天</span>
           <strong>${conversation.pinned ? '已开启' : '未开启'}</strong>
+        </button>
+        <button type="button" class="moli-info-setting-row" data-action="search-messages">
+          <span>查找聊天记录</span>
+          <strong>›</strong>
+        </button>
+        <button type="button" class="moli-info-setting-row moli-danger-row" data-action="clear-chat-history">
+          <span>清空聊天记录</span>
+          <strong>›</strong>
         </button>
         ${isTavern ? `<div class="moli-info-note">酒馆角色改名或换头像时，来源资料会继续刷新；你的备注名、自定义头像、简介和人格提示词不会被自动覆盖。</div>` : ''}
       `;
@@ -521,7 +647,17 @@ export function createPhonePanel({
         <strong>${conversation.pinned ? '已开启' : '未开启'}</strong>
       </button>
 
-      <div class="moli-info-coming">自动吐槽、自动点评、查找记录等设置将在后续阶段继续接入。</div>
+      <button type="button" class="moli-info-setting-row" data-action="search-messages">
+        <span>查找聊天记录</span>
+        <strong>›</strong>
+      </button>
+
+      <button type="button" class="moli-info-setting-row moli-danger-row" data-action="clear-chat-history">
+        <span>清空聊天记录</span>
+        <strong>›</strong>
+      </button>
+
+      <div class="moli-info-coming">自动吐槽、自动点评等设置将在后续阶段继续接入。</div>
     `;
   }
 
@@ -755,6 +891,10 @@ export function createPhonePanel({
 
     if (name === 'forward-detail') {
       renderForwardDetail();
+    }
+
+    if (name === 'message-search') {
+      renderMessageSearch(messageSearchInput?.value || '');
     }
   };
 
@@ -1638,6 +1778,34 @@ export function createPhonePanel({
     }
   });
 
+  messageSearchInput?.addEventListener('input', () => {
+    renderMessageSearch(messageSearchInput.value);
+  });
+
+  messageSearchResults?.addEventListener('click', event => {
+    const row = event.target.closest?.('[data-search-message-id]');
+    if (!row) return;
+
+    const messageId = String(row.dataset.searchMessageId || '');
+    if (!messageId) return;
+
+    show('chat');
+
+    requestAnimationFrame(() => {
+      const bubble = [...chatBody.querySelectorAll('[data-message-id]')]
+        .find(node => String(node.dataset.messageId || '') === messageId);
+
+      if (!bubble) return;
+
+      bubble.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      bubble.classList.add('moli-message-highlight');
+
+      setTimeout(() => {
+        bubble.classList.remove('moli-message-highlight');
+      }, 1400);
+    });
+  });
+
   forwardTargets?.addEventListener('click', event => {
     const button = event.target.closest?.('[data-forward-target]');
     if (!button) return;
@@ -1976,6 +2144,23 @@ export function createPhonePanel({
     '[data-action="chat-info"]'
   ).onclick = () =>
     show('info');
+
+  chatInfo.addEventListener('click', event => {
+    const action = event.target.closest?.('[data-action]')?.dataset?.action;
+
+    if (action === 'search-messages') {
+      openMessageSearch();
+      return;
+    }
+
+    if (action === 'clear-chat-history') {
+      clearCurrentChatHistory();
+    }
+  });
+
+  panel.querySelector(
+    '[data-action="message-search-back"]'
+  ).onclick = () => show('info');
 
   panel.querySelector(
     '[data-action="forward-detail-back"]'
