@@ -364,3 +364,5 @@
 #moli-phone-panel .moli-api-status[data-kind="error"]{color:#c33f3f}
 #moli-phone-panel .moli-api-status[data-kind="loading"]{color:#777}
 #moli-phone-panel .moli-api-status[data-kind="info"]{color:#68758a}
+#moli-phone-panel .moli-send.is-generating{font-weight:600}
+#moli-phone-panel .moli-generation-preview .moli-bubble{opacity:.86}

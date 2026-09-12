@@ -1010,11 +1010,18 @@ Generation / Prompt 接入时使用 Data Store 的统一联系人上下文来源
 当前实现基础：
 
 - `src/storage/api-settings.js`：全局 API 配置持久化；
-- `src/api/providers/provider-registry.js`：统一 Provider 注册与超时；
-- `src/api/providers/openai-compatible.js`：OpenAI Compatible 模型列表；
-- `src/api/providers/claude.js`：Claude 模型列表；
-- `src/api/providers/gemini.js`：Gemini 模型列表；
+- `src/api/providers/provider-registry.js`：统一 Provider 注册、生成、停止与超时；
+- `src/api/providers/openai-compatible.js`：模型列表 + 非流式 / SSE 流式生成；
+- `src/api/providers/claude.js`：模型列表 + 非流式 / SSE 流式生成；
+- `src/api/providers/gemini.js`：模型列表 + 非流式 / SSE 流式生成；
+- `src/generation/generation-service.js`：私聊 Generation 公共入口；
+- `src/generation/prompt-builder.js`：当前阶段的私聊 Prompt 组装器，并接入同联系人跨会话来源标签；
 - 设置页已可刷新模型列表、测试独立 API 连接；
+- 私聊已接通“非空只发送、空输入触发回复”、流式显示、停止、失败后保留用户消息并可空输入重试；
+- 异步结果固定写回请求启动时的原 Scope / Conversation，不允许晚到结果写进新 Scope；
+- 内置人格在正式 Prompt 接入前不使用临时通用 Prompt 生成；
+- 酒馆角色在 Role Fidelity Pack 接入前，只有用户已经填写人格提示词时才允许测试生成；
+- 群聊生成仍等待“轻编排 + 逐人生成”；
 - 酒馆当前 API 模式仍等待 Generation 兼容层，不在 UI 内猜测 SillyTavern 私有接口。
 
 生成中始终支持：
