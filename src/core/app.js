@@ -5,9 +5,7 @@ import { getCurrentScopeKey } from './tavern-scope.js';
 import {
   getContacts,
   ensureBuiltins,
-  refreshLinkedTavernContacts,
 } from '../storage/data-store.js';
-import { listTavernCharacters } from './tavern-contacts.js';
 
 let appInstance = null;
 
@@ -16,9 +14,6 @@ export function initApp() {
 
   getContacts();
 
-  refreshLinkedTavernContacts(
-    listTavernCharacters(),
-  );
 
   ensureBuiltins(
     getCurrentScopeKey(),
