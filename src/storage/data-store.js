@@ -1,3 +1,5 @@
+import { readJson, writeJson } from './storage-adapter.js';
+
 const BUILTIN_CONTACTS = [
   {
     id: 'builtin:meta',
@@ -28,27 +30,41 @@ const BUILTIN_CONTACTS = [
 const CONTACTS_KEY = 'moli-phone:contacts:v1';
 const SCOPE_PREFIX = 'moli-phone:scope:v1:';
 const SCOPE_MIGRATIONS_KEY = 'moli-phone:scope-migrations:v1';
+const SCOPE_SCHEMA_VERSION = 1;
 
-function parse(raw, fallback) {
-  try {
-    return JSON.parse(raw) ?? fallback;
-  } catch {
-    return fallback;
+function migrateScopeData(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  let version = Number(source.schemaVersion) || 0;
+  let data = { ...source };
+
+  if (version < 1) {
+    data = {
+      ...data,
+      conversations:
+        data.conversations && typeof data.conversations === 'object'
+          ? data.conversations
+          : {},
+      schemaVersion: 1,
+    };
+    version = 1;
   }
+
+  return {
+    ...data,
+    conversations:
+      data.conversations && typeof data.conversations === 'object'
+        ? data.conversations
+        : {},
+    schemaVersion: SCOPE_SCHEMA_VERSION,
+  };
 }
 
 function saveContacts(list) {
-  localStorage.setItem(
-    CONTACTS_KEY,
-    JSON.stringify(list)
-  );
+  writeJson(CONTACTS_KEY, list);
 }
 
 export function getContacts() {
-  const saved = parse(
-    localStorage.getItem(CONTACTS_KEY),
-    []
-  );
+  const saved = readJson(CONTACTS_KEY, []);
 
   const map = new Map(
     Array.isArray(saved)
@@ -82,17 +98,16 @@ function legacyScopeKey(scopeKey) {
 }
 
 function loadStoredScope(scopeKey) {
-  const d = parse(
-    localStorage.getItem(key(scopeKey)),
-    null
-  );
+  const d = readJson(key(scopeKey), null);
+  if (!d || typeof d !== 'object') return null;
 
-  return d && typeof d === 'object'
-    ? {
-        conversations:
-          d.conversations || {}
-      }
-    : null;
+  const migrated = migrateScopeData(d);
+
+  if (migrated.schemaVersion !== d.schemaVersion) {
+    writeJson(key(scopeKey), migrated);
+  }
+
+  return migrated;
 }
 
 function migrateLegacyScope(scopeKey) {
@@ -102,10 +117,7 @@ function migrateLegacyScope(scopeKey) {
   const oldData = loadStoredScope(legacy);
   if (!oldData) return null;
 
-  const migrations = parse(
-    localStorage.getItem(SCOPE_MIGRATIONS_KEY),
-    {}
-  );
+  const migrations = readJson(SCOPE_MIGRATIONS_KEY, {});
 
   const oldStorageKey = key(legacy);
   const claimedBy = migrations?.[oldStorageKey];
@@ -114,16 +126,10 @@ function migrateLegacyScope(scopeKey) {
     return null;
   }
 
-  localStorage.setItem(
-    key(scopeKey),
-    JSON.stringify(oldData)
-  );
+  writeJson(key(scopeKey), oldData);
 
   migrations[oldStorageKey] = scopeKey;
-  localStorage.setItem(
-    SCOPE_MIGRATIONS_KEY,
-    JSON.stringify(migrations)
-  );
+  writeJson(SCOPE_MIGRATIONS_KEY, migrations);
 
   return oldData;
 }
@@ -136,14 +142,15 @@ export function loadScope(scopeKey) {
   if (migrated) return migrated;
 
   return {
+    schemaVersion: SCOPE_SCHEMA_VERSION,
     conversations: {}
   };
 }
 
 function saveScope(scopeKey, data) {
-  localStorage.setItem(
+  writeJson(
     key(scopeKey),
-    JSON.stringify(data)
+    migrateScopeData(data)
   );
 }
 
