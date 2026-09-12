@@ -259,3 +259,9 @@
 #moli-phone-panel .moli-info-form .moli-form-field{margin-bottom:14px}
 #moli-phone-panel .moli-info-save-button{width:100%;border:0;border-radius:7px;background:#07c160;color:#fff;padding:10px 14px;font-size:14px}
 #moli-phone-panel .moli-info-note{padding:14px 18px 22px;color:#999;font-size:11px;line-height:1.6}
+
+#moli-phone-panel .moli-pin-mark{font-size:10px;color:#8a8a8a;background:#f1f1f1;border-radius:4px;padding:2px 5px;flex:0 0 auto}
+#moli-phone-panel .moli-unread-badge{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#f04444;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:18px;flex:0 0 auto}
+#moli-phone-panel .moli-info-setting-row{width:100%;margin-top:10px;padding:13px 14px;border:0;border-top:1px solid #e5e5e5;border-bottom:1px solid #e5e5e5;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:16px;text-align:left;font:inherit;cursor:pointer}
+#moli-phone-panel .moli-info-setting-row span{font-size:14px;color:#222}
+#moli-phone-panel .moli-info-setting-row strong{font-size:13px;color:#777;font-weight:400}
