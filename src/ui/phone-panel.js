@@ -209,6 +209,16 @@ export function createPhonePanel({
       <button data-message-action="delete" class="danger">删除</button>
     </div>
 
+    <div class="moli-forward-sheet" data-forward-sheet hidden>
+      <div class="moli-forward-card">
+        <div class="moli-forward-head">
+          <strong>转发给</strong>
+          <button class="moli-icon-btn" data-action="forward-cancel" aria-label="取消转发">×</button>
+        </div>
+        <div class="moli-forward-targets" data-forward-targets></div>
+      </div>
+    </div>
+
     <div class="moli-toast" aria-live="polite"></div>
   `;
 
@@ -238,6 +248,8 @@ export function createPhonePanel({
   const multiBar = panel.querySelector('[data-multi-bar]');
   const multiCount = panel.querySelector('[data-multi-count]');
   const compose = panel.querySelector('.moli-compose');
+  const forwardSheet = panel.querySelector('[data-forward-sheet]');
+  const forwardTargets = panel.querySelector('[data-forward-targets]');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -246,6 +258,7 @@ export function createPhonePanel({
   let suppressPanelClicksUntil = 0;
   let activeMessageId = null;
   let pendingQuote = null;
+  let pendingForward = null;
   let multiSelectMode = false;
   let selectedMessageIds = new Set();
   let messagePressTimer = null;
@@ -1108,6 +1121,117 @@ export function createPhonePanel({
     renderChat();
   }
 
+
+  function conversationDisplayTitle(conversation, contactsById = null) {
+    if (!conversation) return '';
+    if (conversation.type === 'group') {
+      return conversation.name || '未命名群聊';
+    }
+
+    const item = contactsById?.get?.(conversation.contactId)
+      || contact(conversation.contactId);
+    return item ? displayName(item) : '联系人';
+  }
+
+  function snapshotForwardItem(message, sourceTitle) {
+    return {
+      messageId: String(message?.id || ''),
+      senderName: message?.role === 'user'
+        ? '我'
+        : String(message?.senderSnapshot?.name || sourceTitle || ''),
+      content: String(message?.content || ''),
+      ts: Number(message?.ts || 0),
+    };
+  }
+
+  function openForwardPicker(forwardPayload) {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey || !forwardSheet || !forwardTargets) return;
+
+    const contacts = getContacts();
+    const contactsById = new Map(contacts.map(item => [item.id, item]));
+    const conversations = getScopeConversations(scopeKey)
+      .slice()
+      .sort((a, b) => {
+        const aPinned = a?.pinned ? 1 : 0;
+        const bPinned = b?.pinned ? 1 : 0;
+        if (aPinned !== bPinned) return bPinned - aPinned;
+        return Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0);
+      });
+
+    if (!conversations.length) {
+      toast('当前档还没有可转发的聊天');
+      return;
+    }
+
+    pendingForward = forwardPayload;
+    forwardTargets.innerHTML = conversations.map(conversation => {
+      const title = conversationDisplayTitle(conversation, contactsById);
+      const key = conversation.type === 'group'
+        ? conversation.id
+        : conversation.contactId;
+      const item = conversation.type === 'group'
+        ? null
+        : contactsById.get(conversation.contactId);
+
+      return `
+        <button class="moli-forward-target" data-forward-target="${escapeHtml(key || '')}">
+          ${conversation.type === 'group'
+            ? groupAvatarMarkup(conversation)
+            : (item ? avatarMarkup(item) : '<div class="moli-avatar">?</div>')}
+          <span>${escapeHtml(title)}</span>
+        </button>
+      `;
+    }).join('');
+
+    forwardSheet.hidden = false;
+  }
+
+  function closeForwardPicker() {
+    pendingForward = null;
+    if (forwardSheet) forwardSheet.hidden = true;
+    if (forwardTargets) forwardTargets.innerHTML = '';
+  }
+
+  function commitForward(targetConversationKey) {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey || !targetConversationKey || !pendingForward) return;
+
+    const target = getConversation(scopeKey, targetConversationKey);
+    if (!target) {
+      toast('目标聊天已不存在');
+      closeForwardPicker();
+      return;
+    }
+
+    const items = Array.isArray(pendingForward.items)
+      ? pendingForward.items
+      : [];
+
+    appendMessage(
+      scopeKey,
+      targetConversationKey,
+      'user',
+      pendingForward.mode === 'merged'
+        ? `转发的聊天记录（${items.length}条）`
+        : '转发消息',
+      {
+        forward: {
+          mode: pendingForward.mode === 'merged' ? 'merged' : 'single',
+          sourceConversationId: String(pendingForward.sourceConversationId || ''),
+          sourceConversationTitle: String(pendingForward.sourceConversationTitle || ''),
+          items,
+        },
+      }
+    );
+
+    closeForwardPicker();
+    toast('已转发');
+    if (targetConversationKey === currentContactId) {
+      renderChat();
+    }
+  }
+
   function handleMessageMenuAction(action) {
     const scopeKey = getScopeKey?.();
     const messageId = activeMessageId;
@@ -1170,8 +1294,23 @@ export function createPhonePanel({
       return;
     }
 
+    if (action === 'forward') {
+      const sourceConversation = getConversation(scopeKey, currentContactId);
+      const sourceTitle = sourceConversation
+        ? conversationDisplayTitle(sourceConversation)
+        : String(chatTitle?.textContent || '');
+
+      hideMessageMenu();
+      openForwardPicker({
+        mode: 'single',
+        sourceConversationId: String(sourceConversation?.id || currentContactId || ''),
+        sourceConversationTitle: sourceTitle,
+        items: [snapshotForwardItem(message, sourceTitle)],
+      });
+      return;
+    }
+
     hideMessageMenu();
-    if (action === 'forward') toast('转发功能下一步接入');
   }
 
   function renderChat() {
@@ -1247,6 +1386,23 @@ export function createPhonePanel({
             <div class="moli-msg-content">
               ${senderName}
               <div class="moli-bubble">
+                ${message.forward ? `
+                  <div class="moli-forwarded-message">
+                    <div class="moli-forwarded-title">
+                      ${escapeHtml(message.forward.mode === 'merged'
+                        ? `聊天记录 · ${message.forward.items?.length || 0} 条`
+                        : (message.forward.sourceConversationTitle || '转发消息'))}
+                    </div>
+                    ${(message.forward.items || []).map(item => `
+                      <div class="moli-forwarded-item">
+                        ${item.senderName
+                          ? `<div class="moli-forwarded-sender">${escapeHtml(item.senderName)}</div>`
+                          : ''}
+                        <div>${escapeHtml(item.content || '')}</div>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
                 ${message.quote ? `
                   <div class="moli-quoted-message">
                     ${message.quote.senderName
@@ -1255,7 +1411,7 @@ export function createPhonePanel({
                     <div>${escapeHtml(message.quote.content || '')}</div>
                   </div>
                 ` : ''}
-                ${escapeHtml(message.content)}
+                ${message.forward ? '' : escapeHtml(message.content)}
               </div>
             </div>
           </div>
@@ -1353,7 +1509,30 @@ export function createPhonePanel({
         toast('请先选择消息');
         return;
       }
-      toast('批量转发将在下一步接入');
+
+      const scopeKey = getScopeKey?.();
+      const sourceConversation = getConversation(scopeKey, currentContactId);
+      if (!sourceConversation) {
+        toast('当前聊天已不存在');
+        return;
+      }
+
+      const sourceTitle = conversationDisplayTitle(sourceConversation);
+      const selected = (sourceConversation.messages || [])
+        .filter(message => selectedMessageIds.has(String(message.id || '')))
+        .map(message => snapshotForwardItem(message, sourceTitle));
+
+      if (!selected.length) {
+        toast('选中的消息已不存在');
+        return;
+      }
+
+      openForwardPicker({
+        mode: 'merged',
+        sourceConversationId: String(sourceConversation.id || currentContactId || ''),
+        sourceConversationTitle: sourceTitle,
+        items: selected,
+      });
       return;
     }
 
@@ -1373,6 +1552,23 @@ export function createPhonePanel({
         toast('删除失败');
       }
     }
+  });
+
+  forwardTargets?.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-forward-target]');
+    if (!button) return;
+    event.preventDefault();
+    commitForward(String(button.dataset.forwardTarget || ''));
+  });
+
+  forwardSheet?.addEventListener('click', event => {
+    if (event.target === forwardSheet) closeForwardPicker();
+  });
+
+  panel.addEventListener('click', event => {
+    const cancelForward = event.target.closest?.('[data-action="forward-cancel"]');
+    if (!cancelForward) return;
+    closeForwardPicker();
   });
 
   panel.addEventListener('click', event => {
