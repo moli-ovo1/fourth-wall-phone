@@ -17,3 +17,18 @@ export function writeJson(key, value) {
 export function removeValue(key) {
   localStorage.removeItem(key);
 }
+
+
+export function listKeys(prefix = '') {
+  const result = [];
+  const wanted = String(prefix ?? '');
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (key !== null && key.startsWith(wanted)) {
+      result.push(key);
+    }
+  }
+
+  return result;
+}
