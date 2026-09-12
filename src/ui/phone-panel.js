@@ -13,6 +13,8 @@ import {
   appendMessage,
   setConversationPinned,
   markConversationRead,
+  getMessageById,
+  deleteMessage,
 } from '../storage/data-store.js';
 import {
   getTavernCharactersSnapshot,
@@ -188,6 +190,14 @@ export function createPhonePanel({
       </footer>
     </section>
 
+    <div class="moli-message-menu" data-message-menu hidden>
+      <button data-message-action="quote">引用</button>
+      <button data-message-action="copy">复制</button>
+      <button data-message-action="forward">转发</button>
+      <button data-message-action="multi">多选</button>
+      <button data-message-action="delete" class="danger">删除</button>
+    </div>
+
     <div class="moli-toast" aria-live="polite"></div>
   `;
 
@@ -211,12 +221,18 @@ export function createPhonePanel({
   const infoAvatarInput = panel.querySelector('[data-info-avatar-input]');
   const groupMembersEditList = panel.querySelector('[data-group-members-edit-list]');
   const groupMembersTitle = panel.querySelector('[data-group-members-title]');
+  const messageMenu = panel.querySelector('[data-message-menu]');
 
   let currentContactId = null;
   let syncSnapshot = [];
   let pendingContactAvatar = '';
   let groupMemberEditMode = 'add';
   let suppressPanelClicksUntil = 0;
+  let activeMessageId = null;
+  let messagePressTimer = null;
+  let messagePressPointerId = null;
+  let messagePressStartX = 0;
+  let messagePressStartY = 0;
 
   panel.addEventListener(
     'click',
@@ -624,6 +640,7 @@ export function createPhonePanel({
 
   const show = name => {
     if (addMenu) addMenu.hidden = true;
+    hideMessageMenu();
 
     pages.forEach(page => {
       page.classList.toggle('active', page.dataset.page === name);
@@ -977,6 +994,101 @@ export function createPhonePanel({
       });
   }
 
+  function hideMessageMenu() {
+    if (!messageMenu) return;
+    messageMenu.hidden = true;
+    activeMessageId = null;
+  }
+
+  function showMessageMenu(messageId, clientX, clientY) {
+    if (!messageMenu || !messageId) return;
+
+    activeMessageId = messageId;
+    messageMenu.hidden = false;
+
+    const panelRect = panel.getBoundingClientRect();
+    const menuWidth = messageMenu.offsetWidth || 170;
+    const menuHeight = messageMenu.offsetHeight || 220;
+    const localX = clientX - panelRect.left;
+    const localY = clientY - panelRect.top;
+
+    const left = Math.max(8, Math.min(panelRect.width - menuWidth - 8, localX));
+    const top = Math.max(8, Math.min(panelRect.height - menuHeight - 8, localY));
+
+    messageMenu.style.left = `${left}px`;
+    messageMenu.style.top = `${top}px`;
+  }
+
+  async function copyMessageText(message) {
+    const text = String(message?.content || '');
+    if (!text) {
+      toast('这条消息没有可复制内容');
+      return;
+    }
+
+    try {
+      if (windowRef.navigator?.clipboard?.writeText) {
+        await windowRef.navigator.clipboard.writeText(text);
+      } else {
+        const helper = documentRef.createElement('textarea');
+        helper.value = text;
+        helper.style.position = 'fixed';
+        helper.style.opacity = '0';
+        documentRef.body.appendChild(helper);
+        helper.select();
+        documentRef.execCommand?.('copy');
+        helper.remove();
+      }
+      toast('已复制');
+    } catch (error) {
+      console.error('[moli小手机] copy message failed:', error);
+      toast('复制失败');
+    }
+  }
+
+  function handleMessageMenuAction(action) {
+    const scopeKey = getScopeKey?.();
+    const messageId = activeMessageId;
+    if (!scopeKey || !currentContactId || !messageId) {
+      hideMessageMenu();
+      return;
+    }
+
+    const message = getMessageById(scopeKey, currentContactId, messageId);
+    if (!message) {
+      hideMessageMenu();
+      toast('这条消息已不存在');
+      renderChat();
+      return;
+    }
+
+    if (action === 'copy') {
+      hideMessageMenu();
+      copyMessageText(message);
+      return;
+    }
+
+    if (action === 'delete') {
+      hideMessageMenu();
+      const confirmed = windowRef.confirm?.('删除这条消息？') ?? true;
+      if (!confirmed) return;
+
+      const removed = deleteMessage(scopeKey, currentContactId, messageId);
+      if (removed) {
+        renderChat();
+        toast('已删除');
+      } else {
+        toast('删除失败');
+      }
+      return;
+    }
+
+    hideMessageMenu();
+    if (action === 'quote') toast('引用功能下一步接入');
+    if (action === 'forward') toast('转发功能下一步接入');
+    if (action === 'multi') toast('多选功能下一步接入');
+  }
+
   function renderChat() {
     if (!currentContactId) {
       return;
@@ -1043,7 +1155,7 @@ export function createPhonePanel({
         return `
           <div class="moli-msg ${
             isUser ? 'user' : 'assistant'
-          }">
+          }" data-message-id="${escapeHtml(message.id || '')}">
             ${avatar}
 
             <div class="moli-msg-content">
@@ -1060,6 +1172,63 @@ export function createPhonePanel({
     chatBody.scrollTop =
       chatBody.scrollHeight;
   }
+
+  chatBody.addEventListener('contextmenu', event => {
+    const row = event.target.closest?.('[data-message-id]');
+    if (!row) return;
+    event.preventDefault();
+    showMessageMenu(row.dataset.messageId, event.clientX, event.clientY);
+  });
+
+  chatBody.addEventListener('pointerdown', event => {
+    const row = event.target.closest?.('[data-message-id]');
+    if (!row || event.pointerType === 'mouse') return;
+
+    clearTimeout(messagePressTimer);
+    messagePressPointerId = event.pointerId;
+    messagePressStartX = event.clientX;
+    messagePressStartY = event.clientY;
+
+    messagePressTimer = setTimeout(() => {
+      messagePressTimer = null;
+      showMessageMenu(row.dataset.messageId, event.clientX, event.clientY);
+      try { windowRef.navigator?.vibrate?.(18); } catch {}
+    }, 520);
+  });
+
+  chatBody.addEventListener('pointermove', event => {
+    if (!messagePressTimer || event.pointerId !== messagePressPointerId) return;
+    const dx = Math.abs(event.clientX - messagePressStartX);
+    const dy = Math.abs(event.clientY - messagePressStartY);
+    if (dx > 10 || dy > 10) {
+      clearTimeout(messagePressTimer);
+      messagePressTimer = null;
+    }
+  });
+
+  const cancelMessagePress = event => {
+    if (event?.pointerId != null && messagePressPointerId != null && event.pointerId !== messagePressPointerId) return;
+    clearTimeout(messagePressTimer);
+    messagePressTimer = null;
+    messagePressPointerId = null;
+  };
+
+  chatBody.addEventListener('pointerup', cancelMessagePress);
+  chatBody.addEventListener('pointercancel', cancelMessagePress);
+
+  messageMenu?.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-message-action]');
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    handleMessageMenuAction(button.dataset.messageAction);
+  });
+
+  panel.addEventListener('click', event => {
+    if (messageMenu?.hidden) return;
+    if (event.target.closest?.('[data-message-menu]')) return;
+    hideMessageMenu();
+  });
 
   function sendMessage() {
     if (!currentContactId) {
