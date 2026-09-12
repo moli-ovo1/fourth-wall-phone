@@ -8,6 +8,7 @@ import {
   syncTavernContacts,
   createCustomContact,
   createGroupConversation,
+  updateGroupConversation,
   appendMessage,
 } from '../storage/data-store.js';
 import {
@@ -165,9 +166,22 @@ export function createPhonePanel({
         <div class="moli-nav-title">聊天信息</div>
         <div class="moli-nav-side right"></div>
       </header>
-      <main class="moli-placeholder">
-        当前会话设置将在后续阶段接入。
-      </main>
+      <main class="moli-chat-info"></main>
+    </section>
+
+    <section class="moli-page" data-page="group-members-edit">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="group-members-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title" data-group-members-title>群成员</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-group-member-list" data-group-members-edit-list></main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="group-members-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="group-members-confirm">确定</button>
+      </footer>
     </section>
 
     <div class="moli-toast" aria-live="polite"></div>
@@ -189,10 +203,14 @@ export function createPhonePanel({
   const contactPromptInput = panel.querySelector('[data-contact-prompt]');
   const groupNameInput = panel.querySelector('[data-group-name]');
   const groupMemberList = panel.querySelector('.moli-group-member-list');
+  const chatInfo = panel.querySelector('.moli-chat-info');
+  const groupMembersEditList = panel.querySelector('[data-group-members-edit-list]');
+  const groupMembersTitle = panel.querySelector('[data-group-members-title]');
 
   let currentContactId = null;
   let syncSnapshot = [];
   let pendingContactAvatar = '';
+  let groupMemberEditMode = 'add';
 
   const escapeHtml = value => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -350,6 +368,127 @@ export function createPhonePanel({
     }
   }
 
+  function currentConversation() {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey || !currentContactId) return null;
+    return getConversation(scopeKey, currentContactId);
+  }
+
+  function renderChatInfo() {
+    const conversation = currentConversation();
+
+    if (!conversation) {
+      chatInfo.innerHTML = '<div class="moli-placeholder">当前会话不存在。</div>';
+      return;
+    }
+
+    if (conversation.type !== 'group') {
+      const item = contact(conversation.contactId || currentContactId);
+      chatInfo.innerHTML = `
+        <div class="moli-info-private-head">
+          ${item ? avatarMarkup(item, 'moli-info-avatar') : ''}
+          <div class="moli-info-private-name">${escapeHtml(item ? displayName(item) : '联系人')}</div>
+        </div>
+        <div class="moli-info-coming">私聊设置将在后续阶段继续接入。</div>
+      `;
+      return;
+    }
+
+    const members = groupMembers(conversation);
+    chatInfo.innerHTML = `
+      <section class="moli-group-info-members">
+        <div class="moli-group-info-grid">
+          ${members.map(item => `
+            <div class="moli-group-info-member">
+              ${avatarMarkup(item, 'moli-info-member-avatar')}
+              <div class="moli-group-info-member-name">${escapeHtml(displayName(item))}</div>
+            </div>
+          `).join('')}
+          <button class="moli-group-info-action" type="button" data-action="group-add-members" aria-label="增加成员">
+            <span>＋</span>
+            <small>增加</small>
+          </button>
+          <button class="moli-group-info-action" type="button" data-action="group-remove-members" aria-label="踢出成员">
+            <span>－</span>
+            <small>移除</small>
+          </button>
+        </div>
+      </section>
+
+      <label class="moli-info-row moli-info-name-row">
+        <span>群聊名称</span>
+        <input type="text" maxlength="80" data-info-group-name value="${escapeHtml(conversation.name || '')}">
+        <button type="button" data-action="save-group-name">保存</button>
+      </label>
+
+      <div class="moli-info-coming">自动吐槽、自动点评、查找记录等设置将在后续阶段继续接入。</div>
+    `;
+  }
+
+  function openGroupMemberEditor(mode) {
+    const conversation = currentConversation();
+    if (!conversation || conversation.type !== 'group') return;
+
+    groupMemberEditMode = mode === 'remove' ? 'remove' : 'add';
+    groupMembersTitle.textContent = groupMemberEditMode === 'remove' ? '移除群成员' : '增加群成员';
+
+    const currentIds = new Set(conversation.memberIds || []);
+    const contacts = getContacts();
+    const choices = groupMemberEditMode === 'remove'
+      ? contacts.filter(item => currentIds.has(item.id))
+      : contacts.filter(item => !currentIds.has(item.id));
+
+    groupMembersEditList.innerHTML = choices.length
+      ? choices.map(item => `
+          <label class="moli-sync-item">
+            <input type="checkbox" data-group-edit-member-id="${escapeHtml(item.id)}">
+            ${avatarMarkup(item, 'moli-sync-avatar')}
+            <div class="moli-sync-main">
+              <div class="moli-sync-name">${escapeHtml(displayName(item))}</div>
+            </div>
+          </label>
+        `).join('')
+      : `<div class="moli-empty">${groupMemberEditMode === 'remove' ? '当前没有可移除的成员。' : '没有其他可加入的联系人。'}</div>`;
+
+    show('group-members-edit');
+  }
+
+  function confirmGroupMemberEdit() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    if (!scopeKey || !conversation || conversation.type !== 'group') return;
+
+    const selectedIds = [...groupMembersEditList.querySelectorAll('[data-group-edit-member-id]:checked')]
+      .map(input => input.dataset.groupEditMemberId);
+
+    if (!selectedIds.length) {
+      toast(groupMemberEditMode === 'remove' ? '请选择要移除的成员' : '请选择要增加的成员');
+      return;
+    }
+
+    updateGroupConversation(scopeKey, conversation.id, groupMemberEditMode === 'remove'
+      ? { removeMemberIds: selectedIds }
+      : { addMemberIds: selectedIds });
+
+    toast(groupMemberEditMode === 'remove' ? '已移除群成员' : '已增加群成员');
+    show('info');
+  }
+
+  function saveGroupName() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    if (!scopeKey || !conversation || conversation.type !== 'group') return;
+
+    const inputEl = chatInfo.querySelector('[data-info-group-name]');
+    try {
+      updateGroupConversation(scopeKey, conversation.id, { name: inputEl?.value });
+      toast('群聊名称已保存');
+      renderChatInfo();
+    } catch (error) {
+      toast(error?.message || '保存失败');
+    }
+  }
+
   function resetGroupForm() {
     groupNameInput.value = '';
     groupMemberList.innerHTML = '';
@@ -430,6 +569,10 @@ export function createPhonePanel({
 
     if (name === 'create-group') {
       renderGroupCreate();
+    }
+
+    if (name === 'info') {
+      renderChatInfo();
     }
   };
 
@@ -1145,6 +1288,30 @@ export function createPhonePanel({
     '[data-action="chat"]'
   ).onclick = () =>
     show('chat');
+
+  panel.addEventListener('click', event => {
+    const action = event.target.closest?.('[data-action]')?.dataset.action;
+
+    if (action === 'group-add-members') {
+      openGroupMemberEditor('add');
+    } else if (action === 'group-remove-members') {
+      openGroupMemberEditor('remove');
+    } else if (action === 'save-group-name') {
+      saveGroupName();
+    }
+  });
+
+  panel.querySelector(
+    '[data-action="group-members-back"]'
+  ).onclick = () => show('info');
+
+  panel.querySelector(
+    '[data-action="group-members-cancel"]'
+  ).onclick = () => show('info');
+
+  panel.querySelector(
+    '[data-action="group-members-confirm"]'
+  ).onclick = confirmGroupMemberEdit;
 
   panel.querySelector(
     '[data-action="add"]'
