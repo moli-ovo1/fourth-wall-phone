@@ -1332,9 +1332,22 @@ export function createPhonePanel({
     return item ? displayName(item) : '联系人';
   }
 
-  function snapshotForwardItem(message, sourceTitle) {
+  function snapshotForwardItem(message, sourceTitle, sourceConversation = null) {
+    const inferredSenderId = message?.role === 'user'
+      ? ''
+      : String(
+          message?.senderId
+          || (
+            sourceConversation?.type === 'private'
+              ? sourceConversation?.contactId
+              : ''
+          )
+          || ''
+        );
+
     return {
       messageId: String(message?.id || ''),
+      senderId: inferredSenderId,
       senderName: message?.role === 'user'
         ? '我'
         : String(message?.senderSnapshot?.name || sourceTitle || ''),
@@ -1512,7 +1525,7 @@ export function createPhonePanel({
         mode: 'single',
         sourceConversationId: String(sourceConversation?.id || currentContactId || ''),
         sourceConversationTitle: sourceTitle,
-        items: [snapshotForwardItem(message, sourceTitle)],
+        items: [snapshotForwardItem(message, sourceTitle, sourceConversation)],
       });
       return;
     }
@@ -1744,7 +1757,7 @@ export function createPhonePanel({
       const sourceTitle = conversationDisplayTitle(sourceConversation);
       const selected = (sourceConversation.messages || [])
         .filter(message => selectedMessageIds.has(String(message.id || '')))
-        .map(message => snapshotForwardItem(message, sourceTitle));
+        .map(message => snapshotForwardItem(message, sourceTitle, sourceConversation));
 
       if (!selected.length) {
         toast('选中的消息已不存在');
