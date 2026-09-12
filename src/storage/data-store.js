@@ -302,6 +302,26 @@ export function createCustomContact({
   return contact;
 }
 
+
+export function updateContact(contactId, { name, remark, customAvatar, intro, prompt } = {}) {
+  const list = getContacts();
+  const contact = list.find(item => item.id === contactId);
+  if (!contact) throw new Error('联系人不存在');
+  if (name !== undefined && contact.kind === 'custom') {
+    const trimmedName = String(name || '').trim();
+    if (!trimmedName) throw new Error('联系人名称不能为空');
+    contact.name = trimmedName;
+    contact.displayName = trimmedName;
+  }
+  if (remark !== undefined) contact.remark = String(remark || '').trim();
+  if (customAvatar !== undefined) contact.customAvatar = String(customAvatar || '');
+  if (intro !== undefined) contact.intro = String(intro || '').trim();
+  if (prompt !== undefined) contact.prompt = String(prompt || '').trim();
+  contact.updatedAt = Date.now();
+  saveContacts(list);
+  return contact;
+}
+
 export function syncTavernContacts(characters) {
   const list = getContacts();
   const bySource = new Map(
