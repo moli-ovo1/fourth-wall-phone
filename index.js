@@ -1,4 +1,4 @@
-import { initApp } from './src/core/app.js';
+import { initApp } from './SRC/core/app.js';
 
 jQuery(async () => {
     console.log('[moli小手机] extension entry loaded');
@@ -21,7 +21,10 @@ jQuery(async () => {
             window.toastr?.error?.(
                 `moli小手机加载失败：${error?.message || error}`,
                 '',
-                { timeOut: 5000, positionClass: 'toast-top-center' },
+                {
+                    timeOut: 5000,
+                    positionClass: 'toast-top-center',
+                },
             );
         } catch {}
     }
