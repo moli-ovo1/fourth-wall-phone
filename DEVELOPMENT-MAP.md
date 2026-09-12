@@ -983,6 +983,29 @@ Generation / Prompt 接入时使用 Data Store 的统一联系人上下文来源
 
 ---
 
+## Role Fidelity 第一阶段已接入
+
+酒馆角色私聊生成现在使用以下来源：
+
+- 角色卡 Description / Personality / Scenario；
+- 角色卡 System Prompt / Post-History Instructions；
+- Example Dialogue；
+- 当前 SillyTavern 存档最近正文；
+- 当前场外聊天历史；
+- 同一 `contactId` 的其他会话上下文；
+- 用户额外填写的人格提示词。
+
+实现边界：
+
+- 最近正文在生成开始时实时读取，不写入全局 Contact；
+- 角色卡快照可存于 `contact.source.roleFidelity` 作为来源失效时的兼容资料；
+- 用户备注、自定义头像、简介、追加人格提示词不会被角色卡刷新覆盖；
+- 最近正文同时承担近期剧情和语言声纹参考，不再额外复制“最近角色语言样本”；
+- 世界书与柏宝书长期记忆仍由后续独立节点接入；
+- Role Fidelity 不得把正文第三人称叙述格式照搬成手机聊天回复。
+
+---
+
 # 12. API / Generation 层
 
 ## 负责内容
