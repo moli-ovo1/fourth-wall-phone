@@ -136,6 +136,10 @@ export function createPhonePanel({
         </div>
       </header>
       <main class="moli-chat-body"></main>
+      <div class="moli-quote-draft" data-quote-draft hidden>
+        <div class="moli-quote-draft-text" data-quote-draft-text></div>
+        <button class="moli-quote-draft-close" data-action="cancel-quote" aria-label="取消引用">×</button>
+      </div>
       <footer class="moli-compose">
         <button class="moli-plus" data-action="more" aria-label="更多">＋</button>
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
@@ -222,6 +226,8 @@ export function createPhonePanel({
   const groupMembersEditList = panel.querySelector('[data-group-members-edit-list]');
   const groupMembersTitle = panel.querySelector('[data-group-members-title]');
   const messageMenu = panel.querySelector('[data-message-menu]');
+  const quoteDraft = panel.querySelector('[data-quote-draft]');
+  const quoteDraftText = panel.querySelector('[data-quote-draft-text]');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -229,6 +235,7 @@ export function createPhonePanel({
   let groupMemberEditMode = 'add';
   let suppressPanelClicksUntil = 0;
   let activeMessageId = null;
+  let pendingQuote = null;
   let messagePressTimer = null;
   let messagePressPointerId = null;
   let messagePressStartX = 0;
@@ -1083,8 +1090,25 @@ export function createPhonePanel({
       return;
     }
 
+    if (action === 'quote') {
+      pendingQuote = {
+        messageId: String(message.id || ''),
+        content: String(message.content || ''),
+        senderName: message.role === 'user'
+          ? '我'
+          : String(message.senderSnapshot?.name || chatTitle?.textContent || ''),
+      };
+      if (quoteDraftText) {
+        const who = pendingQuote.senderName ? `${pendingQuote.senderName}：` : '';
+        quoteDraftText.textContent = `${who}${pendingQuote.content}`;
+      }
+      if (quoteDraft) quoteDraft.hidden = false;
+      hideMessageMenu();
+      input?.focus();
+      return;
+    }
+
     hideMessageMenu();
-    if (action === 'quote') toast('引用功能下一步接入');
     if (action === 'forward') toast('转发功能下一步接入');
     if (action === 'multi') toast('多选功能下一步接入');
   }
@@ -1161,6 +1185,14 @@ export function createPhonePanel({
             <div class="moli-msg-content">
               ${senderName}
               <div class="moli-bubble">
+                ${message.quote ? `
+                  <div class="moli-quoted-message">
+                    ${message.quote.senderName
+                      ? `<div class="moli-quoted-sender">${escapeHtml(message.quote.senderName)}</div>`
+                      : ''}
+                    <div>${escapeHtml(message.quote.content || '')}</div>
+                  </div>
+                ` : ''}
                 ${escapeHtml(message.content)}
               </div>
             </div>
@@ -1230,6 +1262,14 @@ export function createPhonePanel({
     hideMessageMenu();
   });
 
+  panel.addEventListener('click', event => {
+    const cancelQuote = event.target.closest?.('[data-action="cancel-quote"]');
+    if (!cancelQuote) return;
+    pendingQuote = null;
+    if (quoteDraft) quoteDraft.hidden = true;
+    if (quoteDraftText) quoteDraftText.textContent = '';
+  });
+
   function sendMessage() {
     if (!currentContactId) {
       return;
@@ -1247,10 +1287,14 @@ export function createPhonePanel({
       scopeKey,
       currentContactId,
       'user',
-      text
+      text,
+      pendingQuote ? { quote: pendingQuote } : {}
     );
 
     input.value = '';
+    pendingQuote = null;
+    if (quoteDraft) quoteDraft.hidden = true;
+    if (quoteDraftText) quoteDraftText.textContent = '';
 
     renderChat();
   }
