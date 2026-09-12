@@ -1,4 +1,4 @@
-import { initApp } from './src/core/app.js';
+import { initApp } from './SRC/core/app.js';
 
 function boot() {
     try {
