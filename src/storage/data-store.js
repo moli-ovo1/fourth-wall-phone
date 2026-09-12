@@ -320,6 +320,10 @@ export function refreshTavernContacts(
         originalName: fresh.name,
         originalAvatar: fresh.avatar || '',
         originalAvatarUrl: fresh.avatarUrl || '',
+        roleFidelity:
+          fresh.roleFidelity && typeof fresh.roleFidelity === 'object'
+            ? { ...fresh.roleFidelity }
+            : (contact.source?.roleFidelity || {}),
         status: 'available',
         lastSyncedAt: Date.now(),
       };
@@ -433,6 +437,10 @@ export function syncTavernContacts(characters) {
       originalName: character.name,
       originalAvatar: character.avatar || '',
       originalAvatarUrl: character.avatarUrl || '',
+      roleFidelity:
+        character.roleFidelity && typeof character.roleFidelity === 'object'
+          ? { ...character.roleFidelity }
+          : (contact.source?.roleFidelity || {}),
       status: 'available',
       lastSyncedAt: Date.now(),
     };
