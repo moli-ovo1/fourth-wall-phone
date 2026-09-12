@@ -2,51 +2,109 @@ import { loadUiState, saveUiState } from '../storage/ui-state.js';
 import { createFloatingBall } from '../ui/floating-ball.js';
 import { createPhonePanel } from '../ui/phone-panel.js';
 import { getCurrentScopeKey } from './tavern-scope.js';
-import { getContacts, ensureBuiltins } from '../storage/data-store.js';
+import {
+  getContacts,
+  ensureBuiltins,
+  refreshLinkedTavernContacts,
+} from '../storage/data-store.js';
+import { listTavernCharacters } from './tavern-contacts.js';
 
 let appInstance = null;
 
 export function initApp() {
   appInstance?.destroy?.();
+
   getContacts();
-  ensureBuiltins(getCurrentScopeKey());
+
+  refreshLinkedTavernContacts(
+    listTavernCharacters(),
+  );
+
+  ensureBuiltins(
+    getCurrentScopeKey(),
+  );
 
   const uiState = loadUiState();
+
   let panelController;
 
   const handleController = createFloatingBall({
     uiState,
-    onClick: () => panelController?.toggle(handleController.element),
-    onUiStateChange: () => saveUiState(uiState),
+
+    onClick: () => {
+      panelController?.toggle(
+        handleController.element,
+      );
+    },
+
+    onUiStateChange: () => {
+      saveUiState(uiState);
+    },
   });
 
   panelController = createPhonePanel({
     uiState,
-    onUiStateChange: () => saveUiState(uiState),
+
+    onUiStateChange: () => {
+      saveUiState(uiState);
+    },
+
     getScopeKey: getCurrentScopeKey,
   });
 
-  const outside = e => {
+  const outsidePointerHandler = event => {
     if (!panelController.isOpen()) return;
-    if (panelController.element.contains(e.target) || handleController.element.contains(e.target)) return;
+
+    if (
+      panelController.element.contains(event.target)
+    ) {
+      return;
+    }
+
+    if (
+      handleController.element.contains(event.target)
+    ) {
+      return;
+    }
+
     panelController.close();
   };
-  const resize = () => {
+
+  const resizeHandler = () => {
     handleController.clampToViewport();
     panelController.clampToViewport();
+
     saveUiState(uiState);
   };
 
-  document.addEventListener('pointerdown', outside, true);
-  window.addEventListener('resize', resize);
+  document.addEventListener(
+    'pointerdown',
+    outsidePointerHandler,
+    true,
+  );
+
+  window.addEventListener(
+    'resize',
+    resizeHandler,
+  );
 
   appInstance = {
     destroy() {
-      document.removeEventListener('pointerdown', outside, true);
-      window.removeEventListener('resize', resize);
+      document.removeEventListener(
+        'pointerdown',
+        outsidePointerHandler,
+        true,
+      );
+
+      window.removeEventListener(
+        'resize',
+        resizeHandler,
+      );
+
       panelController.element.remove();
       handleController.element.remove();
-    }
+    },
   };
+
   return appInstance;
 }
