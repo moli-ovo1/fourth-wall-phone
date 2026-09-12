@@ -688,3 +688,20 @@ export function deleteMessages(scopeKey, conversationKey, messageIds) {
 
   return deleted;
 }
+
+
+export function clearConversationMessages(scopeKey, conversationKey) {
+  const data = loadScope(scopeKey);
+  const entry = findConversationEntry(data, conversationKey);
+
+  if (!entry?.conversation) {
+    return false;
+  }
+
+  entry.conversation.messages = [];
+  entry.conversation.unreadCount = 0;
+  entry.conversation.updatedAt = Date.now();
+
+  saveScope(scopeKey, data);
+  return true;
+}
