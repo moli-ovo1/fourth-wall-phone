@@ -7,37 +7,33 @@ export function createFloatingBall({
     onClick,
     onUiStateChange,
 }) {
-    documentRef.getElementById("moli-phone-handle")?.remove();
+    documentRef.getElementById('moli-phone-handle')?.remove();
 
-    const handle = documentRef.createElement("div");
-    handle.id = "moli-phone-handle";
-    handle.textContent = "◫";
-    handle.title = "moli小手机";
-    handle.setAttribute("aria-label", "moli小手机");
+    const handle = documentRef.createElement('div');
+    handle.id = 'moli-phone-handle';
+    handle.textContent = '◫';
+    handle.setAttribute('aria-label', 'moli小手机');
+    handle.setAttribute('title', 'moli小手机');
     documentRef.body.appendChild(handle);
 
-    if (typeof uiState.handleX !== "number") {
+    if (typeof uiState.handleX !== 'number') {
         uiState.handleX = windowRef.innerWidth - HANDLE_SIZE - 12;
     }
-    if (typeof uiState.handleY !== "number") {
+    if (typeof uiState.handleY !== 'number') {
         uiState.handleY = Math.round(windowRef.innerHeight * 0.42);
     }
 
     function applyPosition() {
-        const x = Math.max(
-            0,
-            Math.min(windowRef.innerWidth - HANDLE_SIZE, Number(uiState.handleX)),
-        );
-        const y = Math.max(
-            45,
-            Math.min(windowRef.innerHeight - HANDLE_SIZE - 15, Number(uiState.handleY)),
-        );
+        const x = Math.max(0, Math.min(windowRef.innerWidth - HANDLE_SIZE, Number(uiState.handleX)));
+        const y = Math.max(45, Math.min(windowRef.innerHeight - HANDLE_SIZE - 15, Number(uiState.handleY)));
 
         uiState.handleX = x;
         uiState.handleY = y;
 
         handle.style.left = `${x}px`;
         handle.style.top = `${y}px`;
+        handle.style.right = 'auto';
+        handle.style.bottom = 'auto';
     }
 
     let dragging = false;
@@ -47,7 +43,7 @@ export function createFloatingBall({
     let grabX = 0;
     let grabY = 0;
 
-    handle.addEventListener("pointerdown", (event) => {
+    handle.addEventListener('pointerdown', event => {
         dragging = true;
         moved = false;
         startX = event.clientX;
@@ -57,19 +53,17 @@ export function createFloatingBall({
         grabX = event.clientX - rect.left;
         grabY = event.clientY - rect.top;
 
-        handle.classList.add("dragging");
+        handle.classList.add('dragging');
+
         try {
             handle.setPointerCapture(event.pointerId);
         } catch {}
     });
 
-    handle.addEventListener("pointermove", (event) => {
+    handle.addEventListener('pointermove', event => {
         if (!dragging) return;
 
-        if (
-            Math.abs(event.clientX - startX) > 4 ||
-            Math.abs(event.clientY - startY) > 4
-        ) {
+        if (Math.abs(event.clientX - startX) > 4 || Math.abs(event.clientY - startY) > 4) {
             moved = true;
         }
 
@@ -77,23 +71,21 @@ export function createFloatingBall({
             0,
             Math.min(windowRef.innerWidth - HANDLE_SIZE, event.clientX - grabX),
         );
+
         uiState.handleY = Math.max(
             45,
-            Math.min(
-                windowRef.innerHeight - HANDLE_SIZE - 15,
-                event.clientY - grabY,
-            ),
+            Math.min(windowRef.innerHeight - HANDLE_SIZE - 15, event.clientY - grabY),
         );
 
         handle.style.left = `${uiState.handleX}px`;
         handle.style.top = `${uiState.handleY}px`;
     });
 
-    handle.addEventListener("pointerup", (event) => {
+    handle.addEventListener('pointerup', event => {
         if (!dragging) return;
 
         dragging = false;
-        handle.classList.remove("dragging");
+        handle.classList.remove('dragging');
 
         try {
             handle.releasePointerCapture(event.pointerId);
@@ -103,27 +95,6 @@ export function createFloatingBall({
             onUiStateChange?.();
         } else {
             onClick?.();
-        }
-    });
-
-    applyPosition();
-
-    return {
-        element: handle,
-
-        clampToViewport() {
-            uiState.handleX = Math.min(
-                uiState.handleX,
-                windowRef.innerWidth - HANDLE_SIZE,
-            );
-            uiState.handleY = Math.min(
-                uiState.handleY,
-                windowRef.innerHeight - HANDLE_SIZE - 15,
-            );
-            applyPosition();
-        },
-    };
-}
         }
     });
 
