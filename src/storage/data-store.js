@@ -555,6 +555,7 @@ export function appendMessage(
     data.conversations[contactId] || createPrivateConversation(contactId)
   );
 
+  const normalizedRole = String(role || 'user');
   const message = {
     id:
       `msg:${Date.now()}:` +
@@ -562,7 +563,17 @@ export function appendMessage(
         .toString(36)
         .slice(2, 7),
 
-    role,
+    role: normalizedRole,
+    senderType:
+      normalizedRole === 'user'
+        ? 'user'
+        : normalizedRole === 'system'
+          ? 'system'
+          : 'contact',
+    source: String(
+      options?.source
+      || (options?.forward ? 'forward' : 'manual')
+    ),
     content,
     ts: Date.now(),
   };
