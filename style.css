@@ -338,3 +338,22 @@
 #moli-phone-panel .moli-search-result-top span{font-size:10px;color:#999;white-space:nowrap}
 #moli-phone-panel .moli-search-result-text{font-size:13px;line-height:1.45;color:#555;white-space:pre-wrap;overflow-wrap:anywhere}
 #moli-phone-panel .moli-message-highlight .moli-bubble{outline:2px solid rgba(255,190,0,.7);outline-offset:2px}
+
+#moli-phone-panel .moli-settings-list{flex:1;min-height:0;overflow:auto;background:#f3f3f3;padding:12px}
+#moli-phone-panel .moli-settings-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;border:0;border-radius:10px;background:#fff;padding:13px 14px;text-align:left;color:inherit}
+#moli-phone-panel .moli-settings-row span{display:flex;flex-direction:column;gap:3px}
+#moli-phone-panel .moli-settings-row strong{font-size:14px}
+#moli-phone-panel .moli-settings-row small,#moli-phone-panel .moli-switch-row small{font-size:11px;color:#888;font-weight:400}
+#moli-phone-panel .moli-settings-row b{font-size:22px;color:#aaa;font-weight:400}
+#moli-phone-panel .moli-settings-note{font-size:11px;line-height:1.5;color:#888;padding:10px 4px}
+#moli-phone-panel .moli-api-settings{flex:1;min-height:0;overflow:auto;background:#f3f3f3;padding:12px}
+#moli-phone-panel .moli-api-settings .moli-form-field{margin-bottom:10px}
+#moli-phone-panel .moli-api-settings select{width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:8px;background:#fff;padding:9px 10px;font-size:14px}
+#moli-phone-panel .moli-secret-field{display:flex;gap:7px}
+#moli-phone-panel .moli-secret-field input{flex:1;min-width:0}
+#moli-phone-panel .moli-secret-field button{flex:0 0 auto;border:1px solid #ddd;border-radius:8px;background:#fff;padding:0 10px;color:#555}
+#moli-phone-panel .moli-api-disabled-actions{display:flex;gap:8px;margin-top:4px}
+#moli-phone-panel .moli-api-disabled-actions button{flex:1}
+#moli-phone-panel .moli-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:10px;background:#fff;padding:12px 13px;margin-top:10px}
+#moli-phone-panel .moli-switch-row span{display:flex;flex-direction:column;gap:3px}
+#moli-phone-panel .moli-switch-row input{width:18px;height:18px}

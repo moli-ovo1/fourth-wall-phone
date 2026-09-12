@@ -952,6 +952,20 @@ Scope Key、Contact Schema、Conversation Schema / ID、Message Schema、Storage
 
 ---
 
+## 同联系人跨会话上下文契约
+
+Generation / Prompt 接入时使用 Data Store 的统一联系人上下文来源能力：
+
+- 只按稳定 `contactId` 关联同一角色；
+- 私聊、群聊仍保持独立 Conversation；
+- 当前会话优先，其他会话必须带来源标签；
+- 跨会话只读引用，不自动复制消息；
+- 不得跨 SillyTavern Scope；
+- 转发内容中的 `senderId` 可用于识别同一联系人；
+- Prompt 组装不得把“私聊发生过”改写成“群聊发生过”。
+
+---
+
 # 12. API / Generation 层
 
 ## 负责内容
