@@ -27,6 +27,7 @@ const BUILTIN_CONTACTS = [
 
 const CONTACTS_KEY = 'moli-phone:contacts:v1';
 const SCOPE_PREFIX = 'moli-phone:scope:v1:';
+const SCOPE_MIGRATIONS_KEY = 'moli-phone:scope-migrations:v1';
 
 function parse(raw, fallback) {
   try {
@@ -34,6 +35,13 @@ function parse(raw, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function saveContacts(list) {
+  localStorage.setItem(
+    CONTACTS_KEY,
+    JSON.stringify(list)
+  );
 }
 
 export function getContacts() {
@@ -56,10 +64,7 @@ export function getContacts() {
 
   const list = [...map.values()];
 
-  localStorage.setItem(
-    CONTACTS_KEY,
-    JSON.stringify(list)
-  );
+  saveContacts(list);
 
   return list;
 }
@@ -71,7 +76,12 @@ function key(scopeKey) {
   );
 }
 
-export function loadScope(scopeKey) {
+function legacyScopeKey(scopeKey) {
+  const match = String(scopeKey || '').match(/:chat:(.+)$/);
+  return match ? `chat:${match[1]}` : null;
+}
+
+function loadStoredScope(scopeKey) {
   const d = parse(
     localStorage.getItem(key(scopeKey)),
     null
@@ -82,9 +92,59 @@ export function loadScope(scopeKey) {
         conversations:
           d.conversations || {}
       }
-    : {
-        conversations: {}
-      };
+    : null;
+}
+
+function migrateLegacyScope(scopeKey) {
+  const legacy = legacyScopeKey(scopeKey);
+  if (!legacy || legacy === scopeKey) return null;
+
+  const oldData = loadStoredScope(legacy);
+  if (!oldData) return null;
+
+  const migrations = parse(
+    localStorage.getItem(SCOPE_MIGRATIONS_KEY),
+    {}
+  );
+
+  const oldStorageKey = key(legacy);
+  const claimedBy = migrations?.[oldStorageKey];
+
+  if (claimedBy && claimedBy !== scopeKey) {
+    return null;
+  }
+
+  localStorage.setItem(
+    key(scopeKey),
+    JSON.stringify(oldData)
+  );
+
+  migrations[oldStorageKey] = scopeKey;
+  localStorage.setItem(
+    SCOPE_MIGRATIONS_KEY,
+    JSON.stringify(migrations)
+  );
+
+  return oldData;
+}
+
+export function loadScope(scopeKey) {
+  const existing = loadStoredScope(scopeKey);
+  if (existing) return existing;
+
+  const migrated = migrateLegacyScope(scopeKey);
+  if (migrated) return migrated;
+
+  return {
+    conversations: {}
+  };
+}
+
+function saveScope(scopeKey, data) {
+  localStorage.setItem(
+    key(scopeKey),
+    JSON.stringify(data)
+  );
 }
 
 export function ensureBuiltins(scopeKey) {
@@ -107,12 +167,37 @@ export function ensureBuiltins(scopeKey) {
     }
   }
 
-  localStorage.setItem(
-    key(scopeKey),
-    JSON.stringify(data)
-  );
+  saveScope(scopeKey, data);
 
   return data;
+}
+
+export function getScopeConversations(scopeKey) {
+  return Object.values(
+    ensureBuiltins(scopeKey).conversations
+  );
+}
+
+export function ensureConversation(
+  scopeKey,
+  contactId
+) {
+  const data = ensureBuiltins(scopeKey);
+
+  if (!data.conversations[contactId]) {
+    data.conversations[contactId] = {
+      id: `private:${contactId}`,
+      type: 'private',
+      contactId,
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    saveScope(scopeKey, data);
+  }
+
+  return data.conversations[contactId];
 }
 
 export function getConversation(
@@ -123,6 +208,113 @@ export function getConversation(
     ensureBuiltins(scopeKey)
       .conversations[contactId] || null
   );
+}
+
+export function findTavernContact(sourceId) {
+  return getContacts().find(
+    item =>
+      item.kind === 'tavern' &&
+      item.source?.sourceId === String(sourceId)
+  ) || null;
+}
+
+export function refreshTavernContacts(
+  characters,
+  { markMissing = false } = {}
+) {
+  const list = getContacts();
+  const bySource = new Map(
+    (Array.isArray(characters) ? characters : [])
+      .map(item => [String(item.sourceId), item])
+  );
+
+  let changed = false;
+
+  for (const contact of list) {
+    if (contact.kind !== 'tavern') continue;
+
+    const sourceId = String(contact.source?.sourceId || '');
+    const fresh = bySource.get(sourceId);
+
+    if (fresh) {
+      contact.name = fresh.name;
+      contact.source = {
+        ...(contact.source || {}),
+        type: 'sillytavern',
+        sourceId,
+        originalName: fresh.name,
+        originalAvatar: fresh.avatar || '',
+        originalAvatarUrl: fresh.avatarUrl || '',
+        status: 'available',
+        lastSyncedAt: Date.now(),
+      };
+      changed = true;
+      continue;
+    }
+
+    if (markMissing && contact.source?.status !== 'missing') {
+      contact.source = {
+        ...(contact.source || {}),
+        status: 'missing',
+        lastSyncedAt: Date.now(),
+      };
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    saveContacts(list);
+  }
+
+  return list;
+}
+
+export function syncTavernContacts(characters) {
+  const list = getContacts();
+  const bySource = new Map(
+    list
+      .filter(item => item.kind === 'tavern')
+      .map(item => [String(item.source?.sourceId || ''), item])
+  );
+
+  const synced = [];
+
+  for (const character of Array.isArray(characters) ? characters : []) {
+    const sourceId = String(character.sourceId);
+    let contact = bySource.get(sourceId);
+
+    if (!contact) {
+      contact = {
+        id: `tavern:${sourceId}`,
+        kind: 'tavern',
+        name: character.name,
+        source: {
+          type: 'sillytavern',
+          sourceId,
+        },
+      };
+      list.push(contact);
+      bySource.set(sourceId, contact);
+    }
+
+    contact.name = character.name;
+    contact.source = {
+      ...(contact.source || {}),
+      type: 'sillytavern',
+      sourceId,
+      originalName: character.name,
+      originalAvatar: character.avatar || '',
+      originalAvatarUrl: character.avatarUrl || '',
+      status: 'available',
+      lastSyncedAt: Date.now(),
+    };
+
+    synced.push(contact);
+  }
+
+  saveContacts(list);
+
+  return synced;
 }
 
 export function appendMessage(
@@ -159,10 +351,7 @@ export function appendMessage(
 
   data.conversations[contactId] = conv;
 
-  localStorage.setItem(
-    key(scopeKey),
-    JSON.stringify(data)
-  );
+  saveScope(scopeKey, data);
 
   return conv;
 }
