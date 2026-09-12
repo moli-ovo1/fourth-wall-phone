@@ -624,3 +624,45 @@ export function incrementConversationUnread(scopeKey, conversationKey, amount = 
 
   return conversation;
 }
+
+
+export function getMessageById(scopeKey, conversationKey, messageId) {
+  const conversation = getConversation(scopeKey, conversationKey);
+  if (!conversation) return null;
+
+  return conversation.messages.find(message => message.id === messageId) || null;
+}
+
+export function deleteMessage(scopeKey, conversationKey, messageId) {
+  const data = ensureBuiltins(scopeKey);
+  const conversation = data.conversations[conversationKey];
+  if (!conversation || !Array.isArray(conversation.messages)) return false;
+
+  const index = conversation.messages.findIndex(message => message.id === messageId);
+  if (index < 0) return false;
+
+  conversation.messages.splice(index, 1);
+  conversation.updatedAt = Date.now();
+  saveScope(scopeKey, data);
+  return true;
+}
+
+export function deleteMessages(scopeKey, conversationKey, messageIds) {
+  const ids = new Set((Array.isArray(messageIds) ? messageIds : []).map(String));
+  if (!ids.size) return 0;
+
+  const data = ensureBuiltins(scopeKey);
+  const conversation = data.conversations[conversationKey];
+  if (!conversation || !Array.isArray(conversation.messages)) return 0;
+
+  const before = conversation.messages.length;
+  conversation.messages = conversation.messages.filter(message => !ids.has(String(message.id)));
+  const deleted = before - conversation.messages.length;
+
+  if (deleted > 0) {
+    conversation.updatedAt = Date.now();
+    saveScope(scopeKey, data);
+  }
+
+  return deleted;
+}
