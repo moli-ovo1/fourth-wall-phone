@@ -214,6 +214,19 @@ export function createPhonePanel({
   let syncSnapshot = [];
   let pendingContactAvatar = '';
   let groupMemberEditMode = 'add';
+  let suppressPanelClicksUntil = 0;
+
+  panel.addEventListener(
+    'click',
+    event => {
+      if (Date.now() >= suppressPanelClicksUntil) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    },
+    true,
+  );
 
   const escapeHtml = value => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -1482,6 +1495,10 @@ export function createPhonePanel({
 
 open(handleElement) {
   currentContactId = null;
+
+  // Android/WebView may emit a synthetic click after the floating-ball pointerup.
+  // Ignore only that opening click so it cannot fall through onto the first chat row.
+  suppressPanelClicksUntil = Date.now() + 400;
 
   positionNear(handleElement);
   panel.classList.add('open');
