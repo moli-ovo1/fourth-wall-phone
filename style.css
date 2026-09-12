@@ -292,3 +292,10 @@
 #moli-phone-panel .moli-message-menu button:active{background:#f2f2f2}
 #moli-phone-panel .moli-message-menu button.danger{color:#d33}
 #moli-phone-panel .moli-msg[data-message-id]{touch-action:pan-y;-webkit-user-select:none;user-select:none}
+
+#moli-phone-panel .moli-quote-draft{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f7f7f7;border-top:1px solid #ddd}
+#moli-phone-panel .moli-quote-draft[hidden]{display:none}
+#moli-phone-panel .moli-quote-draft-text{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;color:#666;border-left:3px solid #aaa;padding-left:8px}
+#moli-phone-panel .moli-quote-draft-close{border:0;background:transparent;font-size:20px;line-height:1;color:#777;padding:2px 4px}
+#moli-phone-panel .moli-quoted-message{margin-bottom:6px;padding:5px 7px;border-left:3px solid rgba(0,0,0,.22);background:rgba(0,0,0,.055);font-size:12px;line-height:1.35;color:#666;white-space:pre-wrap;overflow-wrap:anywhere}
+#moli-phone-panel .moli-quoted-sender{font-weight:600;margin-bottom:2px}
