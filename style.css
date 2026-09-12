@@ -265,3 +265,30 @@
 #moli-phone-panel .moli-info-setting-row{width:100%;margin-top:10px;padding:13px 14px;border:0;border-top:1px solid #e5e5e5;border-bottom:1px solid #e5e5e5;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:16px;text-align:left;font:inherit;cursor:pointer}
 #moli-phone-panel .moli-info-setting-row span{font-size:14px;color:#222}
 #moli-phone-panel .moli-info-setting-row strong{font-size:13px;color:#777;font-weight:400}
+
+
+/* 消息长按菜单 */
+#moli-phone-panel .moli-message-menu{
+    position:absolute;
+    z-index:60;
+    width:172px;
+    padding:6px;
+    border:1px solid rgba(0,0,0,.12);
+    border-radius:10px;
+    background:#fff;
+    box-shadow:0 10px 28px rgba(0,0,0,.22);
+}
+#moli-phone-panel .moli-message-menu[hidden]{display:none}
+#moli-phone-panel .moli-message-menu button{
+    width:100%;
+    border:0;
+    border-radius:7px;
+    background:#fff;
+    padding:10px 12px;
+    text-align:left;
+    font-size:14px;
+    cursor:pointer;
+}
+#moli-phone-panel .moli-message-menu button:active{background:#f2f2f2}
+#moli-phone-panel .moli-message-menu button.danger{color:#d33}
+#moli-phone-panel .moli-msg[data-message-id]{touch-action:pan-y;-webkit-user-select:none;user-select:none}
