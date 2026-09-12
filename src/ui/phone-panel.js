@@ -987,7 +987,7 @@ export function createPhonePanel({
           <button type="button" class="moli-info-avatar-button" data-action="change-contact-avatar">更换头像</button>
           ${item.customAvatar && isTavern ? `<button type="button" class="moli-info-link-button" data-action="restore-source-avatar">恢复跟随角色卡头像</button>` : ''}
         </div>
-        ${isTavern ? `<div class="moli-info-source"><div><span>酒馆原名</span><strong>${escapeHtml(item.source?.originalName || item.name || '未知')}</strong></div><div><span>来源状态</span><strong class="${sourceMissing ? 'is-missing' : ''}">${sourceMissing ? '来源角色不可用' : '已关联'}</strong></div></div>` : ''}
+        ${isTavern ? `<div class="moli-info-source"><div><span>酒馆原名</span><strong>${escapeHtml(item.source?.originalName || item.name || '未知')}</strong></div><div><span>来源状态</span><strong class="${sourceMissing ? 'is-missing' : ''}">${sourceMissing ? '来源角色不可用' : '已关联'}</strong></div><div><span>角色保真</span><strong>${Object.values(item.source?.roleFidelity || {}).some(value => String(value || '').trim()) ? '已读取角色卡' : '生成时实时读取'}</strong></div></div>` : ''}
         <div class="moli-info-form">
           ${item.kind === 'custom' ? `<label class="moli-form-field"><span>名称</span><input type="text" maxlength="80" data-info-contact-name value="${escapeHtml(item.name || '')}"></label>` : `<label class="moli-form-field"><span>备注名</span><input type="text" maxlength="80" data-info-contact-remark value="${escapeHtml(item.remark || '')}" placeholder="不填写则跟随角色原名"></label>`}
           <label class="moli-form-field"><span>简介 / 一句话描述</span><textarea rows="3" data-info-contact-intro placeholder="简单介绍这个人">${escapeHtml(item.intro || '')}</textarea></label>
@@ -1006,7 +1006,7 @@ export function createPhonePanel({
           <span>清空聊天记录</span>
           <strong>›</strong>
         </button>
-        ${isTavern ? `<div class="moli-info-note">酒馆角色改名或换头像时，来源资料会继续刷新；你的备注名、自定义头像、简介和人格提示词不会被自动覆盖。</div>` : ''}
+        ${isTavern ? `<div class="moli-info-note">生成时会读取角色卡设定、Example Dialogue 与当前存档最近正文；你填写的人格提示词作为追加约束，不会覆盖角色卡来源资料。酒馆角色改名或换头像时，备注名、自定义头像、简介和追加提示词仍不会被自动覆盖。</div>` : ''}
       `;
       return;
     }
