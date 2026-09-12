@@ -1006,6 +1006,17 @@ Generation / Prompt 接入时使用 Data Store 的统一联系人上下文来源
 - 流式
 - 测试连接
 
+
+当前实现基础：
+
+- `src/storage/api-settings.js`：全局 API 配置持久化；
+- `src/api/providers/provider-registry.js`：统一 Provider 注册与超时；
+- `src/api/providers/openai-compatible.js`：OpenAI Compatible 模型列表；
+- `src/api/providers/claude.js`：Claude 模型列表；
+- `src/api/providers/gemini.js`：Gemini 模型列表；
+- 设置页已可刷新模型列表、测试独立 API 连接；
+- 酒馆当前 API 模式仍等待 Generation 兼容层，不在 UI 内猜测 SillyTavern 私有接口。
+
 生成中始终支持：
 
 - 停止请求

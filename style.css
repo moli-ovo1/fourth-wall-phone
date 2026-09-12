@@ -357,3 +357,10 @@
 #moli-phone-panel .moli-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border-radius:10px;background:#fff;padding:12px 13px;margin-top:10px}
 #moli-phone-panel .moli-switch-row span{display:flex;flex-direction:column;gap:3px}
 #moli-phone-panel .moli-switch-row input{width:18px;height:18px}
+#moli-phone-panel .moli-api-actions{display:flex;gap:8px;margin-top:4px}
+#moli-phone-panel .moli-api-actions button{flex:1}
+#moli-phone-panel .moli-api-status{min-height:18px;padding:7px 3px 0;font-size:11px;line-height:1.45;color:#777;white-space:pre-wrap;overflow-wrap:anywhere}
+#moli-phone-panel .moli-api-status[data-kind="success"]{color:#348a4a}
+#moli-phone-panel .moli-api-status[data-kind="error"]{color:#c33f3f}
+#moli-phone-panel .moli-api-status[data-kind="loading"]{color:#777}
+#moli-phone-panel .moli-api-status[data-kind="info"]{color:#68758a}
