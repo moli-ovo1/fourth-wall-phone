@@ -7,6 +7,7 @@ import {
   refreshTavernContacts,
   syncTavernContacts,
   createCustomContact,
+  updateContact,
   createGroupConversation,
   updateGroupConversation,
   appendMessage,
@@ -167,6 +168,7 @@ export function createPhonePanel({
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-chat-info"></main>
+      <input type="file" accept="image/*" data-info-avatar-input hidden>
     </section>
 
     <section class="moli-page" data-page="group-members-edit">
@@ -204,6 +206,7 @@ export function createPhonePanel({
   const groupNameInput = panel.querySelector('[data-group-name]');
   const groupMemberList = panel.querySelector('.moli-group-member-list');
   const chatInfo = panel.querySelector('.moli-chat-info');
+  const infoAvatarInput = panel.querySelector('[data-info-avatar-input]');
   const groupMembersEditList = panel.querySelector('[data-group-members-edit-list]');
   const groupMembersTitle = panel.querySelector('[data-group-members-title]');
 
@@ -384,12 +387,24 @@ export function createPhonePanel({
 
     if (conversation.type !== 'group') {
       const item = contact(conversation.contactId || currentContactId);
+      if (!item) { chatInfo.innerHTML = '<div class="moli-placeholder">联系人不存在。</div>'; return; }
+      const isTavern = item.kind === 'tavern';
+      const sourceMissing = isTavern && item.source?.status === 'missing';
       chatInfo.innerHTML = `
         <div class="moli-info-private-head">
-          ${item ? avatarMarkup(item, 'moli-info-avatar') : ''}
-          <div class="moli-info-private-name">${escapeHtml(item ? displayName(item) : '联系人')}</div>
+          ${avatarMarkup(item, 'moli-info-avatar')}
+          <div class="moli-info-private-name">${escapeHtml(displayName(item))}</div>
+          <button type="button" class="moli-info-avatar-button" data-action="change-contact-avatar">更换头像</button>
+          ${item.customAvatar && isTavern ? `<button type="button" class="moli-info-link-button" data-action="restore-source-avatar">恢复跟随角色卡头像</button>` : ''}
         </div>
-        <div class="moli-info-coming">私聊设置将在后续阶段继续接入。</div>
+        ${isTavern ? `<div class="moli-info-source"><div><span>酒馆原名</span><strong>${escapeHtml(item.source?.originalName || item.name || '未知')}</strong></div><div><span>来源状态</span><strong class="${sourceMissing ? 'is-missing' : ''}">${sourceMissing ? '来源角色不可用' : '已关联'}</strong></div></div>` : ''}
+        <div class="moli-info-form">
+          ${item.kind === 'custom' ? `<label class="moli-form-field"><span>名称</span><input type="text" maxlength="80" data-info-contact-name value="${escapeHtml(item.name || '')}"></label>` : `<label class="moli-form-field"><span>备注名</span><input type="text" maxlength="80" data-info-contact-remark value="${escapeHtml(item.remark || '')}" placeholder="不填写则跟随角色原名"></label>`}
+          <label class="moli-form-field"><span>简介 / 一句话描述</span><textarea rows="3" data-info-contact-intro placeholder="简单介绍这个人">${escapeHtml(item.intro || '')}</textarea></label>
+          <label class="moli-form-field"><span>人格提示词</span><textarea rows="7" data-info-contact-prompt placeholder="身份、性格、说话方式等">${escapeHtml(item.prompt || '')}</textarea></label>
+          <button type="button" class="moli-info-save-button" data-action="save-contact-info">保存资料</button>
+        </div>
+        ${isTavern ? `<div class="moli-info-note">酒馆角色改名或换头像时，来源资料会继续刷新；你的备注名、自定义头像、简介和人格提示词不会被自动覆盖。</div>` : ''}
       `;
       return;
     }
@@ -423,6 +438,26 @@ export function createPhonePanel({
 
       <div class="moli-info-coming">自动吐槽、自动点评、查找记录等设置将在后续阶段继续接入。</div>
     `;
+  }
+
+
+  async function changeCurrentContactAvatar(file) {
+    const conversation = currentConversation(); if (!conversation || conversation.type === 'group') return;
+    const contactId = conversation.contactId || currentContactId;
+    try { const avatar = await fileToCompressedAvatar(file); updateContact(contactId, { customAvatar: avatar }); renderChatInfo(); toast('头像已保存'); }
+    catch (error) { console.error('[moli小手机] contact avatar failed:', error); toast(error?.message || '头像处理失败'); }
+    finally { infoAvatarInput.value = ''; }
+  }
+  function saveCurrentContactInfo() {
+    const conversation = currentConversation(); if (!conversation || conversation.type === 'group') return;
+    const item = contact(conversation.contactId || currentContactId); if (!item) return;
+    try { updateContact(item.id, { ...(item.kind === 'custom' ? { name: chatInfo.querySelector('[data-info-contact-name]')?.value } : { remark: chatInfo.querySelector('[data-info-contact-remark]')?.value }), intro: chatInfo.querySelector('[data-info-contact-intro]')?.value, prompt: chatInfo.querySelector('[data-info-contact-prompt]')?.value }); toast('联系人资料已保存'); renderChatInfo(); }
+    catch (error) { toast(error?.message || '保存失败'); }
+  }
+  function restoreCurrentContactAvatar() {
+    const conversation = currentConversation(); if (!conversation || conversation.type === 'group') return;
+    const item = contact(conversation.contactId || currentContactId); if (!item || item.kind !== 'tavern') return;
+    updateContact(item.id, { customAvatar: '' }); renderChatInfo(); toast('已恢复跟随角色卡头像');
   }
 
   function openGroupMemberEditor(mode) {
@@ -1298,8 +1333,19 @@ export function createPhonePanel({
       openGroupMemberEditor('remove');
     } else if (action === 'save-group-name') {
       saveGroupName();
+    } else if (action === 'change-contact-avatar') {
+      infoAvatarInput.click();
+    } else if (action === 'restore-source-avatar') {
+      restoreCurrentContactAvatar();
+    } else if (action === 'save-contact-info') {
+      saveCurrentContactInfo();
     }
   });
+
+  infoAvatarInput.onchange = () => {
+    const file = infoAvatarInput.files?.[0];
+    if (file) changeCurrentContactAvatar(file);
+  };
 
   panel.querySelector(
     '[data-action="group-members-back"]'
