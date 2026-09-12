@@ -400,6 +400,53 @@ export function createGroupConversation(
   return conversation;
 }
 
+export function updateGroupConversation(
+  scopeKey,
+  groupId,
+  { name, addMemberIds, removeMemberIds } = {}
+) {
+  const data = ensureBuiltins(scopeKey);
+  const conversation = data.conversations[groupId];
+
+  if (!conversation || conversation.type !== 'group') {
+    throw new Error('群聊不存在');
+  }
+
+  if (name !== undefined) {
+    const trimmedName = String(name || '').trim();
+    if (!trimmedName) {
+      throw new Error('群聊名称不能为空');
+    }
+    conversation.name = trimmedName;
+  }
+
+  const validContactIds = new Set(
+    getContacts().map(item => item.id)
+  );
+  const members = new Set(
+    Array.isArray(conversation.memberIds)
+      ? conversation.memberIds
+      : []
+  );
+
+  for (const id of Array.isArray(addMemberIds) ? addMemberIds : []) {
+    const memberId = String(id || '').trim();
+    if (memberId && validContactIds.has(memberId)) {
+      members.add(memberId);
+    }
+  }
+
+  for (const id of Array.isArray(removeMemberIds) ? removeMemberIds : []) {
+    members.delete(String(id || '').trim());
+  }
+
+  conversation.memberIds = [...members];
+  conversation.updatedAt = Date.now();
+  saveScope(scopeKey, data);
+
+  return conversation;
+}
+
 export function appendMessage(
   scopeKey,
   contactId,
