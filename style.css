@@ -196,3 +196,16 @@
 #moli-phone-panel .moli-primary-btn{min-width:72px;height:36px;border-radius:6px;padding:0 14px}
 #moli-phone-panel .moli-secondary-btn{border:1px solid #ccc;background:#fff}
 #moli-phone-panel .moli-primary-btn{border:0;background:#07c160;color:#fff;font-weight:600}
+
+#moli-phone-panel .moli-contact-form{flex:1;overflow:auto;padding:18px 16px;background:#fff}
+#moli-phone-panel .moli-contact-avatar-row{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:20px}
+#moli-phone-panel .moli-contact-avatar-picker{width:76px;height:76px;border:1px dashed #bbb;border-radius:10px;background:#f7f7f7;overflow:hidden;padding:0;font-size:30px;color:#888}
+#moli-phone-panel .moli-contact-avatar-picker span{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+#moli-phone-panel .moli-contact-avatar-picker img{width:100%;height:100%;display:block;object-fit:cover}
+#moli-phone-panel .moli-contact-avatar-help{font-size:12px;color:#999}
+#moli-phone-panel .moli-form-field{display:block;margin-bottom:16px}
+#moli-phone-panel .moli-form-field>span{display:block;margin-bottom:7px;font-size:13px;color:#666}
+#moli-phone-panel .moli-form-field input,
+#moli-phone-panel .moli-form-field textarea{width:100%;border:1px solid #ddd;border-radius:7px;background:#fafafa;padding:10px 11px;outline:none;font:inherit;font-size:14px;line-height:1.5;resize:vertical}
+#moli-phone-panel .moli-form-field input:focus,
+#moli-phone-panel .moli-form-field textarea:focus{border-color:#aaa;background:#fff}
