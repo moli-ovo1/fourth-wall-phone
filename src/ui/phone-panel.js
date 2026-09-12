@@ -11,6 +11,8 @@ import {
   createGroupConversation,
   updateGroupConversation,
   appendMessage,
+  setConversationPinned,
+  markConversationRead,
 } from '../storage/data-store.js';
 import {
   getTavernCharactersSnapshot,
@@ -417,6 +419,10 @@ export function createPhonePanel({
           <label class="moli-form-field"><span>人格提示词</span><textarea rows="7" data-info-contact-prompt placeholder="身份、性格、说话方式等">${escapeHtml(item.prompt || '')}</textarea></label>
           <button type="button" class="moli-info-save-button" data-action="save-contact-info">保存资料</button>
         </div>
+        <button type="button" class="moli-info-setting-row" data-action="toggle-pin">
+          <span>置顶聊天</span>
+          <strong>${conversation.pinned ? '已开启' : '未开启'}</strong>
+        </button>
         ${isTavern ? `<div class="moli-info-note">酒馆角色改名或换头像时，来源资料会继续刷新；你的备注名、自定义头像、简介和人格提示词不会被自动覆盖。</div>` : ''}
       `;
       return;
@@ -449,10 +455,30 @@ export function createPhonePanel({
         <button type="button" data-action="save-group-name">保存</button>
       </label>
 
+      <button type="button" class="moli-info-setting-row" data-action="toggle-pin">
+        <span>置顶聊天</span>
+        <strong>${conversation.pinned ? '已开启' : '未开启'}</strong>
+      </button>
+
       <div class="moli-info-coming">自动吐槽、自动点评、查找记录等设置将在后续阶段继续接入。</div>
     `;
   }
 
+
+  function toggleCurrentConversationPin() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    if (!scopeKey || !conversation || !currentContactId) return;
+
+    try {
+      setConversationPinned(scopeKey, currentContactId, !conversation.pinned);
+      renderChatInfo();
+      toast(conversation.pinned ? '已取消置顶' : '已置顶');
+    } catch (error) {
+      console.error('[moli小手机] pin conversation failed:', error);
+      toast(error?.message || '设置置顶失败');
+    }
+  }
 
   async function changeCurrentContactAvatar(file) {
     const conversation = currentConversation(); if (!conversation || conversation.type === 'group') return;
@@ -881,7 +907,13 @@ export function createPhonePanel({
         const item = contactsById.get(conversation.contactId);
         return item ? { conversation, item } : null;
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aPinned = a.conversation?.pinned ? 1 : 0;
+        const bPinned = b.conversation?.pinned ? 1 : 0;
+        if (aPinned !== bPinned) return bPinned - aPinned;
+        return Number(b.conversation?.updatedAt || 0) - Number(a.conversation?.updatedAt || 0);
+      });
 
     if (!rowsData.length) {
       chatList.innerHTML = `
@@ -914,6 +946,8 @@ export function createPhonePanel({
               <div class="moli-name">
                 ${escapeHtml(title)}
               </div>
+              ${conversation.pinned ? '<span class="moli-pin-mark">置顶</span>' : ''}
+              ${Number(conversation.unreadCount || 0) > 0 ? `<span class="moli-unread-badge">${Number(conversation.unreadCount) > 99 ? '99+' : Number(conversation.unreadCount)}</span>` : ''}
             </div>
 
             <div class="moli-preview">
@@ -932,6 +966,11 @@ export function createPhonePanel({
         button.addEventListener('click', () => {
           currentContactId =
             button.dataset.conversationId;
+
+          const scopeKey = getScopeKey?.();
+          if (scopeKey && currentContactId) {
+            markConversationRead(scopeKey, currentContactId);
+          }
 
           show('chat');
         });
@@ -1352,6 +1391,8 @@ export function createPhonePanel({
       restoreCurrentContactAvatar();
     } else if (action === 'save-contact-info') {
       saveCurrentContactInfo();
+    } else if (action === 'toggle-pin') {
+      toggleCurrentConversationPin();
     }
   });
 
