@@ -15,6 +15,7 @@ import {
   markConversationRead,
   getMessageById,
   deleteMessage,
+  deleteMessages,
 } from '../storage/data-store.js';
 import {
   getTavernCharactersSnapshot,
@@ -140,6 +141,12 @@ export function createPhonePanel({
         <div class="moli-quote-draft-text" data-quote-draft-text></div>
         <button class="moli-quote-draft-close" data-action="cancel-quote" aria-label="取消引用">×</button>
       </div>
+      <div class="moli-multi-bar" data-multi-bar hidden>
+        <button class="moli-secondary-btn" data-action="multi-cancel">取消</button>
+        <div class="moli-multi-count" data-multi-count>已选 0 条</div>
+        <button class="moli-secondary-btn" data-action="multi-forward">转发</button>
+        <button class="moli-primary-btn moli-danger-btn" data-action="multi-delete">删除</button>
+      </div>
       <footer class="moli-compose">
         <button class="moli-plus" data-action="more" aria-label="更多">＋</button>
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
@@ -228,6 +235,9 @@ export function createPhonePanel({
   const messageMenu = panel.querySelector('[data-message-menu]');
   const quoteDraft = panel.querySelector('[data-quote-draft]');
   const quoteDraftText = panel.querySelector('[data-quote-draft-text]');
+  const multiBar = panel.querySelector('[data-multi-bar]');
+  const multiCount = panel.querySelector('[data-multi-count]');
+  const compose = panel.querySelector('.moli-compose');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -236,6 +246,8 @@ export function createPhonePanel({
   let suppressPanelClicksUntil = 0;
   let activeMessageId = null;
   let pendingQuote = null;
+  let multiSelectMode = false;
+  let selectedMessageIds = new Set();
   let messagePressTimer = null;
   let messagePressPointerId = null;
   let messagePressStartX = 0;
@@ -815,6 +827,22 @@ export function createPhonePanel({
    * 直接调用 SillyTavern 的扩展更新接口。
    * 扩展目录名从当前模块 URL 自动识别，避免安装目录改名后更新失败。
    */
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
+    const controller = new AbortController();
+    const timer = windowRef.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error(`更新请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
+      }
+      throw error;
+    } finally {
+      windowRef.clearTimeout(timer);
+    }
+  }
+
   async function updateExtension() {
     const button = panel.querySelector('[data-action="update"]');
 
@@ -835,9 +863,9 @@ export function createPhonePanel({
       /*
        * SillyTavern 的 POST 接口需要 CSRF Token。
        */
-      const tokenResponse = await fetch('/csrf-token', {
+      const tokenResponse = await fetchWithTimeout('/csrf-token', {
         credentials: 'same-origin',
-      });
+      }, 15000);
 
       if (!tokenResponse.ok) {
         throw new Error(
@@ -859,7 +887,7 @@ export function createPhonePanel({
         throw new Error('无法确定 moli小手机的安装位置');
       }
 
-      const response = await fetch('/api/extensions/update', {
+      const response = await fetchWithTimeout('/api/extensions/update', {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
@@ -870,7 +898,7 @@ export function createPhonePanel({
           extensionName: `/${extensionName}`,
           global: extensionType === 'global',
         }),
-      });
+      }, 60000);
 
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
@@ -988,6 +1016,9 @@ export function createPhonePanel({
       .querySelectorAll('[data-conversation-id]')
       .forEach(button => {
         button.addEventListener('click', () => {
+          multiSelectMode = false;
+          selectedMessageIds = new Set();
+          updateMultiSelectUi();
           currentContactId =
             button.dataset.conversationId;
 
@@ -1053,6 +1084,30 @@ export function createPhonePanel({
     }
   }
 
+  function updateMultiSelectUi() {
+    if (multiBar) multiBar.hidden = !multiSelectMode;
+    if (compose) compose.hidden = multiSelectMode;
+    if (quoteDraft && multiSelectMode) quoteDraft.hidden = true;
+    if (multiCount) multiCount.textContent = `已选 ${selectedMessageIds.size} 条`;
+  }
+
+  function enterMultiSelect(initialMessageId = '') {
+    multiSelectMode = true;
+    selectedMessageIds = new Set();
+    if (initialMessageId) selectedMessageIds.add(String(initialMessageId));
+    pendingQuote = null;
+    if (quoteDraftText) quoteDraftText.textContent = '';
+    updateMultiSelectUi();
+    renderChat();
+  }
+
+  function exitMultiSelect() {
+    multiSelectMode = false;
+    selectedMessageIds = new Set();
+    updateMultiSelectUi();
+    renderChat();
+  }
+
   function handleMessageMenuAction(action) {
     const scopeKey = getScopeKey?.();
     const messageId = activeMessageId;
@@ -1108,9 +1163,15 @@ export function createPhonePanel({
       return;
     }
 
+    if (action === 'multi') {
+      const firstId = messageId;
+      hideMessageMenu();
+      enterMultiSelect(firstId);
+      return;
+    }
+
     hideMessageMenu();
     if (action === 'forward') toast('转发功能下一步接入');
-    if (action === 'multi') toast('多选功能下一步接入');
   }
 
   function renderChat() {
@@ -1179,7 +1240,8 @@ export function createPhonePanel({
         return `
           <div class="moli-msg ${
             isUser ? 'user' : 'assistant'
-          }" data-message-id="${escapeHtml(message.id || '')}">
+          } ${multiSelectMode && selectedMessageIds.has(String(message.id || '')) ? 'selected' : ''}" data-message-id="${escapeHtml(message.id || '')}">
+            ${multiSelectMode ? `<div class="moli-select-dot" aria-hidden="true">${selectedMessageIds.has(String(message.id || '')) ? '✓' : ''}</div>` : ''}
             ${avatar}
 
             <div class="moli-msg-content">
@@ -1205,7 +1267,21 @@ export function createPhonePanel({
       chatBody.scrollHeight;
   }
 
+  chatBody.addEventListener('click', event => {
+    if (!multiSelectMode) return;
+    const row = event.target.closest?.('[data-message-id]');
+    if (!row) return;
+    event.preventDefault();
+    const id = String(row.dataset.messageId || '');
+    if (!id) return;
+    if (selectedMessageIds.has(id)) selectedMessageIds.delete(id);
+    else selectedMessageIds.add(id);
+    updateMultiSelectUi();
+    renderChat();
+  });
+
   chatBody.addEventListener('contextmenu', event => {
+    if (multiSelectMode) return;
     const row = event.target.closest?.('[data-message-id]');
     if (!row) return;
     event.preventDefault();
@@ -1213,6 +1289,7 @@ export function createPhonePanel({
   });
 
   chatBody.addEventListener('pointerdown', event => {
+    if (multiSelectMode) return;
     const row = event.target.closest?.('[data-message-id]');
     if (!row || event.pointerType === 'mouse') return;
 
@@ -1260,6 +1337,42 @@ export function createPhonePanel({
     if (messageMenu?.hidden) return;
     if (event.target.closest?.('[data-message-menu]')) return;
     hideMessageMenu();
+  });
+
+  panel.addEventListener('click', event => {
+    const action = event.target.closest?.('[data-action]')?.dataset?.action;
+    if (!action) return;
+
+    if (action === 'multi-cancel') {
+      exitMultiSelect();
+      return;
+    }
+
+    if (action === 'multi-forward') {
+      if (!selectedMessageIds.size) {
+        toast('请先选择消息');
+        return;
+      }
+      toast('批量转发将在下一步接入');
+      return;
+    }
+
+    if (action === 'multi-delete') {
+      if (!selectedMessageIds.size) {
+        toast('请先选择消息');
+        return;
+      }
+      const confirmed = windowRef.confirm?.(`删除选中的 ${selectedMessageIds.size} 条消息？`) ?? true;
+      if (!confirmed) return;
+      const scopeKey = getScopeKey?.();
+      const removed = deleteMessages(scopeKey, currentContactId, [...selectedMessageIds]);
+      if (removed > 0) {
+        toast(`已删除 ${removed} 条`);
+        exitMultiSelect();
+      } else {
+        toast('删除失败');
+      }
+    }
   });
 
   panel.addEventListener('click', event => {
