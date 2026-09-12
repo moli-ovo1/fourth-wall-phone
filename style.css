@@ -244,3 +244,18 @@
 #moli-phone-panel .moli-info-avatar{width:68px;height:68px;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#222;color:#fff;font-size:24px;font-weight:700}
 #moli-phone-panel .moli-info-avatar img{width:100%;height:100%;display:block;object-fit:cover}
 #moli-phone-panel .moli-info-private-name{font-size:16px;font-weight:600}
+
+
+/* 私聊聊天信息 / 联系人资料 */
+#moli-phone-panel .moli-info-avatar-button{border:0;border-radius:6px;background:#f0f0f0;color:#333;padding:7px 12px;font-size:12px}
+#moli-phone-panel .moli-info-link-button{border:0;background:transparent;color:#576b95;padding:2px 6px;font-size:12px}
+#moli-phone-panel .moli-info-source{margin-top:10px;background:#fff;border-top:1px solid #e5e5e5;border-bottom:1px solid #e5e5e5}
+#moli-phone-panel .moli-info-source>div{display:flex;justify-content:space-between;gap:16px;padding:11px 14px;border-bottom:1px solid #eee;font-size:13px}
+#moli-phone-panel .moli-info-source>div:last-child{border-bottom:0}
+#moli-phone-panel .moli-info-source span{color:#666}
+#moli-phone-panel .moli-info-source strong{min-width:0;text-align:right;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#moli-phone-panel .moli-info-source strong.is-missing{color:#c33}
+#moli-phone-panel .moli-info-form{margin-top:10px;padding:14px 16px;background:#fff}
+#moli-phone-panel .moli-info-form .moli-form-field{margin-bottom:14px}
+#moli-phone-panel .moli-info-save-button{width:100%;border:0;border-radius:7px;background:#07c160;color:#fff;padding:10px 14px;font-size:14px}
+#moli-phone-panel .moli-info-note{padding:14px 18px 22px;color:#999;font-size:11px;line-height:1.6}
