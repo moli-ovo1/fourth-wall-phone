@@ -593,6 +593,7 @@ export function appendMessage(
       sourceConversationTitle: String(options.forward.sourceConversationTitle || ''),
       items: (Array.isArray(options.forward.items) ? options.forward.items : []).map(item => ({
         messageId: String(item?.messageId || ''),
+        senderId: String(item?.senderId || ''),
         senderName: String(item?.senderName || ''),
         content: String(item?.content || ''),
         ts: Number(item?.ts || 0),
@@ -691,17 +692,122 @@ export function deleteMessages(scopeKey, conversationKey, messageIds) {
 
 
 export function clearConversationMessages(scopeKey, conversationKey) {
-  const data = loadScope(scopeKey);
-  const entry = findConversationEntry(data, conversationKey);
+  const data = ensureBuiltins(scopeKey);
+  const conversation = data.conversations[conversationKey];
 
-  if (!entry?.conversation) {
+  if (!conversation) {
     return false;
   }
 
-  entry.conversation.messages = [];
-  entry.conversation.unreadCount = 0;
-  entry.conversation.updatedAt = Date.now();
+  applyConversationDefaults(conversation);
+  conversation.messages = [];
+  conversation.unreadCount = 0;
+  conversation.updatedAt = Date.now();
 
   saveScope(scopeKey, data);
   return true;
+}
+
+
+function conversationIncludesContact(conversation, contactId) {
+  if (!conversation || !contactId) return false;
+
+  if (conversation.type === 'private') {
+    return String(conversation.contactId || '') === String(contactId);
+  }
+
+  if (conversation.type === 'group') {
+    return Array.isArray(conversation.memberIds)
+      && conversation.memberIds.some(id => String(id) === String(contactId));
+  }
+
+  return false;
+}
+
+function contextMessageForContact(message, conversation, contactId) {
+  if (!message || !conversation) return null;
+
+  let senderId = String(message.senderId || '');
+
+  if (
+    !senderId
+    && message.role !== 'user'
+    && conversation.type === 'private'
+    && String(conversation.contactId || '') === String(contactId)
+  ) {
+    senderId = String(contactId);
+  }
+
+  return {
+    id: String(message.id || ''),
+    role: String(message.role || ''),
+    senderId,
+    senderName: String(message.senderSnapshot?.name || ''),
+    content: String(message.content || ''),
+    ts: Number(message.ts || 0),
+    quote: message.quote && typeof message.quote === 'object'
+      ? {
+          messageId: String(message.quote.messageId || ''),
+          senderName: String(message.quote.senderName || ''),
+          content: String(message.quote.content || ''),
+        }
+      : null,
+    forward: message.forward && typeof message.forward === 'object'
+      ? {
+          mode: message.forward.mode === 'merged' ? 'merged' : 'single',
+          sourceConversationId: String(message.forward.sourceConversationId || ''),
+          sourceConversationTitle: String(message.forward.sourceConversationTitle || ''),
+          items: (Array.isArray(message.forward.items) ? message.forward.items : []).map(item => ({
+            messageId: String(item?.messageId || ''),
+            senderId: String(item?.senderId || ''),
+            senderName: String(item?.senderName || ''),
+            content: String(item?.content || ''),
+            ts: Number(item?.ts || 0),
+          })),
+        }
+      : null,
+  };
+}
+
+export function getContactContextSources(
+  scopeKey,
+  contactId,
+  {
+    excludeConversationKey = '',
+    perConversationLimit = 20,
+  } = {}
+) {
+  const id = String(contactId || '');
+  if (!id) return [];
+
+  const data = ensureBuiltins(scopeKey);
+  const limit = Math.max(1, Math.min(100, Number(perConversationLimit) || 20));
+
+  return Object.entries(data.conversations || {})
+    .filter(([conversationKey, conversation]) =>
+      conversationKey !== excludeConversationKey
+      && conversationIncludesContact(conversation, id)
+    )
+    .map(([conversationKey, conversation]) => {
+      applyConversationDefaults(conversation);
+
+      const messages = conversation.messages
+        .slice(-limit)
+        .map(message => contextMessageForContact(message, conversation, id))
+        .filter(Boolean);
+
+      return {
+        conversationKey,
+        conversationId: String(conversation.id || conversationKey),
+        type: conversation.type === 'group' ? 'group' : 'private',
+        name: String(conversation.name || ''),
+        contactId: String(conversation.contactId || ''),
+        memberIds: Array.isArray(conversation.memberIds)
+          ? conversation.memberIds.map(String)
+          : [],
+        updatedAt: Number(conversation.updatedAt || 0),
+        messages,
+      };
+    })
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 }
