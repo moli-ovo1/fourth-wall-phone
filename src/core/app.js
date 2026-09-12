@@ -1,15 +1,19 @@
-import { loadUiState, saveUiState } from "../storage/ui-state.js";
-import { createFloatingBall } from "../ui/floating-ball.js";
-import { createPhonePanel } from "../ui/phone-panel.js";
+import { loadUiState, saveUiState } from '../storage/ui-state.js';
+import { createFloatingBall } from '../ui/floating-ball.js';
+import { createPhonePanel } from '../ui/phone-panel.js';
 
 let appInstance = null;
 
 export function initApp() {
-    appInstance?.destroy?.();
+    if (appInstance) {
+        appInstance.destroy?.();
+    }
+
+    console.log('[moli小手机] initApp start');
 
     const uiState = loadUiState();
 
-    let panelController = null;
+    let panelController;
 
     const handleController = createFloatingBall({
         uiState,
@@ -22,7 +26,7 @@ export function initApp() {
         onUiStateChange: () => saveUiState(uiState),
     });
 
-    const outsidePointerHandler = (event) => {
+    const outsidePointerHandler = event => {
         if (!panelController.isOpen()) return;
         if (panelController.element.contains(event.target)) return;
         if (handleController.element.contains(event.target)) return;
@@ -35,17 +39,18 @@ export function initApp() {
         saveUiState(uiState);
     };
 
-    document.addEventListener("pointerdown", outsidePointerHandler, true);
-    window.addEventListener("resize", resizeHandler);
+    document.addEventListener('pointerdown', outsidePointerHandler, true);
+    window.addEventListener('resize', resizeHandler);
 
     appInstance = {
         destroy() {
-            document.removeEventListener("pointerdown", outsidePointerHandler, true);
-            window.removeEventListener("resize", resizeHandler);
-            panelController?.element?.remove();
-            handleController?.element?.remove();
+            document.removeEventListener('pointerdown', outsidePointerHandler, true);
+            window.removeEventListener('resize', resizeHandler);
+            panelController.element.remove();
+            handleController.element.remove();
         },
     };
 
+    console.log('[moli小手机] initApp success');
     return appInstance;
 }
