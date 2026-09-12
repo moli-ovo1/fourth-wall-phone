@@ -7,6 +7,7 @@ import {
   refreshTavernContacts,
   syncTavernContacts,
   createCustomContact,
+  createGroupConversation,
   appendMessage,
 } from '../storage/data-store.js';
 import {
@@ -38,7 +39,7 @@ export function createPhonePanel({
       <div class="moli-add-menu" data-add-menu hidden>
         <button data-action="sync-tavern">同步酒馆角色</button>
         <button data-action="add-contact">添加联系人</button>
-        <button data-action="group-placeholder">发起群聊</button>
+        <button data-action="create-group">发起群聊</button>
       </div>
     </section>
 
@@ -92,6 +93,28 @@ export function createPhonePanel({
       <footer class="moli-sync-footer">
         <button class="moli-secondary-btn" data-action="add-contact-cancel">取消</button>
         <button class="moli-primary-btn" data-action="add-contact-save">创建</button>
+      </footer>
+    </section>
+
+    <section class="moli-page" data-page="create-group">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="group-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">发起群聊</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-group-create">
+        <label class="moli-form-field moli-group-name-field">
+          <span>群聊名称</span>
+          <input type="text" data-group-name maxlength="80" placeholder="输入群聊名称">
+        </label>
+        <div class="moli-group-member-title">选择联系人</div>
+        <div class="moli-group-member-list"></div>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="group-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="group-confirm">创建群聊</button>
       </footer>
     </section>
 
@@ -163,6 +186,8 @@ export function createPhonePanel({
   const contactNameInput = panel.querySelector('[data-contact-name]');
   const contactIntroInput = panel.querySelector('[data-contact-intro]');
   const contactPromptInput = panel.querySelector('[data-contact-prompt]');
+  const groupNameInput = panel.querySelector('[data-group-name]');
+  const groupMemberList = panel.querySelector('.moli-group-member-list');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -201,6 +226,32 @@ export function createPhonePanel({
     return `
       <div class="${className}">
         ${escapeHtml(item?.avatarText || '◉')}
+      </div>
+    `;
+  };
+
+  const groupMembers = conversation => {
+    const byId = new Map(
+      getContacts().map(item => [item.id, item])
+    );
+
+    return (conversation?.memberIds || [])
+      .map(id => byId.get(id))
+      .filter(Boolean);
+  };
+
+  const groupAvatarMarkup = (conversation, className = 'moli-avatar') => {
+    const members = groupMembers(conversation).slice(0, 9);
+    const gridSize = members.length <= 1 ? 1 : members.length <= 4 ? 2 : 3;
+
+    return `
+      <div class="${className} moli-group-avatar" style="--moli-group-grid:${gridSize}">
+        ${members.map(item => {
+          const url = avatarUrl(item);
+          return url
+            ? `<span class="moli-group-avatar-cell"><img src="${escapeHtml(url)}" alt=""></span>`
+            : `<span class="moli-group-avatar-cell">${escapeHtml((displayName(item) || '◉').slice(0, 1))}</span>`;
+        }).join('')}
       </div>
     `;
   };
@@ -298,6 +349,65 @@ export function createPhonePanel({
     }
   }
 
+  function resetGroupForm() {
+    groupNameInput.value = '';
+    groupMemberList.innerHTML = '';
+  }
+
+  function renderGroupCreate() {
+    const contacts = getContacts();
+
+    if (!contacts.length) {
+      groupMemberList.innerHTML = `
+        <div class="moli-empty">暂无可选择的联系人。</div>
+      `;
+      return;
+    }
+
+    groupMemberList.innerHTML = contacts
+      .map(item => `
+        <label class="moli-sync-item">
+          <input type="checkbox" data-group-member-id="${escapeHtml(item.id)}">
+          ${avatarMarkup(item, 'moli-sync-avatar')}
+          <div class="moli-sync-main">
+            <div class="moli-sync-name">${escapeHtml(displayName(item))}</div>
+          </div>
+        </label>
+      `)
+      .join('');
+  }
+
+  function confirmCreateGroup() {
+    const scopeKey = getScopeKey?.();
+
+    if (!scopeKey) {
+      toast('当前没有可用的聊天存档');
+      return;
+    }
+
+    const memberIds = [
+      ...groupMemberList.querySelectorAll('[data-group-member-id]:checked')
+    ].map(input => input.dataset.groupMemberId);
+
+    try {
+      const conversation = createGroupConversation(
+        scopeKey,
+        {
+          name: groupNameInput.value,
+          memberIds,
+        }
+      );
+
+      currentContactId = conversation.id;
+      resetGroupForm();
+      toast('群聊已创建');
+      show('chat');
+    } catch (error) {
+      console.error('[moli小手机] create group failed:', error);
+      toast(error?.message || '创建群聊失败');
+    }
+  }
+
   const show = name => {
     if (addMenu) addMenu.hidden = true;
 
@@ -315,6 +425,10 @@ export function createPhonePanel({
 
     if (name === 'sync-tavern') {
       renderTavernSync();
+    }
+
+    if (name === 'create-group') {
+      renderGroupCreate();
     }
   };
 
@@ -561,11 +675,15 @@ export function createPhonePanel({
     );
 
     const rowsData = conversations
-      .map(conversation => ({
-        conversation,
-        item: contactsById.get(conversation.contactId),
-      }))
-      .filter(row => row.item);
+      .map(conversation => {
+        if (conversation.type === 'group') {
+          return { conversation, item: null };
+        }
+
+        const item = contactsById.get(conversation.contactId);
+        return item ? { conversation, item } : null;
+      })
+      .filter(Boolean);
 
     if (!rowsData.length) {
       chatList.innerHTML = `
@@ -579,18 +697,24 @@ export function createPhonePanel({
     const rows = rowsData.map(({ item, conversation }) => {
       const messages = conversation?.messages || [];
       const last = messages[messages.length - 1];
+      const isGroup = conversation.type === 'group';
+      const title = isGroup
+        ? conversation.name || '未命名群聊'
+        : displayName(item);
 
       return `
         <button
           class="moli-chat-item"
-          data-contact-id="${escapeHtml(item.id)}"
+          data-conversation-id="${escapeHtml(isGroup ? conversation.id : item.id)}"
         >
-          ${avatarMarkup(item)}
+          ${isGroup
+            ? groupAvatarMarkup(conversation)
+            : avatarMarkup(item)}
 
           <div class="moli-item-main">
             <div class="moli-item-top">
               <div class="moli-name">
-                ${escapeHtml(displayName(item))}
+                ${escapeHtml(title)}
               </div>
             </div>
 
@@ -605,11 +729,11 @@ export function createPhonePanel({
     chatList.innerHTML = rows.join('');
 
     chatList
-      .querySelectorAll('[data-contact-id]')
+      .querySelectorAll('[data-conversation-id]')
       .forEach(button => {
         button.addEventListener('click', () => {
           currentContactId =
-            button.dataset.contactId;
+            button.dataset.conversationId;
 
           show('chat');
         });
@@ -621,26 +745,32 @@ export function createPhonePanel({
       return;
     }
 
-    const item = contact(currentContactId);
+    const scopeKey = getScopeKey?.();
+    const conversation = getConversation(
+      scopeKey,
+      currentContactId
+    );
 
-    if (!item) {
+    if (!conversation) {
       show('home');
       return;
     }
 
-    chatTitle.textContent =
-      displayName(item);
+    const isGroup = conversation.type === 'group';
+    const item = isGroup
+      ? null
+      : contact(conversation.contactId || currentContactId);
 
-    const scopeKey = getScopeKey?.();
+    if (!isGroup && !item) {
+      show('home');
+      return;
+    }
 
-    const conversation =
-      getConversation(
-        scopeKey,
-        currentContactId
-      );
+    chatTitle.textContent = isGroup
+      ? conversation.name || '未命名群聊'
+      : displayName(item);
 
-    const messages =
-      conversation?.messages || [];
+    const messages = conversation?.messages || [];
 
     if (!messages.length) {
       chatBody.innerHTML = `
@@ -653,12 +783,25 @@ export function createPhonePanel({
 
     chatBody.innerHTML = messages
       .map(message => {
-        const isUser =
-          message.role === 'user';
+        const isUser = message.role === 'user';
+        let sender = null;
+
+        if (isGroup && !isUser && message.senderId) {
+          sender = contact(message.senderId);
+        }
 
         const avatar = isUser
           ? '<div class="moli-mini-avatar">我</div>'
-          : avatarMarkup(item, 'moli-mini-avatar');
+          : isGroup
+            ? (sender
+                ? avatarMarkup(sender, 'moli-mini-avatar')
+                : '<div class="moli-mini-avatar">群</div>')
+            : avatarMarkup(item, 'moli-mini-avatar');
+
+        const senderName =
+          isGroup && !isUser && sender
+            ? `<div class="moli-msg-name">${escapeHtml(displayName(sender))}</div>`
+            : '';
 
         return `
           <div class="moli-msg ${
@@ -666,8 +809,11 @@ export function createPhonePanel({
           }">
             ${avatar}
 
-            <div class="moli-bubble">
-              ${escapeHtml(message.content)}
+            <div class="moli-msg-content">
+              ${senderName}
+              <div class="moli-bubble">
+                ${escapeHtml(message.content)}
+              </div>
             </div>
           </div>
         `;
@@ -1041,11 +1187,30 @@ export function createPhonePanel({
   ).onclick = saveCustomContact;
 
   panel.querySelector(
-    '[data-action="group-placeholder"]'
+    '[data-action="create-group"]'
   ).onclick = () => {
     addMenu.hidden = true;
-    toast('发起群聊将在后续阶段接入');
+    resetGroupForm();
+    show('create-group');
   };
+
+  panel.querySelector(
+    '[data-action="group-back"]'
+  ).onclick = () => {
+    resetGroupForm();
+    show('home');
+  };
+
+  panel.querySelector(
+    '[data-action="group-cancel"]'
+  ).onclick = () => {
+    resetGroupForm();
+    show('home');
+  };
+
+  panel.querySelector(
+    '[data-action="group-confirm"]'
+  ).onclick = confirmCreateGroup;
 
   panel.querySelector(
     '[data-action="sync-back"]'
