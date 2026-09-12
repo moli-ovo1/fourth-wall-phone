@@ -13,6 +13,7 @@ import {
 import {
   getTavernCharactersSnapshot,
 } from '../core/tavern-contacts.js';
+import { extensionTypes } from '../../../../../extensions.js';
 
 export function createPhonePanel({
   documentRef = document,
@@ -610,6 +611,12 @@ export function createPhonePanel({
       }
 
       const extensionName = getInstalledExtensionName();
+      const extensionKey = `third-party/${extensionName}`;
+      const extensionType = extensionTypes?.[extensionKey];
+
+      if (extensionType !== 'local' && extensionType !== 'global') {
+        throw new Error('无法确定 moli小手机的安装位置');
+      }
 
       const response = await fetch('/api/extensions/update', {
         method: 'POST',
@@ -619,8 +626,8 @@ export function createPhonePanel({
           'X-CSRF-Token': token,
         },
         body: JSON.stringify({
-          extensionName,
-          global: false,
+          extensionName: `/${extensionName}`,
+          global: extensionType === 'global',
         }),
       });
 
