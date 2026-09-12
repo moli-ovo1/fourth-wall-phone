@@ -1,4 +1,4 @@
-import { readJson, writeJson } from './storage-adapter.js';
+import { listKeys, readJson, writeJson } from './storage-adapter.js';
 
 const BUILTIN_CONTACTS = [
   {
@@ -30,7 +30,130 @@ const BUILTIN_CONTACTS = [
 const CONTACTS_KEY = 'moli-phone:contacts:v1';
 const SCOPE_PREFIX = 'moli-phone:scope:v1:';
 const SCOPE_MIGRATIONS_KEY = 'moli-phone:scope-migrations:v1';
-const SCOPE_SCHEMA_VERSION = 1;
+const SCOPE_SCHEMA_VERSION = 2;
+
+function messageId() {
+  return (
+    `msg:${Date.now()}:` +
+    Math.random().toString(36).slice(2, 7)
+  );
+}
+
+function normalizeSenderSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return null;
+
+  const name = String(snapshot.name || '').trim();
+  const avatar = String(snapshot.avatar || '');
+
+  if (!name && !avatar) return null;
+
+  return {
+    name,
+    avatar,
+  };
+}
+
+function normalizeMessage(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const message = {
+    ...source,
+    id: String(source.id || messageId()),
+    role: String(source.role || 'assistant'),
+    content: String(source.content || ''),
+    ts: Number(source.ts) || Date.now(),
+  };
+
+  if (source.senderId !== undefined && source.senderId !== null) {
+    message.senderId = String(source.senderId);
+  }
+
+  const senderSnapshot = normalizeSenderSnapshot(source.senderSnapshot);
+  if (senderSnapshot) {
+    message.senderSnapshot = senderSnapshot;
+  } else {
+    delete message.senderSnapshot;
+  }
+
+  return message;
+}
+
+function normalizeConversation(storageKey, raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const type = source.type === 'group' ? 'group' : 'private';
+  const now = Date.now();
+
+  if (type === 'group') {
+    const id = String(source.id || storageKey);
+    return {
+      ...source,
+      id,
+      type: 'group',
+      name: String(source.name || ''),
+      memberIds: Array.isArray(source.memberIds)
+        ? [...new Set(source.memberIds.map(id => String(id || '')).filter(Boolean))]
+        : [],
+      messages: Array.isArray(source.messages)
+        ? source.messages.map(normalizeMessage)
+        : [],
+      pinned: Boolean(source.pinned),
+      unreadCount: Math.max(0, Number(source.unreadCount) || 0),
+      createdAt: Number(source.createdAt) || now,
+      updatedAt: Number(source.updatedAt) || Number(source.createdAt) || now,
+    };
+  }
+
+  const contactId = String(source.contactId || storageKey);
+  return {
+    ...source,
+    id: `private:${contactId}`,
+    type: 'private',
+    contactId,
+    messages: Array.isArray(source.messages)
+      ? source.messages.map(normalizeMessage)
+      : [],
+    pinned: Boolean(source.pinned),
+    unreadCount: Math.max(0, Number(source.unreadCount) || 0),
+    createdAt: Number(source.createdAt) || now,
+    updatedAt: Number(source.updatedAt) || Number(source.createdAt) || now,
+  };
+}
+
+function makePrivateConversation(contactId) {
+  const now = Date.now();
+  const id = String(contactId);
+  return {
+    id: `private:${id}`,
+    type: 'private',
+    contactId: id,
+    messages: [],
+    pinned: false,
+    unreadCount: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function getContactAvatarValue(contact) {
+  if (!contact) return '';
+  return String(
+    contact.customAvatar ||
+    contact.source?.originalAvatarUrl ||
+    contact.source?.originalAvatar ||
+    ''
+  );
+}
+
+function buildSenderSnapshot(contactId) {
+  if (!contactId) return null;
+  const contact = getContacts().find(item => item.id === String(contactId));
+  if (!contact) return null;
+
+  return {
+    name: String(contact.remark || contact.displayName || contact.name || ''),
+    avatar: getContactAvatarValue(contact),
+  };
+}
+
 
 function migrateScopeData(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
@@ -49,12 +172,40 @@ function migrateScopeData(raw) {
     version = 1;
   }
 
-  return {
-    ...data,
-    conversations:
+  if (version < 2) {
+    const sourceConversations =
       data.conversations && typeof data.conversations === 'object'
         ? data.conversations
-        : {},
+        : {};
+
+    const conversations = {};
+
+    for (const [storageKey, rawConversation] of Object.entries(sourceConversations)) {
+      const conversation = normalizeConversation(storageKey, rawConversation);
+      conversations[storageKey] = conversation;
+    }
+
+    data = {
+      ...data,
+      conversations,
+      schemaVersion: 2,
+    };
+    version = 2;
+  }
+
+  const sourceConversations =
+    data.conversations && typeof data.conversations === 'object'
+      ? data.conversations
+      : {};
+
+  const conversations = {};
+  for (const [storageKey, rawConversation] of Object.entries(sourceConversations)) {
+    conversations[storageKey] = normalizeConversation(storageKey, rawConversation);
+  }
+
+  return {
+    ...data,
+    conversations,
     schemaVersion: SCOPE_SCHEMA_VERSION,
   };
 }
@@ -95,6 +246,54 @@ function key(scopeKey) {
 function legacyScopeKey(scopeKey) {
   const match = String(scopeKey || '').match(/:chat:(.+)$/);
   return match ? `chat:${match[1]}` : null;
+}
+
+function fallbackScopeCandidates(scopeKey) {
+  const value = String(scopeKey || '');
+
+  const groupMatch = value.match(/^(group:[^:]+):chat:.+$/);
+  if (groupMatch) {
+    return [`${groupMatch[1]}:no-chat`];
+  }
+
+  const characterMatch = value.match(/^(character:[^:]+):chat:.+$/);
+  if (!characterMatch) return [];
+
+  const storagePrefix = key(`${characterMatch[1]}:fallback:`);
+  return listKeys(storagePrefix)
+    .map(storageKey => {
+      try {
+        return decodeURIComponent(storageKey.slice(SCOPE_PREFIX.length));
+      } catch {
+        return '';
+      }
+    })
+    .filter(Boolean);
+}
+
+function migrateFallbackScope(scopeKey) {
+  const candidates = fallbackScopeCandidates(scopeKey);
+  if (!candidates.length) return null;
+
+  const migrations = readJson(SCOPE_MIGRATIONS_KEY, {});
+
+  for (const fallbackKey of candidates) {
+    if (!fallbackKey || fallbackKey === scopeKey) continue;
+
+    const fallbackStorageKey = key(fallbackKey);
+    const claimedBy = migrations?.[fallbackStorageKey];
+    if (claimedBy && claimedBy !== scopeKey) continue;
+
+    const fallbackData = loadStoredScope(fallbackKey);
+    if (!fallbackData) continue;
+
+    writeJson(key(scopeKey), fallbackData);
+    migrations[fallbackStorageKey] = scopeKey;
+    writeJson(SCOPE_MIGRATIONS_KEY, migrations);
+    return fallbackData;
+  }
+
+  return null;
 }
 
 function loadStoredScope(scopeKey) {
@@ -138,6 +337,9 @@ export function loadScope(scopeKey) {
   const existing = loadStoredScope(scopeKey);
   if (existing) return existing;
 
+  const fallbackMigrated = migrateFallbackScope(scopeKey);
+  if (fallbackMigrated) return fallbackMigrated;
+
   const migrated = migrateLegacyScope(scopeKey);
   if (migrated) return migrated;
 
@@ -163,14 +365,7 @@ export function ensureBuiltins(scopeKey) {
     )
   ) {
     if (!data.conversations[c.id]) {
-      data.conversations[c.id] = {
-        id: `private:${c.id}`,
-        type: 'private',
-        contactId: c.id,
-        messages: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      data.conversations[c.id] = makePrivateConversation(c.id);
     }
   }
 
@@ -192,14 +387,7 @@ export function ensureConversation(
   const data = ensureBuiltins(scopeKey);
 
   if (!data.conversations[contactId]) {
-    data.conversations[contactId] = {
-      id: `private:${contactId}`,
-      type: 'private',
-      contactId,
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    data.conversations[contactId] = makePrivateConversation(contactId);
 
     saveScope(scopeKey, data);
   }
@@ -476,37 +664,46 @@ export function updateGroupConversation(
 
 export function appendMessage(
   scopeKey,
-  contactId,
+  conversationKey,
   role,
-  content
+  content,
+  options = {}
 ) {
   const data = ensureBuiltins(scopeKey);
 
-  const conv =
-    data.conversations[contactId] || {
-      id: `private:${contactId}`,
-      type: 'private',
-      contactId,
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+  const existing = data.conversations[conversationKey];
+  const conv = existing
+    ? normalizeConversation(conversationKey, existing)
+    : makePrivateConversation(conversationKey);
 
-  conv.messages.push({
-    id:
-      `msg:${Date.now()}:` +
-      Math.random()
-        .toString(36)
-        .slice(2, 7),
+  const senderId =
+    options.senderId !== undefined && options.senderId !== null
+      ? String(options.senderId)
+      : '';
 
-    role,
-    content,
+  const senderSnapshot =
+    normalizeSenderSnapshot(options.senderSnapshot) ||
+    (senderId ? buildSenderSnapshot(senderId) : null);
+
+  const message = {
+    id: messageId(),
+    role: String(role || 'assistant'),
+    content: String(content || ''),
     ts: Date.now(),
-  });
+  };
 
+  if (senderId) {
+    message.senderId = senderId;
+  }
+
+  if (senderSnapshot) {
+    message.senderSnapshot = senderSnapshot;
+  }
+
+  conv.messages.push(message);
   conv.updatedAt = Date.now();
 
-  data.conversations[contactId] = conv;
+  data.conversations[conversationKey] = conv;
 
   saveScope(scopeKey, data);
 
