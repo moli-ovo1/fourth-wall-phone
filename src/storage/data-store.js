@@ -269,6 +269,39 @@ export function refreshTavernContacts(
   return list;
 }
 
+export function createCustomContact({
+  name,
+  customAvatar = '',
+  intro = '',
+  prompt = '',
+}) {
+  const trimmedName = String(name || '').trim();
+
+  if (!trimmedName) {
+    throw new Error('联系人名称不能为空');
+  }
+
+  const list = getContacts();
+  const contact = {
+    id:
+      `custom:${Date.now()}:` +
+      Math.random().toString(36).slice(2, 8),
+    kind: 'custom',
+    name: trimmedName,
+    displayName: trimmedName,
+    customAvatar: String(customAvatar || ''),
+    intro: String(intro || '').trim(),
+    prompt: String(prompt || '').trim(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  list.push(contact);
+  saveContacts(list);
+
+  return contact;
+}
+
 export function syncTavernContacts(characters) {
   const list = getContacts();
   const bySource = new Map(
