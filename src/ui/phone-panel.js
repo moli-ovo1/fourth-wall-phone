@@ -1,5 +1,8 @@
-import { getContacts, getConversation, addMessage, touchConversation, getLastMessage, formatListTime, getContactAvatar, escapeHtml, getCurrentScopeId } from '../storage/data-store.js';
-import { getTavernCharacters } from '../core/tavern-characters.js';
+import {
+  getContacts,
+  getConversation,
+  appendMessage,
+} from '../storage/data-store.js';
 
 export function createPhonePanel({
   documentRef = document,
