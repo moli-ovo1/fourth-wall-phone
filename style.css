@@ -1,5 +1,5 @@
 #moli-phone-handle{
-    position:absolute;
+    position:fixed;
     z-index:2147483600;
     width:38px;
     height:38px;
@@ -27,7 +27,7 @@
 #moli-phone-handle.dragging{transition:none!important;cursor:grabbing}
 
 #moli-phone-panel{
-    position:absolute;
+    position:fixed;
     z-index:2147483601;
     width:min(390px,calc(100vw - 20px));
     height:min(690px,calc(100vh - 70px));
@@ -95,6 +95,52 @@
     background:transparent;
     padding:7px;
     min-width:32px;
+    min-height:32px;
+    border-radius:8px;
+    font-size:21px;
+    line-height:1;
+    cursor:pointer;
+}
+
+#moli-phone-panel .moli-back{
+    font-size:26px;
+    padding-left:0;
+}
+
+#moli-phone-panel .moli-chat-list{
+    flex:1;
+    overflow:auto;
+    background:#fff;
+}
+
+#moli-phone-panel .moli-empty,
+#moli-phone-panel .moli-placeholder{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:28px;
+    color:#777;
+    line-height:1.8;
+}
+
+#moli-phone-panel .moli-toast{
+    position:absolute;
+    left:50%;
+    bottom:70px;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,.75);
+    color:#fff;
+    padding:8px 12px;
+    border-radius:7px;
+    font-size:12px;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .15s;
+}
+
+#moli-phone-panel .moli-toast.show{opacity:1}
     min-height:32px;
     border-radius:8px;
     font-size:21px;
