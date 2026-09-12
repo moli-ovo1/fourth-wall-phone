@@ -586,6 +586,20 @@ export function appendMessage(
     };
   }
 
+  if (options?.forward && typeof options.forward === 'object') {
+    message.forward = {
+      mode: options.forward.mode === 'merged' ? 'merged' : 'single',
+      sourceConversationId: String(options.forward.sourceConversationId || ''),
+      sourceConversationTitle: String(options.forward.sourceConversationTitle || ''),
+      items: (Array.isArray(options.forward.items) ? options.forward.items : []).map(item => ({
+        messageId: String(item?.messageId || ''),
+        senderName: String(item?.senderName || ''),
+        content: String(item?.content || ''),
+        ts: Number(item?.ts || 0),
+      })),
+    };
+  }
+
   conv.messages.push(message);
   conv.updatedAt = Date.now();
 
