@@ -43,8 +43,11 @@ export function createFloatingBall({
     let grabX = 0;
     let grabY = 0;
 
-    handle.addEventListener('pointerdown', event => {
-        dragging = true;
+handle.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    dragging = true;
         moved = false;
         startX = event.clientX;
         startY = event.clientY;
@@ -81,22 +84,31 @@ export function createFloatingBall({
         handle.style.top = `${uiState.handleY}px`;
     });
 
-    handle.addEventListener('pointerup', event => {
-        if (!dragging) return;
+handle.addEventListener('pointerup', event => {
+    if (!dragging) return;
 
-        dragging = false;
-        handle.classList.remove('dragging');
+    dragging = false;
+    handle.classList.remove('dragging');
 
-        try {
-            handle.releasePointerCapture(event.pointerId);
-        } catch {}
+    try {
+        handle.releasePointerCapture(event.pointerId);
+    } catch {}
 
-        if (moved) {
-            onUiStateChange?.();
-        } else {
-            onClick?.();
-        }
-    });
+    if (moved) {
+        onUiStateChange?.();
+        return;
+    }
+
+    // 阻止手机浏览器在 pointerup 之后继续产生穿透 click。
+    event.preventDefault();
+    event.stopPropagation();
+
+    // 等当前触摸事件完整结束以后，再打开手机面板。
+    // 这样新出现的聊天列表不会接到本次点击。
+    setTimeout(() => {
+        onClick?.();
+    }, 0);
+});
 
     applyPosition();
 
