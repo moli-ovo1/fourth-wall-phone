@@ -1,8 +1,16 @@
 import {
   getContacts,
   getConversation,
+  getScopeConversations,
+  ensureConversation,
+  findTavernContact,
+  refreshTavernContacts,
+  syncTavernContacts,
   appendMessage,
 } from '../storage/data-store.js';
+import {
+  getTavernCharactersSnapshot,
+} from '../core/tavern-contacts.js';
 
 export function createPhonePanel({
   documentRef = document,
@@ -26,6 +34,26 @@ export function createPhonePanel({
         </div>
       </header>
       <main class="moli-chat-list"></main>
+      <div class="moli-add-menu" data-add-menu hidden>
+        <button data-action="sync-tavern">同步酒馆角色</button>
+        <button data-action="add-contact-placeholder">添加联系人</button>
+        <button data-action="group-placeholder">发起群聊</button>
+      </div>
+    </section>
+
+    <section class="moli-page" data-page="sync-tavern">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="sync-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">同步酒馆角色</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-sync-list"></main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="sync-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="sync-confirm">添加</button>
+      </footer>
     </section>
 
     <section class="moli-page" data-page="chat">
@@ -89,10 +117,52 @@ export function createPhonePanel({
   const chatBody = panel.querySelector('.moli-chat-body');
   const chatTitle = panel.querySelector('[data-chat-title]');
   const input = panel.querySelector('.moli-input');
+  const addMenu = panel.querySelector('[data-add-menu]');
+  const syncList = panel.querySelector('.moli-sync-list');
 
   let currentContactId = null;
+  let syncSnapshot = [];
+
+  const escapeHtml = value => String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('\"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+  const displayName = item =>
+    item?.remark ||
+    item?.displayName ||
+    item?.name ||
+    item?.source?.originalName ||
+    '未命名';
+
+  const avatarUrl = item =>
+    item?.customAvatar ||
+    item?.source?.originalAvatarUrl ||
+    '';
+
+  const avatarMarkup = (item, className = 'moli-avatar') => {
+    const url = avatarUrl(item);
+
+    if (url) {
+      return `
+        <div class="${className} has-image">
+          <img src="${escapeHtml(url)}" alt="">
+        </div>
+      `;
+    }
+
+    return `
+      <div class="${className}">
+        ${escapeHtml(item?.avatarText || '◉')}
+      </div>
+    `;
+  };
 
   const show = name => {
+    if (addMenu) addMenu.hidden = true;
+
     pages.forEach(page => {
       page.classList.toggle('active', page.dataset.page === name);
     });
@@ -103,6 +173,10 @@ export function createPhonePanel({
 
     if (name === 'chat') {
       renderChat();
+    }
+
+    if (name === 'sync-tavern') {
+      renderTavernSync();
     }
   };
 
@@ -118,6 +192,109 @@ export function createPhonePanel({
   };
 
   const contact = id => getContacts().find(x => x.id === id);
+
+  function refreshTavernSources() {
+    const snapshot = getTavernCharactersSnapshot();
+
+    if (snapshot.available) {
+      refreshTavernContacts(
+        snapshot.characters,
+        { markMissing: true }
+      );
+    }
+
+    return snapshot;
+  }
+
+  function renderTavernSync() {
+    const snapshot = refreshTavernSources();
+
+    if (!snapshot.available) {
+      syncSnapshot = [];
+      syncList.innerHTML = `
+        <div class="moli-empty">
+          暂时无法读取 SillyTavern 角色列表。
+        </div>
+      `;
+      return;
+    }
+
+    syncSnapshot = snapshot.characters;
+
+    if (!syncSnapshot.length) {
+      syncList.innerHTML = `
+        <div class="moli-empty">
+          当前没有可同步的酒馆角色。
+        </div>
+      `;
+      return;
+    }
+
+    const scopeKey = getScopeKey?.();
+    const activeContactIds = new Set(
+      scopeKey
+        ? getScopeConversations(scopeKey)
+            .map(conv => conv.contactId)
+        : []
+    );
+
+    syncList.innerHTML = syncSnapshot
+      .map(character => {
+        const existing = findTavernContact(character.sourceId);
+        const alreadyInScope =
+          existing && activeContactIds.has(existing.id);
+
+        return `
+          <label class="moli-sync-item">
+            <input
+              type="checkbox"
+              data-sync-source-id="${escapeHtml(character.sourceId)}"
+              ${alreadyInScope ? 'checked disabled' : ''}
+            >
+            <div class="moli-sync-avatar">
+              ${character.avatarUrl
+                ? `<img src="${escapeHtml(character.avatarUrl)}" alt="">`
+                : '◉'}
+            </div>
+            <div class="moli-sync-main">
+              <div class="moli-sync-name">${escapeHtml(character.name)}</div>
+              ${existing
+                ? `<div class="moli-sync-status">${alreadyInScope ? '已在当前聊天列表' : '已添加'}</div>`
+                : ''}
+            </div>
+          </label>
+        `;
+      })
+      .join('');
+  }
+
+  function confirmTavernSync() {
+    const selectedIds = new Set(
+      [...syncList.querySelectorAll('[data-sync-source-id]:checked:not(:disabled)')]
+        .map(input => input.dataset.syncSourceId)
+    );
+
+    if (!selectedIds.size) {
+      toast('请选择要同步的角色');
+      return;
+    }
+
+    const selected = syncSnapshot.filter(
+      item => selectedIds.has(item.sourceId)
+    );
+
+    const syncedContacts = syncTavernContacts(selected);
+    const scopeKey = getScopeKey?.();
+
+    if (scopeKey) {
+      syncedContacts.forEach(item => {
+        ensureConversation(scopeKey, item.id);
+      });
+    }
+
+    toast(`已添加 ${syncedContacts.length} 个角色`);
+    show('home');
+  }
 
   /*
    * moli小手机扩展更新
@@ -220,44 +397,54 @@ export function createPhonePanel({
   }
 
   function renderChatList() {
+    refreshTavernSources();
+
     const contacts = getContacts();
     const scopeKey = getScopeKey?.();
+    const conversations = scopeKey
+      ? getScopeConversations(scopeKey)
+      : [];
 
-    if (!contacts.length) {
+    const contactsById = new Map(
+      contacts.map(item => [item.id, item])
+    );
+
+    const rowsData = conversations
+      .map(conversation => ({
+        conversation,
+        item: contactsById.get(conversation.contactId),
+      }))
+      .filter(row => row.item);
+
+    if (!rowsData.length) {
       chatList.innerHTML = `
         <div class="moli-empty">
-          暂无联系人
+          暂无聊天
         </div>
       `;
       return;
     }
 
-    const rows = contacts.map(item => {
-      const conversation = scopeKey
-        ? getConversation(scopeKey, item.id)
-        : null;
-
+    const rows = rowsData.map(({ item, conversation }) => {
       const messages = conversation?.messages || [];
       const last = messages[messages.length - 1];
 
       return `
         <button
           class="moli-chat-item"
-          data-contact-id="${item.id}"
+          data-contact-id="${escapeHtml(item.id)}"
         >
-          <div class="moli-avatar">
-            ${item.avatarText || '◉'}
-          </div>
+          ${avatarMarkup(item)}
 
           <div class="moli-item-main">
             <div class="moli-item-top">
               <div class="moli-name">
-                ${item.remark || item.name}
+                ${escapeHtml(displayName(item))}
               </div>
             </div>
 
             <div class="moli-preview">
-              ${last ? last.content : '暂无消息'}
+              ${last ? escapeHtml(last.content) : '暂无消息'}
             </div>
           </div>
         </button>
@@ -291,7 +478,7 @@ export function createPhonePanel({
     }
 
     chatTitle.textContent =
-      item.remark || item.name;
+      displayName(item);
 
     const scopeKey = getScopeKey?.();
 
@@ -319,16 +506,14 @@ export function createPhonePanel({
           message.role === 'user';
 
         const avatar = isUser
-          ? '我'
-          : (item.avatarText || '◉');
+          ? '<div class="moli-mini-avatar">我</div>'
+          : avatarMarkup(item, 'moli-mini-avatar');
 
         return `
           <div class="moli-msg ${
             isUser ? 'user' : 'assistant'
           }">
-            <div class="moli-mini-avatar">
-              ${avatar}
-            </div>
+            ${avatar}
 
             <div class="moli-bubble">
               ${escapeHtml(message.content)}
@@ -659,11 +844,44 @@ export function createPhonePanel({
 
   panel.querySelector(
     '[data-action="add"]'
-  ).onclick = () => {
-    toast(
-      '联系人添加功能下一阶段接入'
-    );
+  ).onclick = event => {
+    event.stopPropagation();
+    addMenu.hidden = !addMenu.hidden;
   };
+
+  panel.querySelector(
+    '[data-action="sync-tavern"]'
+  ).onclick = () =>
+    show('sync-tavern');
+
+  panel.querySelector(
+    '[data-action="add-contact-placeholder"]'
+  ).onclick = () => {
+    addMenu.hidden = true;
+    toast('添加联系人将在后续阶段接入');
+  };
+
+  panel.querySelector(
+    '[data-action="group-placeholder"]'
+  ).onclick = () => {
+    addMenu.hidden = true;
+    toast('发起群聊将在后续阶段接入');
+  };
+
+  panel.querySelector(
+    '[data-action="sync-back"]'
+  ).onclick = () =>
+    show('home');
+
+  panel.querySelector(
+    '[data-action="sync-cancel"]'
+  ).onclick = () =>
+    show('home');
+
+  panel.querySelector(
+    '[data-action="sync-confirm"]'
+  ).onclick =
+    confirmTavernSync;
 
   panel.querySelector(
     '[data-action="more"]'
