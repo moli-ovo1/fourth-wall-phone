@@ -154,6 +154,17 @@ export function createPhonePanel({
       </footer>
     </section>
 
+    <section class="moli-page" data-page="forward-detail">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="forward-detail-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">聊天记录</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-forward-detail" data-forward-detail></main>
+    </section>
+
     <section class="moli-page" data-page="settings">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -250,6 +261,7 @@ export function createPhonePanel({
   const compose = panel.querySelector('.moli-compose');
   const forwardSheet = panel.querySelector('[data-forward-sheet]');
   const forwardTargets = panel.querySelector('[data-forward-targets]');
+  const forwardDetail = panel.querySelector('[data-forward-detail]');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -259,6 +271,7 @@ export function createPhonePanel({
   let activeMessageId = null;
   let pendingQuote = null;
   let pendingForward = null;
+  let activeForwardMessageId = null;
   let multiSelectMode = false;
   let selectedMessageIds = new Set();
   let messagePressTimer = null;
@@ -670,6 +683,48 @@ export function createPhonePanel({
     }
   }
 
+
+  function renderForwardDetail() {
+    if (!forwardDetail || !currentContactId || !activeForwardMessageId) {
+      if (forwardDetail) {
+        forwardDetail.innerHTML = '<div class="moli-empty">聊天记录不存在。</div>';
+      }
+      return;
+    }
+
+    const scopeKey = getScopeKey?.();
+    const message = getMessageById(
+      scopeKey,
+      currentContactId,
+      activeForwardMessageId
+    );
+
+    const items = message?.forward?.mode === 'merged'
+      && Array.isArray(message.forward.items)
+      ? message.forward.items
+      : [];
+
+    if (!items.length) {
+      forwardDetail.innerHTML = '<div class="moli-empty">聊天记录不存在。</div>';
+      return;
+    }
+
+    forwardDetail.innerHTML = `
+      <div class="moli-forward-detail-list">
+        ${items.map(item => `
+          <div class="moli-forward-detail-item">
+            <div class="moli-forward-detail-sender">
+              ${escapeHtml(item.senderName || '未知')}
+            </div>
+            <div class="moli-forward-detail-content">
+              ${escapeHtml(item.content || '')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   const show = name => {
     if (addMenu) addMenu.hidden = true;
     hideMessageMenu();
@@ -696,6 +751,10 @@ export function createPhonePanel({
 
     if (name === 'info') {
       renderChatInfo();
+    }
+
+    if (name === 'forward-detail') {
+      renderForwardDetail();
     }
   };
 
@@ -1208,22 +1267,30 @@ export function createPhonePanel({
       ? pendingForward.items
       : [];
 
-    appendMessage(
-      scopeKey,
-      targetConversationKey,
-      'user',
-      pendingForward.mode === 'merged'
-        ? `转发的聊天记录（${items.length}条）`
-        : '转发消息',
-      {
-        forward: {
-          mode: pendingForward.mode === 'merged' ? 'merged' : 'single',
-          sourceConversationId: String(pendingForward.sourceConversationId || ''),
-          sourceConversationTitle: String(pendingForward.sourceConversationTitle || ''),
-          items,
-        },
-      }
-    );
+    if (pendingForward.mode === 'merged') {
+      appendMessage(
+        scopeKey,
+        targetConversationKey,
+        'user',
+        `转发的聊天记录（${items.length}条）`,
+        {
+          forward: {
+            mode: 'merged',
+            sourceConversationId: String(pendingForward.sourceConversationId || ''),
+            sourceConversationTitle: String(pendingForward.sourceConversationTitle || ''),
+            items,
+          },
+        }
+      );
+    } else {
+      const first = items[0];
+      appendMessage(
+        scopeKey,
+        targetConversationKey,
+        'user',
+        String(first?.content || '')
+      );
+    }
 
     closeForwardPicker();
     toast('已转发');
@@ -1386,22 +1453,28 @@ export function createPhonePanel({
             <div class="moli-msg-content">
               ${senderName}
               <div class="moli-bubble">
-                ${message.forward ? `
-                  <div class="moli-forwarded-message">
-                    <div class="moli-forwarded-title">
-                      ${escapeHtml(message.forward.mode === 'merged'
-                        ? `聊天记录 · ${message.forward.items?.length || 0} 条`
-                        : (message.forward.sourceConversationTitle || '转发消息'))}
+                ${message.forward?.mode === 'merged' ? `
+                  <button
+                    type="button"
+                    class="moli-forwarded-message"
+                    data-forward-message-id="${escapeHtml(message.id || '')}"
+                    aria-label="查看聊天记录"
+                  >
+                    <div class="moli-forwarded-title">聊天记录</div>
+                    <div class="moli-forwarded-preview">
+                      ${(message.forward.items || []).slice(0, 3).map(item => `
+                        <div class="moli-forwarded-preview-line">
+                          <span>${escapeHtml(item.senderName || '未知')}：</span>${escapeHtml(item.content || '')}
+                        </div>
+                      `).join('')}
                     </div>
-                    ${(message.forward.items || []).map(item => `
-                      <div class="moli-forwarded-item">
-                        ${item.senderName
-                          ? `<div class="moli-forwarded-sender">${escapeHtml(item.senderName)}</div>`
-                          : ''}
-                        <div>${escapeHtml(item.content || '')}</div>
-                      </div>
-                    `).join('')}
-                  </div>
+                    <div class="moli-forwarded-footer">
+                      ${escapeHtml(`${message.forward.items?.length || 0}条聊天记录`)}
+                    </div>
+                  </button>
+                ` : ''}
+                ${message.forward?.mode === 'single' ? `
+                  ${escapeHtml(message.forward.items?.[0]?.content || message.content || '')}
                 ` : ''}
                 ${message.quote ? `
                   <div class="moli-quoted-message">
@@ -1422,6 +1495,17 @@ export function createPhonePanel({
     chatBody.scrollTop =
       chatBody.scrollHeight;
   }
+
+  chatBody.addEventListener('click', event => {
+    if (multiSelectMode) return;
+    const card = event.target.closest?.('[data-forward-message-id]');
+    if (!card) return;
+    event.preventDefault();
+    event.stopPropagation();
+    activeForwardMessageId = String(card.dataset.forwardMessageId || '');
+    if (!activeForwardMessageId) return;
+    show('forward-detail');
+  });
 
   chatBody.addEventListener('click', event => {
     if (!multiSelectMode) return;
@@ -1892,6 +1976,13 @@ export function createPhonePanel({
     '[data-action="chat-info"]'
   ).onclick = () =>
     show('info');
+
+  panel.querySelector(
+    '[data-action="forward-detail-back"]'
+  ).onclick = () => {
+    activeForwardMessageId = null;
+    show('chat');
+  };
 
   panel.querySelector(
     '[data-action="chat"]'
