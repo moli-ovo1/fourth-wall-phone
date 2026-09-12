@@ -21,6 +21,10 @@ import {
 import {
   getTavernCharactersSnapshot,
 } from '../core/tavern-contacts.js';
+import {
+  getApiSettings,
+  saveApiSettings,
+} from '../storage/api-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
 
 export function createPhonePanel({
@@ -195,9 +199,86 @@ export function createPhonePanel({
           >↻</button>
         </div>
       </header>
-      <main class="moli-placeholder">
-        API、全局自动行为、Markdown 与提示词设置将在后续阶段接入。
+      <main class="moli-settings-list">
+        <button type="button" class="moli-settings-row" data-action="api-settings">
+          <span>
+            <strong>场外 API</strong>
+            <small data-api-settings-summary>独立场外 API</small>
+          </span>
+          <b>›</b>
+        </button>
+        <div class="moli-settings-note">
+          自动行为、Markdown 与提示词 / 预设会继续按开发顺序接入。
+        </div>
       </main>
+    </section>
+
+    <section class="moli-page" data-page="api-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="api-settings-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">场外 API</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-api-settings">
+        <label class="moli-form-field">
+          <span>API 来源</span>
+          <select data-api-source>
+            <option value="independent">独立场外 API</option>
+            <option value="tavern">使用酒馆当前 API</option>
+          </select>
+        </label>
+
+        <div data-api-independent>
+          <label class="moli-form-field">
+            <span>Provider / API 类型</span>
+            <select data-api-provider>
+              <option value="openai-compatible">OpenAI Compatible</option>
+              <option value="claude">Claude</option>
+              <option value="gemini">Gemini</option>
+            </select>
+          </label>
+
+          <label class="moli-form-field">
+            <span>API 地址</span>
+            <input type="text" data-api-base-url placeholder="例如 https://api.example.com/v1">
+          </label>
+
+          <label class="moli-form-field">
+            <span>API Key</span>
+            <div class="moli-secret-field">
+              <input type="password" data-api-key autocomplete="off" placeholder="仅保存在本机">
+              <button type="button" data-action="toggle-api-key">显示</button>
+            </div>
+          </label>
+
+          <label class="moli-form-field">
+            <span>模型 ID</span>
+            <input type="text" data-api-model placeholder="可手动填写模型 ID">
+          </label>
+
+          <div class="moli-api-disabled-actions">
+            <button type="button" class="moli-secondary-btn" disabled>刷新模型列表</button>
+            <button type="button" class="moli-secondary-btn" disabled>测试连接</button>
+          </div>
+          <div class="moli-settings-note">
+            Provider Adapter 接入后，这两个按钮会直接使用这里保存的配置。
+          </div>
+        </div>
+
+        <label class="moli-switch-row">
+          <span>
+            <strong>流式输出</strong>
+            <small>生成时逐步显示内容</small>
+          </span>
+          <input type="checkbox" data-api-stream>
+        </label>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="api-settings-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="api-settings-save">保存</button>
+      </footer>
     </section>
 
     <section class="moli-page" data-page="info">
@@ -279,6 +360,14 @@ export function createPhonePanel({
   const forwardDetail = panel.querySelector('[data-forward-detail]');
   const messageSearchInput = panel.querySelector('[data-message-search-input]');
   const messageSearchResults = panel.querySelector('[data-message-search-results]');
+  const apiSettingsSummary = panel.querySelector('[data-api-settings-summary]');
+  const apiSource = panel.querySelector('[data-api-source]');
+  const apiProvider = panel.querySelector('[data-api-provider]');
+  const apiIndependent = panel.querySelector('[data-api-independent]');
+  const apiBaseUrl = panel.querySelector('[data-api-base-url]');
+  const apiKey = panel.querySelector('[data-api-key]');
+  const apiModel = panel.querySelector('[data-api-model]');
+  const apiStream = panel.querySelector('[data-api-stream]');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -483,6 +572,76 @@ export function createPhonePanel({
     return conversationDisplayTitle(conversation) || '联系人';
   }
 
+  function apiSourceLabel(source) {
+    return source === 'tavern'
+      ? '使用酒馆当前 API'
+      : '独立场外 API';
+  }
+
+  function updateApiSettingsSummary() {
+    if (!apiSettingsSummary) return;
+    const settings = getApiSettings();
+    apiSettingsSummary.textContent = apiSourceLabel(settings.source);
+  }
+
+  function updateApiSettingsModeUi() {
+    if (!apiIndependent || !apiSource) return;
+    apiIndependent.hidden = apiSource.value === 'tavern';
+  }
+
+  function loadApiSettingsForm() {
+    const settings = getApiSettings();
+
+    if (apiSource) apiSource.value = settings.source;
+    if (apiProvider) apiProvider.value = settings.provider;
+    if (apiBaseUrl) apiBaseUrl.value = settings.baseUrl;
+    if (apiKey) {
+      apiKey.value = settings.apiKey;
+      apiKey.type = 'password';
+    }
+    if (apiModel) apiModel.value = settings.model;
+    if (apiStream) apiStream.checked = settings.stream !== false;
+
+    const toggleKeyButton = panel.querySelector('[data-action="toggle-api-key"]');
+    if (toggleKeyButton) toggleKeyButton.textContent = '显示';
+
+    updateApiSettingsModeUi();
+  }
+
+  function saveApiSettingsForm() {
+    const next = saveApiSettings({
+      source: apiSource?.value || 'independent',
+      provider: apiProvider?.value || 'openai-compatible',
+      baseUrl: apiBaseUrl?.value?.trim() || '',
+      apiKey: apiKey?.value || '',
+      model: apiModel?.value?.trim() || '',
+      stream: Boolean(apiStream?.checked),
+    });
+
+    updateApiSettingsSummary();
+    toast('API 设置已保存');
+    return next;
+  }
+
+  function searchableMessageText(message) {
+    const parts = [
+      String(message?.content || ''),
+      String(message?.quote?.content || ''),
+      String(message?.quote?.senderName || ''),
+    ];
+
+    if (message?.forward && Array.isArray(message.forward.items)) {
+      for (const item of message.forward.items) {
+        parts.push(
+          String(item?.senderName || ''),
+          String(item?.content || '')
+        );
+      }
+    }
+
+    return parts.join('\n').toLowerCase();
+  }
+
   function renderMessageSearch(query = '') {
     if (!messageSearchResults) return;
 
@@ -499,7 +658,7 @@ export function createPhonePanel({
     }
 
     const results = (conversation.messages || [])
-      .filter(message => String(message?.content || '').toLowerCase().includes(keyword))
+      .filter(message => searchableMessageText(message).includes(keyword))
       .slice()
       .reverse();
 
@@ -519,7 +678,14 @@ export function createPhonePanel({
             <strong>${escapeHtml(sender)}</strong>
             <span>${escapeHtml(time)}</span>
           </div>
-          <div class="moli-search-result-text">${escapeHtml(message.content || '')}</div>
+          <div class="moli-search-result-text">${escapeHtml(
+            message.forward?.mode === 'merged'
+              ? (message.forward.items || [])
+                  .slice(0, 3)
+                  .map(item => `${item.senderName || '未知'}：${item.content || ''}`)
+                  .join(' / ')
+              : (message.content || message.quote?.content || '')
+          )}</div>
         </button>
       `;
     }).join('');
@@ -895,6 +1061,14 @@ export function createPhonePanel({
 
     if (name === 'message-search') {
       renderMessageSearch(messageSearchInput?.value || '');
+    }
+
+    if (name === 'settings') {
+      updateApiSettingsSummary();
+    }
+
+    if (name === 'api-settings') {
+      loadApiSettingsForm();
     }
   };
 
@@ -2143,6 +2317,36 @@ export function createPhonePanel({
     '[data-action="update"]'
   ).onclick =
     updateExtension;
+
+  panel.querySelector(
+    '[data-action="api-settings"]'
+  ).onclick = () => show('api-settings');
+
+  panel.querySelector(
+    '[data-action="api-settings-back"]'
+  ).onclick = () => show('settings');
+
+  panel.querySelector(
+    '[data-action="api-settings-cancel"]'
+  ).onclick = () => show('settings');
+
+  panel.querySelector(
+    '[data-action="api-settings-save"]'
+  ).onclick = () => {
+    saveApiSettingsForm();
+    show('settings');
+  };
+
+  panel.querySelector(
+    '[data-action="toggle-api-key"]'
+  ).onclick = event => {
+    if (!apiKey) return;
+    const showKey = apiKey.type === 'password';
+    apiKey.type = showKey ? 'text' : 'password';
+    event.currentTarget.textContent = showKey ? '隐藏' : '显示';
+  };
+
+  apiSource?.addEventListener('change', updateApiSettingsModeUi);
 
   panel
     .querySelectorAll(
