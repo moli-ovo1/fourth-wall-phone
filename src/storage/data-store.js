@@ -350,6 +350,56 @@ export function syncTavernContacts(characters) {
   return synced;
 }
 
+
+export function createGroupConversation(
+  scopeKey,
+  { name, memberIds }
+) {
+  const trimmedName = String(name || '').trim();
+  const members = [...new Set(
+    (Array.isArray(memberIds) ? memberIds : [])
+      .map(id => String(id || '').trim())
+      .filter(Boolean)
+  )];
+
+  if (!trimmedName) {
+    throw new Error('群聊名称不能为空');
+  }
+
+  if (!members.length) {
+    throw new Error('请至少选择一位联系人');
+  }
+
+  const validIds = new Set(
+    getContacts().map(item => item.id)
+  );
+  const validMembers = members.filter(id => validIds.has(id));
+
+  if (!validMembers.length) {
+    throw new Error('没有可用的群成员');
+  }
+
+  const data = ensureBuiltins(scopeKey);
+  const groupId =
+    `group:${Date.now()}:` +
+    Math.random().toString(36).slice(2, 8);
+
+  const conversation = {
+    id: groupId,
+    type: 'group',
+    name: trimmedName,
+    memberIds: validMembers,
+    messages: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  data.conversations[groupId] = conversation;
+  saveScope(scopeKey, data);
+
+  return conversation;
+}
+
 export function appendMessage(
   scopeKey,
   contactId,
