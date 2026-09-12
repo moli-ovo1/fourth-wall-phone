@@ -1481,15 +1481,12 @@ export function createPhonePanel({
     showPage: show,
 
     open(handleElement) {
-      currentContactId = null;
       positionNear(handleElement);
       panel.classList.add('open');
       show('home');
     },
 
     close() {
-      currentContactId = null;
-      show('home');
       panel.classList.remove('open');
     },
 
