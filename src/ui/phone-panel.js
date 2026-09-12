@@ -262,8 +262,12 @@ export function createPhonePanel({
 
           <label class="moli-form-field">
             <span>模型 ID</span>
-            <input type="text" data-api-model list="moli-api-model-options" placeholder="可手动填写模型 ID">
-            <datalist id="moli-api-model-options" data-api-model-options></datalist>
+            <div class="moli-model-field">
+              <input type="text" data-api-model placeholder="可手动填写模型 ID">
+              <button type="button" class="moli-model-picker-button" data-action="api-open-model-picker">
+                选择
+              </button>
+            </div>
           </label>
 
           <div class="moli-api-actions">
@@ -289,6 +293,20 @@ export function createPhonePanel({
         <button class="moli-primary-btn" data-action="api-settings-save">保存</button>
       </footer>
     </section>
+
+    <div class="moli-model-sheet" data-api-model-sheet hidden>
+      <div class="moli-model-card">
+        <div class="moli-model-picker-head">
+          <strong>选择模型</strong>
+          <button type="button" class="moli-icon-btn" data-action="api-close-model-picker" aria-label="关闭">×</button>
+        </div>
+        <div class="moli-model-picker-search">
+          <input type="search" data-api-model-search placeholder="搜索模型 ID">
+          <span data-api-model-count></span>
+        </div>
+        <div class="moli-model-picker-list" data-api-model-list></div>
+      </div>
+    </div>
 
     <section class="moli-page" data-page="info">
       <header class="moli-nav">
@@ -377,7 +395,11 @@ export function createPhonePanel({
   const apiBaseUrl = panel.querySelector('[data-api-base-url]');
   const apiKey = panel.querySelector('[data-api-key]');
   const apiModel = panel.querySelector('[data-api-model]');
-  const apiModelOptions = panel.querySelector('[data-api-model-options]');
+  const apiModelSheet = panel.querySelector('[data-api-model-sheet]');
+  const apiModelSearch = panel.querySelector('[data-api-model-search]');
+  const apiModelList = panel.querySelector('[data-api-model-list]');
+  const apiModelCount = panel.querySelector('[data-api-model-count]');
+  const apiModelPickerButton = panel.querySelector('[data-action="api-open-model-picker"]');
   const apiStatus = panel.querySelector('[data-api-status]');
   const apiStream = panel.querySelector('[data-api-stream]');
 
@@ -398,6 +420,7 @@ export function createPhonePanel({
   let messagePressStartY = 0;
   let generationController = null;
   let generationConversationKey = null;
+  let apiModelListCache = [];
 
   panel.addEventListener(
     'click',
@@ -653,11 +676,83 @@ export function createPhonePanel({
       });
   }
 
-  function populateApiModelOptions(models = []) {
-    if (!apiModelOptions) return;
-    apiModelOptions.innerHTML = models
-      .map(model => `<option value="${escapeHtml(model)}"></option>`)
+  function normalizedApiModels(models = []) {
+    const seen = new Set();
+    const result = [];
+
+    for (const value of Array.isArray(models) ? models : []) {
+      const id = String(value || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      result.push(id);
+    }
+
+    return result;
+  }
+
+  function renderApiModelPicker(query = '') {
+    if (!apiModelList) return;
+
+    const keyword = String(query || '').trim().toLowerCase();
+    const filtered = keyword
+      ? apiModelListCache.filter(model => model.toLowerCase().includes(keyword))
+      : apiModelListCache;
+
+    if (apiModelCount) {
+      apiModelCount.textContent = keyword
+        ? `${filtered.length} / ${apiModelListCache.length}`
+        : `${apiModelListCache.length} 个`;
+    }
+
+    if (!filtered.length) {
+      apiModelList.innerHTML = `
+        <div class="moli-model-empty">
+          ${apiModelListCache.length ? '没有匹配的模型。' : '请先刷新模型列表。'}
+        </div>
+      `;
+      return;
+    }
+
+    const selected = String(apiModel?.value || '');
+    apiModelList.innerHTML = filtered
+      .map(model => `
+        <button
+          type="button"
+          class="moli-model-option${model === selected ? ' selected' : ''}"
+          data-api-model-value="${escapeHtml(model)}"
+        >
+          <span>${escapeHtml(model)}</span>
+          ${model === selected ? '<b>✓</b>' : ''}
+        </button>
+      `)
       .join('');
+  }
+
+  function populateApiModelOptions(models = []) {
+    apiModelListCache = normalizedApiModels(models);
+
+    if (apiModelPickerButton) {
+      apiModelPickerButton.textContent = apiModelListCache.length
+        ? `选择 (${apiModelListCache.length})`
+        : '选择';
+    }
+
+    renderApiModelPicker(apiModelSearch?.value || '');
+  }
+
+  function openApiModelPicker() {
+    if (!apiModelSheet) return;
+
+    if (apiModelSearch) apiModelSearch.value = '';
+    renderApiModelPicker('');
+    apiModelSheet.hidden = false;
+
+    setTimeout(() => apiModelSearch?.focus(), 0);
+  }
+
+  function closeApiModelPicker() {
+    if (!apiModelSheet) return;
+    apiModelSheet.hidden = true;
   }
 
   async function refreshApiModels({ quiet = false } = {}) {
@@ -681,7 +776,7 @@ export function createPhonePanel({
 
       setApiStatus(
         models.length
-          ? `已读取 ${models.length} 个模型，可点击模型输入框选择。`
+          ? `已读取 ${models.length} 个模型，可点击“选择”查看完整列表。`
           : '连接成功，但接口没有返回可用模型。',
         'success'
       );
@@ -738,6 +833,8 @@ export function createPhonePanel({
     }
     if (apiModel) apiModel.value = settings.model;
     if (apiStream) apiStream.checked = settings.stream !== false;
+
+    populateApiModelOptions([]);
     populateApiModelOptions([]);
     setApiStatus('');
     updateProviderPlaceholder();
@@ -2643,6 +2740,34 @@ export function createPhonePanel({
   panel.querySelector(
     '[data-action="api-test-connection"]'
   ).onclick = () => testApiConnection();
+
+
+  panel.querySelector(
+    '[data-action="api-open-model-picker"]'
+  ).onclick = () => openApiModelPicker();
+
+  panel.querySelector(
+    '[data-action="api-close-model-picker"]'
+  ).onclick = () => closeApiModelPicker();
+
+  apiModelSearch?.addEventListener('input', () => {
+    renderApiModelPicker(apiModelSearch.value);
+  });
+
+  apiModelList?.addEventListener('click', event => {
+    const option = event.target.closest?.('[data-api-model-value]');
+    if (!option || !apiModel) return;
+
+    apiModel.value = String(option.dataset.apiModelValue || '');
+    closeApiModelPicker();
+    setApiStatus(`已选择模型：${apiModel.value}`, 'success');
+  });
+
+  apiModelSheet?.addEventListener('click', event => {
+    if (event.target === apiModelSheet) {
+      closeApiModelPicker();
+    }
+  });
 
   panel
     .querySelectorAll(
