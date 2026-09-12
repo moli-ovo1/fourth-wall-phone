@@ -1,0 +1,143 @@
+#moli-phone-handle{
+    position:absolute;
+    z-index:2147483600;
+    width:38px;
+    height:38px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:1px solid rgba(255,255,255,.22);
+    border-radius:50%;
+    background:linear-gradient(145deg,rgba(255,255,255,.18),rgba(255,255,255,.07));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 4px 14px rgba(0,0,0,.28);
+    backdrop-filter:blur(14px) saturate(130%);
+    -webkit-backdrop-filter:blur(14px) saturate(130%);
+    color:rgba(255,255,255,.92);
+    font-size:20px;
+    line-height:1;
+    cursor:grab;
+    user-select:none;
+    -webkit-user-select:none;
+    touch-action:none;
+    -webkit-tap-highlight-color:transparent;
+    transition:left .2s ease,top .2s ease,transform .12s ease;
+}
+
+#moli-phone-handle:active{transform:scale(.94)}
+#moli-phone-handle.dragging{transition:none!important;cursor:grabbing}
+
+#moli-phone-panel{
+    position:absolute;
+    z-index:2147483601;
+    width:min(390px,calc(100vw - 20px));
+    height:min(690px,calc(100vh - 70px));
+    display:none;
+    overflow:hidden;
+    box-sizing:border-box;
+    border-radius:22px;
+    background:#f5f5f5;
+    color:#111;
+    box-shadow:0 16px 50px rgba(0,0,0,.38);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+
+#moli-phone-panel.open{display:block}
+#moli-phone-panel *{box-sizing:border-box}
+#moli-phone-panel button{font:inherit;color:inherit}
+
+#moli-phone-panel .moli-page{
+    position:absolute;
+    inset:0;
+    display:none;
+    background:#f5f5f5;
+}
+
+#moli-phone-panel .moli-page.active{
+    display:flex;
+    flex-direction:column;
+}
+
+#moli-phone-panel .moli-nav{
+    height:52px;
+    flex:0 0 52px;
+    display:flex;
+    align-items:center;
+    padding:0 12px;
+    background:#ededed;
+    border-bottom:1px solid #ddd;
+    cursor:grab;
+    touch-action:none;
+    user-select:none;
+    -webkit-user-select:none;
+}
+
+#moli-phone-panel.panel-dragging .moli-nav{cursor:grabbing}
+#moli-phone-panel .moli-nav button{touch-action:auto}
+
+#moli-phone-panel .moli-nav-title{
+    flex:1;
+    text-align:center;
+    font-size:17px;
+    font-weight:600;
+}
+
+#moli-phone-panel .moli-nav-side{
+    width:72px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+#moli-phone-panel .moli-nav-side.right{justify-content:flex-end}
+
+#moli-phone-panel .moli-icon-btn{
+    border:0;
+    background:transparent;
+    padding:7px;
+    min-width:32px;
+    min-height:32px;
+    border-radius:8px;
+    font-size:21px;
+    line-height:1;
+    cursor:pointer;
+}
+
+#moli-phone-panel .moli-back{
+    font-size:26px;
+    padding-left:0;
+}
+
+#moli-phone-panel .moli-chat-list{
+    flex:1;
+    overflow:auto;
+    background:#fff;
+}
+
+#moli-phone-panel .moli-empty,
+#moli-phone-panel .moli-placeholder{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:28px;
+    color:#777;
+    line-height:1.8;
+}
+
+#moli-phone-panel .moli-toast{
+    position:absolute;
+    left:50%;
+    bottom:70px;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,.75);
+    color:#fff;
+    padding:8px 12px;
+    border-radius:7px;
+    font-size:12px;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .15s;
+}
+
+#moli-phone-panel .moli-toast.show{opacity:1}
