@@ -25,6 +25,12 @@ import {
   getApiSettings,
   saveApiSettings,
 } from '../storage/api-settings.js';
+import {
+  getProviderDefaultBaseUrl,
+  getProviderLabel,
+  listProviderModels,
+  testProviderConnection,
+} from '../api/providers/provider-registry.js';
 import { extensionTypes } from '../../../../../extensions.js';
 
 export function createPhonePanel({
@@ -255,15 +261,17 @@ export function createPhonePanel({
 
           <label class="moli-form-field">
             <span>模型 ID</span>
-            <input type="text" data-api-model placeholder="可手动填写模型 ID">
+            <input type="text" data-api-model list="moli-api-model-options" placeholder="可手动填写模型 ID">
+            <datalist id="moli-api-model-options" data-api-model-options></datalist>
           </label>
 
-          <div class="moli-api-disabled-actions">
-            <button type="button" class="moli-secondary-btn" disabled>刷新模型列表</button>
-            <button type="button" class="moli-secondary-btn" disabled>测试连接</button>
+          <div class="moli-api-actions">
+            <button type="button" class="moli-secondary-btn" data-action="api-refresh-models">刷新模型列表</button>
+            <button type="button" class="moli-secondary-btn" data-action="api-test-connection">测试连接</button>
           </div>
+          <div class="moli-api-status" data-api-status></div>
           <div class="moli-settings-note">
-            Provider Adapter 接入后，这两个按钮会直接使用这里保存的配置。
+            API 地址留空时使用该 Provider 的官方地址；模型列表失败时仍可手动填写模型 ID。
           </div>
         </div>
 
@@ -367,6 +375,8 @@ export function createPhonePanel({
   const apiBaseUrl = panel.querySelector('[data-api-base-url]');
   const apiKey = panel.querySelector('[data-api-key]');
   const apiModel = panel.querySelector('[data-api-model]');
+  const apiModelOptions = panel.querySelector('[data-api-model-options]');
+  const apiStatus = panel.querySelector('[data-api-status]');
   const apiStream = panel.querySelector('[data-api-stream]');
 
   let currentContactId = null;
@@ -581,12 +591,135 @@ export function createPhonePanel({
   function updateApiSettingsSummary() {
     if (!apiSettingsSummary) return;
     const settings = getApiSettings();
-    apiSettingsSummary.textContent = apiSourceLabel(settings.source);
+
+    if (settings.source === 'tavern') {
+      apiSettingsSummary.textContent = apiSourceLabel(settings.source);
+      return;
+    }
+
+    let providerLabel = settings.provider;
+    try {
+      providerLabel = getProviderLabel(settings.provider);
+    } catch {}
+
+    apiSettingsSummary.textContent = [
+      '独立场外 API',
+      providerLabel,
+      settings.model || '',
+    ].filter(Boolean).join(' · ');
+  }
+
+  function currentApiFormConfig() {
+    return {
+      source: apiSource?.value || 'independent',
+      provider: apiProvider?.value || 'openai-compatible',
+      baseUrl: apiBaseUrl?.value?.trim() || '',
+      apiKey: apiKey?.value || '',
+      model: apiModel?.value?.trim() || '',
+      stream: Boolean(apiStream?.checked),
+    };
+  }
+
+  function setApiStatus(text = '', kind = '') {
+    if (!apiStatus) return;
+    apiStatus.textContent = text;
+    apiStatus.dataset.kind = kind;
+  }
+
+  function updateProviderPlaceholder() {
+    if (!apiBaseUrl || !apiProvider) return;
+    try {
+      apiBaseUrl.placeholder = `留空使用 ${getProviderDefaultBaseUrl(apiProvider.value)}`;
+    } catch {
+      apiBaseUrl.placeholder = 'API 地址';
+    }
   }
 
   function updateApiSettingsModeUi() {
     if (!apiIndependent || !apiSource) return;
     apiIndependent.hidden = apiSource.value === 'tavern';
+    updateProviderPlaceholder();
+  }
+
+  function setApiActionBusy(busy) {
+    panel
+      .querySelectorAll('[data-action="api-refresh-models"], [data-action="api-test-connection"]')
+      .forEach(button => {
+        button.disabled = Boolean(busy);
+      });
+  }
+
+  function populateApiModelOptions(models = []) {
+    if (!apiModelOptions) return;
+    apiModelOptions.innerHTML = models
+      .map(model => `<option value="${escapeHtml(model)}"></option>`)
+      .join('');
+  }
+
+  async function refreshApiModels({ quiet = false } = {}) {
+    const config = currentApiFormConfig();
+
+    if (config.source !== 'independent') {
+      if (!quiet) setApiStatus('酒馆当前 API 的模型列表将在兼容层接入。', 'info');
+      return [];
+    }
+
+    setApiActionBusy(true);
+    setApiStatus('正在读取模型列表…', 'loading');
+
+    try {
+      const models = await listProviderModels(config);
+      populateApiModelOptions(models);
+
+      if (!apiModel?.value && models[0]) {
+        apiModel.value = models[0];
+      }
+
+      setApiStatus(
+        models.length
+          ? `已读取 ${models.length} 个模型，可点击模型输入框选择。`
+          : '连接成功，但接口没有返回可用模型。',
+        'success'
+      );
+      return models;
+    } catch (error) {
+      console.error('[moli小手机] model list failed:', error);
+      setApiStatus(`模型列表失败：${error?.message || error}`, 'error');
+      if (!quiet) toast('模型列表读取失败');
+      return [];
+    } finally {
+      setApiActionBusy(false);
+    }
+  }
+
+  async function testApiConnection() {
+    const config = currentApiFormConfig();
+
+    if (config.source !== 'independent') {
+      setApiStatus('酒馆当前 API 的测试连接将在 Generation 兼容层接入。', 'info');
+      return;
+    }
+
+    setApiActionBusy(true);
+    setApiStatus('正在测试连接…', 'loading');
+
+    try {
+      const result = await testProviderConnection(config);
+      populateApiModelOptions(result.models);
+      setApiStatus(
+        result.modelCount
+          ? `连接成功，接口返回 ${result.modelCount} 个模型。`
+          : '连接成功。',
+        'success'
+      );
+      toast('API 连接成功');
+    } catch (error) {
+      console.error('[moli小手机] api test failed:', error);
+      setApiStatus(`连接失败：${error?.message || error}`, 'error');
+      toast('API 连接失败');
+    } finally {
+      setApiActionBusy(false);
+    }
   }
 
   function loadApiSettingsForm() {
@@ -601,6 +734,9 @@ export function createPhonePanel({
     }
     if (apiModel) apiModel.value = settings.model;
     if (apiStream) apiStream.checked = settings.stream !== false;
+    populateApiModelOptions([]);
+    setApiStatus('');
+    updateProviderPlaceholder();
 
     const toggleKeyButton = panel.querySelector('[data-action="toggle-api-key"]');
     if (toggleKeyButton) toggleKeyButton.textContent = '显示';
@@ -609,14 +745,7 @@ export function createPhonePanel({
   }
 
   function saveApiSettingsForm() {
-    const next = saveApiSettings({
-      source: apiSource?.value || 'independent',
-      provider: apiProvider?.value || 'openai-compatible',
-      baseUrl: apiBaseUrl?.value?.trim() || '',
-      apiKey: apiKey?.value || '',
-      model: apiModel?.value?.trim() || '',
-      stream: Boolean(apiStream?.checked),
-    });
+    const next = saveApiSettings(currentApiFormConfig());
 
     updateApiSettingsSummary();
     toast('API 设置已保存');
@@ -2346,7 +2475,24 @@ export function createPhonePanel({
     event.currentTarget.textContent = showKey ? '隐藏' : '显示';
   };
 
-  apiSource?.addEventListener('change', updateApiSettingsModeUi);
+  apiSource?.addEventListener('change', () => {
+    updateApiSettingsModeUi();
+    setApiStatus('');
+  });
+
+  apiProvider?.addEventListener('change', () => {
+    updateProviderPlaceholder();
+    populateApiModelOptions([]);
+    setApiStatus('');
+  });
+
+  panel.querySelector(
+    '[data-action="api-refresh-models"]'
+  ).onclick = () => refreshApiModels();
+
+  panel.querySelector(
+    '[data-action="api-test-connection"]'
+  ).onclick = () => testApiConnection();
 
   panel
     .querySelectorAll(
