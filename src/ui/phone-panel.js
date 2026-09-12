@@ -296,12 +296,30 @@ export function createPhonePanel({
     show('home');
   }
 
+  function getInstalledExtensionName() {
+    const moduleUrl = new URL(import.meta.url);
+    const marker = '/scripts/extensions/third-party/';
+    const markerIndex = moduleUrl.pathname.indexOf(marker);
+
+    if (markerIndex === -1) {
+      throw new Error('无法识别当前扩展安装目录');
+    }
+
+    const remainder = moduleUrl.pathname.slice(markerIndex + marker.length);
+    const encodedName = remainder.split('/')[0];
+
+    if (!encodedName) {
+      throw new Error('无法识别当前扩展安装目录');
+    }
+
+    return decodeURIComponent(encodedName);
+  }
+
   /*
    * moli小手机扩展更新
    *
    * 直接调用 SillyTavern 的扩展更新接口。
-   * 因此以后通过 Git 仓库安装后，可以直接在设置页更新，
-   * 不需要每次卸载再重新安装。
+   * 扩展目录名从当前模块 URL 自动识别，避免安装目录改名后更新失败。
    */
   async function updateExtension() {
     const button = panel.querySelector('[data-action="update"]');
@@ -339,13 +357,8 @@ export function createPhonePanel({
         throw new Error('没有取得 CSRF Token');
       }
 
-      /*
-       * extensionName 必须对应安装在：
-       *
-       * public/scripts/extensions/third-party/fourth-wall-phone
-       *
-       * 的扩展目录名称。
-       */
+      const extensionName = getInstalledExtensionName();
+
       const response = await fetch('/api/extensions/update', {
         method: 'POST',
         credentials: 'same-origin',
@@ -354,7 +367,7 @@ export function createPhonePanel({
           'X-CSRF-Token': token,
         },
         body: JSON.stringify({
-          extensionName: 'fourth-wall-phone',
+          extensionName,
           global: false,
         }),
       });
