@@ -521,3 +521,9 @@
 #moli-phone-panel .moli-automation-slider input[type="range"]::-moz-range-thumb{width:18px;height:18px;border:0;border-radius:50%;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.28)}
 
 #moli-phone-panel .moli-automation-value{display:block;margin-top:8px;text-align:center;font-size:12px;line-height:1;color:#8a8a8f;font-weight:500}
+
+#moli-phone-handle{position:fixed}
+#moli-phone-handle .moli-handle-unread-dot{position:absolute;right:-1px;top:-1px;width:9px;height:9px;border-radius:50%;background:#ff3b30;box-shadow:0 0 0 2px rgba(255,255,255,.9);pointer-events:none}
+#moli-phone-panel .moli-typing-indicator{min-height:22px;box-sizing:border-box;padding:4px 54px 2px;background:#f7f7f7;color:#999;font-size:11px;border-top:1px solid #e8e8e8}
+#moli-phone-panel .moli-typing-indicator b{display:inline-block;margin-left:3px;letter-spacing:1px;animation:moliTypingDots .8s ease-in-out infinite alternate}
+@keyframes moliTypingDots{from{opacity:.3;transform:translateY(0)}to{opacity:1;transform:translateY(-1px)}}
