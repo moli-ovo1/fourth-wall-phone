@@ -26,6 +26,10 @@ import {
 import {
   getApiSettings,
   saveApiSettings,
+  getApiPresets,
+  saveApiPreset,
+  deleteApiPreset,
+  getApiPreset,
 } from '../storage/api-settings.js';
 import {
   getProviderDefaultBaseUrl,
@@ -282,6 +286,19 @@ export function createPhonePanel({
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-api-settings">
+        <div class="moli-conversation-section">
+          <div class="moli-conversation-section-title">API 预设</div>
+          <div class="moli-model-field">
+            <select data-api-preset><option value="">——选择预设——</option></select>
+            <button type="button" class="moli-model-picker-button" data-action="api-apply-preset">应用</button>
+          </div>
+          <div class="moli-api-actions">
+            <button type="button" class="moli-secondary-btn" data-action="api-save-preset">另存为预设</button>
+            <button type="button" class="moli-secondary-btn moli-danger-inline" data-action="api-delete-preset">删除所选预设</button>
+          </div>
+          <div class="moli-settings-note">预设保存在本机，可快速复用 API 类型、地址、Key、模型与流式设置。</div>
+        </div>
+
         <label class="moli-form-field">
           <span>API 来源</span>
           <select data-api-source>
@@ -524,6 +541,7 @@ export function createPhonePanel({
   const messageSearchInput = panel.querySelector('[data-message-search-input]');
   const messageSearchResults = panel.querySelector('[data-message-search-results]');
   const apiSettingsSummary = panel.querySelector('[data-api-settings-summary]');
+  const apiPreset = panel.querySelector('[data-api-preset]');
   const apiSource = panel.querySelector('[data-api-source]');
   const apiProvider = panel.querySelector('[data-api-provider]');
   const apiIndependent = panel.querySelector('[data-api-independent]');
@@ -971,8 +989,30 @@ export function createPhonePanel({
     }
   }
 
+  function renderApiPresets(selectedId = '') {
+    if (!apiPreset) return;
+    const presets = getApiPresets();
+    apiPreset.innerHTML = '<option value="">——选择预设——</option>' + presets
+      .map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
+      .join('');
+    if (selectedId && presets.some(item => item.id === selectedId)) apiPreset.value = selectedId;
+  }
+
+  function applyApiConfigToForm(config = {}) {
+    if (apiSource) apiSource.value = config.source || 'independent';
+    if (apiProvider) apiProvider.value = config.provider || 'openai-compatible';
+    if (apiBaseUrl) apiBaseUrl.value = config.baseUrl || '';
+    if (apiKey) apiKey.value = config.apiKey || '';
+    if (apiModel) apiModel.value = config.model || '';
+    if (apiStream) apiStream.checked = config.stream !== false;
+    populateApiModelOptions([]);
+    updateApiSettingsModeUi();
+    setApiStatus('');
+  }
+
   function loadApiSettingsForm() {
     const settings = getApiSettings();
+    renderApiPresets();
 
     if (apiSource) apiSource.value = settings.source;
     if (apiProvider) apiProvider.value = settings.provider;
@@ -3121,6 +3161,32 @@ export function createPhonePanel({
   ).onclick = () => {
     saveApiSettingsForm();
     show('settings');
+  };
+
+  panel.querySelector('[data-action="api-apply-preset"]').onclick = () => {
+    const preset = getApiPreset(apiPreset?.value);
+    if (!preset) { toast('请先选择 API 预设'); return; }
+    applyApiConfigToForm(preset.config);
+    toast(`已读取预设：${preset.name}`);
+  };
+
+  panel.querySelector('[data-action="api-save-preset"]').onclick = () => {
+    const name = windowRef.prompt('预设名称');
+    if (!String(name || '').trim()) return;
+    try {
+      const preset = saveApiPreset(name, currentApiFormConfig());
+      renderApiPresets(preset.id);
+      toast('API 预设已保存');
+    } catch (error) { toast(error?.message || '保存预设失败'); }
+  };
+
+  panel.querySelector('[data-action="api-delete-preset"]').onclick = () => {
+    const preset = getApiPreset(apiPreset?.value);
+    if (!preset) { toast('请先选择 API 预设'); return; }
+    if (!windowRef.confirm(`删除 API 预设“${preset.name}”？`)) return;
+    deleteApiPreset(preset.id);
+    renderApiPresets();
+    toast('API 预设已删除');
   };
 
   panel.querySelector(
