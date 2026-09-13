@@ -71,6 +71,15 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     conversation.messages = [];
   }
 
+  if (conversation.type === 'group') {
+    if (!conversation.automation || typeof conversation.automation !== 'object') conversation.automation = {};
+    const automation = conversation.automation;
+    if (typeof automation.commentaryEnabled !== 'boolean') automation.commentaryEnabled = false;
+    automation.commentaryProbability = Math.max(0, Math.min(100, Number.isFinite(Number(automation.commentaryProbability)) ? Math.round(Number(automation.commentaryProbability)) : 30));
+    if (typeof automation.reviewEnabled !== 'boolean') automation.reviewEnabled = false;
+    automation.reviewEveryTurns = Math.max(1, Math.min(9999, Number.isFinite(Number(automation.reviewEveryTurns)) ? Math.round(Number(automation.reviewEveryTurns)) : 10));
+  }
+
   if (conversation.type === 'private') {
     if (conversation.scopeMode !== 'global') {
       conversation.scopeMode = 'current';
@@ -89,6 +98,12 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     } else {
       conversation.recentChatLimit = Math.max(10, Math.min(9999, Number(conversation.recentChatLimit)));
     }
+    if (!conversation.automation || typeof conversation.automation !== 'object') conversation.automation = {};
+    const automation = conversation.automation;
+    if (typeof automation.commentaryEnabled !== 'boolean') automation.commentaryEnabled = false;
+    automation.commentaryProbability = Math.max(0, Math.min(100, Number.isFinite(Number(automation.commentaryProbability)) ? Math.round(Number(automation.commentaryProbability)) : 30));
+    if (typeof automation.proactiveEnabled !== 'boolean') automation.proactiveEnabled = false;
+    automation.proactiveFrequency = Math.max(0, Math.min(100, Number.isFinite(Number(automation.proactiveFrequency)) ? Math.round(Number(automation.proactiveFrequency)) : 35));
     const memory = conversation.memory && typeof conversation.memory === 'object'
       ? conversation.memory
       : {};
@@ -749,7 +764,7 @@ export function createGroupConversation(
 export function updateGroupConversation(
   scopeKey,
   groupId,
-  { name, addMemberIds, removeMemberIds } = {}
+  { name, addMemberIds, removeMemberIds, commentaryEnabled, commentaryProbability, reviewEnabled, reviewEveryTurns } = {}
 ) {
   const data = ensureBuiltins(scopeKey);
   const conversation = data.conversations[groupId];
@@ -787,6 +802,11 @@ export function updateGroupConversation(
   }
 
   conversation.memberIds = [...members];
+  applyConversationDefaults(conversation);
+  if (commentaryEnabled !== undefined) conversation.automation.commentaryEnabled = Boolean(commentaryEnabled);
+  if (commentaryProbability !== undefined) conversation.automation.commentaryProbability = Math.max(0, Math.min(100, Math.round(Number(commentaryProbability) || 0)));
+  if (reviewEnabled !== undefined) conversation.automation.reviewEnabled = Boolean(reviewEnabled);
+  if (reviewEveryTurns !== undefined) conversation.automation.reviewEveryTurns = Math.max(1, Math.min(9999, Math.round(Number(reviewEveryTurns) || 1)));
   conversation.updatedAt = Date.now();
   saveScope(scopeKey, data);
 
@@ -991,6 +1011,7 @@ export function updatePrivateConversationSettings(
     timeMode,
     bodyContextEnabled,
     recentChatLimit,
+    commentaryEnabled, commentaryProbability, proactiveEnabled, proactiveFrequency,
   } = {}
 ) {
   let located = locateConversation(scopeKey, conversationKey);
@@ -1043,6 +1064,11 @@ export function updatePrivateConversationSettings(
   if (bodyContextEnabled !== undefined) {
     conversation.bodyContextEnabled = Boolean(bodyContextEnabled);
   }
+
+  if (commentaryEnabled !== undefined) conversation.automation.commentaryEnabled = Boolean(commentaryEnabled);
+  if (commentaryProbability !== undefined) conversation.automation.commentaryProbability = Math.max(0, Math.min(100, Math.round(Number(commentaryProbability) || 0)));
+  if (proactiveEnabled !== undefined) conversation.automation.proactiveEnabled = Boolean(proactiveEnabled);
+  if (proactiveFrequency !== undefined) conversation.automation.proactiveFrequency = Math.max(0, Math.min(100, Math.round(Number(proactiveFrequency) || 0));
 
   if (recentChatLimit !== undefined) {
     const value = Number(recentChatLimit);
