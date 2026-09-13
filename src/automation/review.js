@@ -6,6 +6,7 @@ import {
 } from '../storage/data-store.js';
 import { getTavernAssistantTurnState } from '../core/tavern-context.js';
 import { generateGroupReview } from '../generation/generation-service.js';
+import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
 import { beginGenerationTask, endGenerationTask } from '../core/generation-runtime.js';
 
 const POLL_MS = 2200;
@@ -40,6 +41,18 @@ export function createReviewAutomation({ getScopeKey } = {}) {
       const observed = safeCount(runtime.observedAssistantCount);
       const eligible = safeCount(runtime.eligibleAssistantCount);
       const current = safeCount(body.count);
+
+      // “角色闲聊”不读取正文，也不累计/触发正文 Review；切回围读会时从当前正文位置继续。
+      if (group.groupMode === 'role-chat') {
+        if (!runtime.initialized || observed !== current) {
+          updateGroupReviewRuntime(scopeKey, group.conversationKey || group.id, {
+            initialized: true,
+            observedAssistantCount: current,
+            lastError: '',
+          });
+        }
+        continue;
+      }
 
       if (!runtime.initialized) {
         updateGroupReviewRuntime(scopeKey, group.conversationKey || group.id, {
@@ -95,7 +108,11 @@ export function createReviewAutomation({ getScopeKey } = {}) {
       updateGroupReviewRuntime(scopeKey, key, { lastAttemptAt: now, lastError: '' });
       try {
         beginGenerationTask(scopeKey, key, null, 'review');
-        const result = await generateGroupReview({ scopeKey, conversationKey: key });
+        const result = await generateGroupReview({
+          scopeKey,
+          conversationKey: key,
+          reviewTarget: body.lastTurn ? { ...body.lastTurn } : null,
+        });
         const generationTurnId = `review:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
         let messageCount = 0;
         result.replies.forEach(batch => {
@@ -112,7 +129,10 @@ export function createReviewAutomation({ getScopeKey } = {}) {
             messageCount += 1;
           });
         });
-        if (messageCount) recordAutomaticUnreadRound(scopeKey, key, messageCount);
+        if (messageCount) {
+          recordAutomaticUnreadRound(scopeKey, key, messageCount);
+          void maybeAutoCompactConversationMemory({ scopeKey, conversationKey: key });
+        }
         updateGroupReviewRuntime(scopeKey, key, {
           lastTriggeredEligibleCount: sameBoundaryReroll ? nextEligible : triggerEligibleCount,
           lastTriggeredSignature: String(body.lastSignature || ''),
