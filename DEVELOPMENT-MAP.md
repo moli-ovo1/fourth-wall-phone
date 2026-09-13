@@ -455,8 +455,6 @@ Scope Key、Contact Schema、Conversation Schema / ID、Message Schema、Storage
 
 设置：
 
-- 自动吐槽开 / 关
-- 吐槽概率
 - 自动点评开 / 关
 - 每 N 个正文回合点评
 - 查找聊天记录
@@ -598,7 +596,6 @@ Scope Key、Contact Schema、Conversation Schema / ID、Message Schema、Storage
 - 正文生成事件
 - 多会话并行命中
 - 技术事件去重
-- 群聊吐槽
 
 ## 建议文件
 
@@ -610,8 +607,8 @@ Scope Key、Contact Schema、Conversation Schema / ID、Message Schema、Storage
 自动吐槽：
 
 - 概率型
-- 私聊和群聊都可开启
-- 每个会话自己设置概率
+- 仅酒馆角色 / 自定义联系人的私聊可开启
+- 每个私聊 Conversation 自己设置概率
 - 系统设置只有总开关
 
 不使用：
@@ -630,12 +627,12 @@ Scope Key、Contact Schema、Conversation Schema / ID、Message Schema、Storage
 
 同一个正文事件：
 
-- 允许多个私聊 / 群聊分别命中
+- 允许多个符合条件的私聊分别命中
 
-群聊吐槽命中：
+群聊吐槽：
 
-- 使用普通群聊编排逻辑
-- 不强制全员
+- 已废弃；群聊不提供自动吐槽
+- 群聊自动行为只保留自动点评
 
 第四面墙最终要参考 LittleWhiteBox 原版 commentary 设计，而不是 Lite 简化版。
 
@@ -1824,3 +1821,34 @@ moli39 不能移除或回退：Conversation 四概念修正、主/Contact API �
 ## 下一节点
 
 实机确认内置人格生成与更新提示后，进入 **群聊轻编排 + 逐人生成**。
+
+---
+
+# moli47 修正版节点：自动行为设置 + 第四面墙纠偏
+
+## 本轮最终规则
+
+- 酒馆角色 / 自定义联系人私聊：`自动聊天/主动私聊` 开关 + 0～100% 百分比；`自动吐槽正文` 开关 + 0～100% 百分比，两套系统独立。
+- 群聊：彻底取消通用“自动吐槽”；只保留 `自动点评` 开关 + 每 N 个有效正文 AI 回合。
+- 普通群聊回复规则仍是“轻编排 + 逐人生成”：相关度决定首位、@ 必须参与、其余可插话、后发言者读取本轮前序新消息、每人单独加载自己完整上下文。
+- 第四面墙不再使用 moli46 的“幕后分析助手”替代人格，改回 LittleWhiteBox Fourth Wall 的核心行为结构；解析层兼容 `<msg>` 与隐藏 `<thinking>`。
+
+## 本轮只落地的部分
+
+- Conversation 自动行为字段的惰性默认与保存接口。
+- 私聊 / 群聊设置 UI 与持久化。
+- 第四面墙默认人格纠偏与 `<msg>` 解析兼容。
+
+## 本轮没有虚假宣称完成的部分
+
+- 自动吐槽正文事件监听与实际生成。
+- 自动点评 N 回合计数、触发与全员逐人生成。
+- 自动聊天 / 主动私聊后台 SEND/SKIP 判断与实际生成。
+
+## 下一节点
+
+先实现 **群聊轻编排 + 逐人生成**。这是群自动点评真正运行的前置；完成后接 Automation Engine，把自动点评、角色/自创联系人自动吐槽与主动私聊真正接活。
+
+## 回归铁律
+
+moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 `node --check` 外，必须检查 `index.js → initApp → ensureBuiltins → createFloatingBall` 启动链，并确认 `phone-panel.js` 模块可加载、400ms Android 防穿透仍存在。
