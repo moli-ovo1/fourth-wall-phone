@@ -20,6 +20,8 @@ import {
   deleteMessages,
   clearConversationMessages,
   updatePrivateConversationSettings,
+  getConversationMemory,
+  updateConversationMemory,
 } from '../storage/data-store.js';
 import {
   getTavernCharactersSnapshot,
@@ -603,8 +605,15 @@ export function createPhonePanel({
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-settings-list moli-contact-subpage">
-        <div class="moli-settings-note">记忆链固定为：近期原始聊天 → 近期记忆 → 长期总结。近期记忆名称已替代“日记”。具体自动生成与编辑页将在后续记忆阶段接入。</div>
+        <div class="moli-settings-note">这是当前 Conversation 自己的场外聊天记忆，与柏宝书正文长期记忆完全分开。当前原始聊天优先于近期记忆，近期记忆优先于长期总结。</div>
+        <label class="moli-form-field"><span>近期记忆</span><textarea rows="10" data-phone-recent-memory placeholder="每段记忆之间空一行。可直接编辑或删除。"></textarea></label>
+        <div class="moli-api-hint">当前阶段先提供可编辑的数据层与 Prompt 接入；自动压缩生成将在下一阶段使用这里的数据结构。</div>
+        <label class="moli-form-field"><span>长期总结</span><textarea rows="10" data-phone-long-memory placeholder="当前手机聊天的长期关系与历史总结。可直接编辑或清空。"></textarea></label>
       </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="contact-memory-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="contact-memory-save">保存</button>
+      </footer>
     </section>
 
     <section class="moli-page" data-page="conversation-settings">
@@ -783,6 +792,8 @@ export function createPhonePanel({
   const contactApiBody = panel.querySelector('[data-contact-api-body]');
   const contactApiPreset = panel.querySelector('[data-contact-api-preset]');
   const conversationSettingsScope = panel.querySelector('[data-conversation-settings-scope]');
+  const phoneRecentMemoryInput = panel.querySelector('[data-phone-recent-memory]');
+  const phoneLongMemoryInput = panel.querySelector('[data-phone-long-memory]');
   const conversationTitleInput = panel.querySelector('[data-conversation-title]');
   const conversationBodyContext = panel.querySelector('[data-conversation-body-context]');
   const conversationRecentLimit = panel.querySelector('[data-conversation-recent-limit]');
@@ -1329,6 +1340,39 @@ export function createPhonePanel({
     updateMultiSelectUi();
     toast('聊天记录已清空');
     show('chat');
+  }
+
+  function renderPhoneMemorySettings() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    if (!scopeKey || !conversation || conversation.type !== 'private') {
+      toast('当前私聊不存在');
+      show('info');
+      return;
+    }
+    const memory = getConversationMemory(scopeKey, currentContactId) || { recent: [], longTermSummary: '' };
+    if (phoneRecentMemoryInput) phoneRecentMemoryInput.value = memory.recent.map(item => item.content).filter(Boolean).join('\n\n');
+    if (phoneLongMemoryInput) phoneLongMemoryInput.value = memory.longTermSummary || '';
+  }
+
+  function savePhoneMemorySettings() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    if (!scopeKey || !conversation || conversation.type !== 'private' || !currentContactId) {
+      toast('当前私聊不存在');
+      return;
+    }
+    const recent = String(phoneRecentMemoryInput?.value || '')
+      .split(/\n\s*\n+/)
+      .map(content => content.trim())
+      .filter(Boolean)
+      .map((content, index) => ({ id: `manual:${Date.now()}:${index}`, content, createdAt: Date.now() + index }));
+    updateConversationMemory(scopeKey, currentContactId, {
+      recent,
+      longTermSummary: phoneLongMemoryInput?.value || '',
+    });
+    toast('手机记忆已保存');
+    show('info');
   }
 
   function renderConversationSettings() {
@@ -1992,6 +2036,9 @@ export function createPhonePanel({
 
     if (name === 'conversation-settings') {
       renderConversationSettings();
+    }
+    if (name === 'contact-memory-settings') {
+      renderPhoneMemorySettings();
     }
 
     if (name === 'contact-prompt-settings') {
@@ -3703,6 +3750,8 @@ export function createPhonePanel({
   panel.querySelector('[data-action="contact-api-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-api-save"]')?.addEventListener('click', saveContactApiSettings);
   panel.querySelector('[data-action="contact-memory-back"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-memory-cancel"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-memory-save"]')?.addEventListener('click', savePhoneMemorySettings);
 
   contactApiEnabled?.addEventListener('change', syncContactApiUi);
 
