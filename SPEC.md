@@ -2684,3 +2684,24 @@ Commentary 使用独立 Fourth Wall Commentary Prompt，只输出一个 `<msg>` 
 - 皮下 Session 在 moli 中映射为同一个 `builtin:meta` 联系人的多个独立 Conversation：每个记录天然拥有独立消息、手机记忆、自动行为状态与 Fourth Wall 设置；切换记录不合并历史。此处属于宿主架构适配，行为目标与小白X Session 一致，但不额外复制第二套 session 存储。
 - 皮下记录支持新建、切换、重命名和删除；至少保留一条记录。
 - 图片与语音继续明确不移植。
+
+
+## 0.4.4 / moli60 — Fourth Wall 忠实度校正
+- `皮下` 的默认 Prompt、请求 role 顺序、history 格式、Commentary 与 response projection 以上游 LittleWhiteBox Fourth Wall 为行为基准重新审计。
+- Prompt/Commentary/聊天应用设置改为跨 Session 共享；Session 仅隔离聊天历史与皮下记忆。
+- 自动吐槽只进入 active Session，概率范围 1–99%。
+- Session 继续使用 Private Conversation 宿主适配，详见 `FOURTH-WALL-AUDIT.md`。
+- moli59 旧设置保留迁移回退，避免升级丢失用户已保存内容。
+
+
+## 0.4.5 / moli61 — Fourth Wall 专用记忆与上下文归档
+- 皮下 Session 开始使用 LittleWhiteBox Fourth Wall 自己的滚动记忆模型：`memory + archivedCount + 未归档原文`。
+- 未归档 `meta_history` 保留原文直至 token 压力触发，不再套用 moli 普通私聊近期窗口。
+- 自动整理阈值 128k，硬上限 158k，单次记忆输出最多 10k；归档边界保护未回答消息和最近完整交互。
+- 记忆维护 Prompt 按上游语义维护“皮下人设 / 长期记忆”，显式防止把共同创作剧情误记成现实生活。
+- 总结失败/不完整/无压缩收益时不推进归档，保留旧 memory 与聊天。
+- 皮下设置页增加上下文分项统计、长期记忆编辑、清空、立即总结。
+- 旧 moli 皮下手机记忆惰性迁移一次；此后 Fourth Wall memory 独立维护。
+- 皮下正文读取只服从 `maxChatLayers`，移除旧 80 条/64k 字符限制；普通联系人保持原读取窗口。
+- Session 仍使用已批准的 `builtin:meta` Private Conversation 映射。
+- 用户自行维护的 Top User 前缀视为本地资产，后续补丁不得擅自覆盖。

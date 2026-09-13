@@ -2011,3 +2011,34 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 7. 图片/语音继续排除。
 
 宿主适配说明：小白X将 Session 存在 Fourth Wall 自己的 session 数组里；moli 已经有成熟的 Conversation 隔离与记忆链，因此本阶段把一个 Fourth Wall Session 映射为一个 `builtin:meta` Private Conversation。这样不会复制两套会话生命周期，同时保留 Session 的独立历史/记忆/切换语义。
+
+
+## moli60 — Fourth Wall 忠实度审计
+- [x] 默认 Meta Protocol / Confirm / Bottom / Commentary Protocol 校正
+- [x] Agent request role / Assistant Prefill 结构校正
+- [x] meta_history 真实时间与间隔格式校正
+- [x] thinking/msg response projection 校正
+- [x] Prompt/Commentary/chat settings 作用域校正
+- [x] active Session 自动吐槽路由
+- [x] moli59 设置迁移回退
+- [x] 建立 `FOURTH-WALL-AUDIT.md`
+- [ ] 上游 token 级 context/memory archive 完整复刻
+- [ ] ContextButton/context stats
+- [ ] Message/Conversation 边缘交互逐项回归
+
+
+## moli61 — Fourth Wall Memory / Context
+- [x] 合并 moli60 忠实度校正到用户最新完整仓库，同时保留用户手动 Top User 前缀
+- [x] Session 独立 `memory + archivedCount`
+- [x] 小白X安全归档边界 `getArchiveEnd`
+- [x] 128k 自动整理 / 158k 上限 / 10k memory output
+- [x] 上游 Fourth Wall memory maintenance prompt
+- [x] 总结失败/截断/无压缩收益不推进，并支持回滚
+- [x] 未归档 meta_history 全量保留，移除 moli 最近 60/100 条截断
+- [x] 皮下正文 maxChatLayers 放开到 1–9999，并移除 64k 字符旧限制
+- [x] Context stats：总量 / 主剧情 / 皮下记忆 / 皮下聊天 / Prompt
+- [x] 手动保存/清空皮下记忆 + 立即总结
+- [x] 删除/清空消息时 archivedCount 同步
+- [x] 旧 moli 皮下手机记忆一次性迁移
+- [ ] FourthWall ContextButton 的环形入口/取消处理中交互视觉复刻
+- [ ] FourthWallMessage 编辑/重答/错误重试逐项审计

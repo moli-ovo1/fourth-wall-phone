@@ -651,3 +651,50 @@
 .moli-fourth-wall-session-row button {
   min-width: 38px;
 }
+
+
+#moli-phone-panel .moli-fourth-wall-memory-section {
+  display: grid;
+  gap: 12px;
+}
+
+#moli-phone-panel .moli-fourth-wall-context-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#moli-phone-panel .moli-fourth-wall-context-stats > div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--moli-border, rgba(0, 0, 0, .1));
+  border-radius: 12px;
+  background: rgba(127, 127, 127, .06);
+}
+
+#moli-phone-panel .moli-fourth-wall-context-stats span,
+#moli-phone-panel .moli-fourth-wall-context-stats strong {
+  display: block;
+}
+
+#moli-phone-panel .moli-fourth-wall-context-stats span {
+  font-size: 12px;
+  opacity: .66;
+  margin-bottom: 4px;
+}
+
+#moli-phone-panel .moli-fourth-wall-context-stats strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+#moli-phone-panel .moli-fourth-wall-memory-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#moli-phone-panel .moli-fourth-wall-memory-actions button {
+  min-width: 0;
+  padding-inline: 8px;
+}
