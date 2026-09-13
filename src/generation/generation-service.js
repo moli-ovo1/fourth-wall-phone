@@ -3,7 +3,7 @@ import {
   getContacts,
   getConversation,
 } from '../storage/data-store.js';
-import { getApiSettings, resolveApiRuntimeConfig } from '../storage/api-settings.js';
+import { getApiSettings, getApiPreset, resolveApiRuntimeConfig } from '../storage/api-settings.js';
 import { generateProviderText } from '../api/providers/provider-registry.js';
 import {
   getTavernCharacterSnapshot,
@@ -104,9 +104,19 @@ export async function generatePrivateReply({
   const contact = hydratedContact(storedContact);
   assertContactReady(contact);
 
-  const rawConfig = contact?.apiOverride?.enabled === true
-    ? contact.apiOverride.config
-    : getApiSettings();
+  let rawConfig = getApiSettings();
+  if (contact?.apiOverride?.enabled === true) {
+    const preset = getApiPreset(contact.apiOverride.presetId);
+    if (preset?.config) {
+      rawConfig = preset.config;
+    } else if (contact.apiOverride.config) {
+      // moli34 兼容：旧联系人独立 API 曾保存配置副本。
+      // 新 UI 不再产生副本，但旧数据仍可继续生成，避免升级后突然失效。
+      rawConfig = contact.apiOverride.config;
+    } else {
+      throw new Error('联系人选择的 API 配置已不存在，请在联系人资料中重新选择');
+    }
+  }
   const config = resolveApiRuntimeConfig(rawConfig);
   assertApiConfig(config);
 
