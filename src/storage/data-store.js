@@ -10,20 +10,20 @@ const BUILTIN_CONTACTS = [
   {
     id: 'builtin:writer',
     kind: 'builtin',
-    name: '编剧',
-    avatarText: '编'
+    name: '上帝',
+    avatarText: '神'
   },
   {
     id: 'builtin:guide',
     kind: 'builtin',
-    name: '攻略',
-    avatarText: '攻'
+    name: '人类',
+    avatarText: '人'
   },
   {
     id: 'builtin:redpen',
     kind: 'builtin',
-    name: '红笔编辑',
-    avatarText: '红'
+    name: '吃瓜观察员',
+    avatarText: '瓜'
   },
 ];
 
@@ -140,9 +140,22 @@ export function getContacts() {
       : []
   );
 
+  const legacyBuiltinNames = {
+    'builtin:writer': '编剧',
+    'builtin:guide': '攻略',
+    'builtin:redpen': '红笔编辑',
+  };
+
   for (const c of BUILTIN_CONTACTS) {
     if (!map.has(c.id)) {
       map.set(c.id, { ...c });
+      continue;
+    }
+
+    const existing = map.get(c.id);
+    // 只迁移旧系统默认名；如果用户已经自行改过，不覆盖用户内容。
+    if (legacyBuiltinNames[c.id] && existing?.name === legacyBuiltinNames[c.id]) {
+      map.set(c.id, { ...existing, name: c.name, avatarText: c.avatarText });
     }
   }
 
