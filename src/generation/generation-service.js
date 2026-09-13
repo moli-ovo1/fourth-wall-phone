@@ -369,3 +369,57 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   if (!replies.length) throw new Error('本轮群成员没有返回可用消息');
   return { replies, speakerIds };
 }
+
+export async function generateGroupReview({ scopeKey, conversationKey, signal, onDelta } = {}) {
+  if (!scopeKey || !conversationKey) throw new Error('当前群聊不可用');
+  const conversation = getConversation(scopeKey, conversationKey);
+  if (!conversation || conversation.type !== 'group') throw new Error('群聊不存在');
+
+  const allContacts = getContacts();
+  const members = (conversation.memberIds || [])
+    .map(id => allContacts.find(item => String(item.id) === String(id)))
+    .filter(Boolean)
+    .map(hydratedContact);
+  if (!members.length) throw new Error('群聊没有可用成员');
+  members.forEach(assertContactReady);
+
+  const order = [...members];
+  for (let i = order.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+
+  const workingMessages = (conversation.messages || []).map(message => ({ ...message }));
+  const replies = [];
+  for (const speaker of order) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const request = await buildGroupSpeakerRequest({
+      scopeKey,
+      conversation,
+      contact: speaker,
+      members,
+      workingMessages,
+    });
+    request.system = `这是群聊「${String(conversation.name || '群聊')}」的一轮自动点评。请以「${contactLabel(speaker)}」自己的立场点评当前最新正文与局势，不要替其他成员发言；前面本轮已经出现的群消息都是真实新消息，要自然接着讨论。可以赞同、反驳、补充或改变重点。保持线上群聊口吻，不要写小说旁白。\n\n${request.system}`;
+    const config = resolveContactApiConfig(speaker);
+    const result = await runGeneration(config, request, {
+      signal,
+      onDelta: (chunk, fullText) => onDelta?.(chunk, fullText, speaker),
+    });
+    const { parseGeneratedMessages } = await import('./message-parser.js');
+    const generated = parseGeneratedMessages(result.text);
+    if (!generated.length) continue;
+    replies.push({ contact: speaker, messages: generated, text: result.text });
+    generated.forEach(content => workingMessages.push({
+      role: 'assistant',
+      content,
+      senderId: speaker.id,
+      senderSnapshot: { name: contactLabel(speaker), avatar: contactAvatar(speaker) },
+      source: 'review',
+      ts: Date.now(),
+    }));
+  }
+
+  if (!replies.length) throw new Error('本轮自动点评没有返回可用消息');
+  return { replies, speakerIds: order.map(item => item.id) };
+}
