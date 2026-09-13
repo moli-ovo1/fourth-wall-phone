@@ -4,8 +4,8 @@ const BUILTIN_CONTACTS = [
   {
     id: 'builtin:meta',
     kind: 'builtin',
-    name: '第四面墙',
-    avatarText: '墙'
+    name: '皮下',
+    avatarText: '皮'
   },
   {
     id: 'builtin:writer',
@@ -234,6 +234,7 @@ export function getContacts() {
   );
 
   const legacyBuiltinNames = {
+    'builtin:meta': '第四面墙',
     'builtin:writer': '编剧',
     'builtin:guide': '攻略',
     'builtin:redpen': '红笔编辑',
@@ -933,6 +934,14 @@ export function appendMessage(
     content,
     ts: Date.now(),
   };
+
+  if (options?.thinking) {
+    message.thinking = String(options.thinking);
+  }
+
+  if (options?.messageType) {
+    message.messageType = String(options.messageType);
+  }
 
   if (options?.senderId) {
     message.senderId = String(options.senderId);
