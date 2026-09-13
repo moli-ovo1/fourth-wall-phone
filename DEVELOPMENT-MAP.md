@@ -1805,3 +1805,22 @@ moli39 不能移除或回退：Conversation 四概念修正、主/Contact API �
 ## 下一节点
 
 在实机确认自动记忆触发与失败恢复后，进入 **内置人格正式 Prompt / Generation**，让上帝、人类、吃瓜观察员从“可聊天 UI”推进到真正可生成；群聊轻编排仍排在内置人格之后。
+
+# moli46 节点：内置人格 Generation + 更新红色提示
+
+- 唯一执行基线：用户上传、已应用 moli45（100 轮版）的完整仓库 `(23)`。
+- 新增 `src/prompts/builtin-personas.js`：第四面墙、上帝、人类、吃瓜观察员四份独立默认人格 Prompt。
+- `src/generation/generation-service.js` / `prompt-builder.js`：解除内置人格生成拦截；内置人格走现有私聊 Generation、线上预设、多气泡、时间/正文/手机记忆链；不读取 Tavern Role Fidelity / Worldbook。开启正文读取时允许最近正文与柏宝书长期剧情记忆参与。
+- `src/generation/memory-service.js`：解除因旧 Generation 未开放而存在的 builtin 自动记忆排除，使 moli45 自动压缩链对内置人格同样生效。
+- `src/ui/phone-panel.js`：内置人格“人格与提示词”页显示系统默认 Prompt，并新增“恢复默认人格 Prompt”；恢复不影响历史/记忆。
+- 第四面墙本节点是可运行的 moli 默认 Meta/幕后观察人格，不宣称已逐字恢复 LittleWhiteBox 原版完整 Meta Protocol；原版逐项兼容仍需后续单独核对来源/许可/行为。
+- 更新能力补足：后台非阻塞比较本地 manifest 与 `homePage` GitHub 远端 manifest；远端版本更高时设置页更新按钮变红。检查失败不得影响初始化；真正更新继续走 SillyTavern `/api/extensions/update`。
+- `manifest.json`：功能完成后版本从 `0.3.1` 提升到 `0.3.2`。
+
+## 回归要求
+
+不得回退 moli45 100 轮自动记忆、悬浮球移动端防穿透、Tavern 重复同步创建 Conversation、Conversation 设置、主/Contact API、Role Fidelity、世界书白名单/激活、柏宝书、消息/转发/搜索。状态栏继续延期。
+
+## 下一节点
+
+实机确认内置人格生成与更新提示后，进入 **群聊轻编排 + 逐人生成**。

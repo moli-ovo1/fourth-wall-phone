@@ -102,6 +102,16 @@
     cursor:pointer;
 }
 
+#moli-phone-panel .moli-icon-btn.moli-update-available{
+    color:#d70015;
+    font-weight:700;
+}
+
+#moli-phone-panel .moli-restore-builtin-prompt{
+    width:100%;
+    margin-top:2px;
+}
+
 #moli-phone-panel .moli-back{
     font-size:26px;
     padding-left:0;
