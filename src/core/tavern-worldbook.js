@@ -97,7 +97,14 @@ export async function getTavernWorldBookSnapshot(sourceId) {
     books.push(normalizeBook(raw, { key: `embedded:${String(sourceId)}`, name, kind: 'embedded' }));
   }
 
-  const usableBooks = books.filter(book => book.entries.length);
+  const usableBooks = [];
+  const fingerprints = new Set();
+  for (const book of books.filter(book => book.entries.length)) {
+    const fingerprint = book.entries.map(entry => [entry.title, entry.content, entry.keys.join('\u0001')].join('\u0002')).sort().join('\u0003');
+    if (fingerprints.has(fingerprint)) continue;
+    fingerprints.add(fingerprint);
+    usableBooks.push(book);
+  }
   return {
     available: true,
     linkedName,
