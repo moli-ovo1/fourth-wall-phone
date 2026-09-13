@@ -1966,3 +1966,15 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - 修复批量自动点评同一成员可能出现多气泡：生成解析 + Review append 双层 contact-id 去重。
 - 下一阶段时间显示已落地：现实时间/正文时间两模式的微信式稀疏时间标签；正文时间采用正文顶部状态信息快照，不额外调用 AI。
 - 版本：0.4.0。
+
+---
+
+# moli57 节点：第四面墙 LittleWhiteBox 恢复第一阶段
+
+- 执行基线：GitHub `main` / manifest `0.4.0`，并核对本地完整仓库快照关键文件 Git blob SHA 与 GitHub 一致。
+- 新增 `src/prompts/fourth-wall.js`：第四面墙专用 Meta Protocol、Commentary Protocol、上下文清洗、现实/正文时间历史格式化、消息间隔计算。
+- `src/prompts/builtin-personas.js`：`builtin:meta` 默认 Prompt 改由第四面墙专用模块提供；其余内置人格不动。
+- `src/generation/prompt-builder.js`：仅对 `builtin:meta` 启用专用历史格式：现实时间使用消息 `ts`，正文时间使用 `storyTime` 快照；历史正文/其他会话内容做第四面墙上下文清洗。普通联系人、酒馆角色、其他内置人格继续走原路径。
+- 保留 moli 已有 Conversation Memory、最近正文、柏宝书、在线预设、API、流式、停止、消息解析，不重新建立 LittleWhiteBox 的整套存储/UI。
+- 明确未完成：LittleWhiteBox commentary 的正文生成/编辑事件级触发、专用 commentary 请求构造与完整逐项行为兼容；这些进入下一阶段。
+- 版本：0.4.1。

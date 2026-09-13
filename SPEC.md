@@ -2610,3 +2610,20 @@ Generation, private automation, and group Review errors must be visible in the a
 - 约束同时存在于 Prompt、批量解析器和 Review 落地层，避免模型重复 speakerId 时产生额外气泡。
 - 私聊桥按成员 contact id/成员映射隔离，不写死任何角色名字。
 - Conversation 时间显示采用稀疏微信式标签：现实时间按消息 ts，间隔 >=5 分钟或跨日显示；正文时间从最新正文顶部可确认的日期/时刻做消息快照，同一时刻连续气泡只显示一次，无法确认时不编造。
+
+---
+
+## moli57：第四面墙 LittleWhiteBox 恢复第一阶段
+
+第四面墙（`builtin:meta`）开始使用专用 Prompt / 上下文处理路径，而不是只作为普通内置联系人套用通用聊天模板。
+
+本阶段确认：
+
+- 新增 `src/prompts/fourth-wall.js`，集中维护第四面墙 Meta Protocol、Commentary Protocol、皮下历史清洗与时间/间隔格式化。
+- 第四面墙仍复用 moli 已有 Conversation、近期记忆/长期总结、正文读取、API、流式、停止与 `<msg>` 解析链，不另建竞争性存储或 Generation 系统。
+- 现实时间模式：皮下历史消息使用真实 `ts`；用户消息可携带“距上次第四面墙回复”的时间间隔。
+- 正文时间模式：优先使用消息落地时保存的 `storyTime` 快照；没有明确剧情时间时不编造精确时刻。
+- 第四面墙历史/其他会话/正文聊天内容进入 Prompt 前，清理历史中遗留的 `<think>` / `<thinking>` / `<system>` / `<meta>` / `<meta_protocol>` / `<instructions>` 包裹内容，避免把旧输出中的隐藏结构重新当成当前指令。
+- 恢复默认人格 Prompt 时，第四面墙恢复到新的专用 Meta Protocol。
+- 本阶段不引入 LittleWhiteBox 的图片生成、TTS、Fullscreen、图片增强、Voice enhancer、180 秒业务冷却。
+- Commentary 的专用协议已集中到第四面墙模块，但事件级自动 commentary 触发/编辑事件监听继续留在后续阶段，不在本阶段伪装成已完成。
