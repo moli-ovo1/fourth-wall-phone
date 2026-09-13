@@ -1,6 +1,6 @@
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
-import { formatFourthWallHistory, sanitizeFourthWallContext } from '../prompts/fourth-wall.js';
+import { buildFourthWallRequest, sanitizeFourthWallContext } from '../prompts/fourth-wall.js';
 function clean(value) {
   return String(value || '').trim();
 }
@@ -181,6 +181,8 @@ export function buildPrivateGenerationRequest({
   longTermMemoryCoverage = null,
   phoneMemory = null,
   historyLimit = 60,
+  fourthWallCharacterName = '',
+  fourthWallCommentary = null,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
     throw new Error('当前只支持私聊生成');
@@ -197,8 +199,19 @@ export function buildPrivateGenerationRequest({
     ? conversation.messages
     : [];
 
-  if (!pendingUserCount(messages)) {
+  if (!pendingUserCount(messages) && !fourthWallCommentary) {
     throw new Error('没有等待回复的新消息');
+  }
+
+  if (isFourthWall) {
+    return buildFourthWallRequest({
+      conversation,
+      recentBody,
+      phoneMemory,
+      historyLimit,
+      characterName: fourthWallCharacterName || '当前角色',
+      commentary: fourthWallCommentary,
+    });
   }
 
   const systemBlocks = [
@@ -293,20 +306,14 @@ export function buildPrivateGenerationRequest({
     );
   }
 
-  const history = isFourthWall
-    ? formatFourthWallHistory(messages, {
-        historyLimit,
-        timeMode: conversation.timeMode === 'real' ? 'real' : 'body',
-        messageText,
-      })
-    : messages
-        .slice(-Math.max(1, Number(historyLimit) || 60))
-        .map(message => ({
-          role: message.role === 'user' ? 'user' : 'assistant',
-          content: messageText(message),
-          name: senderName(message, conversation, contact),
-        }))
-        .filter(message => message.content);
+  const history = messages
+    .slice(-Math.max(1, Number(historyLimit) || 60))
+    .map(message => ({
+      role: message.role === 'user' ? 'user' : 'assistant',
+      content: messageText(message),
+      name: senderName(message, conversation, contact),
+    }))
+    .filter(message => message.content);
 
   return {
     system: systemBlocks.join('\n\n'),

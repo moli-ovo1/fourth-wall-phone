@@ -9,6 +9,7 @@ import { getApiSettings, getApiPreset, resolveApiRuntimeConfig } from '../storag
 import { generateProviderText } from '../api/providers/provider-registry.js';
 import {
   getTavernCharacterSnapshot,
+  getCurrentTavernCharacterSnapshot,
 } from '../core/tavern-contacts.js';
 import {
   getRecentTavernBody,
@@ -96,6 +97,7 @@ export async function generatePrivateReply({
   signal,
   onDelta,
   automationInstruction = '',
+  fourthWallCommentary = null,
 } = {}) {
   if (!scopeKey || !conversationKey) {
     throw new Error('当前会话不可用');
@@ -109,6 +111,8 @@ export async function generatePrivateReply({
   const storedContact = findContact(conversation.contactId);
   const contact = hydratedContact(storedContact);
   assertContactReady(contact);
+  const isFourthWall = String(contact?.id || '') === 'builtin:meta';
+  const currentTavernCharacter = isFourthWall ? getCurrentTavernCharacterSnapshot() : null;
 
   let rawConfig = getApiSettings();
   if (contact?.apiOverride?.enabled === true) {
@@ -153,15 +157,18 @@ export async function generatePrivateReply({
   if (recentBody?.messages?.length) {
     worldBookScanParts.push(...recentBody.messages.map(message => String(message?.content || '')).filter(Boolean));
   }
-  const activatedWorldBook = await getActivatedTavernWorldBook({
-    contact,
-    scanText: worldBookScanParts.join('\n'),
-  });
+  const activatedWorldBook = isFourthWall
+    ? null
+    : await getActivatedTavernWorldBook({
+        contact,
+        scanText: worldBookScanParts.join('\n'),
+      });
 
   // 柏宝书是正文世界的长期历史来源。Contact 决定是否允许，
   // Conversation 的正文读取开关决定本次聊天是否接入动态剧情上下文。
   const baiBaiMemory = (
-    conversation.bodyContextEnabled !== false
+    !isFourthWall
+    && conversation.bodyContextEnabled !== false
     && (
       contact?.kind === 'builtin'
       || (contact?.kind === 'tavern' && contact?.roleSources?.longTermMemory !== false)
@@ -178,9 +185,11 @@ export async function generatePrivateReply({
     longTermMemoryCoverage: baiBaiMemory?.coverage || null,
     phoneMemory: getConversationMemory(scopeKey, conversationKey),
     historyLimit: conversation.recentChatLimit || 100,
+    fourthWallCharacterName: currentTavernCharacter?.name || '',
+    fourthWallCommentary,
   });
 
-  if (String(automationInstruction || '').trim()) {
+  if (String(automationInstruction || '').trim() && !fourthWallCommentary) {
     request.messages = [...(request.messages || []), { role: 'user', content: String(automationInstruction).trim() }];
   }
 
