@@ -1573,3 +1573,40 @@ moli33 的主 API 页面仍不符合酒馆用户熟悉的手机扩展使用方�
 2. 状态历史落到 Conversation，避免多世界线串状态。
 3. 再做近期记忆 / 长期总结。
 4. 再接 Conversation API override，最终形成：`Conversation > Contact > 主设置`。
+
+---
+
+## moli35 节点：联系人 API 引用 + 人格来源分型
+
+### 已完成
+
+- `src/ui/phone-panel.js`
+  - Contact 独立 API 删除重复的 Key / URL / 模型 / 代理 / 流式表单。
+  - Contact 独立 API 只选择主设置已保存 API 配置。
+  - 保存时只写 `enabled + presetId`，不再复制配置内容。
+  - 人格与提示词 UI 按联系人类型显示语义：Tavern=自定义附加 Prompt；Custom=人格 Prompt；Builtin=内置人格 Prompt。
+  - 酒馆角色提示文案明确：附加 Prompt 不取代角色卡人格。
+- `src/generation/generation-service.js`
+  - Contact 独立 API 生成时通过 `presetId` 动态解析主设置配置。
+  - 保留 moli34 `apiOverride.config` 旧副本兼容读取，避免旧数据升级后失效。
+  - 引用配置被删除时明确报错，不静默误用其他模型。
+
+### 数据契约
+
+新 Contact API override：
+
+```js
+{ enabled: true, presetId: "..." }
+```
+
+关闭：
+
+```js
+{ enabled: false }
+```
+
+禁止新代码重新把 API Key / URL / 模型复制进 Contact。
+
+### 下一节点
+
+`moli36`：状态栏本体。按已确认的章鱼式结构实现全局状态栏预设库 + Contact 状态栏配置，并保持 Conversation 状态历史独立的架构边界。
