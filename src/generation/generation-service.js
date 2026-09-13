@@ -94,6 +94,7 @@ export async function generatePrivateReply({
   conversationKey,
   signal,
   onDelta,
+  automationInstruction = '',
 } = {}) {
   if (!scopeKey || !conversationKey) {
     throw new Error('当前会话不可用');
@@ -169,6 +170,10 @@ export async function generatePrivateReply({
     phoneMemory: getConversationMemory(scopeKey, conversationKey),
     historyLimit: conversation.recentChatLimit || 100,
   });
+
+  if (String(automationInstruction || '').trim()) {
+    request.messages = [...(request.messages || []), { role: 'user', content: String(automationInstruction).trim() }];
+  }
 
   let result;
   if (config.source === 'tavern') {
@@ -313,7 +318,8 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
     phoneMemory: null,
     historyLimit: conversation.recentChatLimit || 100,
   });
-  request.system = `你现在位于群聊「${String(conversation.name || '群聊')}」。你只扮演「${contactLabel(contact)}」，绝不能替其他群成员或用户发言。其他成员刚刚说出的内容属于真实的同轮群消息；要自然接住前文，不要把群聊变成分别回答用户的独立问答。可以赞同、反驳、补充、调侃、转移话题，也可以保持简短。\n当前群成员：${members.map(contactLabel).join('、')}\n\n${request.system}`;
+  const selfRule = contact?.kind === 'tavern' ? `\n【本人视角铁律】正文中与你同名、同身份的角色就是你本人。谈到正文中的自己时必须保持第一人称与本人立场，不得称自己为“他/她”“这个角色”或切换成作者、分析员、旁观者。你可以辩解、隐瞒、否认、反思、恼火或拒绝讨论，但必须是你本人在说话。分析剧情不是普通 Tavern 角色的默认职责。\n` : '';
+  request.system = `你现在位于群聊「${String(conversation.name || '群聊')}」。你只扮演「${contactLabel(contact)}」，绝不能替其他群成员或用户发言。其他成员刚刚说出的内容属于真实的同轮群消息；要自然接住前文，不要把群聊变成分别回答用户的独立问答。可以赞同、反驳、补充、调侃、转移话题，也可以保持简短。\n当前群成员：${members.map(contactLabel).join('、')}\n${selfRule}\n${request.system}`;
   return request;
 }
 
@@ -337,11 +343,11 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   const recentUserText = messages.slice(-Math.max(trailingUsers, 8)).map(message => groupMessageText(message, new Map(members.map(item => [String(item.id), item])))).filter(Boolean).join('\n');
   const roster = members.map(member => `- id=${member.id}; 名称=${contactLabel(member)}; 简述=${shortContactDescription(member)}${forcedIds.includes(member.id) ? '; 本轮被@，必须参与' : ''}`).join('\n');
   const orchestratorRequest = {
-    system: '你是群聊轻量发言编排器，只决定本轮哪些成员值得说话以及顺序，不代写任何成员内容。按话题相关度、角色立场、被@情况和插话价值选择。不要强制全员，也不要设置固定人数；最多不超过现有群成员数。被@成员必须参与。只输出 JSON 数组，元素必须是给定成员 id。',
+    system: '你是群聊轻量发言编排器，只决定本轮哪些成员值得说话以及顺序，不代写任何成员内容。按话题相关度、角色立场、被@情况和插话价值选择。通常选择1～3名最值得说话的成员，只有确有必要时才可到4名；禁止全员轮流报到。被@成员必须参与，除被@者外最多再选2人。只输出 JSON 数组，元素必须是给定成员 id。',
     messages: [{ role: 'user', content: `群成员：\n${roster}\n\n最近群聊：\n${recentUserText}\n\n输出本轮 speaker id 顺序。` }],
   };
   const orchestrated = await runGeneration(orchestratorConfig, orchestratorRequest, { signal });
-  const speakerIds = parseSpeakerOrder(orchestrated.text, members, forcedIds);
+  const speakerIds = parseSpeakerOrder(orchestrated.text, members, forcedIds).slice(0, Math.min(4, Math.max(1, forcedIds.length + 2)));
   if (!speakerIds.length) throw new Error('群聊编排器没有选出发言成员，可再次空输入重试');
 
   const workingMessages = messages.map(message => ({ ...message }));
@@ -357,7 +363,7 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
       onDelta: (chunk, fullText) => onDelta?.(chunk, fullText, speaker),
     });
     const { parseGeneratedMessages } = await import('./message-parser.js');
-    const generated = parseGeneratedMessages(result.text);
+    const generated = parseGeneratedMessages(result.text).slice(0, 3);
     if (!generated.length) continue;
     replies.push({ contact: speaker, messages: generated, text: result.text });
     generated.forEach(content => workingMessages.push({
@@ -400,14 +406,14 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
       members,
       workingMessages,
     });
-    request.system = `这是群聊「${String(conversation.name || '群聊')}」的一轮自动点评。请以「${contactLabel(speaker)}」自己的立场点评当前最新正文与局势，不要替其他成员发言；前面本轮已经出现的群消息都是真实新消息，要自然接着讨论。可以赞同、反驳、补充或改变重点。保持线上群聊口吻，不要写小说旁白。\n\n${request.system}`;
+    request.system = `这是群聊「${String(conversation.name || '群聊')}」的一轮自动点评。${speaker?.kind === 'tavern' ? '正文中与你同名同身份的人就是你本人；必须以第一人称本人立场回应，不得把自己称为“他/她/这个角色”，也不得变成剧情分析员。' : ''}请以「${contactLabel(speaker)}」自己的立场点评当前最新正文与局势，不要替其他成员发言；前面本轮已经出现的群消息都是真实新消息，要自然接着讨论。可以赞同、反驳、补充或改变重点。保持线上群聊口吻，不要写小说旁白。\n\n${request.system}`;
     const config = resolveContactApiConfig(speaker);
     const result = await runGeneration(config, request, {
       signal,
       onDelta: (chunk, fullText) => onDelta?.(chunk, fullText, speaker),
     });
     const { parseGeneratedMessages } = await import('./message-parser.js');
-    const generated = parseGeneratedMessages(result.text);
+    const generated = parseGeneratedMessages(result.text).slice(0, 2);
     if (!generated.length) continue;
     replies.push({ contact: speaker, messages: generated, text: result.text });
     generated.forEach(content => workingMessages.push({
