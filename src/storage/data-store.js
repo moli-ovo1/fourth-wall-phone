@@ -99,11 +99,16 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
             content: String(item?.content || '').trim(),
             createdAt: Number(item?.createdAt || Date.now()),
             updatedAt: Number(item?.updatedAt || item?.createdAt || Date.now()),
+            source: item?.source === 'auto' ? 'auto' : 'manual',
+            messageStartId: String(item?.messageStartId || ''),
+            messageEndId: String(item?.messageEndId || ''),
           })).filter(item => item.content)
         : [],
       longTermSummary: String(memory.longTermSummary || '').trim(),
       lastCondensedMessageId: String(memory.lastCondensedMessageId || ''),
       lastSummarizedAt: Number(memory.lastSummarizedAt || 0),
+      lastCondensedAt: Number(memory.lastCondensedAt || 0),
+      lastAutoError: String(memory.lastAutoError || ''),
     };
   }
 
@@ -837,6 +842,12 @@ export function appendMessage(
     message.senderId = String(options.senderId);
   }
 
+  // 同一次 AI 调用返回的多个角色气泡共享一个轮次 ID。
+  // 用于手机记忆按“完整 AI 交互轮次”计数，而不是按气泡条数计数。
+  if (options?.generationTurnId) {
+    message.generationTurnId = String(options.generationTurnId);
+  }
+
   if (options?.senderSnapshot && typeof options.senderSnapshot === 'object') {
     message.senderSnapshot = {
       name: String(options.senderSnapshot.name || ''),
@@ -1055,10 +1066,12 @@ export function getConversationMemory(scopeKey, conversationKey) {
     longTermSummary: String(conversation.memory.longTermSummary || ''),
     lastCondensedMessageId: String(conversation.memory.lastCondensedMessageId || ''),
     lastSummarizedAt: Number(conversation.memory.lastSummarizedAt || 0),
+    lastCondensedAt: Number(conversation.memory.lastCondensedAt || 0),
+    lastAutoError: String(conversation.memory.lastAutoError || ''),
   };
 }
 
-export function updateConversationMemory(scopeKey, conversationKey, { recent, longTermSummary, lastCondensedMessageId, lastSummarizedAt } = {}) {
+export function updateConversationMemory(scopeKey, conversationKey, { recent, longTermSummary, lastCondensedMessageId, lastSummarizedAt, lastCondensedAt, lastAutoError } = {}) {
   const located = locateConversation(scopeKey, conversationKey);
   const conversation = located?.conversation;
   if (!conversation || conversation.type !== 'private') throw new Error('私聊不存在');
@@ -1071,11 +1084,16 @@ export function updateConversationMemory(scopeKey, conversationKey, { recent, lo
       content: String(item?.content || '').trim(),
       createdAt: Number(item?.createdAt || Date.now()),
       updatedAt: Date.now(),
+      source: item?.source === 'auto' ? 'auto' : 'manual',
+      messageStartId: String(item?.messageStartId || ''),
+      messageEndId: String(item?.messageEndId || ''),
     })).filter(item => item.content);
   }
   if (longTermSummary !== undefined) conversation.memory.longTermSummary = String(longTermSummary || '').trim();
   if (lastCondensedMessageId !== undefined) conversation.memory.lastCondensedMessageId = String(lastCondensedMessageId || '');
   if (lastSummarizedAt !== undefined) conversation.memory.lastSummarizedAt = Math.max(0, Number(lastSummarizedAt) || 0);
+  if (lastCondensedAt !== undefined) conversation.memory.lastCondensedAt = Math.max(0, Number(lastCondensedAt) || 0);
+  if (lastAutoError !== undefined) conversation.memory.lastAutoError = String(lastAutoError || '');
 
   conversation.updatedAt = Date.now();
   saveLocatedConversation(scopeKey, located);
