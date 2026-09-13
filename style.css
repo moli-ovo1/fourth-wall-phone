@@ -555,3 +555,17 @@
   overflow-wrap:anywhere;
 }
 #moli-phone-panel .moli-chat-error[hidden]{display:none!important}
+
+
+/* moli56: WeChat-style sparse time labels */
+.moli-chat-time-label {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.3;
+  opacity: .56;
+  margin: 10px 0 6px;
+  user-select: none;
+  pointer-events: none;
+}
