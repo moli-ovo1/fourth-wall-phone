@@ -16,3 +16,35 @@ export function endGenerationTask(scopeKey, conversationKey, controller = null) 
 export function getGenerationTask(scopeKey, conversationKey) { return tasks.get(keyOf(scopeKey, conversationKey)) || null; }
 export function isGenerationActive(scopeKey, conversationKey) { return Boolean(getGenerationTask(scopeKey, conversationKey)?.active); }
 export function abortGenerationTask(scopeKey, conversationKey) { const task=getGenerationTask(scopeKey, conversationKey); if (!task?.controller) return false; task.controller.abort(); return true; }
+
+
+const generationErrors = new Map();
+
+export function setGenerationError(scopeKey, conversationKey, message, source = 'generation') {
+  const key = keyOf(scopeKey, conversationKey);
+  const error = {
+    scopeKey,
+    conversationKey,
+    message: String(message || '生成失败'),
+    source,
+    createdAt: Date.now(),
+  };
+  generationErrors.set(key, error);
+  window.dispatchEvent(new CustomEvent('moli:generation-error', { detail: { ...error, active: true } }));
+  return error;
+}
+
+export function clearGenerationError(scopeKey, conversationKey) {
+  const key = keyOf(scopeKey, conversationKey);
+  const previous = generationErrors.get(key) || null;
+  if (!previous) return false;
+  generationErrors.delete(key);
+  window.dispatchEvent(new CustomEvent('moli:generation-error', {
+    detail: { scopeKey, conversationKey, active: false, source: previous.source || 'generation' },
+  }));
+  return true;
+}
+
+export function getGenerationError(scopeKey, conversationKey) {
+  return generationErrors.get(keyOf(scopeKey, conversationKey)) || null;
+}
