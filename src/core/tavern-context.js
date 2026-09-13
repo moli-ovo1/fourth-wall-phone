@@ -148,3 +148,50 @@ export function getTavernAssistantTurnState() {
     recentTurns: turns.slice(-3),
   };
 }
+
+
+function parseStoryTimeCandidate(text) {
+  const top = String(text || '').slice(0, 1800);
+  if (!top) return null;
+  const lines = top.split(/\r?\n/).slice(0, 30).map(line => line.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const preferred = lines.filter(line => /(?:时间|日期|date|time|📅|🗓|🕒|⏰|⌚)/i.test(line));
+  const pool = [...preferred, ...lines];
+  const patterns = [
+    /((?:20\d{2})[年\/.\-]\s*\d{1,2}[月\/.\-]\s*\d{1,2}日?\s*(?:星期[一二三四五六日天]\s*)?(?:[上下中凌早晚午晨夜傍]+\s*)?\d{1,2}[:：]\d{2})/,
+    /(\d{1,2}月\s*\d{1,2}日\s*(?:星期[一二三四五六日天]\s*)?(?:[上下中凌早晚午晨夜傍]+\s*)?\d{1,2}[:：]\d{2})/,
+    /((?:20\d{2})[-\/.]\d{1,2}[-\/.]\d{1,2}\s+\d{1,2}[:：]\d{2})/,
+    /((?:[上下中凌早晚午晨夜傍]+\s*)?\d{1,2}[:：]\d{2})/,
+    /((?:20\d{2})年\s*\d{1,2}月\s*\d{1,2}日)/,
+    /(\d{1,2}月\s*\d{1,2}日)/,
+  ];
+  for (const line of pool) {
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (!match) continue;
+      const label = match[1].replace(/：/g, ':').replace(/\s+/g, ' ').trim();
+      const hm = label.match(/(\d{1,2}):(\d{2})/);
+      const minuteOfDay = hm ? Number(hm[1]) * 60 + Number(hm[2]) : null;
+      const md = label.match(/(?:(20\d{2})[年\/.\-])?\s*(\d{1,2})[月\/.\-]\s*(\d{1,2})日?/);
+      const dateKey = md ? `${md[1] || ''}-${Number(md[2])}-${Number(md[3])}` : '';
+      return { label, minuteOfDay: Number.isFinite(minuteOfDay) ? minuteOfDay : null, dateKey };
+    }
+  }
+  return null;
+}
+
+export function getCurrentTavernStoryTimeState() {
+  const ctx = getContext();
+  const chat = candidateChats(ctx)[0];
+  if (!chat) return null;
+  for (let i = chat.length - 1; i >= 0; i -= 1) {
+    const message = chat[i];
+    if (!message || typeof message !== 'object') continue;
+    const isUser = Boolean(message.is_user ?? message.isUser ?? message.role === 'user');
+    const isSystem = Boolean(message.is_system ?? message.isSystem ?? message.role === 'system');
+    if (isUser || isSystem) continue;
+    const content = clean(message.mes ?? message.message ?? message.content ?? message.text);
+    const parsed = parseStoryTimeCandidate(content);
+    if (parsed) return parsed;
+  }
+  return null;
+}
