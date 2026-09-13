@@ -174,6 +174,8 @@ export function buildPrivateGenerationRequest({
   otherContextSources = [],
   recentBody = null,
   worldBookText = '',
+  longTermMemoryText = '',
+  longTermMemoryCoverage = null,
   historyLimit = 60,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
@@ -228,6 +230,17 @@ export function buildPrivateGenerationRequest({
   if (prompt) {
     systemBlocks.push(
       `${contact.kind === 'tavern' ? '【自定义附加 Prompt】' : '【用户追加的人格提示词】'}\n${prompt}`
+    );
+  }
+
+  if (clean(longTermMemoryText)) {
+    const coverageNote = longTermMemoryCoverage?.complete === false
+      ? '\n\n注意：柏宝书报告这份长期记忆存在摘要缺口；不要把它当作毫无遗漏的完整历史，近期事实继续以最近正文为准。'
+      : '';
+    systemBlocks.push(
+      '【柏宝书长期剧情记忆】\n以下内容来自柏宝书正常记忆注入口径，只用于补充最近正文窗口之前已经发生的剧情。不要把摘要措辞当成角色当前台词，也不要覆盖更近期的正文事实。\n\n'
+      + clip(longTermMemoryText, 18000)
+      + coverageNote
     );
   }
 

@@ -13,6 +13,7 @@ import {
 } from '../core/tavern-context.js';
 import { buildPrivateGenerationRequest } from './prompt-builder.js';
 import { getActivatedTavernWorldBook } from '../core/tavern-worldbook.js';
+import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -145,12 +146,22 @@ export async function generatePrivateReply({
     scanText: worldBookScanParts.join('\n'),
   });
 
+  // 柏宝书是正文世界的长期历史来源。Contact 决定是否允许，
+  // Conversation 的正文读取开关决定本次聊天是否接入动态剧情上下文。
+  const baiBaiMemory = (
+    contact?.kind === 'tavern'
+    && contact?.roleSources?.longTermMemory !== false
+    && conversation.bodyContextEnabled !== false
+  ) ? getBaiBaiLongTermMemory() : null;
+
   const request = buildPrivateGenerationRequest({
     contact,
     conversation,
     otherContextSources,
     recentBody,
     worldBookText: activatedWorldBook?.text || '',
+    longTermMemoryText: baiBaiMemory?.text || '',
+    longTermMemoryCoverage: baiBaiMemory?.coverage || null,
     historyLimit: conversation.recentChatLimit || 100,
   });
 
