@@ -15,6 +15,7 @@ import {
   appendMessage,
   setConversationPinned,
   markConversationRead,
+  incrementConversationUnread,
   getMessageById,
   deleteMessage,
   deleteMessages,
@@ -3006,7 +3007,7 @@ export function createPhonePanel({
           ? '<div class="moli-mini-avatar">我</div>'
           : isGroup
             ? (sender
-                ? avatarMarkup(sender, 'moli-mini-avatar')
+                ? avatarMarkup(sender, 'moli-mini-avatar moli-group-member-jump')
                 : '<div class="moli-mini-avatar">群</div>')
             : avatarMarkup(item, 'moli-mini-avatar');
 
@@ -3020,7 +3021,7 @@ export function createPhonePanel({
             isUser ? 'user' : 'assistant'
           } ${multiSelectMode && selectedMessageIds.has(String(message.id || '')) ? 'selected' : ''}" data-message-id="${escapeHtml(message.id || '')}">
             ${multiSelectMode ? `<div class="moli-select-dot" aria-hidden="true">${selectedMessageIds.has(String(message.id || '')) ? '✓' : ''}</div>` : ''}
-            ${avatar}
+            ${isGroup && !isUser && sender ? `<button type="button" class="moli-avatar-jump-hit" data-jump-private="${escapeHtml(sender.id)}" aria-label="进入${escapeHtml(displayName(sender))}私聊">${avatar}</button>` : avatar}
 
             <div class="moli-msg-content">
               ${senderName}
@@ -3413,6 +3414,17 @@ export function createPhonePanel({
         && currentContactId === generationConversationKey
       ) {
         renderChat();
+      }
+
+      // 若用户在本轮生成期间关闭了手机，生成结果应成为真正的“未读消息”。
+      // 这同时驱动聊天列表与悬浮球红点；仍停留在当前聊天时则不制造自读红点。
+      const panelStillVisibleOnThisChat = documentRef.body.contains(panel)
+        && panel.classList.contains('open')
+        && panel.querySelector('[data-page="chat"]')?.classList.contains('active')
+        && currentContactId === generationConversationKey;
+      if (!panelStillVisibleOnThisChat) {
+        const produced = replyBatches.reduce((sum, batch) => sum + (batch.messages || []).length, 0);
+        if (produced) incrementConversationUnread(requestScopeKey, generationConversationKey, produced);
       }
 
       // 自动记忆是低频、增量的后台式收尾：只有达到阈值才会额外调用一次 API。
@@ -4180,6 +4192,18 @@ export function createPhonePanel({
       const value = chatInfo.querySelector('[data-commentary-value]');
       if (value) value.textContent = `${target.value}%`;
     }
+  });
+
+  chatBody.addEventListener('click', event => {
+    const jump = event.target?.closest?.('[data-jump-private]');
+    if (!jump) return;
+    const contactId = String(jump.dataset.jumpPrivate || '');
+    const scopeKey = getScopeKey?.();
+    if (!contactId || !scopeKey) return;
+    ensureConversation(scopeKey, contactId);
+    currentContactId = contactId;
+    markConversationRead(scopeKey, currentContactId);
+    show('chat');
   });
 
   const externalGenerationState = event => {
