@@ -48,8 +48,8 @@ import {
 import { generatePrivateReply } from '../generation/generation-service.js';
 import { parseGeneratedMessages, previewGeneratedMessages } from '../generation/message-parser.js';
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
-import { getStatusPresets, getStatusPreset, saveStatusPreset, deleteStatusPreset } from '../storage/status-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
+import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
 
 export function createPhonePanel({
   documentRef = document,
@@ -238,37 +238,8 @@ export function createPhonePanel({
           </span>
           <b>›</b>
         </button>
-        <button type="button" class="moli-settings-row" data-action="status-presets">
-          <span>
-            <strong>状态栏预设</strong>
-            <small>Prompt / Regex / HTML 模板</small>
-          </span>
-          <b>›</b>
-        </button>
         <div class="moli-settings-note">
           当前聊天模式统一为线上即时通讯。预设负责所有联系人共用的线上聊天行为；联系人自身的人格与资料仍由联系人配置提供。
-        </div>
-      </main>
-    </section>
-
-    <section class="moli-page" data-page="status-presets">
-      <header class="moli-nav">
-        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="status-presets-back" aria-label="返回">‹</button></div>
-        <div class="moli-nav-title">状态栏预设</div>
-        <div class="moli-nav-side right"></div>
-      </header>
-      <main class="moli-settings-list moli-contact-subpage">
-        <label class="moli-form-field"><span>已有预设</span><select data-status-preset-select><option value="">新建预设</option></select></label>
-        <label class="moli-form-field"><span>预设名称</span><input type="text" maxlength="80" data-status-preset-name placeholder="例如：通用角色状态"></label>
-        <label class="moli-form-field"><span>Prompt Suffix</span><textarea rows="7" data-status-preset-prompt placeholder="要求模型在回复末尾输出状态栏文本的附加提示"></textarea></label>
-        <label class="moli-form-field"><span>提取正则 Regex</span><textarea rows="4" data-status-preset-regex spellcheck="false" placeholder="例如：<status>([\\s\\S]*?)</status>"></textarea></label>
-        <label class="moli-form-field"><span>HTML Template</span><textarea rows="7" data-status-preset-template spellcheck="false" placeholder="例如：<div>$1</div>"></textarea></label>
-        <label class="moli-form-field"><span>测试文本</span><textarea rows="5" data-status-test-text placeholder="粘贴一段包含状态栏的模型输出"></textarea></label>
-        <div class="moli-settings-note" data-status-test-result>填写 Regex 与测试文本后可检查匹配结果。HTML 实时渲染将在模板安全规则确定后接入。</div>
-        <div class="moli-api-row">
-          <button type="button" class="moli-secondary-btn" data-action="status-preset-test">测试匹配</button>
-          <button type="button" class="moli-secondary-btn moli-danger-inline" data-action="status-preset-delete">删除</button>
-          <button type="button" class="moli-primary-btn" data-action="status-preset-save">保存预设</button>
         </div>
       </main>
     </section>
@@ -582,6 +553,23 @@ export function createPhonePanel({
       </main>
     </section>
 
+    <section class="moli-page" data-page="contact-worldbook-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="contact-worldbook-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">世界书来源</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-settings-list moli-contact-subpage">
+        <div class="moli-settings-note" data-worldbook-summary>正在读取 SillyTavern 世界书...</div>
+        <div data-worldbook-list></div>
+        <div class="moli-settings-note">这里的开关是“允许使用”的白名单，不代表每轮强制注入。下一阶段会基于 SillyTavern 的常驻、关键词、递归与上下文触发规则决定本轮真正激活的条目。</div>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="contact-worldbook-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="contact-worldbook-save">保存白名单</button>
+      </footer>
+    </section>
+
     <section class="moli-page" data-page="contact-api-settings">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -608,30 +596,6 @@ export function createPhonePanel({
       <footer class="moli-sync-footer">
         <button class="moli-secondary-btn" data-action="contact-api-cancel">取消</button>
         <button class="moli-primary-btn" data-action="contact-api-save">保存</button>
-      </footer>
-    </section>
-
-    <section class="moli-page" data-page="contact-status-settings">
-      <header class="moli-nav">
-        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="contact-status-back" aria-label="返回">‹</button></div>
-        <div class="moli-nav-title">状态栏</div>
-        <div class="moli-nav-side right"></div>
-      </header>
-      <main class="moli-settings-list moli-contact-subpage">
-        <label class="moli-switch-row">
-          <span><strong>启用角色状态栏</strong><small>开启后，这个联系人使用下面的状态栏规则。</small></span>
-          <input type="checkbox" data-contact-status-enabled>
-        </label>
-        <label class="moli-form-field"><span>快速填充预设</span><select data-contact-status-preset><option value="">不读取预设</option></select></label>
-        <button type="button" class="moli-secondary-btn" data-action="contact-status-apply-preset">应用预设内容</button>
-        <label class="moli-form-field"><span>Prompt Suffix</span><textarea rows="7" data-contact-status-prompt></textarea></label>
-        <label class="moli-form-field"><span>Regex Pattern</span><textarea rows="4" data-contact-status-regex spellcheck="false"></textarea></label>
-        <label class="moli-form-field"><span>HTML Template</span><textarea rows="7" data-contact-status-template spellcheck="false"></textarea></label>
-        <div class="moli-settings-note">这里保存联系人默认状态栏规则。实际产生的状态历史属于各自 Conversation，不会因为同一联系人而自动混用。</div>
-      </main>
-      <footer class="moli-sync-footer">
-        <button class="moli-secondary-btn" data-action="contact-status-cancel">取消</button>
-        <button class="moli-primary-btn" data-action="contact-status-save">保存</button>
       </footer>
     </section>
 
@@ -813,6 +777,8 @@ export function createPhonePanel({
   const contactSourceDetailTitle = panel.querySelector('[data-contact-source-detail-title]');
   const contactSourceDetailMeta = panel.querySelector('[data-contact-source-detail-meta]');
   const contactSourceDetailText = panel.querySelector('[data-contact-source-detail-text]');
+  const worldBookSummary = panel.querySelector('[data-worldbook-summary]');
+  const worldBookList = panel.querySelector('[data-worldbook-list]');
   const contactProfileIntro = panel.querySelector('[data-contact-profile-intro]');
   const contactProfilePrompt = panel.querySelector('[data-contact-profile-prompt]');
   const contactPromptField = panel.querySelector('[data-contact-prompt-field]');
@@ -821,18 +787,6 @@ export function createPhonePanel({
   const contactApiEnabled = panel.querySelector('[data-contact-api-enabled]');
   const contactApiBody = panel.querySelector('[data-contact-api-body]');
   const contactApiPreset = panel.querySelector('[data-contact-api-preset]');
-  const statusPresetSelect = panel.querySelector('[data-status-preset-select]');
-  const statusPresetName = panel.querySelector('[data-status-preset-name]');
-  const statusPresetPrompt = panel.querySelector('[data-status-preset-prompt]');
-  const statusPresetRegex = panel.querySelector('[data-status-preset-regex]');
-  const statusPresetTemplate = panel.querySelector('[data-status-preset-template]');
-  const statusTestText = panel.querySelector('[data-status-test-text]');
-  const statusTestResult = panel.querySelector('[data-status-test-result]');
-  const contactStatusEnabled = panel.querySelector('[data-contact-status-enabled]');
-  const contactStatusPreset = panel.querySelector('[data-contact-status-preset]');
-  const contactStatusPrompt = panel.querySelector('[data-contact-status-prompt]');
-  const contactStatusRegex = panel.querySelector('[data-contact-status-regex]');
-  const contactStatusTemplate = panel.querySelector('[data-contact-status-template]');
   const conversationSettingsScope = panel.querySelector('[data-conversation-settings-scope]');
   const conversationTitleInput = panel.querySelector('[data-conversation-title]');
   const conversationBodyContext = panel.querySelector('[data-conversation-body-context]');
@@ -1435,119 +1389,6 @@ export function createPhonePanel({
     }
   }
 
-  function renderStatusPresetSelects(selectedId = '') {
-    const presets = getStatusPresets();
-    if (statusPresetSelect) {
-      statusPresetSelect.innerHTML = '<option value="">新建预设</option>' + presets.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
-      statusPresetSelect.value = presets.some(item => item.id === selectedId) ? selectedId : '';
-    }
-    if (contactStatusPreset) {
-      const current = contactStatusPreset.value;
-      contactStatusPreset.innerHTML = '<option value="">不读取预设</option>' + presets.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
-      contactStatusPreset.value = presets.some(item => item.id === current) ? current : '';
-    }
-  }
-
-  function loadStatusPresetEditor(presetId = '') {
-    const preset = presetId ? getStatusPreset(presetId) : null;
-    if (statusPresetName) statusPresetName.value = preset?.name || '';
-    if (statusPresetPrompt) statusPresetPrompt.value = preset?.promptSuffix || '';
-    if (statusPresetRegex) statusPresetRegex.value = preset?.regex || '';
-    if (statusPresetTemplate) statusPresetTemplate.value = preset?.htmlTemplate || '';
-    if (statusTestResult) statusTestResult.textContent = '填写 Regex 与测试文本后可检查匹配结果。HTML 实时渲染将在模板安全规则确定后接入。';
-  }
-
-  function renderStatusPresets() {
-    renderStatusPresetSelects(statusPresetSelect?.value || '');
-    loadStatusPresetEditor(statusPresetSelect?.value || '');
-  }
-
-  function saveStatusPresetEditor() {
-    try {
-      const saved = saveStatusPreset({
-        id: statusPresetSelect?.value || '',
-        name: statusPresetName?.value || '',
-        promptSuffix: statusPresetPrompt?.value || '',
-        regex: statusPresetRegex?.value || '',
-        htmlTemplate: statusPresetTemplate?.value || '',
-      });
-      renderStatusPresetSelects(saved.id);
-      loadStatusPresetEditor(saved.id);
-      toast('状态栏预设已保存');
-    } catch (error) {
-      toast(error?.message || '保存状态栏预设失败');
-    }
-  }
-
-  function deleteStatusPresetEditor() {
-    const id = statusPresetSelect?.value || '';
-    if (!id) { toast('请先选择要删除的预设'); return; }
-    if (!windowRef.confirm?.('删除这个状态栏预设？已复制到联系人资料里的内容不会被删除。')) return;
-    deleteStatusPreset(id);
-    renderStatusPresetSelects('');
-    loadStatusPresetEditor('');
-    toast('状态栏预设已删除');
-  }
-
-  function testStatusPresetRegex() {
-    if (!statusTestResult) return;
-    const pattern = String(statusPresetRegex?.value || '').trim();
-    const text = String(statusTestText?.value || '');
-    if (!pattern) { statusTestResult.textContent = '请先填写 Regex。'; return; }
-    try {
-      const regex = new RegExp(pattern, 'm');
-      const match = text.match(regex);
-      statusTestResult.textContent = match
-        ? `匹配成功：${match.slice(1).filter(value => value !== undefined).map((value, index) => `$${index + 1} = ${value}`).join('；') || match[0]}`
-        : '没有匹配到状态栏内容。';
-    } catch (error) {
-      statusTestResult.textContent = `Regex 无效：${error?.message || error}`;
-    }
-  }
-
-  function renderContactStatusSettings() {
-    const conversation = currentConversation();
-    const item = conversation?.type === 'private' ? contact(conversation.contactId) : null;
-    if (!item) { toast('当前联系人不存在'); show('info'); return; }
-    const status = item.statusBar && typeof item.statusBar === 'object' ? item.statusBar : {};
-    renderStatusPresetSelects();
-    if (contactStatusEnabled) contactStatusEnabled.checked = status.enabled === true;
-    if (contactStatusPreset) contactStatusPreset.value = status.presetId && getStatusPreset(status.presetId) ? status.presetId : '';
-    if (contactStatusPrompt) contactStatusPrompt.value = status.promptSuffix || '';
-    if (contactStatusRegex) contactStatusRegex.value = status.regex || '';
-    if (contactStatusTemplate) contactStatusTemplate.value = status.htmlTemplate || '';
-  }
-
-  function applyContactStatusPreset() {
-    const preset = getStatusPreset(contactStatusPreset?.value || '');
-    if (!preset) { toast('请选择一个状态栏预设'); return; }
-    if (contactStatusPrompt) contactStatusPrompt.value = preset.promptSuffix || '';
-    if (contactStatusRegex) contactStatusRegex.value = preset.regex || '';
-    if (contactStatusTemplate) contactStatusTemplate.value = preset.htmlTemplate || '';
-    toast('已填入预设内容');
-  }
-
-  function saveContactStatusSettings() {
-    const conversation = currentConversation();
-    const item = conversation?.type === 'private' ? contact(conversation.contactId) : null;
-    if (!item) { toast('当前联系人不存在'); return; }
-    try {
-      updateContact(item.id, {
-        statusBar: {
-          enabled: Boolean(contactStatusEnabled?.checked),
-          presetId: String(contactStatusPreset?.value || ''),
-          promptSuffix: String(contactStatusPrompt?.value || ''),
-          regex: String(contactStatusRegex?.value || ''),
-          htmlTemplate: String(contactStatusTemplate?.value || ''),
-        },
-      });
-      toast('联系人状态栏设置已保存');
-      show('info');
-    } catch (error) {
-      toast(error?.message || '保存联系人状态栏失败');
-    }
-  }
-
   function renderConversationSettings() {
     const conversation = currentConversation();
     if (!conversation || conversation.type !== 'private') {
@@ -1558,7 +1399,7 @@ export function createPhonePanel({
 
     if (conversationSettingsScope) {
       const label = conversation.scopeMode === 'global' ? '全局' : '当前存档';
-      conversationSettingsScope.textContent = `当前聊天归属：${label}。归属请在资料卡外层修改；这里仅调整聊天名称、时间模式、正文读取与近期消息上下文。`;
+      conversationSettingsScope.textContent = `当前聊天：${conversation.title || '默认聊天'} · ${label}。这里调整时间模式、正文读取与近期消息上下文。`;
     }
 
     if (conversationTitleInput) {
@@ -1648,9 +1489,6 @@ export function createPhonePanel({
         <button type="button" class="moli-info-setting-row" data-action="contact-api-settings">
           <span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong>
         </button>
-        <button type="button" class="moli-info-setting-row" data-action="contact-status-settings">
-          <span>状态栏</span><strong>›</strong>
-        </button>
         <button type="button" class="moli-info-setting-row" data-action="contact-memory-settings">
           <span>手机记忆</span><strong>›</strong>
         </button>
@@ -1665,16 +1503,10 @@ export function createPhonePanel({
               return `<option value="${escapeHtml(key)}" ${key === currentContactId ? 'selected' : ''}>${escapeHtml(title)} · ${owner}</option>`;
             }).join('');
           })()}</select></label>
-          <label><span>归属</span><select data-info-conversation-scope>
-            <option value="current" ${conversation.scopeMode === 'global' ? '' : 'selected'}>当前存档</option>
-            <option value="global" ${conversation.scopeMode === 'global' ? 'selected' : ''}>全局</option>
-          </select></label>
-          <div><span>时间模式</span><strong>${conversation.timeMode === 'real' ? '现实世界时间' : conversation.timeMode === 'none' ? '无时间感' : '跟随正文时间'}</strong></div>
-          <div><span>读取当前正文</span><strong>${conversation.bodyContextEnabled === false ? '关闭' : '开启'}</strong></div>
         </div>
         <button type="button" class="moli-info-setting-row" data-action="conversation-settings">
           <span>当前聊天设置</span>
-          <strong>${conversation.timeMode === 'real' ? '现实世界时间' : conversation.timeMode === 'none' ? '无时间感' : '跟随正文时间'} ›</strong>
+          <strong>›</strong>
         </button>
         <button type="button" class="moli-info-setting-row" data-action="new-private-chat">
           <span>＋ 新建另一个聊天</span>
@@ -1792,14 +1624,84 @@ export function createPhonePanel({
       </div>
       <div class="moli-source-section">
         <div class="moli-source-section-title">世界书</div>
-        <button type="button" class="moli-source-placeholder" disabled><span>世界书条目</span><strong>尚未接入 ›</strong></button>
-        <div class="moli-source-section-note">这里未来只管理“允许使用哪些条目”；本轮实际激活仍按常驻、关键词和上下文触发，不会把全部勾选条目无条件塞入 API。</div>
+        <button type="button" class="moli-source-placeholder" data-action="contact-worldbook-settings"><span>世界书条目</span><strong>读取 ›</strong></button>
+        <div class="moli-source-section-note">这里管理“允许使用哪些条目”的白名单；本轮实际激活仍按 SillyTavern 世界书触发规则决定，不会把全部勾选条目无条件塞入 API。</div>
       </div>
       <div class="moli-source-section">
         <div class="moli-source-section-title">长期剧情记忆</div>
         <button type="button" class="moli-source-placeholder" disabled><span>柏宝书长期记忆</span><strong>尚未接入 ›</strong></button>
       </div>`;
     contactRoleSources.hidden = false;
+  }
+
+  let currentWorldBookSnapshot = null;
+
+  function worldBookEntryKey(entry) {
+    return String(entry?.key || '');
+  }
+
+  async function renderContactWorldBookSettings() {
+    const item = currentPrivateContact();
+    if (!item || item.kind !== 'tavern') {
+      toast('世界书来源仅适用于酒馆角色');
+      show('info');
+      return;
+    }
+
+    if (worldBookSummary) worldBookSummary.textContent = '正在读取 SillyTavern 世界书...';
+    if (worldBookList) worldBookList.innerHTML = '';
+
+    try {
+      currentWorldBookSnapshot = await getTavernWorldBookSnapshot(item.source?.sourceId);
+      const snapshot = currentWorldBookSnapshot;
+      const policy = item.worldBookPolicy && typeof item.worldBookPolicy === 'object' ? item.worldBookPolicy : {};
+      const disabled = policy.disabledEntries && typeof policy.disabledEntries === 'object' ? policy.disabledEntries : {};
+
+      if (worldBookSummary) {
+        if (!snapshot.available) worldBookSummary.textContent = snapshot.reason || '当前 SillyTavern 未提供世界书读取接口。';
+        else if (!snapshot.books.length) worldBookSummary.textContent = '这个角色当前没有检测到关联世界书或内嵌 Character Book。';
+        else worldBookSummary.textContent = `检测到 ${snapshot.books.length} 本来源，共 ${snapshot.entries.length} 个条目。关闭条目只影响 moli小手机，不修改 SillyTavern 原世界书。`;
+      }
+
+      if (!worldBookList) return;
+      if (!snapshot.entries.length) {
+        worldBookList.innerHTML = '<div class="moli-placeholder">没有可管理的世界书条目。</div>';
+        return;
+      }
+
+      worldBookList.innerHTML = snapshot.books.map(book => {
+        const entries = snapshot.entries.filter(entry => entry.bookKey === book.key);
+        return `<section class="moli-source-section">
+          <div class="moli-source-section-title">${escapeHtml(book.name || '未命名世界书')}</div>
+          <div class="moli-source-section-note">${book.kind === 'linked' ? 'SillyTavern 关联世界书' : '角色卡内嵌 Character Book'} · ${entries.length} 条</div>
+          ${entries.map(entry => {
+            const key = worldBookEntryKey(entry);
+            const enabled = disabled[key] !== true;
+            const keys = Array.isArray(entry.keys) && entry.keys.length ? entry.keys.join('、') : (entry.constant ? '常驻条目' : '无关键词');
+            return `<label class="moli-worldbook-entry"><span><strong>${escapeHtml(entry.title || `条目 ${entry.uid}`)}</strong><small>${escapeHtml(keys)}</small></span><input type="checkbox" data-worldbook-entry="${escapeHtml(key)}" ${enabled ? 'checked' : ''}></label>`;
+          }).join('')}
+        </section>`;
+      }).join('');
+    } catch (error) {
+      console.error('[moli小手机] read world book failed:', error);
+      currentWorldBookSnapshot = null;
+      if (worldBookSummary) worldBookSummary.textContent = `读取失败：${error?.message || error}`;
+      if (worldBookList) worldBookList.innerHTML = '';
+    }
+  }
+
+  function saveContactWorldBookPolicy() {
+    const item = currentPrivateContact();
+    if (!item || item.kind !== 'tavern' || !currentWorldBookSnapshot) return;
+    const disabledEntries = {};
+    for (const entry of currentWorldBookSnapshot.entries) {
+      const key = worldBookEntryKey(entry);
+      const input = [...(worldBookList?.querySelectorAll('[data-worldbook-entry]') || [])].find(node => node.dataset.worldbookEntry === key);
+      if (input && input.checked === false) disabledEntries[key] = true;
+    }
+    updateContact(item.id, { worldBookPolicy: { disabledEntries, updatedAt: Date.now() } });
+    toast('世界书白名单已保存');
+    show('contact-prompt-settings');
   }
 
   function renderContactPromptSettings() {
@@ -2160,12 +2062,8 @@ export function createPhonePanel({
       renderContactApiSettings();
     }
 
-    if (name === 'contact-status-settings') {
-      renderContactStatusSettings();
-    }
-
-    if (name === 'status-presets') {
-      renderStatusPresets();
+    if (name === 'contact-worldbook-settings') {
+      renderContactWorldBookSettings();
     }
 
     if (name === 'forward-detail') {
@@ -3668,12 +3566,6 @@ export function createPhonePanel({
     updateExtension;
 
   panel.querySelector('[data-action="prompt-settings"]')?.addEventListener('click', () => show('prompt-settings'));
-  panel.querySelector('[data-action="status-presets"]')?.addEventListener('click', () => show('status-presets'));
-  panel.querySelector('[data-action="status-presets-back"]')?.addEventListener('click', () => show('settings'));
-  statusPresetSelect?.addEventListener('change', () => loadStatusPresetEditor(statusPresetSelect.value));
-  panel.querySelector('[data-action="status-preset-save"]')?.addEventListener('click', saveStatusPresetEditor);
-  panel.querySelector('[data-action="status-preset-delete"]')?.addEventListener('click', deleteStatusPresetEditor);
-  panel.querySelector('[data-action="status-preset-test"]')?.addEventListener('click', testStatusPresetRegex);
   panel.querySelector('[data-action="prompt-settings-back"]')?.addEventListener('click', () => show('settings'));
   panel.querySelector('[data-action="prompt-editor-back"]')?.addEventListener('click', () => show('prompt-settings'));
   panel.querySelector('[data-action="prompt-editor-cancel"]')?.addEventListener('click', () => show('prompt-settings'));
@@ -3875,29 +3767,15 @@ export function createPhonePanel({
       renderChat();
       return;
     }
-
-    if (target.matches('[data-info-conversation-scope]')) {
-      const scopeKey = getScopeKey?.();
-      const conversation = currentConversation();
-      if (!scopeKey || !conversation || conversation.type !== 'private' || !currentContactId) return;
-      const nextScopeMode = target.value === 'global' ? 'global' : 'current';
-      if (nextScopeMode === conversation.scopeMode) return;
-      try {
-        updatePrivateConversationSettings(scopeKey, currentContactId, { scopeMode: nextScopeMode });
-        toast(nextScopeMode === 'global' ? '已改为全局聊天' : '已改为当前存档聊天');
-        renderChatInfo();
-      } catch (error) {
-        console.error('[moli小手机] move conversation scope failed:', error);
-        toast(error?.message || '修改聊天归属失败');
-        renderChatInfo();
-      }
-    }
   });
 
   panel.querySelector('[data-action="contact-prompt-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-save"]')?.addEventListener('click', saveContactPromptSettings);
   panel.querySelector('[data-action="contact-source-detail-back"]')?.addEventListener('click', () => show('contact-prompt-settings'));
+  panel.querySelector('[data-action="contact-worldbook-back"]')?.addEventListener('click', () => show('contact-prompt-settings'));
+  panel.querySelector('[data-action="contact-worldbook-cancel"]')?.addEventListener('click', () => show('contact-prompt-settings'));
+  panel.querySelector('[data-action="contact-worldbook-save"]')?.addEventListener('click', saveContactWorldBookPolicy);
   contactRoleSources?.addEventListener('click', event => {
     const view = event.target.closest?.('[data-role-source-view]');
     if (view) openContactSourceDetail(view.dataset.roleSourceView);
@@ -3906,10 +3784,6 @@ export function createPhonePanel({
   panel.querySelector('[data-action="contact-api-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-api-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-api-save"]')?.addEventListener('click', saveContactApiSettings);
-  panel.querySelector('[data-action="contact-status-back"]')?.addEventListener('click', () => show('info'));
-  panel.querySelector('[data-action="contact-status-cancel"]')?.addEventListener('click', () => show('info'));
-  panel.querySelector('[data-action="contact-status-save"]')?.addEventListener('click', saveContactStatusSettings);
-  panel.querySelector('[data-action="contact-status-apply-preset"]')?.addEventListener('click', applyContactStatusPreset);
   panel.querySelector('[data-action="contact-memory-back"]')?.addEventListener('click', () => show('info'));
 
   contactApiEnabled?.addEventListener('change', syncContactApiUi);
@@ -3988,8 +3862,8 @@ export function createPhonePanel({
       show('contact-prompt-settings');
     } else if (action === 'contact-api-settings') {
       show('contact-api-settings');
-    } else if (action === 'contact-status-settings') {
-      show('contact-status-settings');
+    } else if (action === 'contact-worldbook-settings') {
+      show('contact-worldbook-settings');
     } else if (action === 'contact-memory-settings') {
       show('contact-memory-settings');
     }
