@@ -2627,3 +2627,48 @@ Generation, private automation, and group Review errors must be visible in the a
 - 恢复默认人格 Prompt 时，第四面墙恢复到新的专用 Meta Protocol。
 - 本阶段不引入 LittleWhiteBox 的图片生成、TTS、Fullscreen、图片增强、Voice enhancer、180 秒业务冷却。
 - Commentary 的专用协议已集中到第四面墙模块，但事件级自动 commentary 触发/编辑事件监听继续留在后续阶段，不在本阶段伪装成已完成。
+
+---
+
+## moli58：皮下（LittleWhiteBox 四次元壁核心复刻第一阶段）
+
+### 1. 产品身份
+
+`builtin:meta` 对用户显示为 **皮下**，辅助小字为 **入戏…**。它不是普通联系人，不使用普通私聊/群聊的全局线上人格预设；它拥有独立 Fourth Wall Protocol，同时复用 moli 的 API、模型参数、超时与流式底座。
+
+### 2. 头像
+
+皮下头像没有独立持久化真值。每次渲染时读取当前 SillyTavern 正文 char 的头像；切换正文角色后，皮下聊天列表、资料页和 AI 气泡头像随之变化。
+
+### 3. Fourth Wall Context Stack
+
+皮下请求严格区分：
+
+- `chat_history`：当前正文，属于双方共同创作的 RP 剧本；
+- `meta_memory`：当前皮下 Conversation 的手机记忆；
+- `meta_history`：当前皮下 Conversation 的原始聊天历史；
+- Fourth Wall Meta Protocol：规定现实语C搭档身份、时间感、聊天方式和 `<thinking>/<msg>` 输出。
+
+正文不得被解释成皮下人物的现实生活履历。皮下不注入普通线上聊天全局预设，也不读取世界书/柏宝书作为第二套皮下人格来源。
+
+### 4. 外露思考过程
+
+普通皮下回复要求模型输出：
+
+`<thinking>...</thinking>` + `<msg>...</msg>`。
+
+`thinking` 作为皮下消息正式字段持久化。流式时 UI 以“思考中”展开；完成后显示为可折叠“思考过程”。只有皮下使用这套外露内省 UI，普通联系人/群聊不受影响。
+
+### 5. 实时吐槽 Commentary
+
+皮下资料卡复用现有“自动吐槽正文 + 百分比”设置。开启后支持三类事件：
+
+- `ai_message`：正文新增 AI 回复；
+- `edit_own`：用户编辑自己的正文台词；
+- `edit_ai`：用户编辑 AI 正文台词。
+
+Commentary 使用独立 Fourth Wall Commentary Prompt，只输出一个 `<msg>` 气泡，不附长 thinking。编辑事件扩展仅属于皮下，不改变其他联系人现有自动吐槽语义。
+
+### 6. 明确未完成但已进入复刻路线
+
+除图片/语音外，LittleWhiteBox 四次元壁其余能力继续逐项复刻。下一阶段优先补：多 Session、Fourth Wall Prompt 模板编辑/恢复、Assistant Prefill 开关、正文层数设置、皮下记忆整理/上下文统计、重答/清空时与原版一致的细节行为。

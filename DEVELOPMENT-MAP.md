@@ -1978,3 +1978,22 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - 保留 moli 已有 Conversation Memory、最近正文、柏宝书、在线预设、API、流式、停止、消息解析，不重新建立 LittleWhiteBox 的整套存储/UI。
 - 明确未完成：LittleWhiteBox commentary 的正文生成/编辑事件级触发、专用 commentary 请求构造与完整逐项行为兼容；这些进入下一阶段。
 - 版本：0.4.1。
+
+# moli58 节点：皮下（LittleWhiteBox 四次元壁核心复刻第一阶段）
+
+- `builtin:meta` 前台名称正式迁移为“皮下”，资料卡/聊天列表增加小字“入戏…”。旧默认名“第四面墙”惰性迁移为“皮下”，不覆盖用户自己改过的其他名称。
+- 皮下头像不再拥有独立头像真值，运行时动态读取当前 SillyTavern 正文 char 头像；聊天列表、资料页、消息气泡统一跟随当前正文角色。
+- 皮下不再注入 moli 普通线上聊天全局预设；普通私聊/群聊继续使用 moli 全局预设。皮下独立使用 Fourth Wall Protocol，但继续复用主 API / 模型 / temperature / 超时 / 流式底层能力。
+- `src/prompts/fourth-wall.js` 改为独立 Fourth Wall request 构造：`chat_history`（当前正文）/ `meta_memory`（手机皮下记忆）/ `meta_history`（皮下原始聊天）严格分层；普通聊天输出 `<thinking> + <msg>`，Commentary 只输出 `<msg>`。
+- 消息结构新增可选 `thinking` / `messageType`；皮下普通回复保存 thinking，自动 Commentary 不保存长 thinking。
+- UI 新增皮下专用外露“思考过程”折叠区；流式生成时以“思考中”打开显示，完成后作为消息的一部分保存并可重新展开。
+- 皮下资料卡复用现有私聊“自动吐槽正文 + 百分比滑杆”组件，不新增第二套样式；皮下不显示普通联系人“主动私聊”控制。
+- Private Automation 允许 `builtin:meta` 参与 Commentary，并新增 LittleWhiteBox 同款三类触发：`ai_message`（正文 AI 新回复）、`edit_own`（用户编辑自己的正文台词）、`edit_ai`（用户编辑 AI 正文台词）。编辑事件只扩展到皮下，不改变其他角色原有“正文新回复吐槽”规则。
+- 自动 Commentary 使用 Fourth Wall 专用 Commentary Prompt，每次最多落地一个气泡。
+- 版本：`0.4.2`。
+
+## 与 LittleWhiteBox 原版的已知适配差异
+
+- 图片 / 语音能力按用户明确要求不复刻。
+- LittleWhiteBox 的独立 Agent API 宿主被适配为 moli 已有 API/provider 层；这是宿主差异，不改变 Fourth Wall 的 Prompt / 会话语义。
+- 本阶段先复刻核心会话协议、外露 thinking、动态 char 头像与实时 Commentary。LittleWhiteBox 的多 Session、独立 Prompt 模板编辑器、Assistant Prefill 开关、上下文计数/手动整理皮下记忆等继续进入后续节点，不宣称已完成。

@@ -569,3 +569,63 @@
   user-select: none;
   pointer-events: none;
 }
+
+/* moli58: 皮下（Fourth Wall）外露内省 */
+.moli-fourth-wall-subtitle {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: .58;
+}
+
+.moli-fourth-wall-thinking {
+  max-width: min(78vw, 560px);
+  margin: 0 0 6px;
+  border: 1px solid rgba(100, 110, 120, .16);
+  border-radius: 14px;
+  background: rgba(248, 249, 247, .72);
+  overflow: hidden;
+}
+
+.moli-fourth-wall-thinking > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .68;
+  user-select: none;
+}
+
+.moli-fourth-wall-thinking > summary::-webkit-details-marker {
+  display: none;
+}
+
+.moli-fourth-wall-thinking > summary::before {
+  content: '›';
+  display: inline-block;
+  margin-right: 6px;
+  transform: rotate(0deg);
+  transition: transform .15s ease;
+}
+
+.moli-fourth-wall-thinking[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.moli-fourth-wall-thinking > div {
+  padding: 0 12px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.65;
+  opacity: .74;
+}
+.moli-fourth-wall-list-subtitle {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: .52;
+}
