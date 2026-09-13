@@ -591,7 +591,7 @@ export function createCustomContact({
 }
 
 
-export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, roleSources, apiOverride, statusBar } = {}) {
+export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, roleSources, worldBookPolicy, apiOverride } = {}) {
   const list = getContacts();
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
@@ -613,9 +613,9 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
       ? JSON.parse(JSON.stringify(apiOverride))
       : { enabled: false };
   }
-  if (statusBar !== undefined) {
-    contact.statusBar = statusBar && typeof statusBar === 'object'
-      ? JSON.parse(JSON.stringify(statusBar))
+  if (worldBookPolicy !== undefined && contact.kind === 'tavern') {
+    contact.worldBookPolicy = worldBookPolicy && typeof worldBookPolicy === 'object'
+      ? JSON.parse(JSON.stringify(worldBookPolicy))
       : {};
   }
   contact.updatedAt = Date.now();
