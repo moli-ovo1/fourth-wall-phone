@@ -72,6 +72,16 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
   }
 
   if (conversation.type === 'private') {
+    const automation = conversation.automation && typeof conversation.automation === 'object'
+      ? conversation.automation
+      : {};
+    conversation.automation = {
+      autoChatEnabled: Boolean(automation.autoChatEnabled),
+      autoChatProbability: Math.max(0, Math.min(100, Number.isFinite(Number(automation.autoChatProbability)) ? Math.round(Number(automation.autoChatProbability)) : 30)),
+      commentaryEnabled: Boolean(automation.commentaryEnabled),
+      commentaryProbability: Math.max(0, Math.min(100, Number.isFinite(Number(automation.commentaryProbability)) ? Math.round(Number(automation.commentaryProbability)) : 30)),
+    };
+
     if (conversation.scopeMode !== 'global') {
       conversation.scopeMode = 'current';
     }
@@ -109,6 +119,14 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
       lastSummarizedAt: Number(memory.lastSummarizedAt || 0),
       lastCondensedAt: Number(memory.lastCondensedAt || 0),
       lastAutoError: String(memory.lastAutoError || ''),
+    };
+  } else if (conversation.type === 'group') {
+    const automation = conversation.automation && typeof conversation.automation === 'object'
+      ? conversation.automation
+      : {};
+    conversation.automation = {
+      reviewEnabled: Boolean(automation.reviewEnabled),
+      reviewInterval: Math.max(1, Math.min(9999, Number.isFinite(Number(automation.reviewInterval)) ? Math.round(Number(automation.reviewInterval)) : 5)),
     };
   }
 
@@ -749,7 +767,7 @@ export function createGroupConversation(
 export function updateGroupConversation(
   scopeKey,
   groupId,
-  { name, addMemberIds, removeMemberIds } = {}
+  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval } = {}
 ) {
   const data = ensureBuiltins(scopeKey);
   const conversation = data.conversations[groupId];
@@ -787,6 +805,17 @@ export function updateGroupConversation(
   }
 
   conversation.memberIds = [...members];
+
+  applyConversationDefaults(conversation, { scopeKey });
+  if (reviewEnabled !== undefined) {
+    conversation.automation.reviewEnabled = Boolean(reviewEnabled);
+  }
+  if (reviewInterval !== undefined) {
+    const value = Number(reviewInterval);
+    if (!Number.isFinite(value)) throw new Error('自动点评间隔必须是数字');
+    conversation.automation.reviewInterval = Math.max(1, Math.min(9999, Math.round(value)));
+  }
+
   conversation.updatedAt = Date.now();
   saveScope(scopeKey, data);
 
@@ -991,6 +1020,10 @@ export function updatePrivateConversationSettings(
     timeMode,
     bodyContextEnabled,
     recentChatLimit,
+    autoChatEnabled,
+    autoChatProbability,
+    commentaryEnabled,
+    commentaryProbability,
   } = {}
 ) {
   let located = locateConversation(scopeKey, conversationKey);
@@ -1048,6 +1081,23 @@ export function updatePrivateConversationSettings(
     const value = Number(recentChatLimit);
     if (!Number.isFinite(value)) throw new Error('最近聊天条数必须是数字');
     conversation.recentChatLimit = Math.max(10, Math.min(9999, Math.round(value)));
+  }
+
+  if (autoChatEnabled !== undefined) {
+    conversation.automation.autoChatEnabled = Boolean(autoChatEnabled);
+  }
+  if (autoChatProbability !== undefined) {
+    const value = Number(autoChatProbability);
+    if (!Number.isFinite(value)) throw new Error('自动聊天概率必须是数字');
+    conversation.automation.autoChatProbability = Math.max(0, Math.min(100, Math.round(value)));
+  }
+  if (commentaryEnabled !== undefined) {
+    conversation.automation.commentaryEnabled = Boolean(commentaryEnabled);
+  }
+  if (commentaryProbability !== undefined) {
+    const value = Number(commentaryProbability);
+    if (!Number.isFinite(value)) throw new Error('自动吐槽概率必须是数字');
+    conversation.automation.commentaryProbability = Math.max(0, Math.min(100, Math.round(value)));
   }
 
   conversation.updatedAt = Date.now();
