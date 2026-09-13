@@ -18,6 +18,7 @@ import {
   deleteMessage,
   deleteMessages,
   clearConversationMessages,
+  updatePrivateConversationSettings,
 } from '../storage/data-store.js';
 import {
   getTavernCharactersSnapshot,
@@ -401,6 +402,59 @@ export function createPhonePanel({
       <input type="file" accept="image/*" data-info-avatar-input hidden>
     </section>
 
+    <section class="moli-page" data-page="conversation-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="conversation-settings-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">当前聊天设置</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-conversation-settings">
+        <div class="moli-settings-note" data-conversation-settings-scope></div>
+
+        <label class="moli-form-field">
+          <span>聊天名称</span>
+          <input type="text" maxlength="80" data-conversation-title placeholder="例如：日常 / 2018正文">
+        </label>
+
+        <div class="moli-conversation-section">
+          <div class="moli-conversation-section-title">时间模式</div>
+          <label class="moli-choice-card">
+            <input type="radio" name="moli-conversation-time-mode" value="body">
+            <span><strong>跟随正文时间</strong><small>使用当前正文 / 剧情中的时间，不把现实世界经过的时间擅自套进故事。</small></span>
+          </label>
+          <label class="moli-choice-card">
+            <input type="radio" name="moli-conversation-time-mode" value="real">
+            <span><strong>现实世界时间</strong><small>使用现实日期、时刻与真实消息间隔，适合日常陪伴聊天。</small></span>
+          </label>
+          <label class="moli-choice-card">
+            <input type="radio" name="moli-conversation-time-mode" value="none">
+            <span><strong>无时间感</strong><small>除非聊天或正文明确提到，否则不主动推断现实时间与经过时长。</small></span>
+          </label>
+        </div>
+
+        <label class="moli-switch-row moli-conversation-switch">
+          <span><strong>读取当前正文</strong><small>开启后，生成时读取当前 SillyTavern 最近正文；关闭后正文不会进入本聊天的生成上下文。</small></span>
+          <input type="checkbox" data-conversation-body-context>
+        </label>
+
+        <label class="moli-form-field moli-conversation-limit-field">
+          <span>最近聊天读取上限</span>
+          <input type="number" min="10" max="9999" step="1" inputmode="numeric" data-conversation-recent-limit>
+          <small>默认 100，可设置 10～9999。完整聊天记录不会因此删除；这里只控制每次生成优先读取多少条近期原始消息。</small>
+        </label>
+
+        <div class="moli-settings-note">
+          保存后只影响当前这个聊天实例。同一个联系人建立的其他聊天不会被一起修改。
+        </div>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="conversation-settings-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="conversation-settings-save">保存</button>
+      </footer>
+    </section>
+
     <section class="moli-page" data-page="group-members-edit">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -492,6 +546,10 @@ export function createPhonePanel({
   const promptEditorDelete = panel.querySelector('[data-action="prompt-editor-delete"]');
   const newPrivateContactName = panel.querySelector('[data-new-private-contact-name]');
   const newPrivateTitle = panel.querySelector('[data-new-private-title]');
+  const conversationSettingsScope = panel.querySelector('[data-conversation-settings-scope]');
+  const conversationTitleInput = panel.querySelector('[data-conversation-title]');
+  const conversationBodyContext = panel.querySelector('[data-conversation-body-context]');
+  const conversationRecentLimit = panel.querySelector('[data-conversation-recent-limit]');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -1111,6 +1169,75 @@ export function createPhonePanel({
     }
   }
 
+  function renderConversationSettings() {
+    const conversation = currentConversation();
+    if (!conversation || conversation.type !== 'private') {
+      toast('当前私聊不存在');
+      show('info');
+      return;
+    }
+
+    if (conversationSettingsScope) {
+      const label = conversation.scopeMode === 'global' ? '全局陪伴' : '随当前正文';
+      conversationSettingsScope.textContent = `当前聊天归属：${label}。归属类型在创建聊天时确定；这里调整的是这个聊天实例自己的时间、正文与近期消息上下文。`;
+    }
+
+    if (conversationTitleInput) {
+      conversationTitleInput.value = conversation.title || '';
+    }
+
+    const timeMode = ['real', 'body', 'none'].includes(String(conversation.timeMode))
+      ? String(conversation.timeMode)
+      : (conversation.scopeMode === 'global' ? 'real' : 'body');
+    const timeInput = panel.querySelector(`input[name="moli-conversation-time-mode"][value="${timeMode}"]`);
+    if (timeInput) timeInput.checked = true;
+
+    if (conversationBodyContext) {
+      conversationBodyContext.checked = conversation.bodyContextEnabled !== false;
+    }
+
+    if (conversationRecentLimit) {
+      const value = Number(conversation.recentChatLimit);
+      conversationRecentLimit.value = Number.isFinite(value)
+        ? String(Math.max(10, Math.min(9999, Math.round(value))))
+        : '100';
+    }
+  }
+
+  function saveConversationSettings() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    const conversationKey = currentContactId;
+    if (!scopeKey || !conversation || conversation.type !== 'private' || !conversationKey) {
+      toast('当前私聊不存在');
+      return;
+    }
+
+    const selectedTimeMode = panel.querySelector('input[name="moli-conversation-time-mode"]:checked')?.value || 'body';
+    const rawLimit = Number(conversationRecentLimit?.value || 100);
+    if (!Number.isFinite(rawLimit)) {
+      toast('最近聊天读取上限必须是数字');
+      return;
+    }
+
+    const normalizedLimit = Math.max(10, Math.min(9999, Math.round(rawLimit)));
+    if (conversationRecentLimit) conversationRecentLimit.value = String(normalizedLimit);
+
+    try {
+      updatePrivateConversationSettings(scopeKey, conversationKey, {
+        title: conversationTitleInput?.value || '',
+        timeMode: selectedTimeMode,
+        bodyContextEnabled: Boolean(conversationBodyContext?.checked),
+        recentChatLimit: normalizedLimit,
+      });
+      toast('当前聊天设置已保存');
+      show('info');
+    } catch (error) {
+      console.error('[moli小手机] save conversation settings failed:', error);
+      toast(error?.message || '保存当前聊天设置失败');
+    }
+  }
+
   function renderChatInfo() {
     const conversation = currentConversation();
 
@@ -1142,6 +1269,10 @@ export function createPhonePanel({
           <div><span>当前聊天</span><strong>${escapeHtml(conversation.title || (conversation.scopeMode === 'global' ? '全局陪伴' : '随当前正文'))}</strong></div>
           <div><span>归属</span><strong>${conversation.scopeMode === 'global' ? '全局陪伴' : '随当前正文'}</strong></div>
         </div>
+        <button type="button" class="moli-info-setting-row" data-action="conversation-settings">
+          <span>当前聊天设置</span>
+          <strong>时间 / 正文 / 上下文 ›</strong>
+        </button>
         <button type="button" class="moli-info-setting-row" data-action="new-private-chat">
           <span>＋ 新建另一个聊天</span>
           <strong>›</strong>
@@ -1435,6 +1566,10 @@ export function createPhonePanel({
 
     if (name === 'info') {
       renderChatInfo();
+    }
+
+    if (name === 'conversation-settings') {
+      renderConversationSettings();
     }
 
     if (name === 'forward-detail') {
@@ -3054,6 +3189,10 @@ export function createPhonePanel({
   });
   panel.querySelector('[data-action="new-private-confirm"]')?.addEventListener('click', confirmNewPrivateChat);
 
+  panel.querySelector('[data-action="conversation-settings-back"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="conversation-settings-cancel"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="conversation-settings-save"]')?.addEventListener('click', saveConversationSettings);
+
   panel
     .querySelectorAll(
       '[data-action="home"]'
@@ -3118,6 +3257,11 @@ export function createPhonePanel({
       const conversation = currentConversation();
       if (conversation?.type === 'private') {
         openNewPrivateChat(conversation.contactId);
+      }
+    } else if (action === 'conversation-settings') {
+      const conversation = currentConversation();
+      if (conversation?.type === 'private') {
+        show('conversation-settings');
       }
     }
   });
