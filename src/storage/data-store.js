@@ -124,9 +124,21 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     const automation = conversation.automation && typeof conversation.automation === 'object'
       ? conversation.automation
       : {};
+    const runtime = automation.reviewRuntime && typeof automation.reviewRuntime === 'object'
+      ? automation.reviewRuntime
+      : {};
     conversation.automation = {
       reviewEnabled: Boolean(automation.reviewEnabled),
       reviewInterval: Math.max(1, Math.min(9999, Number.isFinite(Number(automation.reviewInterval)) ? Math.round(Number(automation.reviewInterval)) : 5)),
+      reviewRuntime: {
+        initialized: Boolean(runtime.initialized),
+        observedAssistantCount: Math.max(0, Number.isFinite(Number(runtime.observedAssistantCount)) ? Math.round(Number(runtime.observedAssistantCount)) : 0),
+        eligibleAssistantCount: Math.max(0, Number.isFinite(Number(runtime.eligibleAssistantCount)) ? Math.round(Number(runtime.eligibleAssistantCount)) : 0),
+        lastTriggeredEligibleCount: Math.max(0, Number.isFinite(Number(runtime.lastTriggeredEligibleCount)) ? Math.round(Number(runtime.lastTriggeredEligibleCount)) : 0),
+        lastTriggeredSignature: String(runtime.lastTriggeredSignature || ''),
+        lastAttemptAt: Math.max(0, Number(runtime.lastAttemptAt || 0)),
+        lastError: String(runtime.lastError || ''),
+      },
     };
   }
 
@@ -820,6 +832,21 @@ export function updateGroupConversation(
   saveScope(scopeKey, data);
 
   return conversation;
+}
+
+
+export function updateGroupReviewRuntime(scopeKey, groupId, patch = {}) {
+  const data = ensureBuiltins(scopeKey);
+  const conversation = data.conversations[groupId];
+  if (!conversation || conversation.type !== 'group') throw new Error('群聊不存在');
+  applyConversationDefaults(conversation, { scopeKey });
+  conversation.automation.reviewRuntime = {
+    ...conversation.automation.reviewRuntime,
+    ...(patch && typeof patch === 'object' ? patch : {}),
+  };
+  conversation.updatedAt = Date.now();
+  saveScope(scopeKey, data);
+  return conversation.automation.reviewRuntime;
 }
 
 export function appendMessage(
