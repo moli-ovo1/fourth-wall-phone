@@ -54,6 +54,36 @@ function normalizeTavernRoleSources(value) {
   );
 }
 
+
+function normalizeFourthWallContactSettings(contact) {
+  if (!contact || String(contact.id || '') !== 'builtin:meta') return contact;
+  const global = contact.fourthWallGlobalSettings && typeof contact.fourthWallGlobalSettings === 'object'
+    ? contact.fourthWallGlobalSettings : {};
+  const templates = global.promptTemplates && typeof global.promptTemplates === 'object' ? global.promptTemplates : {};
+  contact.fourthWallGlobalSettings = {
+    commentary: {
+      enabled: global.commentary?.enabled === true,
+      probability: Math.max(1, Math.min(99, Number.isFinite(Number(global.commentary?.probability)) ? Math.round(Number(global.commentary.probability)) : 30)),
+    },
+    promptTemplates: {
+      topUser: String(templates.topUser || ''),
+      confirm: String(templates.confirm || ''),
+      metaProtocol: String(templates.metaProtocol || ''),
+      bottom: String(templates.bottom || ''),
+    },
+  };
+  const chat = contact.fourthWallChatSettings && typeof contact.fourthWallChatSettings === 'object'
+    ? contact.fourthWallChatSettings : {};
+  contact.fourthWallChatSettingsInitialized = contact.fourthWallChatSettingsInitialized === true;
+  contact.fourthWallChatSettings = {
+    maxChatLayers: Math.max(1, Math.min(9999, Number.isFinite(Number(chat.maxChatLayers)) ? Math.round(Number(chat.maxChatLayers)) : 20)),
+    stream: chat.stream !== false,
+    disableAssistantPrefill: chat.disableAssistantPrefill === true,
+  };
+  contact.fourthWallActiveConversationKey = String(contact.fourthWallActiveConversationKey || '');
+  return contact;
+}
+
 function normalizeConversationMemory(memoryValue) {
   const memory = memoryValue && typeof memoryValue === 'object' ? memoryValue : {};
   return {
@@ -81,6 +111,20 @@ function normalizeConversationMemory(memoryValue) {
   };
 }
 
+
+
+function normalizeFourthWallSessionState(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    memory: String(source.memory || '').trim(),
+    archivedCount: Math.max(0, Number.isFinite(Number(source.archivedCount)) ? Math.round(Number(source.archivedCount)) : 0),
+    lastContextTokens: Math.max(0, Number.isFinite(Number(source.lastContextTokens)) ? Math.round(Number(source.lastContextTokens)) : 0),
+    lastContextUpdatedAt: Math.max(0, Number(source.lastContextUpdatedAt || 0)),
+    lastSummaryAt: Math.max(0, Number(source.lastSummaryAt || 0)),
+    lastSummaryError: String(source.lastSummaryError || ''),
+    legacyMemoryMigrated: source.legacyMemoryMigrated === true,
+  };
+}
 
 function normalizeFourthWallSettings(value) {
   const source = value && typeof value === 'object' ? value : {};
@@ -152,6 +196,23 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     conversation.memory = normalizeConversationMemory(conversation.memory);
     if (String(conversation.contactId || '') === 'builtin:meta') {
       conversation.fourthWall = normalizeFourthWallSettings(conversation.fourthWall);
+      conversation.fourthWallSession = normalizeFourthWallSessionState(conversation.fourthWallSession);
+      if (!conversation.fourthWallSession.legacyMemoryMigrated) {
+        if (!conversation.fourthWallSession.memory) {
+          const legacyParts = [
+            String(conversation.memory?.longTermSummary || '').trim(),
+            ...(Array.isArray(conversation.memory?.recent)
+              ? conversation.memory.recent.map(item => String(item?.content || '').trim()).filter(Boolean)
+              : []),
+          ].filter(Boolean);
+          if (legacyParts.length) conversation.fourthWallSession.memory = legacyParts.join('\n\n');
+        }
+        conversation.fourthWallSession.legacyMemoryMigrated = true;
+      }
+      conversation.fourthWallSession.archivedCount = Math.min(
+        conversation.fourthWallSession.archivedCount,
+        conversation.messages.length
+      );
     }
   } else if (conversation.type === 'group') {
     conversation.groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
@@ -281,6 +342,7 @@ export function getContacts() {
     if (contact?.kind === 'tavern') {
       contact.roleSources = normalizeTavernRoleSources(contact.roleSources);
     }
+    normalizeFourthWallContactSettings(contact);
   }
 
   saveContacts(list);
@@ -699,7 +761,7 @@ export function createCustomContact({
 }
 
 
-export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, roleSources, worldBookPolicy, apiOverride } = {}) {
+export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, roleSources, worldBookPolicy, apiOverride, fourthWallGlobalSettings, fourthWallChatSettings, fourthWallActiveConversationKey } = {}) {
   const list = getContacts();
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
@@ -725,6 +787,35 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
     contact.worldBookPolicy = worldBookPolicy && typeof worldBookPolicy === 'object'
       ? JSON.parse(JSON.stringify(worldBookPolicy))
       : {};
+  }
+  if (String(contact.id || '') === 'builtin:meta') {
+    normalizeFourthWallContactSettings(contact);
+    if (fourthWallGlobalSettings !== undefined) {
+      const patch = fourthWallGlobalSettings && typeof fourthWallGlobalSettings === 'object' ? fourthWallGlobalSettings : {};
+      contact.fourthWallGlobalSettings = {
+        ...contact.fourthWallGlobalSettings,
+        ...patch,
+        commentary: {
+          ...contact.fourthWallGlobalSettings.commentary,
+          ...(patch.commentary && typeof patch.commentary === 'object' ? patch.commentary : {}),
+        },
+        promptTemplates: {
+          ...contact.fourthWallGlobalSettings.promptTemplates,
+          ...(patch.promptTemplates && typeof patch.promptTemplates === 'object' ? patch.promptTemplates : {}),
+        },
+      };
+    }
+    if (fourthWallChatSettings !== undefined) {
+      contact.fourthWallChatSettingsInitialized = true;
+      contact.fourthWallChatSettings = {
+        ...contact.fourthWallChatSettings,
+        ...(fourthWallChatSettings && typeof fourthWallChatSettings === 'object' ? fourthWallChatSettings : {}),
+      };
+    }
+    if (fourthWallActiveConversationKey !== undefined) {
+      contact.fourthWallActiveConversationKey = String(fourthWallActiveConversationKey || '');
+    }
+    normalizeFourthWallContactSettings(contact);
   }
   contact.updatedAt = Date.now();
   saveContacts(list);
@@ -1106,6 +1197,12 @@ export function deleteMessage(scopeKey, conversationKey, messageId) {
   if (index < 0) return false;
 
   conversation.messages.splice(index, 1);
+  if (String(conversation.contactId || '') === 'builtin:meta' && conversation.fourthWallSession) {
+    conversation.fourthWallSession.archivedCount = Math.max(
+      0,
+      Number(conversation.fourthWallSession.archivedCount || 0) - (index < Number(conversation.fourthWallSession.archivedCount || 0) ? 1 : 0)
+    );
+  }
   conversation.updatedAt = Date.now();
   saveLocatedConversation(scopeKey, located);
   return true;
@@ -1120,10 +1217,19 @@ export function deleteMessages(scopeKey, conversationKey, messageIds) {
   if (!conversation || !Array.isArray(conversation.messages)) return 0;
 
   const before = conversation.messages.length;
+  const oldArchivedCount = String(conversation.contactId || '') === 'builtin:meta'
+    ? Number(conversation.fourthWallSession?.archivedCount || 0)
+    : 0;
+  const deletedBeforeArchive = oldArchivedCount > 0
+    ? conversation.messages.slice(0, oldArchivedCount).filter(message => ids.has(String(message.id))).length
+    : 0;
   conversation.messages = conversation.messages.filter(message => !ids.has(String(message.id)));
   const deleted = before - conversation.messages.length;
 
   if (deleted > 0) {
+    if (String(conversation.contactId || '') === 'builtin:meta' && conversation.fourthWallSession) {
+      conversation.fourthWallSession.archivedCount = Math.max(0, oldArchivedCount - deletedBeforeArchive);
+    }
     conversation.updatedAt = Date.now();
     saveLocatedConversation(scopeKey, located);
   }
@@ -1142,6 +1248,10 @@ export function clearConversationMessages(scopeKey, conversationKey) {
 
   applyConversationDefaults(conversation, { scopeKey });
   conversation.messages = [];
+  if (String(conversation.contactId || '') === 'builtin:meta' && conversation.fourthWallSession) {
+    // 对齐小白X clearSession(clearMemory=false)：清聊天保留皮下长期记忆，但归档边界归零。
+    conversation.fourthWallSession.archivedCount = 0;
+  }
   conversation.unreadCount = 0;
   conversation.updatedAt = Date.now();
 
@@ -1262,6 +1372,30 @@ export function updatePrivateConversationSettings(
 }
 
 
+
+
+export function getFourthWallSessionState(scopeKey, conversationKey) {
+  const conversation = getConversation(scopeKey, conversationKey);
+  if (!conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') return null;
+  applyConversationDefaults(conversation, { scopeKey });
+  return { ...conversation.fourthWallSession };
+}
+
+export function updateFourthWallSessionState(scopeKey, conversationKey, patch = {}) {
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') {
+    throw new Error('当前聊天不是皮下会话');
+  }
+  applyConversationDefaults(conversation, { scopeKey });
+  const current = normalizeFourthWallSessionState(conversation.fourthWallSession);
+  const next = normalizeFourthWallSessionState({ ...current, ...(patch && typeof patch === 'object' ? patch : {}) });
+  next.archivedCount = Math.min(next.archivedCount, conversation.messages.length);
+  conversation.fourthWallSession = next;
+  conversation.updatedAt = Date.now();
+  saveLocatedConversation(scopeKey, located);
+  return { ...next };
+}
 
 export function getConversationMemory(scopeKey, conversationKey) {
   const conversation = getConversation(scopeKey, conversationKey);
