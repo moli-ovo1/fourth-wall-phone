@@ -12,6 +12,10 @@ export function createFloatingBall({
     const handle = documentRef.createElement('div');
     handle.id = 'moli-phone-handle';
     handle.textContent = '◫';
+    const unreadDot = documentRef.createElement('span');
+    unreadDot.className = 'moli-handle-unread-dot';
+    unreadDot.hidden = true;
+    handle.appendChild(unreadDot);
     handle.setAttribute('aria-label', 'moli小手机');
     handle.setAttribute('title', 'moli小手机');
     documentRef.body.appendChild(handle);
@@ -116,6 +120,8 @@ handle.addEventListener('pointerup', event => {
         element: handle,
 
         applyPosition,
+
+        setUnread(active) { unreadDot.hidden = !active; handle.classList.toggle('has-unread', Boolean(active)); },
 
         clampToViewport() {
             uiState.handleX = Math.min(uiState.handleX, windowRef.innerWidth - HANDLE_SIZE);

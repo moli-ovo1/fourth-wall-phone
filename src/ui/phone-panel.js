@@ -206,6 +206,7 @@ export function createPhonePanel({
         <button class="moli-secondary-btn" data-action="multi-forward">转发</button>
         <button class="moli-primary-btn moli-danger-btn" data-action="multi-delete">删除</button>
       </div>
+      <div class="moli-typing-indicator" data-typing-indicator hidden><span>对方正在输入</span><b>•••</b></div>
       <footer class="moli-compose">
         <button class="moli-plus" data-action="more" aria-label="更多">＋</button>
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
@@ -736,6 +737,7 @@ export function createPhonePanel({
   const multiBar = panel.querySelector('[data-multi-bar]');
   const multiCount = panel.querySelector('[data-multi-count]');
   const compose = panel.querySelector('.moli-compose');
+  const typingIndicator = panel.querySelector('[data-typing-indicator]');
   const forwardSheet = panel.querySelector('[data-forward-sheet]');
   const forwardTargets = panel.querySelector('[data-forward-targets]');
   const forwardDetail = panel.querySelector('[data-forward-detail]');
@@ -3284,6 +3286,7 @@ export function createPhonePanel({
   }
 
   function setGenerationBusy(busy) {
+    if (typingIndicator) typingIndicator.hidden = !busy;
     if (!sendButton) return;
     sendButton.textContent = busy ? '停止' : '发送';
     sendButton.classList.toggle('is-generating', Boolean(busy));
@@ -4159,6 +4162,16 @@ export function createPhonePanel({
     }
   });
 
+  const externalGenerationState = event => {
+    const detail = event?.detail || {};
+    if (detail.scopeKey && detail.scopeKey !== getScopeKey?.()) return;
+    if (detail.conversationKey !== currentContactId) return;
+    const chatPage = panel.querySelector('[data-page="chat"]');
+    if (!panel.classList.contains('open') || !chatPage?.classList.contains('active')) return;
+    if (typingIndicator) typingIndicator.hidden = !detail.active;
+  };
+  windowRef.addEventListener('moli:generation-state', externalGenerationState);
+
   const externalConversationUpdate = event => {
     const detail = event?.detail || {};
     if (detail.scopeKey && detail.scopeKey !== getScopeKey?.()) return;
@@ -4196,6 +4209,7 @@ open(handleElement) {
 
     destroy() {
       windowRef.removeEventListener('moli:conversation-updated', externalConversationUpdate);
+      windowRef.removeEventListener('moli:generation-state', externalGenerationState);
       panel.remove();
     },
 
