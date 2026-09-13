@@ -323,10 +323,21 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
     messages: syntheticMessages,
     memory: modeMemory,
   };
-  const recentBody = syntheticConversation.bodyContextEnabled === false
+  let recentBody = syntheticConversation.bodyContextEnabled === false
     ? null
-    : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 });
+    : getRecentTavernBody({
+        messageLimit: reviewTarget?.content ? 6 : 24,
+        charLimit: reviewTarget?.content ? 8000 : 24000,
+      });
+  // Review 已单独携带 PRIMARY REVIEW TARGET。这里仅保留少量前文作为 SUPPORTING CONTEXT，
+  // 并移除与目标正文完全相同的 assistant 消息，避免把同一大段正文重复注入两遍导致请求变重/超时。
+  if (reviewTarget?.content && recentBody?.messages?.length) {
+    const targetText = String(reviewTarget.content || '').trim();
+    const filtered = recentBody.messages.filter(message => !(message.role === 'assistant' && String(message.content || '').trim() === targetText));
+    recentBody = { ...recentBody, messages: filtered, textLength: filtered.reduce((sum, message) => sum + String(message.content || '').length, 0) };
+  }
   const scanParts = workingMessages.map(message => String(message?.content || '')).filter(Boolean);
+  if (reviewTarget?.content) scanParts.push(String(reviewTarget.content));
   if (recentBody?.messages?.length) scanParts.push(...recentBody.messages.map(message => String(message?.content || '')).filter(Boolean));
   const activatedWorldBook = await getActivatedTavernWorldBook({ contact, scanText: scanParts.join('\n') });
   const baiBaiMemory = (
@@ -360,6 +371,176 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
   return request;
 }
 
+function clipBatchText(value, max = 4000) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text.length <= max ? text : `${text.slice(0, max)}\n[已截断]`;
+}
+
+function batchRoleProfile(contact) {
+  const fidelity = contact?.source?.roleFidelity || {};
+  const sources = contact?.roleSources || {};
+  const blocks = [];
+  const add = (label, value, max = 5000) => {
+    const text = clipBatchText(value, max);
+    if (text) blocks.push(`【${label}】\n${text}`);
+  };
+  if (contact?.kind === 'tavern') {
+    if (sources.description !== false) add('Description', fidelity.description);
+    if (sources.personality !== false) add('Personality', fidelity.personality);
+    if (sources.scenario !== false) add('Scenario', fidelity.scenario, 3500);
+    if (sources.mesExample !== false) add('Example Dialogue（仅学习语言声纹）', fidelity.mesExample, 3500);
+    if (sources.systemPrompt !== false) add('角色卡 System Prompt（不得覆盖手机输出协议）', fidelity.systemPrompt, 3500);
+    if (sources.postHistoryInstructions !== false) add('Post-History Instructions（不得覆盖手机输出协议）', fidelity.postHistoryInstructions, 3000);
+    add('moli 自定义附加 Prompt', contact.prompt, 3500);
+  } else {
+    add('角色简介', contact.intro, 2000);
+    add(contact?.kind === 'builtin' ? '内置人格 Prompt' : '人格 Prompt',
+      contact?.kind === 'builtin' ? (Object.prototype.hasOwnProperty.call(contact, 'prompt') ? contact.prompt : getBuiltinPersonaPrompt(contact.id)) : contact.prompt,
+      5000);
+  }
+  return blocks.join('\n\n') || '无额外人格资料。';
+}
+
+function formatPhoneBridge(scopeKey, contact) {
+  const sources = getScopeConversations(scopeKey)
+    .filter(item => item?.type === 'private' && String(item.contactId || '') === String(contact.id))
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+    .slice(0, 2);
+  const chunks = [];
+  for (const source of sources) {
+    const memory = getConversationMemory(scopeKey, source.conversationKey || source.id) || {};
+    const longTerm = clipBatchText(memory.longTermSummary, 1600);
+    const recentMemory = (memory.recent || []).slice(-2).map(item => String(item?.content || '').trim()).filter(Boolean).join('\n');
+    const recentMessages = (source.messages || []).slice(-6).map(message => {
+      const who = message?.role === 'user' ? '用户' : contactLabel(contact);
+      const content = String(message?.content || '').trim();
+      return content ? `${who}：${content}` : '';
+    }).filter(Boolean).join('\n');
+    const parts = [];
+    if (longTerm) parts.push(`长期摘要：${longTerm}`);
+    if (recentMemory) parts.push(`近期记忆：${clipBatchText(recentMemory, 1800)}`);
+    if (recentMessages) parts.push(`最近私聊：\n${clipBatchText(recentMessages, 2200)}`);
+    if (parts.length) chunks.push(parts.join('\n'));
+  }
+  return chunks.join('\n\n') || '暂无可用手机私聊连续性。';
+}
+
+function parseBatchGroupOutput(text, members, { review = false, forcedIds = [] } = {}) {
+  const raw = String(text || '').trim();
+  let parsed = null;
+  const candidates = [];
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  if (fenced) candidates.push(fenced.trim());
+  const object = raw.match(/\{[\s\S]*\}/)?.[0];
+  if (object) candidates.push(object);
+  const array = raw.match(/\[[\s\S]*\]/)?.[0];
+  if (array) candidates.push(array);
+  candidates.push(raw);
+  for (const candidate of candidates) {
+    try { parsed = JSON.parse(candidate); break; } catch {}
+  }
+  let items = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.messages) ? parsed.messages : []);
+  if (!items.length) {
+    const tagPattern = /<speaker\s+id=["']?([^"'>\s]+)["']?\s*>([\s\S]*?)<\/speaker>/gi;
+    let match;
+    while ((match = tagPattern.exec(raw))) items.push({ speakerId: match[1], content: match[2] });
+  }
+  const byId = new Map(members.map(member => [String(member.id), member]));
+  const byName = new Map(members.map(member => [contactLabel(member), member]));
+  const seen = new Set();
+  const replies = [];
+  for (const item of items) {
+    const id = String(item?.speakerId ?? item?.id ?? '').trim();
+    const name = String(item?.speaker ?? item?.name ?? '').trim();
+    const member = byId.get(id) || byName.get(name);
+    if (!member || seen.has(String(member.id))) continue;
+    let content = String(item?.content ?? item?.message ?? item?.text ?? '').trim();
+    if (!content || /^SKIP$/i.test(content)) continue;
+    content = content.slice(0, review ? 100 : 80);
+    seen.add(String(member.id));
+    replies.push({ contact: member, messages: [content], text: content });
+  }
+  if (!review) {
+    const required = forcedIds.map(String);
+    const missing = required.filter(id => !seen.has(id));
+    if (missing.length) {
+      throw new Error(`批量群聊返回缺少被 @ 成员：${missing.map(id => contactLabel(byId.get(id))).filter(Boolean).join('、')}`);
+    }
+  }
+  return replies;
+}
+
+async function buildBatchGroupRequest({ scopeKey, conversation, members, reviewTarget = null } = {}) {
+  const review = Boolean(reviewTarget?.content);
+  const groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
+  if (review && groupMode === 'role-chat') throw new Error('角色闲聊模式不运行正文自动点评');
+  const readingMode = groupMode === 'reading';
+  const messages = Array.isArray(conversation.messages) ? conversation.messages : [];
+  const membersById = new Map(members.map(item => [String(item.id), item]));
+  const groupHistory = messages.slice(-Math.min(40, Math.max(8, Number(conversation.recentChatLimit) || 40)))
+    .map(message => {
+      if (message?.role === 'user') return `用户：${String(message?.content || '').trim()}`;
+      const member = membersById.get(String(message?.senderId || ''));
+      return `${member ? contactLabel(member) : String(message?.senderSnapshot?.name || '群成员')}：${String(message?.content || '').trim()}`;
+    }).filter(Boolean).join('\n');
+
+  const groupMemory = getConversationMemory(scopeKey, conversation.conversationKey || conversation.id) || {};
+  const recentMemory = (groupMemory.recent || []).filter(item => groupMode === 'reading'
+    ? (!item?.sourceMode || item.sourceMode === 'reading')
+    : (!item?.sourceMode || item.sourceMode === 'role-chat'))
+    .slice(-4).map(item => String(item?.content || '').trim()).filter(Boolean).join('\n\n');
+  const longMemory = groupMode === 'reading'
+    ? String(groupMemory.longTermByMode?.reading || groupMemory.longTermSummary || '')
+    : String(groupMemory.longTermByMode?.roleChat || '');
+
+  let recentBody = null;
+  if (readingMode && conversation.bodyContextEnabled !== false) {
+    recentBody = getRecentTavernBody({
+      messageLimit: review ? 4 : 10,
+      charLimit: review ? 6000 : 12000,
+    });
+  }
+  if (review && reviewTarget?.content && recentBody?.messages?.length) {
+    const target = String(reviewTarget.content || '').trim();
+    recentBody = {
+      ...recentBody,
+      messages: recentBody.messages.filter(message => !(message.role === 'assistant' && String(message.content || '').trim() === target)),
+    };
+  }
+  const bodyText = recentBody?.messages?.map(message => `${message?.name || (message?.role === 'user' ? '用户' : '正文角色')}：${String(message?.content || '').trim()}`).filter(Boolean).join('\n') || '';
+  const scanText = [groupHistory, recentMemory, longMemory, bodyText, reviewTarget?.content || ''].filter(Boolean).join('\n');
+
+  const memberBlocks = [];
+  for (const member of members) {
+    assertContactReady(member);
+    const worldBook = await getActivatedTavernWorldBook({ contact: member, scanText });
+    memberBlocks.push(
+      `===== MEMBER PRIVATE ZONE: ${contactLabel(member)} | id=${member.id} =====\n`
+      + `【身份资料】\n${batchRoleProfile(member)}\n\n`
+      + `【本成员自己的世界书】\n${clipBatchText(worldBook?.text || '', 6000) || '本轮无激活条目。'}\n\n`
+      + `【本成员自己的手机连续性｜仅允许 ${contactLabel(member)} 使用】\n${formatPhoneBridge(scopeKey, member)}\n`
+      + `===== END PRIVATE ZONE =====`
+    );
+  }
+
+  const selfRules = members.filter(member => member?.kind === 'tavern').map(member =>
+    `- ${contactLabel(member)}：正文中与你同名同身份的人就是你本人；谈到自己必须保持第一人称本人立场，不得把自己称为“他/她/这个角色”。`
+  ).join('\n');
+
+  const modeText = readingMode
+    ? '围读会：所有成员共同看到下方这一份当前正文上下文；不要再为任何成员加载另一套个人正文历史或柏宝书。'
+    : '角色闲聊：禁止使用当前正文、柏宝书或成员个人正文历史；只依据群聊天、群手机记忆、成员身份资料/世界书和该成员自己的手机连续性。';
+  const reviewBlock = review
+    ? `\n【PRIMARY REVIEW TARGET｜本轮唯一点评对象】\n签名：${String(reviewTarget.signature || '')}\n${String(reviewTarget.content || '')}\n【边界】所有成员都必须点评这一份触发正文；群历史、群记忆和辅助正文只能帮助理解，绝不能成为点评对象。\n`
+    : '';
+
+  const system = `你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择与发言生成，禁止再请求第二个编排器。\n\n【群模式】${modeText}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${review ? '【自动点评】本轮所有列出的成员各输出 1 个气泡，每个最多100个中文字符；不要 SKIP。' : '【普通群聊】根据相关度和插话价值选择 1～3 人；被 @ 的成员必须参与；不要机械全员轮流。每人只输出1个气泡，每个最多80个中文字符。无话可说的成员不要输出。'}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。speakerId 必须逐字使用下方提供的 id。${reviewBlock}`;
+
+  const shared = `【群聊】${String(conversation.name || '群聊')}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchText(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || '暂无可确认正文上下文'}` : ''}\n\n${memberBlocks.join('\n\n')}`;
+  return { system, messages: [{ role: 'user', content: shared }] };
+}
+
 export async function generateGroupReply({ scopeKey, conversationKey, signal, onDelta } = {}) {
   if (!scopeKey || !conversationKey) throw new Error('当前群聊不可用');
   const conversation = getConversation(scopeKey, conversationKey);
@@ -367,65 +548,21 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   const allContacts = getContacts();
   const members = (conversation.memberIds || []).map(id => allContacts.find(item => String(item.id) === String(id))).filter(Boolean).map(hydratedContact);
   if (!members.length) throw new Error('群聊没有可用成员');
-  members.forEach(assertContactReady);
-
   const messages = Array.isArray(conversation.messages) ? conversation.messages : [];
   let trailingUsers = 0;
   for (let i = messages.length - 1; i >= 0 && messages[i]?.role === 'user'; i -= 1) trailingUsers += 1;
   if (!trailingUsers) throw new Error('先发送一条消息，再空输入触发群聊回复');
-
   const forcedIds = mentionedMemberIds(messages, members);
-  const currentUserStart = Math.max(0, messages.length - trailingUsers);
-  const previousSpeakerIds = [];
-  for (let i = currentUserStart - 1; i >= 0 && messages[i]?.role === 'assistant'; i -= 1) {
-    const id = String(messages[i]?.senderId || '');
-    if (id && !previousSpeakerIds.includes(id)) previousSpeakerIds.unshift(id);
-  }
-  const orchestratorConfig = resolveApiRuntimeConfig(getApiSettings());
-  assertApiConfig(orchestratorConfig);
-  const recentUserText = messages.slice(-Math.max(trailingUsers, 8)).map(message => groupMessageText(message, new Map(members.map(item => [String(item.id), item])))).filter(Boolean).join('\n');
-  const roster = members.map(member => `- id=${member.id}; 名称=${contactLabel(member)}; 简述=${shortContactDescription(member)}${forcedIds.includes(member.id) ? '; 本轮被@，必须参与' : ''}`).join('\n');
-  const orchestratorRequest = {
-    system: '你是群聊轻量发言编排器，只决定本轮哪些成员值得说话以及顺序，不代写任何成员内容。按话题相关度、角色立场、被@情况和插话价值选择。通常选择1～3名最值得说话的成员，只有确有必要时才可到4名；禁止全员轮流报到。被@成员必须参与，除被@者外最多再选2人。每一轮必须重新判断，上一轮入选绝不等于本轮继续入选；当有同等相关的其他成员时，优先避免连续重复完全相同的发言组合。只输出 JSON 数组，元素必须是给定成员 id。',
-    messages: [{ role: 'user', content: `群成员：\n${roster}\n\n最近群聊：\n${recentUserText}\n\n上一轮发言者：${previousSpeakerIds.join('、') || '无'}。这只是去重复参考，不得压过本轮真实相关度。\n\n输出本轮 speaker id 顺序。` }],
-  };
-  const orchestrated = await runGeneration(orchestratorConfig, orchestratorRequest, { signal });
-  let speakerIds = parseSpeakerOrder(orchestrated.text, members, forcedIds).slice(0, Math.min(4, Math.max(1, forcedIds.length + 2)));
-  if (!speakerIds.length) throw new Error('群聊编排器没有选出发言成员，可再次空输入重试');
-  if (members.length > speakerIds.length && speakerIds.length > 1 && previousSpeakerIds.length === speakerIds.length) {
-    const sameSet = speakerIds.every(id => previousSpeakerIds.includes(String(id)));
-    if (sameSet) {
-      let replaceAt = -1;
-      for (let i = speakerIds.length - 1; i >= 0; i -= 1) { if (!forcedIds.map(String).includes(String(speakerIds[i]))) { replaceAt = i; break; } }
-      const alternate = members.find(member => !speakerIds.map(String).includes(String(member.id)));
-      if (replaceAt >= 0 && alternate) speakerIds[replaceAt] = String(alternate.id);
-    }
-  }
 
-  const workingMessages = messages.map(message => ({ ...message }));
-  const replies = [];
-  for (const speakerId of speakerIds) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const speaker = members.find(member => String(member.id) === String(speakerId));
-    if (!speaker) continue;
-    const request = await buildGroupSpeakerRequest({ scopeKey, conversation, contact: speaker, members, workingMessages });
-    const config = resolveContactApiConfig(speaker);
-    const result = await runGeneration(config, request, {
-      signal,
-      onDelta: (chunk, fullText) => onDelta?.(chunk, fullText, speaker),
-    });
-    const { parseGeneratedMessages } = await import('./message-parser.js');
-    const generated = parseGeneratedMessages(result.text).slice(0, 1).map(text => String(text).slice(0, 80));
-    if (!generated.length) continue;
-    replies.push({ contact: speaker, messages: generated, text: result.text });
-    generated.forEach(content => workingMessages.push({
-      role: 'assistant', content, senderId: speaker.id,
-      senderSnapshot: { name: contactLabel(speaker), avatar: contactAvatar(speaker) },
-      source: 'generation', ts: Date.now(),
-    }));
-  }
-  if (!replies.length) throw new Error('本轮群成员没有返回可用消息');
-  return { replies, speakerIds };
+  // moli55：普通群聊不再“编排器1次 + 每位成员N次”。选人与发言合并成一次主 API 请求。
+  const request = await buildBatchGroupRequest({ scopeKey, conversation, members });
+  const config = resolveApiRuntimeConfig(getApiSettings());
+  assertApiConfig(config);
+  const result = await runGeneration(config, request, { signal });
+  const replies = parseBatchGroupOutput(result.text, members, { review: false, forcedIds });
+  if (!replies.length) throw new Error('本轮群聊批量生成没有返回可用消息');
+  onDelta?.('', '', replies[0]?.contact || null);
+  return { replies, speakerIds: replies.map(item => item.contact.id), batch: true };
 }
 
 export async function generateGroupReview({ scopeKey, conversationKey, signal, onDelta, reviewTarget = null } = {}) {
@@ -433,53 +570,20 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
   const conversation = getConversation(scopeKey, conversationKey);
   if (!conversation || conversation.type !== 'group') throw new Error('群聊不存在');
   if (conversation.groupMode === 'role-chat') throw new Error('角色闲聊模式不运行正文自动点评');
-
   const allContacts = getContacts();
-  const members = (conversation.memberIds || [])
-    .map(id => allContacts.find(item => String(item.id) === String(id)))
-    .filter(Boolean)
-    .map(hydratedContact);
+  const members = (conversation.memberIds || []).map(id => allContacts.find(item => String(item.id) === String(id))).filter(Boolean).map(hydratedContact);
   if (!members.length) throw new Error('群聊没有可用成员');
-  members.forEach(assertContactReady);
 
-  const order = [...members];
-  for (let i = order.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
-  }
-
-  const workingMessages = (conversation.messages || []).map(message => ({ ...message }));
-  const replies = [];
-  for (const speaker of order) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const request = await buildGroupSpeakerRequest({
-      scopeKey,
-      conversation,
-      contact: speaker,
-      members,
-      workingMessages,
-      reviewTarget,
-    });
-    request.system = `这是群聊「${String(conversation.name || '群聊')}」的一轮自动点评。请严格点评 system 中标记为 PRIMARY REVIEW TARGET 的触发正文快照；群聊历史与群记忆仅用于理解。${speaker?.kind === 'tavern' ? '正文中与你同名同身份的人就是你本人；必须以第一人称本人立场回应，不得把自己称为“他/她/这个角色”，也不得变成剧情分析员。' : ''}请以「${contactLabel(speaker)}」自己的立场点评这次 PRIMARY REVIEW TARGET 正文快照及其局势，不要替其他成员发言；前面本轮已经出现的群消息都是真实新消息，要自然接着讨论。可以赞同、反驳、补充或改变重点。保持线上群聊口吻，不要写小说旁白。\n\n${request.system}`;
-    const config = resolveContactApiConfig(speaker);
-    const result = await runGeneration(config, request, {
-      signal,
-      onDelta: (chunk, fullText) => onDelta?.(chunk, fullText, speaker),
-    });
-    const { parseGeneratedMessages } = await import('./message-parser.js');
-    const generated = parseGeneratedMessages(result.text).slice(0, 1).map(text => String(text).slice(0, 100));
-    if (!generated.length) continue;
-    replies.push({ contact: speaker, messages: generated, text: result.text });
-    generated.forEach(content => workingMessages.push({
-      role: 'assistant',
-      content,
-      senderId: speaker.id,
-      senderSnapshot: { name: contactLabel(speaker), avatar: contactAvatar(speaker) },
-      source: 'review',
-      ts: Date.now(),
-    }));
-  }
-
-  if (!replies.length) throw new Error('本轮自动点评没有返回可用消息');
-  return { replies, speakerIds: order.map(item => item.id) };
+  // moli55：自动点评全员也只调用一次主 API，再按 speakerId 拆成独立气泡。
+  const request = await buildBatchGroupRequest({ scopeKey, conversation, members, reviewTarget });
+  const config = resolveApiRuntimeConfig(getApiSettings());
+  assertApiConfig(config);
+  const result = await runGeneration(config, request, { signal });
+  const replies = parseBatchGroupOutput(result.text, members, { review: true });
+  if (!replies.length) throw new Error('自动点评批量生成没有返回可用消息');
+  const returned = new Set(replies.map(item => String(item.contact.id)));
+  const missing = members.filter(member => !returned.has(String(member.id))).map(contactLabel);
+  const failures = missing.length ? [{ name: missing.join('、'), error: '模型未按批量格式返回这些成员的点评' }] : [];
+  onDelta?.('', '', replies[0]?.contact || null);
+  return { replies, failures, speakerIds: replies.map(item => item.contact.id), batch: true };
 }
