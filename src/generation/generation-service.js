@@ -338,17 +338,32 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   if (!trailingUsers) throw new Error('先发送一条消息，再空输入触发群聊回复');
 
   const forcedIds = mentionedMemberIds(messages, members);
+  const currentUserStart = Math.max(0, messages.length - trailingUsers);
+  const previousSpeakerIds = [];
+  for (let i = currentUserStart - 1; i >= 0 && messages[i]?.role === 'assistant'; i -= 1) {
+    const id = String(messages[i]?.senderId || '');
+    if (id && !previousSpeakerIds.includes(id)) previousSpeakerIds.unshift(id);
+  }
   const orchestratorConfig = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(orchestratorConfig);
   const recentUserText = messages.slice(-Math.max(trailingUsers, 8)).map(message => groupMessageText(message, new Map(members.map(item => [String(item.id), item])))).filter(Boolean).join('\n');
   const roster = members.map(member => `- id=${member.id}; 名称=${contactLabel(member)}; 简述=${shortContactDescription(member)}${forcedIds.includes(member.id) ? '; 本轮被@，必须参与' : ''}`).join('\n');
   const orchestratorRequest = {
-    system: '你是群聊轻量发言编排器，只决定本轮哪些成员值得说话以及顺序，不代写任何成员内容。按话题相关度、角色立场、被@情况和插话价值选择。通常选择1～3名最值得说话的成员，只有确有必要时才可到4名；禁止全员轮流报到。被@成员必须参与，除被@者外最多再选2人。只输出 JSON 数组，元素必须是给定成员 id。',
-    messages: [{ role: 'user', content: `群成员：\n${roster}\n\n最近群聊：\n${recentUserText}\n\n输出本轮 speaker id 顺序。` }],
+    system: '你是群聊轻量发言编排器，只决定本轮哪些成员值得说话以及顺序，不代写任何成员内容。按话题相关度、角色立场、被@情况和插话价值选择。通常选择1～3名最值得说话的成员，只有确有必要时才可到4名；禁止全员轮流报到。被@成员必须参与，除被@者外最多再选2人。每一轮必须重新判断，上一轮入选绝不等于本轮继续入选；当有同等相关的其他成员时，优先避免连续重复完全相同的发言组合。只输出 JSON 数组，元素必须是给定成员 id。',
+    messages: [{ role: 'user', content: `群成员：\n${roster}\n\n最近群聊：\n${recentUserText}\n\n上一轮发言者：${previousSpeakerIds.join('、') || '无'}。这只是去重复参考，不得压过本轮真实相关度。\n\n输出本轮 speaker id 顺序。` }],
   };
   const orchestrated = await runGeneration(orchestratorConfig, orchestratorRequest, { signal });
-  const speakerIds = parseSpeakerOrder(orchestrated.text, members, forcedIds).slice(0, Math.min(4, Math.max(1, forcedIds.length + 2)));
+  let speakerIds = parseSpeakerOrder(orchestrated.text, members, forcedIds).slice(0, Math.min(4, Math.max(1, forcedIds.length + 2)));
   if (!speakerIds.length) throw new Error('群聊编排器没有选出发言成员，可再次空输入重试');
+  if (members.length > speakerIds.length && speakerIds.length > 1 && previousSpeakerIds.length === speakerIds.length) {
+    const sameSet = speakerIds.every(id => previousSpeakerIds.includes(String(id)));
+    if (sameSet) {
+      let replaceAt = -1;
+      for (let i = speakerIds.length - 1; i >= 0; i -= 1) { if (!forcedIds.map(String).includes(String(speakerIds[i]))) { replaceAt = i; break; } }
+      const alternate = members.find(member => !speakerIds.map(String).includes(String(member.id)));
+      if (replaceAt >= 0 && alternate) speakerIds[replaceAt] = String(alternate.id);
+    }
+  }
 
   const workingMessages = messages.map(message => ({ ...message }));
   const replies = [];
