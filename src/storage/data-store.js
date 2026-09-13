@@ -80,6 +80,10 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
       autoChatProbability: Math.max(0, Math.min(100, Number.isFinite(Number(automation.autoChatProbability)) ? Math.round(Number(automation.autoChatProbability)) : 30)),
       commentaryEnabled: Boolean(automation.commentaryEnabled),
       commentaryProbability: Math.max(0, Math.min(100, Number.isFinite(Number(automation.commentaryProbability)) ? Math.round(Number(automation.commentaryProbability)) : 30)),
+      unreadAutoRounds: Math.max(0, Number.isFinite(Number(automation.unreadAutoRounds)) ? Math.round(Number(automation.unreadAutoRounds)) : 0),
+      autoSuspended: Boolean(automation.autoSuspended),
+      lastBodyAssistantCount: Math.max(0, Number.isFinite(Number(automation.lastBodyAssistantCount)) ? Math.round(Number(automation.lastBodyAssistantCount)) : 0),
+      lastAutoChatAt: Math.max(0, Number(automation.lastAutoChatAt || 0)),
     };
 
     if (conversation.scopeMode !== 'global') {
@@ -130,6 +134,8 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     conversation.automation = {
       reviewEnabled: Boolean(automation.reviewEnabled),
       reviewInterval: Math.max(1, Math.min(9999, Number.isFinite(Number(automation.reviewInterval)) ? Math.round(Number(automation.reviewInterval)) : 5)),
+      unreadAutoRounds: Math.max(0, Number.isFinite(Number(automation.unreadAutoRounds)) ? Math.round(Number(automation.unreadAutoRounds)) : 0),
+      autoSuspended: Boolean(automation.autoSuspended),
       reviewRuntime: {
         initialized: Boolean(runtime.initialized),
         observedAssistantCount: Math.max(0, Number.isFinite(Number(runtime.observedAssistantCount)) ? Math.round(Number(runtime.observedAssistantCount)) : 0),
@@ -961,7 +967,9 @@ export function markConversationRead(scopeKey, conversationKey) {
 
   const conversation = applyConversationDefaults(located.conversation, { scopeKey });
   conversation.unreadCount = 0;
+  if (conversation.automation) { conversation.automation.unreadAutoRounds = 0; conversation.automation.autoSuspended = false; }
   saveLocatedConversation(scopeKey, located);
+  window.dispatchEvent(new CustomEvent('moli:unread-changed', { detail: { scopeKey, conversationKey } }));
 
   return conversation;
 }
@@ -973,7 +981,22 @@ export function incrementConversationUnread(scopeKey, conversationKey, amount = 
   const conversation = applyConversationDefaults(located.conversation, { scopeKey });
   conversation.unreadCount += Math.max(0, Number(amount) || 0);
   saveLocatedConversation(scopeKey, located);
+  window.dispatchEvent(new CustomEvent('moli:unread-changed', { detail: { scopeKey, conversationKey } }));
 
+  return conversation;
+}
+
+export function recordAutomaticUnreadRound(scopeKey, conversationKey, messageCount = 1) {
+  const located = locateConversation(scopeKey, conversationKey);
+  if (!located) return null;
+  const conversation = applyConversationDefaults(located.conversation, { scopeKey });
+  conversation.unreadCount += Math.max(0, Number(messageCount) || 0);
+  if (conversation.automation) {
+    conversation.automation.unreadAutoRounds = Math.max(0, Number(conversation.automation.unreadAutoRounds || 0)) + 1;
+    if (conversation.automation.unreadAutoRounds >= 3) conversation.automation.autoSuspended = true;
+  }
+  saveLocatedConversation(scopeKey, located);
+  window.dispatchEvent(new CustomEvent('moli:unread-changed', { detail: { scopeKey, conversationKey } }));
   return conversation;
 }
 
@@ -1289,4 +1312,15 @@ export function getContactContextSources(
       };
     })
     .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export function updatePrivateAutomationRuntime(scopeKey, conversationKey, patch = {}) {
+  const located = locateConversation(scopeKey, conversationKey);
+  if (!located) return null;
+  const conversation = applyConversationDefaults(located.conversation, { scopeKey });
+  if (conversation.type !== 'private') return null;
+  Object.assign(conversation.automation, patch || {});
+  conversation.updatedAt = Date.now();
+  saveLocatedConversation(scopeKey, located);
+  return conversation.automation;
 }
