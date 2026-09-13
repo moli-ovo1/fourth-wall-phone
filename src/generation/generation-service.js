@@ -1,8 +1,9 @@
+import { getContext as getTavernContext } from '../../../../../extensions.js';
 import {
   getContacts,
   getConversation,
 } from '../storage/data-store.js';
-import { getApiSettings } from '../storage/api-settings.js';
+import { getApiSettings, resolveApiRuntimeConfig } from '../storage/api-settings.js';
 import { generateProviderText } from '../api/providers/provider-registry.js';
 import {
   getTavernCharacterSnapshot,
@@ -16,12 +17,10 @@ function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
 }
 
-function assertIndependentConfig(config) {
-  if (config?.source === 'tavern') {
-    throw new Error('“使用酒馆当前 API”将在兼容层接入后开放生成');
-  }
+function assertApiConfig(config) {
+  if (config?.source === 'tavern') return;
   if (!String(config?.model || '').trim()) {
-    throw new Error('请先在设置中填写模型 ID');
+    throw new Error('请先在 API 设置中选择或填写模型');
   }
 }
 
@@ -105,8 +104,11 @@ export async function generatePrivateReply({
   const contact = hydratedContact(storedContact);
   assertContactReady(contact);
 
-  const config = getApiSettings();
-  assertIndependentConfig(config);
+  const rawConfig = contact?.apiOverride?.enabled === true
+    ? contact.apiOverride.config
+    : getApiSettings();
+  const config = resolveApiRuntimeConfig(rawConfig);
+  assertApiConfig(config);
 
   // 同一联系人可以拥有彼此独立的多个私聊现实。
   // 在用户显式开放跨会话记忆之前，不默认把“同一联系人”的其他私聊注入当前生成，
@@ -128,7 +130,26 @@ export async function generatePrivateReply({
     historyLimit: conversation.recentChatLimit || 100,
   });
 
-  const result = await generateProviderText(config, request, { signal, onDelta });
+  let result;
+  if (config.source === 'tavern') {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const prompt = (Array.isArray(request?.messages) ? request.messages : [])
+      .map(item => `${item?.role === 'assistant' ? 'Assistant' : 'User'}: ${String(item?.content || '')}`)
+      .join('\n\n');
+    const generateRaw = getTavernContext?.()?.generateRaw;
+    if (typeof generateRaw !== 'function') {
+      throw new Error('当前 SillyTavern 未提供 generateRaw 接口');
+    }
+    const text = String(await generateRaw({
+      prompt,
+      systemPrompt: String(request?.system || ''),
+    }) || '').trim();
+    if (!text) throw new Error('酒馆当前 API 返回了空回复');
+    onDelta?.(text, text);
+    result = { text, raw: null };
+  } else {
+    result = await generateProviderText(config, request, { signal, onDelta });
+  }
 
   return {
     ...result,
