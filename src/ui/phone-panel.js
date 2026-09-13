@@ -26,6 +26,7 @@ import {
 } from '../storage/data-store.js';
 import {
   getTavernCharactersSnapshot,
+  getCurrentTavernCharacterSnapshot,
 } from '../core/tavern-contacts.js';
 import { getCurrentTavernStoryTimeState } from '../core/tavern-context.js';
 import {
@@ -52,7 +53,7 @@ import {
 import { generatePrivateReply, generateGroupReply } from '../generation/generation-service.js';
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
-import { parseGeneratedMessages, previewGeneratedMessages } from '../generation/message-parser.js';
+import { parseGeneratedMessages, previewGeneratedMessages, parseFourthWallResponse, previewFourthWallResponse } from '../generation/message-parser.js';
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
 import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
@@ -861,17 +862,25 @@ export function createPhonePanel({
     .replaceAll('\"', '&quot;')
     .replaceAll("'", '&#39;');
 
-  const displayName = item =>
-    item?.remark ||
-    item?.displayName ||
-    item?.name ||
-    item?.source?.originalName ||
-    '未命名';
+  const isFourthWallContact = item => String(item?.id || '') === 'builtin:meta';
 
-  const avatarUrl = item =>
-    item?.customAvatar ||
-    item?.source?.originalAvatarUrl ||
-    '';
+  const displayName = item =>
+    isFourthWallContact(item)
+      ? '皮下'
+      : (
+        item?.remark ||
+        item?.displayName ||
+        item?.name ||
+        item?.source?.originalName ||
+        '未命名'
+      );
+
+  const avatarUrl = item => {
+    if (isFourthWallContact(item)) {
+      return String(getCurrentTavernCharacterSnapshot()?.avatarUrl || '');
+    }
+    return item?.customAvatar || item?.source?.originalAvatarUrl || '';
+  };
 
   const avatarMarkup = (item, className = 'moli-avatar') => {
     const url = avatarUrl(item);
@@ -886,7 +895,7 @@ export function createPhonePanel({
 
     return `
       <div class="${className}">
-        ${escapeHtml(item?.avatarText || '◉')}
+        ${escapeHtml(isFourthWallContact(item) ? '皮' : (item?.avatarText || '◉'))}
       </div>
     `;
   };
@@ -1541,8 +1550,8 @@ export function createPhonePanel({
       chatInfo.innerHTML = `
         <div class="moli-info-private-head">
           ${avatarMarkup(item, 'moli-info-avatar')}
-          <div class="moli-info-private-name">${escapeHtml(displayName(item))}</div>
-          <button type="button" class="moli-info-avatar-button" data-action="change-contact-avatar">更换头像</button>
+          <div class="moli-info-private-name">${escapeHtml(displayName(item))}${isFourthWallContact(item) ? '<small class="moli-fourth-wall-subtitle">入戏…</small>' : ''}</div>
+          ${isFourthWallContact(item) ? '' : '<button type="button" class="moli-info-avatar-button" data-action="change-contact-avatar">更换头像</button>'}
           ${item.customAvatar && isTavern ? `<button type="button" class="moli-info-link-button" data-action="restore-source-avatar">恢复跟随角色卡头像</button>` : ''}
         </div>
         ${isTavern ? `<div class="moli-info-source"><div><span>酒馆原名</span><strong>${escapeHtml(item.source?.originalName || item.name || '未知')}</strong></div><div><span>来源状态</span><strong class="${sourceMissing ? 'is-missing' : ''}">${sourceMissing ? '来源角色不可用' : '已关联'}</strong></div></div>` : ''}
@@ -1563,16 +1572,17 @@ export function createPhonePanel({
           <span>当前聊天设置</span>
           <strong>›</strong>
         </button>
-        ${(item.kind === 'tavern' || item.kind === 'custom') ? `
+        ${(item.kind === 'tavern' || item.kind === 'custom' || isFourthWallContact(item)) ? `
         <div class="moli-info-form" data-private-automation>
+          ${isFourthWallContact(item) ? '' : `
           <label class="moli-choice-card">
             <input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}>
             <span><strong>自动聊天 / 主动私聊</strong><small>角色自主判断是否主动联系；百分比控制主动倾向，不是机械定时器。</small></span>
           </label>
-          <label class="moli-automation-slider"><span>主动私聊频率</span><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}" aria-label="主动私聊频率"><small class="moli-automation-value" data-auto-chat-value>${Number(conversation.automation?.autoChatProbability ?? 30)}%</small></label>
+          <label class="moli-automation-slider"><span>主动私聊频率</span><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}" aria-label="主动私聊频率"><small class="moli-automation-value" data-auto-chat-value>${Number(conversation.automation?.autoChatProbability ?? 30)}%</small></label>`}
           <label class="moli-choice-card">
             <input type="checkbox" data-commentary-enabled ${conversation.automation?.commentaryEnabled ? 'checked' : ''}>
-            <span><strong>自动吐槽正文</strong><small>只针对正文事件吐槽，与主动私聊是两个独立系统。</small></span>
+            <span><strong>自动吐槽正文</strong><small>${isFourthWallContact(item) ? '复刻四次元壁实时吐槽：正文新回复、编辑自己的台词、编辑 AI 台词都可触发。' : '只针对正文事件吐槽，与主动私聊是两个独立系统。'}</small></span>
           </label>
           <label class="moli-automation-slider"><span>正文吐槽频率</span><input type="range" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}" aria-label="正文吐槽频率"><small class="moli-automation-value" data-commentary-value>${Number(conversation.automation?.commentaryProbability ?? 30)}%</small></label>
           <button type="button" class="moli-info-save-button" data-action="save-private-automation">保存自动行为</button>
@@ -1662,8 +1672,8 @@ export function createPhonePanel({
     const scopeKey = getScopeKey?.();
     const conversation = currentConversation();
     const item = conversation?.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
-    if (!scopeKey || !conversation || conversation.type !== 'private' || !item || !['tavern', 'custom'].includes(item.kind)) return;
-    const autoChatProbability = Number(chatInfo.querySelector('[data-auto-chat-probability]')?.value ?? 30);
+    if (!scopeKey || !conversation || conversation.type !== 'private' || !item || !(['tavern', 'custom'].includes(item.kind) || isFourthWallContact(item))) return;
+    const autoChatProbability = Number(chatInfo.querySelector('[data-auto-chat-probability]')?.value ?? conversation.automation?.autoChatProbability ?? 30);
     const commentaryProbability = Number(chatInfo.querySelector('[data-commentary-probability]')?.value ?? 30);
     if (!Number.isFinite(autoChatProbability) || !Number.isFinite(commentaryProbability)) {
       toast('百分比必须是数字');
@@ -1671,7 +1681,9 @@ export function createPhonePanel({
     }
     try {
       updatePrivateConversationSettings(scopeKey, currentContactId, {
-        autoChatEnabled: Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked),
+        autoChatEnabled: isFourthWallContact(item)
+          ? Boolean(conversation.automation?.autoChatEnabled)
+          : Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked),
         autoChatProbability,
         commentaryEnabled: Boolean(chatInfo.querySelector('[data-commentary-enabled]')?.checked),
         commentaryProbability,
@@ -2333,6 +2345,7 @@ export function createPhonePanel({
   const contact = id => getContacts().find(x => x.id === id);
 
   function privateConversationTitle(conversation, item) {
+    if (isFourthWallContact(item)) return '皮下';
     const base = displayName(item);
     const ownTitle = String(conversation?.title || '').trim();
     if (ownTitle) return `${base} · ${ownTitle}`;
@@ -2701,12 +2714,13 @@ export function createPhonePanel({
             <div class="moli-item-top">
               <div class="moli-name">
                 ${escapeHtml(title)}
+                ${!isGroup && isFourthWallContact(item) ? '<small class="moli-fourth-wall-list-subtitle">入戏…</small>' : ''}
               </div>
               ${conversation.pinned ? '<span class="moli-pin-mark">置顶</span>' : ''}
             </div>
 
             <div class="moli-preview">
-              ${last ? escapeHtml(last.content) : '暂无消息'}
+              ${last ? escapeHtml(last.content) : (isFourthWallContact(item) ? '入戏…' : '暂无消息')}
             </div>
           </div>
         </button>
@@ -3151,6 +3165,12 @@ export function createPhonePanel({
 
             <div class="moli-msg-content">
               ${senderName}
+              ${!isUser && isFourthWallContact(item) && message.thinking ? `
+                <details class="moli-fourth-wall-thinking">
+                  <summary>思考过程</summary>
+                  <div>${escapeHtml(message.thinking)}</div>
+                </details>
+              ` : ''}
               <div class="moli-bubble">
                 ${message.forward?.mode === 'merged' ? `
                   <button
@@ -3406,6 +3426,12 @@ export function createPhonePanel({
       row.innerHTML = `
         ${avatarMarkup(contactItem, 'moli-mini-avatar')}
         <div class="moli-msg-content">
+          ${isFourthWallContact(contactItem) ? `
+            <details class="moli-fourth-wall-thinking" data-generation-preview-thinking-wrap open hidden>
+              <summary>思考中</summary>
+              <div data-generation-preview-thinking></div>
+            </details>
+          ` : ''}
           <div class="moli-bubble" data-generation-preview-text></div>
         </div>
       `;
@@ -3413,7 +3439,16 @@ export function createPhonePanel({
     }
 
     const bubble = row.querySelector('[data-generation-preview-text]');
-    if (bubble) bubble.textContent = previewGeneratedMessages(text);
+    if (isFourthWallContact(contactItem)) {
+      const projected = previewFourthWallResponse(text);
+      const thinkingWrap = row.querySelector('[data-generation-preview-thinking-wrap]');
+      const thinking = row.querySelector('[data-generation-preview-thinking]');
+      if (thinking) thinking.textContent = projected.thinking;
+      if (thinkingWrap) thinkingWrap.hidden = !projected.thinking;
+      if (bubble) bubble.textContent = projected.message || (projected.thinking ? '正在组织回复…' : '');
+    } else if (bubble) {
+      bubble.textContent = previewGeneratedMessages(text);
+    }
     chatBody.scrollTop = chatBody.scrollHeight;
   }
 
@@ -3523,9 +3558,15 @@ export function createPhonePanel({
       clearGenerationPreview();
 
       const generationTurnId = `turn:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+      const privateFourthWall = conversation.type === 'private' && String(result?.contact?.id || '') === 'builtin:meta';
+      const fourthWallParsed = privateFourthWall ? parseFourthWallResponse(result.text) : null;
       const replyBatches = conversation.type === 'group'
         ? result.replies
-        : [{ contact: result.contact, messages: parseGeneratedMessages(result.text) }];
+        : [{
+            contact: result.contact,
+            messages: privateFourthWall ? fourthWallParsed.messages : parseGeneratedMessages(result.text),
+            thinking: privateFourthWall ? fourthWallParsed.thinking : '',
+          }];
       if (!replyBatches?.length || !replyBatches.some(batch => batch.messages?.length)) {
         throw new Error('模型没有返回可用消息');
       }
@@ -3540,6 +3581,8 @@ export function createPhonePanel({
               source: 'generation',
               generationTurnId,
               storyTime: messageStoryTimeMeta(conversation),
+              thinking: batch.thinking || '',
+              messageType: privateFourthWall ? 'message' : '',
               senderId: batch.contact.id,
               senderSnapshot: {
                 name: displayName(batch.contact),
