@@ -48,6 +48,7 @@ import {
   testProviderConnection,
 } from '../api/providers/provider-registry.js';
 import { generatePrivateReply } from '../generation/generation-service.js';
+import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
 import { parseGeneratedMessages, previewGeneratedMessages } from '../generation/message-parser.js';
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
@@ -606,8 +607,9 @@ export function createPhonePanel({
       </header>
       <main class="moli-settings-list moli-contact-subpage">
         <div class="moli-settings-note">这是当前 Conversation 自己的场外聊天记忆，与柏宝书正文长期记忆完全分开。当前原始聊天优先于近期记忆，近期记忆优先于长期总结。</div>
+        <div class="moli-settings-note" data-phone-memory-auto-status>自动压缩尚未运行。累计 100 个完整 AI 交互轮次后生成一段近期记忆。</div>
         <label class="moli-form-field"><span>近期记忆</span><textarea rows="10" data-phone-recent-memory placeholder="每段记忆之间空一行。可直接编辑或删除。"></textarea></label>
-        <div class="moli-api-hint">当前阶段先提供可编辑的数据层与 Prompt 接入；自动压缩生成将在下一阶段使用这里的数据结构。</div>
+        <div class="moli-api-hint">自动压缩按完整 AI 交互轮次计数：同一轮里用户多气泡 + 角色多气泡仍只算 1 轮；只有整轮离开最近聊天窗口后才参与累计。</div>
         <label class="moli-form-field"><span>长期总结</span><textarea rows="10" data-phone-long-memory placeholder="当前手机聊天的长期关系与历史总结。可直接编辑或清空。"></textarea></label>
       </main>
       <footer class="moli-sync-footer">
@@ -794,6 +796,7 @@ export function createPhonePanel({
   const conversationSettingsScope = panel.querySelector('[data-conversation-settings-scope]');
   const phoneRecentMemoryInput = panel.querySelector('[data-phone-recent-memory]');
   const phoneLongMemoryInput = panel.querySelector('[data-phone-long-memory]');
+  const phoneMemoryAutoStatus = panel.querySelector('[data-phone-memory-auto-status]');
   const conversationTitleInput = panel.querySelector('[data-conversation-title]');
   const conversationBodyContext = panel.querySelector('[data-conversation-body-context]');
   const conversationRecentLimit = panel.querySelector('[data-conversation-recent-limit]');
@@ -1353,6 +1356,12 @@ export function createPhonePanel({
     const memory = getConversationMemory(scopeKey, currentContactId) || { recent: [], longTermSummary: '' };
     if (phoneRecentMemoryInput) phoneRecentMemoryInput.value = memory.recent.map(item => item.content).filter(Boolean).join('\n\n');
     if (phoneLongMemoryInput) phoneLongMemoryInput.value = memory.longTermSummary || '';
+    if (phoneMemoryAutoStatus) {
+      const autoCount = memory.recent.filter(item => item?.source === 'auto').length;
+      const condensed = memory.lastCondensedAt ? new Date(memory.lastCondensedAt).toLocaleString() : '尚未运行';
+      const summarized = memory.lastSummarizedAt ? new Date(memory.lastSummarizedAt).toLocaleString() : '尚未沉淀';
+      phoneMemoryAutoStatus.textContent = `自动近期记忆 ${autoCount} 段 · 上次压缩：${condensed} · 上次长期沉淀：${summarized}${memory.lastAutoError ? ` · 最近失败：${memory.lastAutoError}` : ''}`;
+    }
   }
 
   function savePhoneMemorySettings() {
@@ -1366,7 +1375,7 @@ export function createPhonePanel({
       .split(/\n\s*\n+/)
       .map(content => content.trim())
       .filter(Boolean)
-      .map((content, index) => ({ id: `manual:${Date.now()}:${index}`, content, createdAt: Date.now() + index }));
+      .map((content, index) => ({ id: `manual:${Date.now()}:${index}`, content, createdAt: Date.now() + index, source: 'manual' }));
     updateConversationMemory(scopeKey, currentContactId, {
       recent,
       longTermSummary: phoneLongMemoryInput?.value || '',
@@ -3212,6 +3221,7 @@ export function createPhonePanel({
         throw new Error('模型没有返回可用消息');
       }
 
+      const generationTurnId = `turn:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
       generatedMessages.forEach(content => {
         appendMessage(
           requestScopeKey,
@@ -3220,6 +3230,7 @@ export function createPhonePanel({
           content,
           {
             source: 'generation',
+            generationTurnId,
             senderId: result.contact.id,
             senderSnapshot: {
               name: displayName(result.contact),
@@ -3235,6 +3246,13 @@ export function createPhonePanel({
       ) {
         renderChat();
       }
+
+      // 自动记忆是低频、增量的后台式收尾：只有达到阈值才会额外调用一次 API。
+      // 失败不会影响本轮正常回复，也不会推进压缩游标。
+      void maybeAutoCompactConversationMemory({
+        scopeKey: requestScopeKey,
+        conversationKey: generationConversationKey,
+      });
     } catch (error) {
       clearGenerationPreview();
       if (error?.name === 'AbortError' || controller.signal.aborted) {
