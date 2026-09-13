@@ -1682,3 +1682,24 @@ moli39 不能移除或回退：Conversation 四概念修正、主/Contact API �
 ## 下一节点
 
 在实机确认 moli39 来源开关与原文查看正常后，再实现世界书读取地基；不得先把所有世界书条目无条件注入 Prompt。
+
+# moli40 节点：资料卡减法 + 状态栏延期 + 世界书读取地基
+
+- 唯一执行基线：用户上传的最新完整仓库 `(18)`。
+- 资料卡：
+  - 保留 `当前聊天` Conversation 选择器，选项内显示 `聊天名 · 当前存档/全局`；
+  - 删除资料卡外层独立 `归属` 选择器；
+  - 删除外层重复的时间模式/读取正文摘要；
+  - 时间、正文开关、最近聊天上限只在 `当前聊天设置` 编辑。
+- 状态栏：按用户最新决定整体延期；移除主设置状态栏预设入口、Contact 状态栏入口及相关 UI 运行代码。旧持久化字段不主动清洗，避免破坏性迁移。
+- 世界书第一阶段：
+  - 新增 `src/core/tavern-worldbook.js`；
+  - 对齐 SillyTavern Extension Context：角色关联世界书使用 `loadWorldInfo(name)`，内嵌 Character Book 使用 `convertCharacterBook()`；
+  - Tavern `角色资料与提示词 → 世界书条目` 可读取真实来源；
+  - Contact 保存 `worldBookPolicy.disabledEntries`，默认全开，只记录用户关闭项；
+  - 不修改 SillyTavern 原世界书；
+  - 本阶段不注入世界书正文，避免错误实现成“全部条目每轮塞 Prompt”。
+
+下一节点：实现“本轮世界书激活层”。先继续核对 SillyTavern `getWorldInfoPrompt` / World Info 触发语义与 moli 独立 Conversation 上下文之间的适配，再做白名单交集和 Prompt 注入；不得跳过触发层。
+
+回归铁律：API 配置引用、Conversation 多私聊、角色来源开关/原文查看、消息/转发/搜索、悬浮球等既有能力不得回退。状态栏除外——它已由用户明确延期并从现行 UI 移除。

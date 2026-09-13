@@ -487,3 +487,18 @@
 #moli-phone-panel .moli-source-placeholder strong{font-weight:400;font-size:11px;color:#aaa}
 #moli-phone-panel .moli-source-detail-meta{padding:10px 12px;border-radius:12px;background:#fff;font-size:11px;line-height:1.5;color:#777}
 #moli-phone-panel .moli-source-detail-text{white-space:pre-wrap;word-break:break-word;margin:10px 0 0;padding:14px;border-radius:12px;background:#fff;border:1px solid #e7e7e7;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#222;min-height:180px}
+
+/* moli40: Tavern 世界书白名单 */
+#moli-phone-panel .moli-worldbook-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.14);
+}
+#moli-phone-panel .moli-worldbook-entry:last-child { border-bottom: 0; }
+#moli-phone-panel .moli-worldbook-entry > span { min-width: 0; display: grid; gap: 3px; }
+#moli-phone-panel .moli-worldbook-entry strong { font-size: 14px; font-weight: 600; }
+#moli-phone-panel .moli-worldbook-entry small { font-size: 12px; opacity: 0.62; overflow-wrap: anywhere; }
+#moli-phone-panel .moli-worldbook-entry input { flex: 0 0 auto; }
