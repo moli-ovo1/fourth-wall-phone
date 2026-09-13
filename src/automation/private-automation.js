@@ -42,10 +42,26 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
     }
     const opportunity = now - lastOpportunityAt >= AUTO_CHAT_OPPORTUNITY_MS;
     if (opportunity) lastOpportunityAt = now;
-    for (const conv of getScopeConversations(scopeKey).filter(x => x?.type === 'private')) {
+    const privateConversations = getScopeConversations(scopeKey).filter(x => x?.type === 'private');
+    const fallbackFourthWall = privateConversations
+      .filter(x => String(x?.contactId || '') === 'builtin:meta')
+      .sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0))[0];
+    for (const conv of privateConversations) {
       const contact = contacts.find(c => String(c.id) === String(conv.contactId));
       if (!contact || conv.automation?.autoSuspended || running.has(conv.conversationKey || conv.id)) continue;
-      const key = String(conv.conversationKey || conv.id); const a = conv.automation || {};
+      const key = String(conv.conversationKey || conv.id);
+      const isFourthWallContact = String(contact.id || '') === 'builtin:meta';
+      if (isFourthWallContact) {
+        const activeKey = String(contact.fourthWallActiveConversationKey || fallbackFourthWall?.conversationKey || fallbackFourthWall?.id || '');
+        if (activeKey && activeKey !== key) continue;
+      }
+      const a = isFourthWallContact
+        ? {
+            ...(conv.automation || {}),
+            commentaryEnabled: contact.fourthWallGlobalSettings?.commentary?.enabled === true,
+            commentaryProbability: Number(contact.fourthWallGlobalSettings?.commentary?.probability ?? 30),
+          }
+        : (conv.automation || {});
       const bodyCount = Math.max(0, Number(body?.count || 0));
       const previousBody = Math.max(0, Number(a.lastBodyAssistantCount || 0));
       if (body.available && bodyCount !== previousBody) updatePrivateAutomationRuntime(scopeKey, key, { lastBodyAssistantCount: bodyCount });
@@ -83,7 +99,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       running.add(key);
       beginGenerationTask(scopeKey, key, null, mode);
       try {
-        const isFourthWall = String(contact.id || '') === 'builtin:meta';
+        const isFourthWall = isFourthWallContact;
         const instruction = mode === 'commentary'
           ? '这是正文刚发生后的场外私聊吐槽机会。你就是正文中的你本人，不是分析员。只在你本人此刻真的会想吐槽/联系用户时回复；若不想说，严格只输出 [SKIP]。若回复，像手机私聊一样简短自然。'
           : '这是一次主动私聊机会。根据关系、最近聊天、未完话题、正文事件、时间与距离上次互动的间隔，自主决定现在是否真的会主动联系用户。若不会，严格只输出 [SKIP]；若会，直接像真实手机聊天一样发你想说的话，不要解释判断过程。';
