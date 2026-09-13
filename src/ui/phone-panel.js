@@ -50,6 +50,7 @@ import { parseGeneratedMessages, previewGeneratedMessages } from '../generation/
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
 import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
+import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 
 export function createPhonePanel({
   documentRef = document,
@@ -496,35 +497,6 @@ export function createPhonePanel({
       </main>
     </section>
 
-    <section class="moli-page" data-page="new-private-chat">
-      <header class="moli-nav">
-        <div class="moli-nav-side">
-          <button class="moli-icon-btn moli-back" data-action="new-private-back" aria-label="返回">‹</button>
-        </div>
-        <div class="moli-nav-title">新建聊天</div>
-        <div class="moli-nav-side right"></div>
-      </header>
-      <main class="moli-settings-list moli-new-private-chat">
-        <div class="moli-settings-note" data-new-private-contact-name></div>
-        <label class="moli-form-field">
-          <span>聊天名称（可选）</span>
-          <input type="text" maxlength="80" data-new-private-title placeholder="例如：日常 / 2018正文">
-        </label>
-        <label class="moli-choice-card">
-          <input type="radio" name="moli-private-scope-mode" value="current" checked>
-          <span><strong>随当前正文</strong><small>绑定当前 SillyTavern 聊天档。切换到别的正文后隐藏，回来后原聊天与历史继续保留。</small></span>
-        </label>
-        <label class="moli-choice-card">
-          <input type="radio" name="moli-private-scope-mode" value="global">
-          <span><strong>全局陪伴</strong><small>跨正文持续存在并保留同一份聊天历史。默认使用现实时间，默认不读取当前正文。</small></span>
-        </label>
-      </main>
-      <footer class="moli-sync-footer">
-        <button class="moli-secondary-btn" data-action="new-private-cancel">取消</button>
-        <button class="moli-primary-btn" data-action="new-private-confirm">创建</button>
-      </footer>
-    </section>
-
     <section class="moli-page" data-page="info">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -793,8 +765,6 @@ export function createPhonePanel({
   const promptEditorNameWrap = panel.querySelector('[data-prompt-editor-name-wrap]');
   const promptEditorName = panel.querySelector('[data-prompt-editor-name]');
   const promptEditorDelete = panel.querySelector('[data-action="prompt-editor-delete"]');
-  const newPrivateContactName = panel.querySelector('[data-new-private-contact-name]');
-  const newPrivateTitle = panel.querySelector('[data-new-private-title]');
   const contactPromptOwner = panel.querySelector('[data-contact-prompt-owner]');
   const contactPromptPageTitle = panel.querySelector('[data-contact-prompt-page-title]');
   const contactRoleSources = panel.querySelector('[data-contact-role-sources]');
@@ -835,7 +805,6 @@ export function createPhonePanel({
   let generationController = null;
   let generationConversationKey = null;
   let activePromptBlockId = null;
-  let newPrivateContactId = null;
 
   panel.addEventListener(
     'click',
@@ -1362,127 +1331,6 @@ export function createPhonePanel({
     show('chat');
   }
 
-  function renderNewPrivateChat() {
-    const item = contact(newPrivateContactId);
-    if (newPrivateContactName) {
-      newPrivateContactName.textContent = item
-        ? `为「${displayName(item)}」创建新的独立私聊。`
-        : '创建新的独立私聊。';
-    }
-    if (newPrivateTitle) newPrivateTitle.value = '';
-
-    const currentRadio = panel.querySelector('input[name="moli-private-scope-mode"][value="current"]');
-    if (currentRadio) currentRadio.checked = true;
-  }
-
-  function openNewPrivateChat(contactId) {
-    const item = contact(contactId);
-    if (!item) {
-      toast('联系人不存在');
-      return;
-    }
-    newPrivateContactId = item.id;
-    show('new-private-chat');
-  }
-
-  function confirmNewPrivateChat() {
-    const scopeKey = getScopeKey?.();
-    if (!scopeKey || !newPrivateContactId) {
-      toast('当前聊天环境不可用');
-      return;
-    }
-
-    const scopeMode = panel.querySelector('input[name="moli-private-scope-mode"]:checked')?.value || 'current';
-
-    try {
-      const conversation = createPrivateConversationInstance(
-        scopeKey,
-        newPrivateContactId,
-        {
-          scopeMode,
-          title: newPrivateTitle?.value || '',
-        }
-      );
-
-      currentContactId = conversation.conversationKey || conversation.id;
-      newPrivateContactId = null;
-      toast(scopeMode === 'global' ? '全局陪伴聊天已创建' : '当前正文聊天已创建');
-      show('chat');
-    } catch (error) {
-      console.error('[moli小手机] create private conversation failed:', error);
-      toast(error?.message || '创建聊天失败');
-    }
-  }
-
-  function renderConversationSettings() {
-    const conversation = currentConversation();
-    if (!conversation || conversation.type !== 'private') {
-      toast('当前私聊不存在');
-      show('info');
-      return;
-    }
-
-    if (conversationSettingsScope) {
-      const label = conversation.scopeMode === 'global' ? '全局' : '当前存档';
-      conversationSettingsScope.textContent = `当前聊天：${conversation.title || '默认聊天'} · ${label}。这里调整时间模式、正文读取与近期消息上下文。`;
-    }
-
-    if (conversationTitleInput) {
-      conversationTitleInput.value = conversation.title || '';
-    }
-
-    const timeMode = ['real', 'body', 'none'].includes(String(conversation.timeMode))
-      ? String(conversation.timeMode)
-      : (conversation.scopeMode === 'global' ? 'real' : 'body');
-    const timeInput = panel.querySelector(`input[name="moli-conversation-time-mode"][value="${timeMode}"]`);
-    if (timeInput) timeInput.checked = true;
-
-    if (conversationBodyContext) {
-      conversationBodyContext.checked = conversation.bodyContextEnabled !== false;
-    }
-
-    if (conversationRecentLimit) {
-      const value = Number(conversation.recentChatLimit);
-      conversationRecentLimit.value = Number.isFinite(value)
-        ? String(Math.max(10, Math.min(9999, Math.round(value))))
-        : '100';
-    }
-  }
-
-  function saveConversationSettings() {
-    const scopeKey = getScopeKey?.();
-    const conversation = currentConversation();
-    const conversationKey = currentContactId;
-    if (!scopeKey || !conversation || conversation.type !== 'private' || !conversationKey) {
-      toast('当前私聊不存在');
-      return;
-    }
-
-    const selectedTimeMode = panel.querySelector('input[name="moli-conversation-time-mode"]:checked')?.value || 'body';
-    const rawLimit = Number(conversationRecentLimit?.value || 100);
-    if (!Number.isFinite(rawLimit)) {
-      toast('最近聊天读取上限必须是数字');
-      return;
-    }
-
-    const normalizedLimit = Math.max(10, Math.min(9999, Math.round(rawLimit)));
-    if (conversationRecentLimit) conversationRecentLimit.value = String(normalizedLimit);
-
-    try {
-      updatePrivateConversationSettings(scopeKey, conversationKey, {
-        title: conversationTitleInput?.value || '',
-        timeMode: selectedTimeMode,
-        bodyContextEnabled: Boolean(conversationBodyContext?.checked),
-        recentChatLimit: normalizedLimit,
-      });
-      toast('当前聊天设置已保存');
-      show('info');
-    } catch (error) {
-      console.error('[moli小手机] save conversation settings failed:', error);
-      toast(error?.message || '保存当前聊天设置失败');
-    }
-  }
-
   function renderChatInfo() {
     const conversation = currentConversation();
 
@@ -1519,10 +1367,6 @@ export function createPhonePanel({
         </button>
         <button type="button" class="moli-info-setting-row" data-action="conversation-settings">
           <span>当前聊天设置</span>
-          <strong>›</strong>
-        </button>
-        <button type="button" class="moli-info-setting-row" data-action="new-private-chat">
-          <span>＋ 新建另一个聊天</span>
           <strong>›</strong>
         </button>
         <button type="button" class="moli-info-setting-row" data-action="toggle-pin">
@@ -1642,7 +1486,16 @@ export function createPhonePanel({
       </div>
       <div class="moli-source-section">
         <div class="moli-source-section-title">长期剧情记忆</div>
-        <button type="button" class="moli-source-placeholder" disabled><span>柏宝书长期记忆</span><strong>尚未接入 ›</strong></button>
+        <div class="moli-role-source-row">
+          <div class="moli-role-source-view is-static">
+            <span><strong>柏宝书长期记忆</strong><small>${getBaiBaiMemoryStatus().available ? '已检测到 · 读取正常注入口径历史' : '未检测到 · 自动回退最近正文'}</small></span>
+          </div>
+          <label class="moli-role-source-switch" title="柏宝书长期记忆">
+            <input type="checkbox" data-role-source-toggle="longTermMemory" ${roleSources.longTermMemory !== false ? 'checked' : ''}>
+            <span></span>
+          </label>
+        </div>
+        <div class="moli-source-section-note">只读取柏宝书公开 API 的长期历史剧情，不读取状态、变量、物品、NPC、计划等数据。当前聊天关闭“读取当前正文”时，本动态剧情来源也不会注入。</div>
       </div>`;
     contactRoleSources.hidden = false;
   }
@@ -1776,12 +1629,17 @@ export function createPhonePanel({
       if (item.kind !== 'tavern') {
         payload.intro = contactProfileIntro?.value || '';
       } else {
-        payload.roleSources = Object.fromEntries(
-          TAVERN_ROLE_SOURCE_ITEMS.map(([key]) => [
-            key,
-            contactRoleSources?.querySelector(`[data-role-source-toggle="${key}"]`)?.checked !== false,
-          ])
-        );
+        payload.roleSources = {
+          ...(item.roleSources || {}),
+          ...Object.fromEntries(
+            TAVERN_ROLE_SOURCE_ITEMS.map(([key]) => [
+              key,
+              contactRoleSources?.querySelector(`[data-role-source-toggle="${key}"]`)?.checked !== false,
+            ])
+          ),
+          longTermMemory:
+            contactRoleSources?.querySelector('[data-role-source-toggle="longTermMemory"]')?.checked !== false,
+        };
       }
       updateContact(item.id, payload);
       toast(item.kind === 'tavern' ? '角色资料与提示词已保存' : '人格与提示词已保存');
@@ -2099,9 +1957,6 @@ export function createPhonePanel({
       renderPromptSettings();
     }
 
-    if (name === 'new-private-chat') {
-      renderNewPrivateChat();
-    }
   };
 
   function renderPromptSettings() {
@@ -2230,14 +2085,6 @@ export function createPhonePanel({
       return;
     }
 
-    const scopeKey = getScopeKey?.();
-    const activeContactIds = new Set(
-      scopeKey
-        ? getScopeConversations(scopeKey)
-            .map(conv => conv.contactId)
-        : []
-    );
-
     syncList.innerHTML = syncSnapshot
       .map(character => {
         const existing = findTavernContact(character.sourceId);
@@ -2249,7 +2096,6 @@ export function createPhonePanel({
             <input
               type="checkbox"
               data-sync-source-id="${escapeHtml(character.sourceId)}"
-              ${alreadyInScope ? 'checked disabled' : ''}
             >
             <div class="moli-sync-avatar">
               ${character.avatarUrl
@@ -2258,7 +2104,7 @@ export function createPhonePanel({
             </div>
             <div class="moli-sync-main">
               <div class="moli-sync-name">${escapeHtml(character.name)}</div>
-              ${existing && !alreadyInScope ? '<div class="moli-sync-status">已添加</div>' : ''}
+              ${existing ? '<div class="moli-sync-status">已添加</div>' : ''}
             </div>
           </label>
         `;
@@ -2270,7 +2116,7 @@ export function createPhonePanel({
 
   function confirmTavernSync() {
     const selectedIds = new Set(
-      [...syncList.querySelectorAll('[data-sync-source-id]:checked:not(:disabled)')]
+      [...syncList.querySelectorAll('[data-sync-source-id]:checked')]
         .map(input => input.dataset.syncSourceId)
     );
 
@@ -2303,13 +2149,14 @@ export function createPhonePanel({
     const syncedContacts = syncTavernContacts(pendingTavernSync);
 
     syncedContacts.forEach(item => {
-      const existing = getPrivateConversationsForContact(scopeKey, item.id);
-      if (!existing.length) {
-        createPrivateConversationInstance(scopeKey, item.id, { scopeMode });
-      }
+      createPrivateConversationInstance(scopeKey, item.id, { scopeMode });
     });
 
     pendingTavernSync = [];
+    // 添加完成后立刻重置同步页的临时勾选状态。Contact 已存在也不锁死，
+    // 用户下次仍可再次选择它创建另一个独立 Conversation。
+    syncList.querySelectorAll('[data-sync-source-id]').forEach(input => { input.checked = false; });
+    renderTavernSync();
     toast(`已添加 ${syncedContacts.length} 个${scopeMode === 'global' ? '全局角色' : '正文角色'}`);
     show('home');
   }
@@ -3771,16 +3618,6 @@ export function createPhonePanel({
   panel.querySelector('[data-action="api-refresh-custom-models"]')?.addEventListener('click', () => refreshApiModels({ customOnly: true }));
   panel.querySelector('[data-action="api-test-connection"]')?.addEventListener('click', testApiConnection);
 
-  panel.querySelector('[data-action="new-private-back"]')?.addEventListener('click', () => {
-    newPrivateContactId = null;
-    show('info');
-  });
-  panel.querySelector('[data-action="new-private-cancel"]')?.addEventListener('click', () => {
-    newPrivateContactId = null;
-    show('info');
-  });
-  panel.querySelector('[data-action="new-private-confirm"]')?.addEventListener('click', confirmNewPrivateChat);
-
   panel.querySelector('[data-action="conversation-settings-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-save"]')?.addEventListener('click', saveConversationSettings);
@@ -3863,11 +3700,6 @@ export function createPhonePanel({
       saveCurrentContactInfo();
     } else if (action === 'toggle-pin') {
       toggleCurrentConversationPin();
-    } else if (action === 'new-private-chat') {
-      const conversation = currentConversation();
-      if (conversation?.type === 'private') {
-        openNewPrivateChat(conversation.contactId);
-      }
     } else if (action === 'conversation-settings') {
       const conversation = currentConversation();
       if (conversation?.type === 'private') {
