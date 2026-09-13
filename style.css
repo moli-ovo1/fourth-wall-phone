@@ -512,3 +512,10 @@
 #moli-phone-panel .moli-worldbook-entry strong { font-size: 14px; font-weight: 600; }
 #moli-phone-panel .moli-worldbook-entry small { font-size: 12px; opacity: 0.62; overflow-wrap: anywhere; }
 #moli-phone-panel .moli-worldbook-entry input { flex: 0 0 auto; }
+
+/* moli47: private automation uses compact sliders; values remain stored as 0-100 but no number field is shown. */
+#moli-phone-panel .moli-automation-slider{display:block;margin:2px 0 18px}
+#moli-phone-panel .moli-automation-slider>span{display:block;margin-bottom:9px;font-size:13px;color:#666}
+#moli-phone-panel .moli-automation-slider input[type="range"]{width:100%;height:4px;margin:0;padding:0;border:0;border-radius:999px;background:#ddd;appearance:none;-webkit-appearance:none;outline:none}
+#moli-phone-panel .moli-automation-slider input[type="range"]::-webkit-slider-thumb{width:18px;height:18px;border:0;border-radius:50%;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.28);appearance:none;-webkit-appearance:none}
+#moli-phone-panel .moli-automation-slider input[type="range"]::-moz-range-thumb{width:18px;height:18px;border:0;border-radius:50%;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.28)}

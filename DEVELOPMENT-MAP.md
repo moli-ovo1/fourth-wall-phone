@@ -1852,3 +1852,22 @@ moli39 不能移除或回退：Conversation 四概念修正、主/Contact API �
 ## 回归铁律
 
 moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 `node --check` 外，必须检查 `index.js → initApp → ensureBuiltins → createFloatingBall` 启动链，并确认 `phone-panel.js` 模块可加载、400ms Android 防穿透仍存在。
+
+---
+
+# moli48 节点：滑杆 UI + 群聊轻编排/逐人生成
+
+- 唯一执行基线：用户上传、已应用修正版 moli47 的完整仓库 `(26)`。
+- `src/ui/phone-panel.js`：酒馆角色/自创联系人的主动私聊频率、正文吐槽频率由数字输入改为无数字显示的 range 滑杆；群聊空输入从占位提示切换为真实 `generateGroupReply()`。
+- `style.css`：新增紧凑滑杆样式，不显示百分比文本。
+- `src/generation/generation-service.js`：新增普通群聊轻量 speaker 编排、@ 强制参与、逐 speaker 独立生成；后 speaker 使用包含本轮前序新消息的 working history；每个 speaker 单独解析自己的 Contact API，并继续复用既有 Role Fidelity / Worldbook / BaiBai 上下文链。
+- 群聊编排请求不加载所有成员完整角色卡，只读取短描述；编排器不代写正文。
+- 本节点不实现自动点评、正文自动吐槽、主动私聊后台 Automation；它们进入下一节点。
+
+## 回归要求
+
+继续保留 moli47 启动链修复、悬浮球、400ms Android 防穿透、私聊 Generation、内置人格、100 轮手机记忆、主/Contact API、Role Fidelity、世界书、柏宝书、消息/转发/搜索、更新红色提示。群聊不得重新出现自动吐槽设置。
+
+## 下一节点
+
+进入 Automation Engine：先接群聊自动点评的正文回合计数/暂停续算/全员逐人 Review，再接酒馆角色与自创联系人的正文自动吐槽和主动私聊 SEND/SKIP。
