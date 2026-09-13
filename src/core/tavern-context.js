@@ -150,6 +150,30 @@ export function getTavernAssistantTurnState() {
 }
 
 
+export function getTavernMessageRevisionState() {
+  const ctx = getContext();
+  const chat = candidateChats(ctx)[0];
+  if (!chat) return { available: false, messages: [] };
+
+  const messages = chat.map((message, index) => {
+    if (!message || typeof message !== 'object') return null;
+    const normalized = normalizeChatMessage(message);
+    if (!normalized || normalized.role === 'system') return null;
+    const stable = clean(message.send_date ?? message.sendDate ?? message.extra?.gen_id ?? message.id ?? '');
+    return {
+      index,
+      role: normalized.role,
+      name: normalized.name,
+      content: normalized.content,
+      key: `${index}:${stable}`,
+      signature: `${index}:${stable}:${normalized.role}:${normalized.content}`,
+    };
+  }).filter(Boolean);
+
+  return { available: true, messages };
+}
+
+
 function parseStoryTimeCandidate(text) {
   const top = String(text || '').slice(0, 1800);
   if (!top) return null;

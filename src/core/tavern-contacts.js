@@ -145,3 +145,43 @@ export function getTavernCharacterSnapshot(sourceId) {
     .find(item => String(item.sourceId) === target)
     || null;
 }
+
+
+export function getCurrentTavernCharacterSnapshot() {
+  const ctx = getContext();
+  if (!ctx) return null;
+
+  const rawId = ctx?.characterId ?? ctx?.character_id ?? ctx?.this_chid;
+  const index = Number(rawId);
+  let character = Number.isInteger(index) ? ctx?.characters?.[index] : ctx?.character;
+
+  if (!character && rawId !== undefined && rawId !== null) {
+    const target = String(rawId);
+    const arrays = candidateCharacterArrays(ctx);
+    for (const list of arrays) {
+      character = list.find((item, itemIndex) => String(sourceIdFor(item, itemIndex)) === target) || null;
+      if (character) break;
+    }
+  }
+
+  if (!character) {
+    const name = String(ctx?.name2 ?? ctx?.character?.name ?? '').trim();
+    if (name) {
+      const arrays = candidateCharacterArrays(ctx);
+      for (const list of arrays) {
+        character = list.find(item => String(item?.name || '').trim() === name) || null;
+        if (character) break;
+      }
+    }
+  }
+
+  if (!character) return null;
+  const avatar = character?.avatar || character?.avatar_url || '';
+  return {
+    sourceId: String(sourceIdFor(character, Number.isInteger(index) ? index : 0)),
+    name: String(character?.name || ctx?.name2 || '').trim(),
+    avatar,
+    avatarUrl: getAvatarUrl(ctx, avatar),
+    roleFidelity: roleFidelityFor(character),
+  };
+}
