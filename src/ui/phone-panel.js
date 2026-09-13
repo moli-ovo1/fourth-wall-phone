@@ -5,6 +5,7 @@ import {
   ensureConversation,
   createPrivateConversationInstance,
   getPrivateConversationsForContact,
+  deletePrivateConversationInstance,
   findTavernContact,
   refreshTavernContacts,
   syncTavernContacts,
@@ -59,6 +60,7 @@ import { extensionTypes } from '../../../../../extensions.js';
 import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
+import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
 
 export function createPhonePanel({
   documentRef = document,
@@ -686,6 +688,70 @@ export function createPhonePanel({
       </footer>
     </section>
 
+    <section class="moli-page" data-page="fourth-wall-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="fourth-wall-settings-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">皮下设置</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-settings-list moli-contact-subpage">
+        <section class="moli-fourth-wall-session-section">
+          <div class="moli-conversation-section-title">聊天记录</div>
+          <div class="moli-fourth-wall-session-row">
+            <select data-fourth-wall-session-select aria-label="皮下聊天记录"></select>
+            <button type="button" data-action="fourth-wall-session-add" title="新建记录">＋</button>
+            <button type="button" data-action="fourth-wall-session-rename" title="重命名记录">改</button>
+            <button type="button" data-action="fourth-wall-session-delete" title="删除记录">删</button>
+          </div>
+          <div class="moli-settings-note">每条记录拥有独立的皮下聊天历史与手机记忆；切换记录不会混合上下文。</div>
+        </section>
+
+        <label class="moli-form-field">
+          <span>普通聊天层数</span>
+          <input type="number" min="1" max="9999" step="1" inputmode="numeric" data-fourth-wall-max-layers>
+          <small>控制每次皮下生成读取多少层当前正文。小白X默认 20 层。</small>
+        </label>
+
+        <label class="moli-switch-row">
+          <span><strong>流式生成</strong><small>开启时在皮下聊天框中实时更新生成内容。</small></span>
+          <input type="checkbox" data-fourth-wall-stream>
+        </label>
+
+        <label class="moli-switch-row">
+          <span><strong>禁用 Assistant Prefill</strong><small>开启后把 Bottom Prompt 放进 User 消息，不使用 Assistant 预填充。</small></span>
+          <input type="checkbox" data-fourth-wall-disable-prefill>
+        </label>
+
+        <button type="button" class="moli-info-setting-row" data-action="fourth-wall-prompts">
+          <span>提示词模板</span><strong>›</strong>
+        </button>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="fourth-wall-settings-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="fourth-wall-settings-save">保存</button>
+      </footer>
+    </section>
+
+    <section class="moli-page" data-page="fourth-wall-prompts">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="fourth-wall-prompts-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">皮下提示词模板</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-settings-list moli-contact-subpage">
+        <div class="moli-settings-note">这四段只属于“皮下”，不会进入普通私聊或群聊的全局线上预设。</div>
+        <label class="moli-form-field"><span>Top User</span><textarea rows="9" data-fourth-wall-prompt-top></textarea></label>
+        <label class="moli-form-field"><span>Confirm</span><textarea rows="3" data-fourth-wall-prompt-confirm></textarea></label>
+        <label class="moli-form-field"><span>Meta Protocol</span><textarea rows="18" data-fourth-wall-prompt-meta></textarea></label>
+        <label class="moli-form-field"><span>Bottom / Assistant Prefill</span><textarea rows="6" data-fourth-wall-prompt-bottom></textarea></label>
+        <button type="button" class="moli-secondary-btn" data-action="fourth-wall-prompts-restore">恢复小白X默认模板</button>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="fourth-wall-prompts-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="fourth-wall-prompts-save">保存模板</button>
+      </footer>
+    </section>
+
     <section class="moli-page" data-page="group-members-edit">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -818,6 +884,14 @@ export function createPhonePanel({
   const conversationTitleInput = panel.querySelector('[data-conversation-title]');
   const conversationBodyContext = panel.querySelector('[data-conversation-body-context]');
   const conversationRecentLimit = panel.querySelector('[data-conversation-recent-limit]');
+  const fourthWallSessionSelect = panel.querySelector('[data-fourth-wall-session-select]');
+  const fourthWallMaxLayers = panel.querySelector('[data-fourth-wall-max-layers]');
+  const fourthWallStream = panel.querySelector('[data-fourth-wall-stream]');
+  const fourthWallDisablePrefill = panel.querySelector('[data-fourth-wall-disable-prefill]');
+  const fourthWallPromptTop = panel.querySelector('[data-fourth-wall-prompt-top]');
+  const fourthWallPromptConfirm = panel.querySelector('[data-fourth-wall-prompt-confirm]');
+  const fourthWallPromptMeta = panel.querySelector('[data-fourth-wall-prompt-meta]');
+  const fourthWallPromptBottom = panel.querySelector('[data-fourth-wall-prompt-bottom]');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -1534,6 +1608,149 @@ export function createPhonePanel({
     }
   }
 
+
+  function fourthWallConversation() {
+    const conversation = currentConversation();
+    if (!conversation || conversation.type !== 'private') return null;
+    const item = contact(conversation.contactId || currentContactId);
+    return isFourthWallContact(item) ? conversation : null;
+  }
+
+  function renderFourthWallSettings() {
+    const scopeKey = getScopeKey?.();
+    const conversation = fourthWallConversation();
+    if (!scopeKey || !conversation) {
+      toast('当前不是皮下会话');
+      show('info');
+      return;
+    }
+    const sessions = getPrivateConversationsForContact(scopeKey, 'builtin:meta');
+    if (fourthWallSessionSelect) {
+      fourthWallSessionSelect.innerHTML = sessions.map((session, index) => {
+        const key = session.conversationKey || session.id;
+        const label = session.title || (index === sessions.length - 1 ? 'Default' : `记录 ${sessions.length - index}`);
+        return `<option value="${escapeHtml(key)}" ${String(key) === String(currentContactId) ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+      }).join('');
+    }
+    const settings = conversation.fourthWall || {};
+    if (fourthWallMaxLayers) fourthWallMaxLayers.value = String(Math.max(1, Math.min(9999, Number(settings.maxChatLayers) || 20)));
+    if (fourthWallStream) fourthWallStream.checked = settings.stream !== false;
+    if (fourthWallDisablePrefill) fourthWallDisablePrefill.checked = settings.disableAssistantPrefill === true;
+    const deleteButton = panel.querySelector('[data-action="fourth-wall-session-delete"]');
+    if (deleteButton) deleteButton.disabled = sessions.length <= 1;
+  }
+
+  function saveFourthWallSettings() {
+    const scopeKey = getScopeKey?.();
+    const conversation = fourthWallConversation();
+    if (!scopeKey || !conversation || !currentContactId) return;
+    const layers = Number(fourthWallMaxLayers?.value || 20);
+    if (!Number.isFinite(layers)) {
+      toast('普通聊天层数必须是数字');
+      return;
+    }
+    updatePrivateConversationSettings(scopeKey, currentContactId, {
+      fourthWallSettings: {
+        maxChatLayers: Math.max(1, Math.min(9999, Math.round(layers))),
+        stream: Boolean(fourthWallStream?.checked),
+        disableAssistantPrefill: Boolean(fourthWallDisablePrefill?.checked),
+      },
+    });
+    toast('皮下设置已保存');
+    show('info');
+  }
+
+  function renderFourthWallPrompts() {
+    const conversation = fourthWallConversation();
+    if (!conversation) {
+      show('info');
+      return;
+    }
+    const defaults = getFourthWallDefaultPromptTemplates();
+    const templates = conversation.fourthWall?.promptTemplates || {};
+    if (fourthWallPromptTop) fourthWallPromptTop.value = templates.topUser || defaults.topUser;
+    if (fourthWallPromptConfirm) fourthWallPromptConfirm.value = templates.confirm || defaults.confirm;
+    if (fourthWallPromptMeta) fourthWallPromptMeta.value = templates.metaProtocol || defaults.metaProtocol;
+    if (fourthWallPromptBottom) fourthWallPromptBottom.value = templates.bottom || defaults.bottom;
+  }
+
+  function saveFourthWallPrompts() {
+    const scopeKey = getScopeKey?.();
+    const conversation = fourthWallConversation();
+    if (!scopeKey || !conversation || !currentContactId) return;
+    updatePrivateConversationSettings(scopeKey, currentContactId, {
+      fourthWallSettings: {
+        promptTemplates: {
+          topUser: fourthWallPromptTop?.value || '',
+          confirm: fourthWallPromptConfirm?.value || '',
+          metaProtocol: fourthWallPromptMeta?.value || '',
+          bottom: fourthWallPromptBottom?.value || '',
+        },
+      },
+    });
+    toast('皮下提示词模板已保存');
+    show('fourth-wall-settings');
+  }
+
+  function restoreFourthWallPrompts() {
+    const defaults = getFourthWallDefaultPromptTemplates();
+    if (fourthWallPromptTop) fourthWallPromptTop.value = defaults.topUser;
+    if (fourthWallPromptConfirm) fourthWallPromptConfirm.value = defaults.confirm;
+    if (fourthWallPromptMeta) fourthWallPromptMeta.value = defaults.metaProtocol;
+    if (fourthWallPromptBottom) fourthWallPromptBottom.value = defaults.bottom;
+    toast('已恢复默认模板，点击保存后生效');
+  }
+
+  function switchFourthWallSession(conversationKey) {
+    const scopeKey = getScopeKey?.();
+    const target = scopeKey ? getConversation(scopeKey, conversationKey) : null;
+    if (!target || String(target.contactId || '') !== 'builtin:meta') return;
+    currentContactId = conversationKey;
+    markConversationRead(scopeKey, conversationKey);
+    show('chat');
+  }
+
+  function addFourthWallSession() {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey) return;
+    const name = windowRef.prompt?.('新记录名称', '新记录')?.trim();
+    if (!name) return;
+    const base = fourthWallConversation();
+    const created = createPrivateConversationInstance(scopeKey, 'builtin:meta', {
+      scopeMode: base?.scopeMode === 'global' ? 'global' : 'current',
+      title: name,
+    });
+    currentContactId = created.conversationKey || created.id;
+    show('chat');
+  }
+
+  function renameFourthWallSession() {
+    const scopeKey = getScopeKey?.();
+    const conversation = fourthWallConversation();
+    if (!scopeKey || !conversation || !currentContactId) return;
+    const name = windowRef.prompt?.('重命名记录', conversation.title || 'Default')?.trim();
+    if (!name) return;
+    updatePrivateConversationSettings(scopeKey, currentContactId, { title: name });
+    renderFourthWallSettings();
+  }
+
+  function deleteFourthWallSession() {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey || !currentContactId) return;
+    const sessions = getPrivateConversationsForContact(scopeKey, 'builtin:meta');
+    if (sessions.length <= 1) {
+      toast('至少保留一条皮下记录');
+      return;
+    }
+    if (!windowRef.confirm?.('确定删除当前记录及其皮下记忆吗？')) return;
+    const deleting = currentContactId;
+    deletePrivateConversationInstance(scopeKey, deleting);
+    const remaining = getPrivateConversationsForContact(scopeKey, 'builtin:meta');
+    const next = remaining[0];
+    currentContactId = next?.conversationKey || next?.id || 'builtin:meta';
+    show('chat');
+  }
+
   function renderChatInfo() {
     const conversation = currentConversation();
 
@@ -1559,9 +1776,13 @@ export function createPhonePanel({
           ${item.kind === 'custom' ? `<label class="moli-form-field"><span>名称</span><input type="text" maxlength="80" data-info-contact-name value="${escapeHtml(item.name || '')}"></label>` : `<label class="moli-form-field"><span>备注名</span><input type="text" maxlength="80" data-info-contact-remark value="${escapeHtml(item.remark || '')}" placeholder="不填写则跟随角色原名"></label>`}
           <button type="button" class="moli-info-save-button" data-action="save-contact-info">保存基础资料</button>
         </div>
+        ${isFourthWallContact(item) ? `
+        <button type="button" class="moli-info-setting-row" data-action="fourth-wall-settings">
+          <span>皮下设置</span><strong>›</strong>
+        </button>` : `
         <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings">
           <span>${isTavern ? '角色资料与提示词' : '人格与提示词'}</span><strong>›</strong>
-        </button>
+        </button>`}
         <button type="button" class="moli-info-setting-row" data-action="contact-api-settings">
           <span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong>
         </button>
@@ -2227,6 +2448,12 @@ export function createPhonePanel({
 
     if (name === 'conversation-settings') {
       renderConversationSettings();
+    }
+    if (name === 'fourth-wall-settings') {
+      renderFourthWallSettings();
+    }
+    if (name === 'fourth-wall-prompts') {
+      renderFourthWallPrompts();
     }
     if (name === 'contact-memory-settings') {
       renderPhoneMemorySettings();
@@ -4123,6 +4350,17 @@ export function createPhonePanel({
   panel.querySelector('[data-action="conversation-settings-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-save"]')?.addEventListener('click', saveConversationSettings);
+  panel.querySelector('[data-action="fourth-wall-settings-back"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="fourth-wall-settings-cancel"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="fourth-wall-settings-save"]')?.addEventListener('click', saveFourthWallSettings);
+  panel.querySelector('[data-action="fourth-wall-prompts-back"]')?.addEventListener('click', () => show('fourth-wall-settings'));
+  panel.querySelector('[data-action="fourth-wall-prompts-cancel"]')?.addEventListener('click', () => show('fourth-wall-settings'));
+  panel.querySelector('[data-action="fourth-wall-prompts-save"]')?.addEventListener('click', saveFourthWallPrompts);
+  panel.querySelector('[data-action="fourth-wall-prompts-restore"]')?.addEventListener('click', restoreFourthWallPrompts);
+  panel.querySelector('[data-action="fourth-wall-session-add"]')?.addEventListener('click', addFourthWallSession);
+  panel.querySelector('[data-action="fourth-wall-session-rename"]')?.addEventListener('click', renameFourthWallSession);
+  panel.querySelector('[data-action="fourth-wall-session-delete"]')?.addEventListener('click', deleteFourthWallSession);
+  fourthWallSessionSelect?.addEventListener('change', () => switchFourthWallSession(fourthWallSessionSelect.value));
   panel.querySelectorAll('input[name="moli-group-mode"]').forEach(input => input.addEventListener('change', () => {
     const conversation = currentConversation();
     if (!conversation || conversation.type !== 'group' || !conversationBodyContext) return;
@@ -4229,6 +4467,10 @@ export function createPhonePanel({
       if (conversation && ['private', 'group'].includes(conversation.type)) {
         show('conversation-settings');
       }
+    } else if (action === 'fourth-wall-settings') {
+      show('fourth-wall-settings');
+    } else if (action === 'fourth-wall-prompts') {
+      show('fourth-wall-prompts');
     } else if (action === 'contact-prompt-settings') {
       show('contact-prompt-settings');
     } else if (action === 'contact-api-settings') {
