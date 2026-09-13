@@ -638,6 +638,18 @@ export function createPhonePanel({
           <input type="text" maxlength="80" data-conversation-title placeholder="例如：日常 / 2018正文">
         </label>
 
+        <div class="moli-conversation-section" data-group-mode-section hidden>
+          <div class="moli-conversation-section-title">群聊模式</div>
+          <label class="moli-choice-card">
+            <input type="radio" name="moli-group-mode" value="reading">
+            <span><strong>围读会</strong><small>允许读取当前正文，适合正文点评、讨论与剧情分析；自动点评仅在此模式运行。</small></span>
+          </label>
+          <label class="moli-choice-card">
+            <input type="radio" name="moli-group-mode" value="role-chat">
+            <span><strong>角色闲聊</strong><small>模拟日常微信群；不读取当前正文、柏宝书或成员各自正文历史。</small></span>
+          </label>
+        </div>
+
         <div class="moli-conversation-section">
           <div class="moli-conversation-section-title">时间模式</div>
           <label class="moli-choice-card">
@@ -647,10 +659,6 @@ export function createPhonePanel({
           <label class="moli-choice-card">
             <input type="radio" name="moli-conversation-time-mode" value="real">
             <span><strong>现实世界时间</strong><small>使用现实日期、时刻与真实消息间隔，适合日常陪伴聊天。</small></span>
-          </label>
-          <label class="moli-choice-card">
-            <input type="radio" name="moli-conversation-time-mode" value="none">
-            <span><strong>无时间感</strong><small>除非聊天或正文明确提到，否则不主动推断现实时间与经过时长。</small></span>
           </label>
         </div>
 
@@ -799,6 +807,7 @@ export function createPhonePanel({
   const contactApiBody = panel.querySelector('[data-contact-api-body]');
   const contactApiPreset = panel.querySelector('[data-contact-api-preset]');
   const conversationSettingsScope = panel.querySelector('[data-conversation-settings-scope]');
+  const groupModeSection = panel.querySelector('[data-group-mode-section]');
   const phoneRecentMemoryInput = panel.querySelector('[data-phone-recent-memory]');
   const phoneLongMemoryInput = panel.querySelector('[data-phone-long-memory]');
   const phoneMemoryAutoStatus = panel.querySelector('[data-phone-memory-auto-status]');
@@ -1353,14 +1362,22 @@ export function createPhonePanel({
   function renderPhoneMemorySettings() {
     const scopeKey = getScopeKey?.();
     const conversation = currentConversation();
-    if (!scopeKey || !conversation || conversation.type !== 'private') {
-      toast('当前私聊不存在');
+    if (!scopeKey || !conversation || !['private', 'group'].includes(conversation.type)) {
+      toast('当前会话不存在');
       show('info');
       return;
     }
-    const memory = getConversationMemory(scopeKey, currentContactId) || { recent: [], longTermSummary: '' };
-    if (phoneRecentMemoryInput) phoneRecentMemoryInput.value = memory.recent.map(item => item.content).filter(Boolean).join('\n\n');
-    if (phoneLongMemoryInput) phoneLongMemoryInput.value = memory.longTermSummary || '';
+    const memory = getConversationMemory(scopeKey, currentContactId) || { recent: [], longTermSummary: '', longTermByMode: {} };
+    const groupMode = conversation.type === 'group' ? (conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading') : '';
+    const visibleRecent = conversation.type === 'group'
+      ? (memory.recent || []).filter(item => groupMode === 'reading' ? (!item?.sourceMode || item.sourceMode === 'reading') : item?.sourceMode === 'role-chat')
+      : (memory.recent || []);
+    if (phoneRecentMemoryInput) phoneRecentMemoryInput.value = visibleRecent.map(item => item.content).filter(Boolean).join('\n\n');
+    if (phoneLongMemoryInput) {
+      phoneLongMemoryInput.value = conversation.type === 'group'
+        ? (groupMode === 'role-chat' ? (memory.longTermByMode?.roleChat || '') : (memory.longTermByMode?.reading || memory.longTermSummary || ''))
+        : (memory.longTermSummary || '');
+    }
     if (phoneMemoryAutoStatus) {
       const autoCount = memory.recent.filter(item => item?.source === 'auto').length;
       const condensed = memory.lastCondensedAt ? new Date(memory.lastCondensedAt).toLocaleString() : '尚未运行';
@@ -1372,48 +1389,79 @@ export function createPhonePanel({
   function savePhoneMemorySettings() {
     const scopeKey = getScopeKey?.();
     const conversation = currentConversation();
-    if (!scopeKey || !conversation || conversation.type !== 'private' || !currentContactId) {
-      toast('当前私聊不存在');
+    if (!scopeKey || !conversation || !['private', 'group'].includes(conversation.type) || !currentContactId) {
+      toast('当前会话不存在');
       return;
     }
-    const recent = String(phoneRecentMemoryInput?.value || '')
+    const groupMode = conversation.type === 'group' ? (conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading') : '';
+    const editedRecent = String(phoneRecentMemoryInput?.value || '')
       .split(/\n\s*\n+/)
       .map(content => content.trim())
       .filter(Boolean)
-      .map((content, index) => ({ id: `manual:${Date.now()}:${index}`, content, createdAt: Date.now() + index, source: 'manual' }));
-    updateConversationMemory(scopeKey, currentContactId, {
-      recent,
-      longTermSummary: phoneLongMemoryInput?.value || '',
-    });
+      .map((content, index) => ({ id: `manual:${Date.now()}:${index}`, content, createdAt: Date.now() + index, source: 'manual', sourceMode: groupMode }));
+    if (conversation.type === 'group') {
+      const existing = getConversationMemory(scopeKey, currentContactId) || { recent: [], longTermByMode: {} };
+      const preserved = (existing.recent || []).filter(item => groupMode === 'reading'
+        ? item?.sourceMode === 'role-chat'
+        : (!item?.sourceMode || item.sourceMode === 'reading'));
+      const longTermByMode = {
+        ...(existing.longTermByMode || {}),
+        [groupMode === 'role-chat' ? 'roleChat' : 'reading']: phoneLongMemoryInput?.value || '',
+      };
+      updateConversationMemory(scopeKey, currentContactId, {
+        recent: [...preserved, ...editedRecent],
+        longTermByMode,
+      });
+    } else {
+      updateConversationMemory(scopeKey, currentContactId, {
+        recent: editedRecent,
+        longTermSummary: phoneLongMemoryInput?.value || '',
+      });
+    }
     toast('手机记忆已保存');
     show('info');
   }
 
   function renderConversationSettings() {
     const conversation = currentConversation();
-    if (!conversation || conversation.type !== 'private') {
-      toast('当前私聊不存在');
+    if (!conversation || !['private', 'group'].includes(conversation.type)) {
+      toast('当前会话不存在');
       show('info');
       return;
     }
 
     if (conversationSettingsScope) {
-      const label = conversation.scopeMode === 'global' ? '全局' : '当前存档';
-      conversationSettingsScope.textContent = `当前聊天：${conversation.title || '默认聊天'} · ${label}。这里调整时间模式、正文读取与近期消息上下文。`;
+      if (conversation.type === 'group') {
+        conversationSettingsScope.textContent = `当前群聊：${conversation.name || '未命名群聊'}。模式决定正文与 Review 是否进入这个 Conversation。`;
+      } else {
+        const label = conversation.scopeMode === 'global' ? '全局' : '当前存档';
+        conversationSettingsScope.textContent = `当前聊天：${conversation.title || '默认聊天'} · ${label}。这里调整时间模式、正文读取与近期消息上下文。`;
+      }
     }
 
     if (conversationTitleInput) {
-      conversationTitleInput.value = conversation.title || '';
+      conversationTitleInput.value = conversation.type === 'group' ? (conversation.name || '') : (conversation.title || '');
     }
 
-    const timeMode = ['real', 'body', 'none'].includes(String(conversation.timeMode))
+    if (groupModeSection) groupModeSection.hidden = conversation.type !== 'group';
+    if (conversation.type === 'group') {
+      const groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
+      const modeInput = panel.querySelector(`input[name="moli-group-mode"][value="${groupMode}"]`);
+      if (modeInput) modeInput.checked = true;
+    }
+
+    const timeMode = ['real', 'body'].includes(String(conversation.timeMode))
       ? String(conversation.timeMode)
       : (conversation.scopeMode === 'global' ? 'real' : 'body');
     const timeInput = panel.querySelector(`input[name="moli-conversation-time-mode"][value="${timeMode}"]`);
     if (timeInput) timeInput.checked = true;
 
     if (conversationBodyContext) {
-      conversationBodyContext.checked = conversation.bodyContextEnabled !== false;
+      const roleChat = conversation.type === 'group' && conversation.groupMode === 'role-chat';
+      conversationBodyContext.checked = !roleChat && conversation.bodyContextEnabled !== false;
+      conversationBodyContext.disabled = roleChat;
+      const row = conversationBodyContext.closest('.moli-switch-row');
+      row?.classList.toggle('is-disabled', roleChat);
     }
 
     if (conversationRecentLimit) {
@@ -1428,8 +1476,8 @@ export function createPhonePanel({
     const scopeKey = getScopeKey?.();
     const conversation = currentConversation();
     const conversationKey = currentContactId;
-    if (!scopeKey || !conversation || conversation.type !== 'private' || !conversationKey) {
-      toast('当前私聊不存在');
+    if (!scopeKey || !conversation || !['private', 'group'].includes(conversation.type) || !conversationKey) {
+      toast('当前会话不存在');
       return;
     }
 
@@ -1444,12 +1492,23 @@ export function createPhonePanel({
     if (conversationRecentLimit) conversationRecentLimit.value = String(normalizedLimit);
 
     try {
-      updatePrivateConversationSettings(scopeKey, conversationKey, {
-        title: conversationTitleInput?.value || '',
-        timeMode: selectedTimeMode,
-        bodyContextEnabled: Boolean(conversationBodyContext?.checked),
-        recentChatLimit: normalizedLimit,
-      });
+      if (conversation.type === 'group') {
+        const groupMode = panel.querySelector('input[name="moli-group-mode"]:checked')?.value || 'reading';
+        updateGroupConversation(scopeKey, conversationKey, {
+          name: conversationTitleInput?.value || conversation.name || '群聊',
+          groupMode,
+          timeMode: selectedTimeMode,
+          bodyContextEnabled: groupMode === 'reading' && Boolean(conversationBodyContext?.checked),
+          recentChatLimit: normalizedLimit,
+        });
+      } else {
+        updatePrivateConversationSettings(scopeKey, conversationKey, {
+          title: conversationTitleInput?.value || '',
+          timeMode: selectedTimeMode,
+          bodyContextEnabled: Boolean(conversationBodyContext?.checked),
+          recentChatLimit: normalizedLimit,
+        });
+      }
       toast('当前聊天设置已保存');
       show('info');
     } catch (error) {
@@ -1554,6 +1613,15 @@ export function createPhonePanel({
         <button type="button" data-action="save-group-name">保存</button>
       </label>
 
+      <button type="button" class="moli-info-setting-row" data-action="contact-memory-settings">
+        <span>手机记忆</span><strong>›</strong>
+      </button>
+
+      <button type="button" class="moli-info-setting-row" data-action="conversation-settings">
+        <span>当前聊天设置</span>
+        <strong>${conversation.groupMode === 'role-chat' ? '角色闲聊' : '围读会'} ›</strong>
+      </button>
+
       <button type="button" class="moli-info-setting-row" data-action="toggle-pin">
         <span>置顶聊天</span>
         <strong>${conversation.pinned ? '已开启' : '未开启'}</strong>
@@ -1571,8 +1639,8 @@ export function createPhonePanel({
 
       <div class="moli-info-form" data-group-review-settings>
         <label class="moli-choice-card">
-          <input type="checkbox" data-review-enabled ${conversation.automation?.reviewEnabled ? 'checked' : ''}>
-          <span><strong>自动点评</strong><small>群聊只有自动点评，不提供自动吐槽。</small></span>
+          <input type="checkbox" data-review-enabled ${conversation.automation?.reviewEnabled ? 'checked' : ''} ${conversation.groupMode === 'role-chat' ? 'disabled' : ''}>
+          <span><strong>自动点评</strong><small>${conversation.groupMode === 'role-chat' ? '角色闲聊模式不读取正文，因此暂停自动点评。切回围读会后恢复。' : '围读会按正文回合触发；群聊不提供自动吐槽。'}</small></span>
         </label>
         <label class="moli-form-field"><span>每 N 个有效正文 AI 回合点评</span><input type="number" min="1" max="9999" step="1" data-review-interval value="${Number(conversation.automation?.reviewInterval ?? 5)}"></label>
         <button type="button" class="moli-info-save-button" data-action="save-group-review">保存自动点评</button>
@@ -2627,7 +2695,6 @@ export function createPhonePanel({
                 ${escapeHtml(title)}
               </div>
               ${conversation.pinned ? '<span class="moli-pin-mark">置顶</span>' : ''}
-              ${Number(conversation.unreadCount || 0) > 0 ? `<span class="moli-unread-badge">${Number(conversation.unreadCount) > 99 ? '99+' : Number(conversation.unreadCount)}</span>` : ''}
             </div>
 
             <div class="moli-preview">
@@ -3936,6 +4003,15 @@ export function createPhonePanel({
   panel.querySelector('[data-action="conversation-settings-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-save"]')?.addEventListener('click', saveConversationSettings);
+  panel.querySelectorAll('input[name="moli-group-mode"]').forEach(input => input.addEventListener('change', () => {
+    const conversation = currentConversation();
+    if (!conversation || conversation.type !== 'group' || !conversationBodyContext) return;
+    const roleChat = panel.querySelector('input[name="moli-group-mode"]:checked')?.value === 'role-chat';
+    conversationBodyContext.disabled = roleChat;
+    if (roleChat) conversationBodyContext.checked = false;
+    else conversationBodyContext.checked = true;
+    conversationBodyContext.closest('.moli-switch-row')?.classList.toggle('is-disabled', roleChat);
+  }));
   panel.querySelector('[data-action="contact-prompt-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-save"]')?.addEventListener('click', saveContactPromptSettings);
@@ -4030,7 +4106,7 @@ export function createPhonePanel({
       toggleCurrentConversationPin();
     } else if (action === 'conversation-settings') {
       const conversation = currentConversation();
-      if (conversation?.type === 'private') {
+      if (conversation && ['private', 'group'].includes(conversation.type)) {
         show('conversation-settings');
       }
     } else if (action === 'contact-prompt-settings') {
