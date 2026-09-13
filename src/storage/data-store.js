@@ -81,6 +81,25 @@ function normalizeConversationMemory(memoryValue) {
   };
 }
 
+
+function normalizeFourthWallSettings(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  const templates = source.promptTemplates && typeof source.promptTemplates === 'object'
+    ? source.promptTemplates
+    : {};
+  return {
+    maxChatLayers: Math.max(1, Math.min(9999, Number.isFinite(Number(source.maxChatLayers)) ? Math.round(Number(source.maxChatLayers)) : 20)),
+    stream: source.stream !== false,
+    disableAssistantPrefill: source.disableAssistantPrefill === true,
+    promptTemplates: {
+      topUser: String(templates.topUser || ''),
+      confirm: String(templates.confirm || ''),
+      metaProtocol: String(templates.metaProtocol || ''),
+      bottom: String(templates.bottom || ''),
+    },
+  };
+}
+
 function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
   if (!conversation || typeof conversation !== 'object') return conversation;
 
@@ -131,6 +150,9 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
       conversation.recentChatLimit = Math.max(10, Math.min(9999, Number(conversation.recentChatLimit)));
     }
     conversation.memory = normalizeConversationMemory(conversation.memory);
+    if (String(conversation.contactId || '') === 'builtin:meta') {
+      conversation.fourthWall = normalizeFourthWallSettings(conversation.fourthWall);
+    }
   } else if (conversation.type === 'group') {
     conversation.groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
     if (!['real', 'body'].includes(String(conversation.timeMode))) conversation.timeMode = 'body';
@@ -558,6 +580,19 @@ export function getPrivateConversationsForContact(scopeKey, contactId) {
       && String(conversation.contactId || '') === String(contactId || '')
     )
     .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+}
+
+
+export function deletePrivateConversationInstance(scopeKey, conversationKey) {
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation || conversation.type !== 'private') {
+    throw new Error('私聊不存在');
+  }
+  delete located.data.conversations[conversationKey];
+  if (located.storage === 'global') saveGlobalConversationStore(located.data);
+  else saveScope(scopeKey, located.data);
+  return true;
 }
 
 export function getConversation(
@@ -1128,6 +1163,7 @@ export function updatePrivateConversationSettings(
     autoChatProbability,
     commentaryEnabled,
     commentaryProbability,
+    fourthWallSettings,
   } = {}
 ) {
   let located = locateConversation(scopeKey, conversationKey);
@@ -1202,6 +1238,22 @@ export function updatePrivateConversationSettings(
     const value = Number(commentaryProbability);
     if (!Number.isFinite(value)) throw new Error('自动吐槽概率必须是数字');
     conversation.automation.commentaryProbability = Math.max(0, Math.min(100, Math.round(value)));
+  }
+  if (fourthWallSettings !== undefined) {
+    if (String(conversation.contactId || '') !== 'builtin:meta') {
+      throw new Error('当前聊天不是皮下会话');
+    }
+    const current = normalizeFourthWallSettings(conversation.fourthWall);
+    const patch = fourthWallSettings && typeof fourthWallSettings === 'object' ? fourthWallSettings : {};
+    const merged = {
+      ...current,
+      ...patch,
+      promptTemplates: {
+        ...current.promptTemplates,
+        ...(patch.promptTemplates && typeof patch.promptTemplates === 'object' ? patch.promptTemplates : {}),
+      },
+    };
+    conversation.fourthWall = normalizeFourthWallSettings(merged);
   }
 
   conversation.updatedAt = Date.now();
