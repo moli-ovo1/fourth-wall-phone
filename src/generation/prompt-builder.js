@@ -1,5 +1,6 @@
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
+import { formatFourthWallHistory, sanitizeFourthWallContext } from '../prompts/fourth-wall.js';
 function clean(value) {
   return String(value || '').trim();
 }
@@ -40,7 +41,7 @@ function senderName(message, conversation, contact) {
   return clean(message?.senderName) || '联系人';
 }
 
-function formatOtherConversation(source, contact) {
+function formatOtherConversation(source, contact, { fourthWall = false } = {}) {
   const label = source.type === 'group'
     ? `群聊「${clean(source.name) || '未命名群聊'}」`
     : `与用户的私聊`;
@@ -50,7 +51,8 @@ function formatOtherConversation(source, contact) {
       const who = message.role === 'user'
         ? '用户'
         : (clean(message.senderName) || contactName(contact));
-      const content = messageText(message);
+      const rawContent = messageText(message);
+      const content = fourthWall ? sanitizeFourthWallContext(rawContent) : rawContent;
       return content ? `${who}：${content}` : '';
     })
     .filter(Boolean);
@@ -122,7 +124,7 @@ function roleFidelityBlocks(contact) {
   return blocks;
 }
 
-function recentBodyBlock(recentBody) {
+function recentBodyBlock(recentBody, { fourthWall = false } = {}) {
   const messages = Array.isArray(recentBody?.messages)
     ? recentBody.messages
     : [];
@@ -131,7 +133,7 @@ function recentBodyBlock(recentBody) {
 
   const lines = messages
     .map(message => {
-      const content = clean(message?.content);
+      const content = fourthWall ? sanitizeFourthWallContext(message?.content) : clean(message?.content);
       if (!content) return '';
 
       const who = clean(message?.name)
@@ -185,6 +187,7 @@ export function buildPrivateGenerationRequest({
   }
 
   const name = contactName(contact);
+  const isFourthWall = String(contact?.id || '') === 'builtin:meta';
   const intro = clean(contact.intro);
   const builtinDefaultPrompt = contact.kind === 'builtin' ? getBuiltinPersonaPrompt(contact.id) : '';
   const prompt = contact.kind === 'builtin'
@@ -267,7 +270,7 @@ export function buildPrivateGenerationRequest({
     );
   }
 
-  const bodyBlock = recentBodyBlock(recentBody);
+  const bodyBlock = recentBodyBlock(recentBody, { fourthWall: isFourthWall });
   if (bodyBlock) {
     systemBlocks.push(bodyBlock);
   }
@@ -280,7 +283,7 @@ export function buildPrivateGenerationRequest({
   }
 
   const otherBlocks = (Array.isArray(otherContextSources) ? otherContextSources : [])
-    .map(source => formatOtherConversation(source, contact))
+    .map(source => formatOtherConversation(source, contact, { fourthWall: isFourthWall }))
     .filter(Boolean);
 
   if (otherBlocks.length) {
@@ -290,14 +293,20 @@ export function buildPrivateGenerationRequest({
     );
   }
 
-  const history = messages
-    .slice(-Math.max(1, Number(historyLimit) || 60))
-    .map(message => ({
-      role: message.role === 'user' ? 'user' : 'assistant',
-      content: messageText(message),
-      name: senderName(message, conversation, contact),
-    }))
-    .filter(message => message.content);
+  const history = isFourthWall
+    ? formatFourthWallHistory(messages, {
+        historyLimit,
+        timeMode: conversation.timeMode === 'real' ? 'real' : 'body',
+        messageText,
+      })
+    : messages
+        .slice(-Math.max(1, Number(historyLimit) || 60))
+        .map(message => ({
+          role: message.role === 'user' ? 'user' : 'assistant',
+          content: messageText(message),
+          name: senderName(message, conversation, contact),
+        }))
+        .filter(message => message.content);
 
   return {
     system: systemBlocks.join('\n\n'),
@@ -312,6 +321,7 @@ export function buildPrivateGenerationRequest({
         : 0,
       phoneRecentMemoryCount: phoneRecentMemories.length,
       phoneLongTermSummaryEnabled: Boolean(phoneLongTermSummary),
+      fourthWallProtocolEnabled: isFourthWall,
       roleFidelityEnabled:
         contact.kind === 'tavern'
         && Boolean(contact?.source?.roleFidelity),
