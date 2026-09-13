@@ -95,6 +95,31 @@ export function createPhonePanel({
       </footer>
     </section>
 
+    <section class="moli-page" data-page="sync-tavern-scope">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="sync-scope-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">角色类型</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-settings-list">
+        <div class="moli-settings-note">选择这些酒馆角色加入 moli小手机 后的归属。这个选择在添加好友时完成，不放进角色资料卡重复修改。</div>
+        <label class="moli-choice-card">
+          <input type="radio" name="moli-sync-scope-mode" value="current" checked>
+          <span><strong>正文角色</strong><small>只属于当前 SillyTavern 存档，默认跟随正文时间并读取当前正文。</small></span>
+        </label>
+        <label class="moli-choice-card">
+          <input type="radio" name="moli-sync-scope-mode" value="global">
+          <span><strong>全局角色</strong><small>跨正文持续存在，默认使用现实时间且不读取当前正文。</small></span>
+        </label>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="sync-scope-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="sync-scope-confirm">确认添加</button>
+      </footer>
+    </section>
+
     <section class="moli-page" data-page="add-contact">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -1492,18 +1517,6 @@ export function createPhonePanel({
         <button type="button" class="moli-info-setting-row" data-action="contact-memory-settings">
           <span>手机记忆</span><strong>›</strong>
         </button>
-        <div class="moli-info-source moli-conversation-identity moli-conversation-controls">
-          <label><span>当前聊天</span><select data-info-conversation-picker>${(() => {
-            const scopeKey = getScopeKey?.();
-            const siblings = scopeKey ? getPrivateConversationsForContact(scopeKey, conversation.contactId) : [conversation];
-            return siblings.map(candidate => {
-              const key = candidate.conversationKey || candidate.id;
-              const title = candidate.title || '默认聊天';
-              const owner = candidate.scopeMode === 'global' ? '全局' : '当前存档';
-              return `<option value="${escapeHtml(key)}" ${key === currentContactId ? 'selected' : ''}>${escapeHtml(title)} · ${owner}</option>`;
-            }).join('');
-          })()}</select></label>
-        </div>
         <button type="button" class="moli-info-setting-row" data-action="conversation-settings">
           <span>当前聊天设置</span>
           <strong>›</strong>
@@ -2245,15 +2258,15 @@ export function createPhonePanel({
             </div>
             <div class="moli-sync-main">
               <div class="moli-sync-name">${escapeHtml(character.name)}</div>
-              ${existing
-                ? `<div class="moli-sync-status">${alreadyInScope ? '已在当前聊天列表' : '已添加'}</div>`
-                : ''}
+              ${existing && !alreadyInScope ? '<div class="moli-sync-status">已添加</div>' : ''}
             </div>
           </label>
         `;
       })
       .join('');
   }
+
+  let pendingTavernSync = [];
 
   function confirmTavernSync() {
     const selectedIds = new Set(
@@ -2266,20 +2279,38 @@ export function createPhonePanel({
       return;
     }
 
-    const selected = syncSnapshot.filter(
-      item => selectedIds.has(item.sourceId)
-    );
+    pendingTavernSync = syncSnapshot.filter(item => selectedIds.has(item.sourceId));
+    const currentRadio = panel.querySelector('input[name="moli-sync-scope-mode"][value="current"]');
+    if (currentRadio) currentRadio.checked = true;
+    show('sync-tavern-scope');
+  }
 
-    const syncedContacts = syncTavernContacts(selected);
-    const scopeKey = getScopeKey?.();
-
-    if (scopeKey) {
-      syncedContacts.forEach(item => {
-        ensureConversation(scopeKey, item.id);
-      });
+  function confirmTavernSyncScope() {
+    if (!pendingTavernSync.length) {
+      show('sync-tavern');
+      return;
     }
 
-    toast(`已添加 ${syncedContacts.length} 个角色`);
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey) {
+      toast('当前聊天环境不可用');
+      return;
+    }
+
+    const scopeMode = panel.querySelector('input[name="moli-sync-scope-mode"]:checked')?.value === 'global'
+      ? 'global'
+      : 'current';
+    const syncedContacts = syncTavernContacts(pendingTavernSync);
+
+    syncedContacts.forEach(item => {
+      const existing = getPrivateConversationsForContact(scopeKey, item.id);
+      if (!existing.length) {
+        createPrivateConversationInstance(scopeKey, item.id, { scopeMode });
+      }
+    });
+
+    pendingTavernSync = [];
+    toast(`已添加 ${syncedContacts.length} 个${scopeMode === 'global' ? '全局角色' : '正文角色'}`);
     show('home');
   }
 
@@ -3753,22 +3784,6 @@ export function createPhonePanel({
   panel.querySelector('[data-action="conversation-settings-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-save"]')?.addEventListener('click', saveConversationSettings);
-  panel.addEventListener('change', event => {
-    const target = event.target;
-    if (!(target instanceof windowRef.HTMLSelectElement)) return;
-
-    if (target.matches('[data-info-conversation-picker]')) {
-      const nextKey = String(target.value || '');
-      if (!nextKey || nextKey === currentContactId) return;
-      currentContactId = nextKey;
-      const scopeKey = getScopeKey?.();
-      if (scopeKey) markConversationRead(scopeKey, currentContactId);
-      renderChatInfo();
-      renderChat();
-      return;
-    }
-  });
-
   panel.querySelector('[data-action="contact-prompt-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-save"]')?.addEventListener('click', saveContactPromptSettings);
@@ -3973,6 +3988,13 @@ export function createPhonePanel({
     '[data-action="sync-confirm"]'
   ).onclick =
     confirmTavernSync;
+
+  panel.querySelector('[data-action="sync-scope-back"]')?.addEventListener('click', () => show('sync-tavern'));
+  panel.querySelector('[data-action="sync-scope-cancel"]')?.addEventListener('click', () => {
+    pendingTavernSync = [];
+    show('home');
+  });
+  panel.querySelector('[data-action="sync-scope-confirm"]')?.addEventListener('click', confirmTavernSyncScope);
 
   panel.querySelector(
     '[data-action="more"]'
