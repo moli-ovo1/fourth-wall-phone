@@ -554,7 +554,7 @@ export function createCustomContact({
 }
 
 
-export function updateContact(contactId, { name, remark, customAvatar, intro, prompt } = {}) {
+export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, apiOverride, statusBar } = {}) {
   const list = getContacts();
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
@@ -568,6 +568,16 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
   if (customAvatar !== undefined) contact.customAvatar = String(customAvatar || '');
   if (intro !== undefined) contact.intro = String(intro || '').trim();
   if (prompt !== undefined) contact.prompt = String(prompt || '').trim();
+  if (apiOverride !== undefined) {
+    contact.apiOverride = apiOverride && typeof apiOverride === 'object'
+      ? JSON.parse(JSON.stringify(apiOverride))
+      : { enabled: false };
+  }
+  if (statusBar !== undefined) {
+    contact.statusBar = statusBar && typeof statusBar === 'object'
+      ? JSON.parse(JSON.stringify(statusBar))
+      : {};
+  }
   contact.updatedAt = Date.now();
   saveContacts(list);
   return contact;
