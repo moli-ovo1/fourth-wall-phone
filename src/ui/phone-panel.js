@@ -1494,6 +1494,20 @@ export function createPhonePanel({
           <span>当前聊天设置</span>
           <strong>›</strong>
         </button>
+        ${(item.kind === 'tavern' || item.kind === 'custom') ? `
+        <div class="moli-info-form" data-private-automation>
+          <label class="moli-choice-card">
+            <input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}>
+            <span><strong>自动聊天 / 主动私聊</strong><small>角色自主判断是否主动联系；百分比控制主动倾向，不是机械定时器。</small></span>
+          </label>
+          <label class="moli-form-field"><span>自动聊天百分比（0–100%）</span><input type="number" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}"></label>
+          <label class="moli-choice-card">
+            <input type="checkbox" data-commentary-enabled ${conversation.automation?.commentaryEnabled ? 'checked' : ''}>
+            <span><strong>自动吐槽正文</strong><small>只针对正文事件吐槽，与主动私聊是两个独立系统。</small></span>
+          </label>
+          <label class="moli-form-field"><span>自动吐槽百分比（0–100%）</span><input type="number" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}"></label>
+          <button type="button" class="moli-info-save-button" data-action="save-private-automation">保存自动行为</button>
+        </div>` : ''}
         <button type="button" class="moli-info-setting-row" data-action="toggle-pin">
           <span>置顶聊天</span>
           <strong>${conversation.pinned ? '已开启' : '未开启'}</strong>
@@ -1553,8 +1567,65 @@ export function createPhonePanel({
         <strong>›</strong>
       </button>
 
-      <div class="moli-info-coming">自动吐槽、自动点评等设置将在后续阶段继续接入。</div>
+      <div class="moli-info-form" data-group-review-settings>
+        <label class="moli-choice-card">
+          <input type="checkbox" data-review-enabled ${conversation.automation?.reviewEnabled ? 'checked' : ''}>
+          <span><strong>自动点评</strong><small>群聊只有自动点评，不提供自动吐槽。</small></span>
+        </label>
+        <label class="moli-form-field"><span>每 N 个有效正文 AI 回合点评</span><input type="number" min="1" max="9999" step="1" data-review-interval value="${Number(conversation.automation?.reviewInterval ?? 5)}"></label>
+        <button type="button" class="moli-info-save-button" data-action="save-group-review">保存自动点评</button>
+      </div>
+      <div class="moli-info-coming">自动点评真正触发与全员逐人生成将在群聊编排器接通后启用；当前先保存配置，不伪造已运行状态。</div>
     `;
+  }
+
+
+  function savePrivateAutomationSettings() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    const item = conversation?.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
+    if (!scopeKey || !conversation || conversation.type !== 'private' || !item || !['tavern', 'custom'].includes(item.kind)) return;
+    const autoChatProbability = Number(chatInfo.querySelector('[data-auto-chat-probability]')?.value ?? 30);
+    const commentaryProbability = Number(chatInfo.querySelector('[data-commentary-probability]')?.value ?? 30);
+    if (!Number.isFinite(autoChatProbability) || !Number.isFinite(commentaryProbability)) {
+      toast('百分比必须是数字');
+      return;
+    }
+    try {
+      updatePrivateConversationSettings(scopeKey, currentContactId, {
+        autoChatEnabled: Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked),
+        autoChatProbability,
+        commentaryEnabled: Boolean(chatInfo.querySelector('[data-commentary-enabled]')?.checked),
+        commentaryProbability,
+      });
+      toast('自动行为设置已保存');
+      renderChatInfo();
+    } catch (error) {
+      console.error('[moli小手机] save private automation failed:', error);
+      toast(error?.message || '保存自动行为失败');
+    }
+  }
+
+  function saveGroupReviewSettings() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    if (!scopeKey || !conversation || conversation.type !== 'group') return;
+    const reviewInterval = Number(chatInfo.querySelector('[data-review-interval]')?.value ?? 5);
+    if (!Number.isFinite(reviewInterval)) {
+      toast('点评间隔必须是数字');
+      return;
+    }
+    try {
+      updateGroupConversation(scopeKey, conversation.id, {
+        reviewEnabled: Boolean(chatInfo.querySelector('[data-review-enabled]')?.checked),
+        reviewInterval,
+      });
+      toast('自动点评设置已保存');
+      renderChatInfo();
+    } catch (error) {
+      console.error('[moli小手机] save group review failed:', error);
+      toast(error?.message || '保存自动点评失败');
+    }
   }
 
 
@@ -3874,6 +3945,16 @@ export function createPhonePanel({
 
     if (action === 'clear-chat-history') {
       clearCurrentChatHistory();
+      return;
+    }
+
+    if (action === 'save-private-automation') {
+      savePrivateAutomationSettings();
+      return;
+    }
+
+    if (action === 'save-group-review') {
+      saveGroupReviewSettings();
     }
   });
 
