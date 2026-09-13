@@ -47,7 +47,7 @@ import {
   listProviderModels,
   testProviderConnection,
 } from '../api/providers/provider-registry.js';
-import { generatePrivateReply } from '../generation/generation-service.js';
+import { generatePrivateReply, generateGroupReply } from '../generation/generation-service.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
 import { parseGeneratedMessages, previewGeneratedMessages } from '../generation/message-parser.js';
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
@@ -1500,12 +1500,12 @@ export function createPhonePanel({
             <input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}>
             <span><strong>自动聊天 / 主动私聊</strong><small>角色自主判断是否主动联系；百分比控制主动倾向，不是机械定时器。</small></span>
           </label>
-          <label class="moli-form-field"><span>自动聊天百分比（0–100%）</span><input type="number" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}"></label>
+          <label class="moli-automation-slider"><span>主动私聊频率</span><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}" aria-label="主动私聊频率"></label>
           <label class="moli-choice-card">
             <input type="checkbox" data-commentary-enabled ${conversation.automation?.commentaryEnabled ? 'checked' : ''}>
             <span><strong>自动吐槽正文</strong><small>只针对正文事件吐槽，与主动私聊是两个独立系统。</small></span>
           </label>
-          <label class="moli-form-field"><span>自动吐槽百分比（0–100%）</span><input type="number" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}"></label>
+          <label class="moli-automation-slider"><span>正文吐槽频率</span><input type="range" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}" aria-label="正文吐槽频率"></label>
           <button type="button" class="moli-info-save-button" data-action="save-private-automation">保存自动行为</button>
         </div>` : ''}
         <button type="button" class="moli-info-setting-row" data-action="toggle-pin">
@@ -3315,10 +3315,6 @@ export function createPhonePanel({
       return;
     }
 
-    if (conversation.type !== 'private') {
-      toast('群聊回复将在轻编排层接入');
-      return;
-    }
 
     const trailingUserMessages = (conversation.messages || [])
       .slice()
@@ -3344,44 +3340,50 @@ export function createPhonePanel({
     toast('正在生成回复…');
 
     try {
-      const result = await generatePrivateReply({
+      const commonGenerationOptions = {
         scopeKey,
         conversationKey: currentContactId,
         signal: controller.signal,
-        onDelta: (_chunk, fullText) => {
+        onDelta: (_chunk, fullText, activeContact) => {
           if (controller.signal.aborted) return;
           if (getScopeKey?.() !== requestScopeKey) return;
           if (currentContactId !== generationConversationKey) return;
-          updateGenerationPreview(requestContact, fullText);
+          updateGenerationPreview(activeContact || requestContact, fullText);
         },
-      });
+      };
+      const result = conversation.type === 'group'
+        ? await generateGroupReply(commonGenerationOptions)
+        : await generatePrivateReply(commonGenerationOptions);
 
       if (controller.signal.aborted) return;
 
       clearGenerationPreview();
 
-      const generatedMessages = parseGeneratedMessages(result.text);
-      if (!generatedMessages.length) {
+      const generationTurnId = `turn:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+      const replyBatches = conversation.type === 'group'
+        ? result.replies
+        : [{ contact: result.contact, messages: parseGeneratedMessages(result.text) }];
+      if (!replyBatches?.length || !replyBatches.some(batch => batch.messages?.length)) {
         throw new Error('模型没有返回可用消息');
       }
-
-      const generationTurnId = `turn:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-      generatedMessages.forEach(content => {
-        appendMessage(
-          requestScopeKey,
-          generationConversationKey,
-          'assistant',
-          content,
-          {
-            source: 'generation',
-            generationTurnId,
-            senderId: result.contact.id,
-            senderSnapshot: {
-              name: displayName(result.contact),
-              avatar: avatarUrl(result.contact),
-            },
-          }
-        );
+      replyBatches.forEach(batch => {
+        (batch.messages || []).forEach(content => {
+          appendMessage(
+            requestScopeKey,
+            generationConversationKey,
+            'assistant',
+            content,
+            {
+              source: 'generation',
+              generationTurnId,
+              senderId: batch.contact.id,
+              senderSnapshot: {
+                name: displayName(batch.contact),
+                avatar: avatarUrl(batch.contact),
+              },
+            }
+          );
+        });
       });
 
       if (
