@@ -191,7 +191,7 @@ export function buildPrivateGenerationRequest({
     '只回复当前角色本人的消息，不要替用户发言，不要输出系统说明。',
   ];
 
-  const scopeLabel = conversation.scopeMode === 'global' ? '全局陪伴' : '随当前正文';
+  const scopeLabel = conversation.scopeMode === 'global' ? '全局' : '当前存档';
   const timeLabel = conversation.timeMode === 'real'
     ? '现实世界时间'
     : conversation.timeMode === 'none'
