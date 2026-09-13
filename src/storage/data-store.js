@@ -938,6 +938,17 @@ export function appendMessage(
     message.senderId = String(options.senderId);
   }
 
+  if (options?.storyTime && typeof options.storyTime === 'object') {
+    const label = String(options.storyTime.label || '').trim();
+    if (label) {
+      message.storyTime = {
+        label,
+        minuteOfDay: options.storyTime.minuteOfDay !== null && options.storyTime.minuteOfDay !== undefined && Number.isFinite(Number(options.storyTime.minuteOfDay)) ? Number(options.storyTime.minuteOfDay) : null,
+        dateKey: String(options.storyTime.dateKey || ''),
+      };
+    }
+  }
+
   // 同一次 AI 调用返回的多个角色气泡共享一个轮次 ID。
   // 用于手机记忆按“完整 AI 交互轮次”计数，而不是按气泡条数计数。
   if (options?.generationTurnId) {
