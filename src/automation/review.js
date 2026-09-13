@@ -7,7 +7,7 @@ import {
 import { getTavernAssistantTurnState } from '../core/tavern-context.js';
 import { generateGroupReview } from '../generation/generation-service.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
-import { beginGenerationTask, endGenerationTask } from '../core/generation-runtime.js';
+import { beginGenerationTask, endGenerationTask, setGenerationError } from '../core/generation-runtime.js';
 
 const POLL_MS = 2200;
 const RETRY_MS = 60000;
@@ -133,6 +133,10 @@ export function createReviewAutomation({ getScopeKey } = {}) {
           recordAutomaticUnreadRound(scopeKey, key, messageCount);
           void maybeAutoCompactConversationMemory({ scopeKey, conversationKey: key });
         }
+        if (result.failures?.length) {
+          const detail = result.failures.map(item => `${item.name}：${item.error}`).join('；');
+          setGenerationError(scopeKey, key, `自动点评部分失败：${detail}`, 'review');
+        }
         updateGroupReviewRuntime(scopeKey, key, {
           lastTriggeredEligibleCount: sameBoundaryReroll ? nextEligible : triggerEligibleCount,
           lastTriggeredSignature: String(body.lastSignature || ''),
@@ -141,10 +145,12 @@ export function createReviewAutomation({ getScopeKey } = {}) {
         });
         window.dispatchEvent(new CustomEvent('moli:conversation-updated', { detail: { scopeKey, conversationKey: key, source: 'review' } }));
       } catch (error) {
+        const errorMessage = String(error?.message || error || '自动点评失败');
         updateGroupReviewRuntime(scopeKey, key, {
           lastAttemptAt: Date.now(),
-          lastError: String(error?.message || error || '自动点评失败'),
+          lastError: errorMessage,
         });
+        setGenerationError(scopeKey, key, `自动点评失败：${errorMessage}`, 'review');
         console.error('[moli小手机] automatic group review failed:', error);
       } finally {
         endGenerationTask(scopeKey, key);

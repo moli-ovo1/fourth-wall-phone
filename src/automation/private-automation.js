@@ -2,7 +2,7 @@ import { appendMessage, getContacts, getScopeConversations, recordAutomaticUnrea
 import { getTavernAssistantTurnState } from '../core/tavern-context.js';
 import { generatePrivateReply } from '../generation/generation-service.js';
 import { parseGeneratedMessages } from '../generation/message-parser.js';
-import { beginGenerationTask, endGenerationTask } from '../core/generation-runtime.js';
+import { beginGenerationTask, endGenerationTask, setGenerationError } from '../core/generation-runtime.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -45,7 +45,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         messages.forEach(content => appendMessage(scopeKey, key, 'assistant', content, { source: mode === 'commentary' ? 'commentary' : 'auto-chat', generationTurnId: turnId, senderId: contact.id, senderSnapshot: { name: contact.remark || contact.name || '联系人', avatar: contact.customAvatar || contact.source?.originalAvatarUrl || '' } }));
         recordAutomaticUnreadRound(scopeKey, key, messages.length);
         window.dispatchEvent(new CustomEvent('moli:conversation-updated', { detail: { scopeKey, conversationKey: key, source: mode } }));
-      } catch (e) { console.error('[moli小手机] private automation failed:', e); }
+      } catch (e) { setGenerationError(scopeKey, key, `自动行为失败：${String(e?.message || e || '请求失败')}`, mode); console.error('[moli小手机] private automation failed:', e); }
       finally { updatePrivateAutomationRuntime(scopeKey, key, { lastAutoChatAt: mode === 'chat' ? Date.now() : Number(a.lastAutoChatAt || 0) }); endGenerationTask(scopeKey, key); running.delete(key); }
     }
   };
