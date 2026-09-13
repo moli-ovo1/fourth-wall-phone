@@ -1611,21 +1611,23 @@ moli33 的主 API 页面仍不符合酒馆用户熟悉的手机扩展使用方�
 
 `moli36`：状态栏本体。按已确认的章鱼式结构实现全局状态栏预设库 + Contact 状态栏配置，并保持 Conversation 状态历史独立的架构边界。
 
-# moli36 节点：时间模式修复 + 状态栏第一阶段
+# moli37 节点：Conversation / SPEC 校准
 
-## 已完成
-1. 修复 Conversation 时间模式的“看起来保存了但没有实际变化”问题：
-   - 聊天信息页新增当前时间模式显示；
-   - 当前聊天设置按钮同步显示所选模式；
-   - 现实时间模式在每次生成时注入动态现实日期/时刻；
-   - 正文时间 / 无时间感分别注入明确时间规则。
-2. 新增 `src/storage/status-settings.js`，建立全局状态栏预设库。
-3. 主设置新增“状态栏预设”页：名称 / Prompt Suffix / Regex / HTML Template / Regex 测试。
-4. 联系人“状态栏”占位页升级为可保存配置页，并支持从全局预设快速填充。
-5. 保持 Contact / Conversation 边界：联系人只保存默认状态栏规则，状态历史仍预留给 Conversation。
+本节点暂停继续堆叠状态栏，先修复 Conversation 2.0 管理 UI 与数据归属。
 
-## 下一步
-1. 设计并实现 Conversation 状态历史存储与提取流程。
-2. 确认“最近 N 个状态进入上下文”的默认 N 后再接入对应 Conversation 设置。
-3. 确认状态输出频率（每条 / 条件触发 / 其他）后，再把 Prompt Suffix 正式接入生成与状态提取。
-4. HTML Template 实时预览需先确定安全清洗规则，再开放真实渲染。
+## 实现
+
+- `src/ui/phone-panel.js`
+  - 当前聊天设置页新增 `当前聊天` 选择器，可在同 Contact 的已有私聊之间切换。
+  - `归属` 从只读说明改为可编辑选择：随当前正文 / 全局陪伴。
+  - 保存时同时提交 scopeMode、时间模式、正文读取和最近聊天上限。
+- `src/storage/data-store.js`
+  - `updatePrivateConversationSettings()` 支持 scopeMode。
+  - current/global 切换采用 move 语义：删除原 store 中同 key 条目，再把同一个 Conversation 对象写入目标 store；历史与设置不复制、不清空。
+  - 内置联系人存在全局 Conversation 时，不因 `ensureBuiltins()` 自动重建同 ID 的 current 默认聊天，避免归属迁移后立即出现幽灵副本。
+- `SPEC.md`
+  - 新增“现行规则索引”，明确 Conversation、API、人格、记忆等已被后续设计替代的旧规则，并列出审计待补齐项。
+
+## 下一节点
+
+moli38：酒馆角色人格来源开关 + 世界书地基。进入前继续以最新完整仓库为唯一执行基线。
