@@ -1355,3 +1355,90 @@ Generation / Prompt 接入时使用 Data Store 的统一联系人上下文来源
 5. 为后续手机记忆 / 自动吐槽 / 自动聊天预留同一 Conversation 配置入口
 
 完成后再进入联系人资料“人格与提示词”与手机记忆实现。
+
+---
+
+# moli32 节点：Conversation 2.0 第二阶段
+
+本节点把 moli31 已存在的数据字段正式接到用户界面。
+
+## 已完成
+
+### 当前聊天设置页
+
+私聊 `聊天信息 → 当前聊天设置`：
+
+1. 聊天名称
+2. 时间模式
+   - 跟随正文时间
+   - 现实世界时间
+   - 无时间感
+3. 读取当前正文开关
+4. 最近聊天读取上限 `10～9999`
+
+保存通过现有 `updatePrivateConversationSettings()` 修改当前 Conversation。
+
+### 数据归属
+
+以上字段均为 Conversation 级，不是 Contact 级：
+
+- `conversation.title`
+- `conversation.timeMode`
+- `conversation.bodyContextEnabled`
+- `conversation.recentChatLimit`
+
+同一个联系人多个私聊互不覆盖。
+
+### 已有生成接线继续保留
+
+moli31 已完成：
+
+- `generation-service` 根据 `bodyContextEnabled` 决定是否读取正文。
+- `prompt-builder` 注入当前 Conversation 的归属 / 时间模式 / 正文读取状态。
+- 最近聊天窗口读取 `recentChatLimit`，默认 100。
+- 全局陪伴跨 Scope 保存；随当前正文仍按绑定 Scope 隔离。
+
+moli32 不重写这些逻辑，只把已有能力开放为可配置 UI。
+
+## 验证
+
+需保持以下回归项：
+
+- 旧私聊历史不丢失。
+- 新建多个私聊继续正常。
+- 全局陪伴跨 Scope 仍可见。
+- 随当前正文不会泄露到其他 Scope。
+- 设置上限输入小于 10 / 大于 9999 时正常收敛。
+- 一个 Conversation 的设置不会修改同联系人另一个 Conversation。
+
+## 下一节点
+
+优先进入联系人层：
+
+`联系人资料 → 人格与提示词`
+
+目标是把“这个人是谁”与“这个聊天处于什么世界”彻底分开。
+
+酒馆角色优先接入：
+
+- 角色卡
+- 性格
+- 场景
+- Example Dialogue
+- 世界书
+- 柏宝书长期记忆
+- 最近正文
+- 场外聊天历史
+- 自定义附加 Prompt
+
+并确保：
+
+`设置 → 提示词与预设 → 联系人配置 → 某联系人`
+
+与：
+
+`联系人资料 → 人格与提示词`
+
+最终读取 / 修改同一份底层数据，不制造两套独立配置。
+
+内置人格数量暂不在本阶段锁死，留到后面统一确定。

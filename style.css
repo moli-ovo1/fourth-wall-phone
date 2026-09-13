@@ -416,3 +416,14 @@
 #moli-phone-panel .moli-conversation-identity{margin-top:10px}
 #moli-phone-panel .moli-prompt-editor{display:flex;flex-direction:column}
 #moli-phone-panel .moli-prompt-editor textarea{flex:1;height:auto;min-height:220px}
+
+/* moli32: current private conversation settings */
+#moli-phone-panel .moli-conversation-settings{flex:1;min-height:0;overflow:auto;background:#f3f3f3;padding:12px}
+#moli-phone-panel .moli-conversation-settings>.moli-form-field{margin-top:10px;padding:12px 13px;border-radius:10px;background:#fff}
+#moli-phone-panel .moli-conversation-settings>.moli-form-field>span{font-size:13px;color:#444}
+#moli-phone-panel .moli-conversation-settings>.moli-form-field input{box-sizing:border-box;background:#fafafa}
+#moli-phone-panel .moli-conversation-section{margin-top:10px;padding:12px;border-radius:10px;background:#fff}
+#moli-phone-panel .moli-conversation-section-title{margin-bottom:8px;font-size:13px;font-weight:600;color:#333}
+#moli-phone-panel .moli-conversation-settings .moli-choice-card{margin-top:8px}
+#moli-phone-panel .moli-conversation-switch{margin-top:10px}
+#moli-phone-panel .moli-conversation-limit-field small{display:block;margin-top:7px;color:#888;font-size:11px;line-height:1.55}
