@@ -1871,3 +1871,26 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 ## 下一节点
 
 进入 Automation Engine：先接群聊自动点评的正文回合计数/暂停续算/全员逐人 Review，再接酒馆角色与自创联系人的正文自动吐槽和主动私聊 SEND/SKIP。
+
+---
+
+# moli49 节点：滑杆百分比反馈 + 群聊自动点评 Automation
+
+- 唯一执行基线：用户上传、已应用 moli48 的完整仓库 `(27)`。
+- `src/ui/phone-panel.js`：主动私聊 / 正文吐槽滑杆下方增加居中小号 `N%`，拖动实时更新；群聊自动点评说明从“未接通”改为真实运行状态；后台 Review 更新可通知已打开面板刷新。
+- `style.css`：新增滑杆百分比小字样式。
+- `src/core/tavern-context.js`：新增当前正文有效 assistant 回合状态读取，只复用现有 `ctx.chat` 数据，不引入未确认的 SillyTavern 事件 API。
+- `src/storage/data-store.js`：群聊 `automation.reviewRuntime` 增加自动点评运行进度持久化；新增专用 runtime 更新入口，不改 Contact / Message 主契约。
+- `src/generation/generation-service.js`：新增 `generateGroupReview()`；第一位随机、全员至少一次、逐人独立生成，后说者读取本轮前序 Review 消息；复用成员各自 API / Role Fidelity / Worldbook / BaiBai。
+- `src/automation/review.js`：新增群聊自动点评监测器。稳定 scope 下轮询已验证的 Tavern `chat` 数组；关闭时不累计、删除回退、N 边界触发、边界 reroll 可针对新正文再触发；失败 60 秒内不重复轰炸 API。
+- `src/core/app.js`：初始化 / 销毁 Review Automation；Panel 销毁时同步注销外部更新监听，避免反复开关手机产生事件监听泄漏。
+
+## 仍未实现
+
+- 酒馆角色 / 自定义联系人的正文自动吐槽实际事件触发与生成。
+- 酒馆角色 / 自定义联系人的主动私聊 SEND/SKIP 判断与后台生成。
+- 自动吐槽 / 自动点评的全局总开关仍需在对应 Automation 总设置节点统一收口；本节点没有擅自新增另一套设置页面。
+
+## 下一节点
+
+继续 Automation Engine：接酒馆角色 / 自定义联系人的 **正文自动吐槽**，然后接 **主动私聊 SEND/SKIP**。两者继续使用各自 Conversation 的独立百分比，不互相代替。
