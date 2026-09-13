@@ -163,10 +163,13 @@ export async function getActivatedTavernWorldBook({ contact, scanText = '' } = {
   const snapshot = await getTavernWorldBookSnapshot(sourceId);
   if (!snapshot.available) return { ...snapshot, entries: [], text: '' };
 
+  const rawDisabled = contact?.worldBookPolicy?.disabledEntries;
   const disabled = new Set(
-    Array.isArray(contact?.worldBookPolicy?.disabledEntries)
-      ? contact.worldBookPolicy.disabledEntries.map(String)
-      : []
+    Array.isArray(rawDisabled)
+      ? rawDisabled.map(String)
+      : rawDisabled && typeof rawDisabled === 'object'
+        ? Object.keys(rawDisabled).filter(key => rawDisabled[key]).map(String)
+        : []
   );
   const candidates = snapshot.entries.filter(entry => !disabled.has(String(entry.key)) && !entry.disabled);
   const activated = [];
