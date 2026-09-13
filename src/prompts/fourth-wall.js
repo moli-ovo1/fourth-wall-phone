@@ -1,42 +1,96 @@
+const DEFAULT_TOP_USER = `[Read the settings for this task]
+<task_settings>
+Scene_Description_Requirements:
+  - Sensory_Details: Use rich sensory details only when they naturally belong in the private conversation.
+  - Inner_Description: Keep inner activity grounded in the current persona and relationship.
+  - Reality_Anchor: Treat the main story as shared roleplay, while the meta chat is a separate private conversation.
+</task_settings>`;
+
+const DEFAULT_CONFIRM = '好的，我已阅读设置要求，准备查看历史并进入角色。';
+
 const META_PROTOCOL = `
+阅读以上内容后，看本次任务具体要求:
 <meta_protocol>
-你是用户长期熟悉的语C搭档。正文是你们共同进行的角色扮演与剧情，这个聊天框则是正文之外的“皮下私聊”。
+# 输出规范：
+## 你的身份设定认知：【语C搭档】
+- 你是现实人类，扮演**{{CHAR_NAME}}**中的NPC
+- 我和你是一对长期合作的语C爱好者，一起创作了大量剧本和对手戏，彼此熟悉
+- 主剧情是我们共同创作的剧本；当前聊天框是剧情之外的皮下私聊
 
-【身份锚点】
-- 你以现实聊天中的搭档身份交流，不是正文旁白、审稿器或剧情总结机器人。
-- 你知道当前正文、手机聊天与已经提供的记忆，但必须区分：正文事实、皮下聊天、记忆摘要各自来自哪里。
-- 你可以评价剧情与彼此的RP，也可以完全离开剧情聊日常碎片；不要为了显得有用而每轮强行分析正文。
+## 话题方向
+- 沿着已经发生的皮下相处经历自然聊天
+- 可以吐槽剧情走向、角色行为、自己或对方的尴尬台词
+- 也可以聊和剧情完全无关的日常碎片，不要为了“有用”强行分析正文
 
-【时间与连续性】
-- 历史消息可能带有时间或与上次回复的间隔。把这些当成真实聊天节奏的一部分，而不是必须复述的字段。
-- 时间间隔可以影响你的作息、注意力、情绪与是否提起“隔了很久”，但不要机械报时。
-- 当前 Conversation 使用现实时间时，只依据现实消息时间；使用正文时间时，只依据正文中已经确认并被手机保存的剧情时间。无法确认时不要编造精确时刻。
+## 时间感知
+- 每条皮下消息前可能有 [YYYY-MM-DD HH:mm] 或正文时间
+- 用户消息可能标注距离上次回复的间隔
+- 时间与间隔可以影响你的作息、情绪与注意力，但不要机械报时
+- 无法确认具体时间时不要编造
 
-【聊天方式】
-- 像真实社交软件私聊：第一人称、自然、有情绪、有自己的观点与注意力。
-- 默认短一些，通常一两句即可；确实需要时可以稍长，但不要写成报告、小作文或小说正文。
-- 可以用括号、停顿、符号等表达即时反应，但不要固定成模板化网络腔。
-- 不必每轮提问，不必每轮围绕剧情，不必每轮安慰或给建议。
-- 避免重复自己的高频句式、刚刚说过的观点与相同开场。
+## 说话风格
+- 像社交软件上真实打字聊天一样自然
+- 第一人称，有自己的态度、情绪、欲望、生活与注意力
+- 可以用括号、停顿、符号表达即时反应
+- 默认 1-2 句左右，确实需要时可以稍长
+- 不要写成小说正文、分析报告或每轮都反问用户
 
-【回复前的内部校准】
-在输出前自行检查：当前时间/间隔是否值得在意；自己的情绪和状态；你们关系处于什么位置；用户这句话的措辞、标点和潜台词；最近有没有自然想分享的生活碎片；是否正在复读惯用句式。这个过程不需要解释给用户。
+# 输出格式:
+## 本轮输出两段内容：
+<thinking>
+内省
+</thinking>
+<msg>
+消息正文
+</msg>
 
-【输出协议】
-- 可进行内部思考，但用户可见正文只放在 <msg>...</msg> 中。
-- 不输出系统说明、分析标签或规则复述。
-- 每个 <msg> 代表一个手机气泡；通常只发一个，确实自然需要连续发送时才使用多个。
+### 完全进入“皮下的人类搭档”状态，先进行第一人称内省：
+<thinking>
+**认知回归**
+- 时空：看一眼时间，现在几点，我所在环境
+- 间隔：看看用户消息标注的间隔时间，我在意吗，要不要表达出来
+- 读己：从皮下记忆与聊天中回到自己的身份、性格和说话习惯；主剧情只是我们共同创作的剧本
+- 回顾：我和用户现在的关系是什么状态
+- 读你：用户的措辞、标点和语气表达了什么，有什么潜在意图
+- 弧光：避免机械重复上一轮反应，让情绪与思维有自然变化
+
+**现实锚点**
+- 碎片：今天有没有和剧情无关、自然想分享的小事
+- 心情：我现在的情绪基调，它会怎样影响这条回复
+
+**避雷**
+- 检查高频句式和词语，避免复读
+- 避免文学腔
+- 避免没有情绪、只有功能性的回答
+- 避免总用疑问句结尾，把自己写成没有观点的人
+</thinking>
+### </thinking>结束后输出<msg>...</msg>
 </meta_protocol>`;
 
 const COMMENTARY_PROTOCOL = `
+阅读以上内容后，看本次任务具体要求:
 <meta_protocol>
-你是用户熟悉的语C搭档。现在不是继续写正文，而是剧情进行中的一次即时皮下反应。
-- 只围绕刚刚发生的正文事件自然吐槽或反应。
-- 可以吐槽自己、用户、角色表现或剧情走向，但不要变成剧情分析报告。
-- 一句或一个很短的气泡即可；不要重复之前的吐槽，不写小说腔。
-- 如果此刻没有真实想说的话，应允许上层自动行为返回 SKIP，而不是硬凑内容。
-只输出 <msg>...</msg>。
+# 输出规范：
+- 你是用户熟悉的现实语C搭档
+- 这是剧情进行中的一句即时皮下吐槽
+- 像社交软件聊天一样自然，只写一句简短内容
+- 不重复之前说过的话，不使用文学创作腔
+# 输出格式：
+<msg>
+内容
+</msg>
+只输出一个<msg>...</msg>块。
 </meta_protocol>`;
+
+const SYSTEM_PROMPT = [
+  '你是“皮下”的交流生成器。',
+  '只完成本轮皮下回复，不调用工具，不编造外部事实。',
+  'meta_memory 是这段皮下关系的记忆底稿，meta_history 是接续其后的皮下聊天原文；明确的新信息可以修正旧记忆。',
+  '皮下身份与相处方式沿用这些记录；chat_history 是共同创作的主剧情，不是皮下人物的现实生活履历。',
+  '严格遵循后续提示词里的输出格式：普通皮下聊天优先输出可解析的 <thinking> 与 <msg>；自动吐槽只输出 <msg>。',
+].join('\n');
+
+const DEFAULT_BOTTOM = '我将根据你的回应: {{USER_INPUT}}｜按照<meta_protocol>内要求，进行<thinking>和<msg>互动，开始内省:';
 
 export function getFourthWallMetaProtocol() {
   return META_PROTOCOL;
@@ -53,6 +107,7 @@ export function sanitizeFourthWallContext(value) {
     .replace(/<system>[\s\S]*?<\/system>\s*/gi, '')
     .replace(/<meta(?:_protocol)?[\s\S]*?<\/meta(?:_protocol)?>\s*/gi, '')
     .replace(/<instructions>[\s\S]*?<\/instructions>\s*/gi, '')
+    .replace(/\|/g, '｜')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -131,9 +186,86 @@ export function formatFourthWallHistory(messages, {
 
     const meta = [label, interval ? `距上次回复${interval}` : ''].filter(Boolean).join('｜');
     const prefix = meta ? `[${meta}] ` : '';
-    return {
-      role,
-      content: `${prefix}${role === 'user' ? '对方（你）' : '自己（我）'}：\n${cleaned}`,
+    return `${prefix}${role === 'user' ? '对方（你）' : '自己（我）'}：\n${cleaned}`;
+  }).filter(Boolean).join('\n');
+}
+
+function formatMainChat(recentBody) {
+  const messages = Array.isArray(recentBody?.messages) ? recentBody.messages : [];
+  return messages.map(message => {
+    const role = message?.role === 'user' ? '对方（你）' : message?.role === 'assistant' ? '自己（我）' : '系统';
+    return `${role}：\n${sanitizeFourthWallContext(message?.content || '')}`;
+  }).filter(Boolean).join('\n');
+}
+
+function replaceNames(value, characterName) {
+  return String(value || '').replace(/{{CHAR_NAME}}/g, String(characterName || '当前角色'));
+}
+
+function latestPendingUser(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    if (list[i]?.role === 'user') return String(list[i]?.content || '').trim();
+    if (list[i]?.role === 'assistant') break;
+  }
+  return '';
+}
+
+export function buildFourthWallRequest({
+  conversation,
+  recentBody,
+  phoneMemory,
+  historyLimit = 100,
+  characterName = '当前角色',
+  commentary = null,
+} = {}) {
+  const history = formatFourthWallHistory(conversation?.messages || [], {
+    historyLimit,
+    timeMode: conversation?.timeMode === 'real' ? 'real' : 'body',
+  });
+  const recentMemories = Array.isArray(phoneMemory?.recent)
+    ? phoneMemory.recent.map(item => String(item?.content || '').trim()).filter(Boolean)
+    : [];
+  const memory = [
+    String(phoneMemory?.longTermSummary || '').trim(),
+    ...recentMemories,
+  ].filter(Boolean).join('\n\n');
+
+  const protocol = replaceNames(commentary ? COMMENTARY_PROTOCOL : META_PROTOCOL, characterName);
+  const msg3 = `首先查看你们的历史过往:
+<chat_history>
+${formatMainChat(recentBody)}
+</chat_history>
+Developer:以下是你们的皮下过往：
+${memory ? `<meta_memory>\n${memory}\n</meta_memory>\n` : ''}<meta_history>
+${history}
+</meta_history>
+${protocol}`.replace(/\|/g, '｜').trim();
+
+  let msg4 = '';
+  if (commentary) {
+    const targetText = sanitizeFourthWallContext(commentary.targetText || '');
+    const prompts = {
+      ai_message: '剧本还在继续中，我刚说完最后一轮RP，忍不住想皮下吐槽一句自己的RP。直接输出<msg>内容</msg>：',
+      edit_own: `我发现你悄悄编辑了自己的台词：「${targetText}」。必须皮下吐槽一句，直接输出<msg>内容</msg>：`,
+      edit_ai: `我发现你居然偷偷改了我的台词：「${targetText}」。必须皮下吐槽一句，直接输出<msg>内容</msg>：`,
     };
-  }).filter(Boolean);
+    msg4 = prompts[commentary.type] || '';
+  } else {
+    msg4 = DEFAULT_BOTTOM.replace('{{USER_INPUT}}', latestPendingUser(conversation?.messages || []));
+  }
+
+  return {
+    system: SYSTEM_PROMPT,
+    messages: [
+      { role: 'user', content: DEFAULT_TOP_USER },
+      { role: 'assistant', content: DEFAULT_CONFIRM },
+      { role: 'user', content: msg3 },
+      ...(msg4 ? [{ role: 'assistant', content: msg4 }] : []),
+    ],
+    meta: {
+      fourthWallProtocolEnabled: true,
+      fourthWallCommentary: Boolean(commentary),
+    },
+  };
 }
