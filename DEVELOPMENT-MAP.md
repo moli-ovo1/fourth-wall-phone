@@ -1723,3 +1723,30 @@ moli39 不能移除或回退：Conversation 四概念修正、主/Contact API �
 ## 回归铁律
 
 后续不得重新把归属选择器放回角色资料卡；Tavern 初始正文/全局归属属于“同步酒馆角色”的添加流程。状态栏仍为延期功能，不得顺手恢复。
+
+
+# moli42 节点：同步选择 Bug 修复 + 资料卡减法 + 柏宝书长期记忆
+
+- 唯一执行基线：用户上传、已应用 moli41 的完整仓库 `(20)`。
+- `src/ui/phone-panel.js`：
+  - 修复同步 Tavern 角色后 checkbox 被永久 checked/disabled 的问题；
+  - 添加完成后立即清空勾选并重绘同步列表；
+  - “已添加”只做 Contact 存在提示，已存在 Contact 仍可再次选择创建新的独立 Conversation；
+  - 删除资料卡“＋ 新建另一个聊天”页面、入口和事件链；
+  - Tavern 长期剧情记忆改为真实柏宝书检测状态 + `longTermMemory` 开关。
+- `src/integrations/baibai-memory.js`：
+  - 新增 ST-BaiBai-Book 公共 API v1 只读适配器；
+  - 只调用 `getInjectedHistory()`；不读取状态、变量、物品、NPC、计划等资源；
+  - 不存在/失败时安全降级。
+- `src/generation/generation-service.js` / `prompt-builder.js`：
+  - `roleSources.longTermMemory !== false` 且当前 Conversation 开启正文读取时注入柏宝书长期历史；
+  - coverage 不完整时显式提示模型长期记忆可能有缺口；
+  - 最近正文继续作为近期事实兜底。
+
+## 回归要求
+
+必须继续保留：moli41 世界书本轮激活、角色资料六来源开关/原文查看、主/Contact API、Conversation 当前聊天设置、消息/转发/搜索、悬浮球移动端防穿透。状态栏仍延期，不恢复。
+
+## 下一节点
+
+柏宝书实机确认后，下一主功能节点进入 **手机近期记忆 / 长期总结数据层**；不要把柏宝书正文长期记忆和手机场外聊天记忆混成同一份数据。

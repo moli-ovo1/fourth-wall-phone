@@ -2328,3 +2328,33 @@ moli40 的世界书条目开关继续只表示 Contact 白名单。moli41 在生
 不得直接调用当前 SillyTavern 页面角色的世界书结果冒充任意 moli Contact 的世界书；不同 Tavern Contact 的世界书必须保持来源隔离。
 
 复杂的 SillyTavern 高级世界书能力（例如 inclusion group、sticky/cooldown、outlet、精确 token budget/插入位置等）仍属于后续兼容增强，不在本节点伪装为已完整复刻。
+
+
+# moli42 现行修正：同步角色可重复创建 Conversation + 柏宝书长期剧情记忆
+
+> 本节为 2026-09-13 现行规则；与早期“已添加角色不可再次选择”以及资料卡“＋ 新建另一个聊天”的历史 UI 冲突时，以本节为准。
+
+## 1. 同步酒馆角色的选择状态不是永久状态
+
+- “已添加”只表示该 Tavern Contact 已经存在于 moli 通讯录，不代表该角色永久不可选择。
+- 同步列表中的勾选属于一次性的 UI 临时状态；完成添加后必须立即清空并刷新。
+- 已存在的 Tavern Contact 仍可再次勾选，并通过“正文角色 / 全局角色”创建一个新的独立 Conversation。
+- 因此不得再用“已在当前聊天列表”把 checkbox 设为 checked + disabled。
+
+## 2. 删除资料卡“＋ 新建另一个聊天”
+
+资料卡不再提供“＋ 新建另一个聊天”。Tavern 角色需要再次建立独立聊天时，统一从“同步酒馆角色”流程选择已有 Contact 并创建新的 Conversation。Contact 本体继续复用，不重复复制角色资料。
+
+## 3. 柏宝书长期剧情记忆第一阶段接入
+
+- 只使用 ST-BaiBai-Book 公共只读 API v1：`globalThis.STBaiBaiBook`。
+- 读取 `getInjectedHistory()`，使用与柏宝书正常记忆注入一致、已经避开其当前滑动窗口的长期历史剧情。
+- 不读取 snapshot、state、vars、items、plans、scenes、npcs、itemLog 等状态型资料。
+- Tavern Contact 的 `roleSources.longTermMemory` 控制是否允许使用；关闭只停止注入，不修改柏宝书数据。
+- 当前 Conversation 关闭“读取当前正文”时，不注入柏宝书这一动态正文世界来源，避免全局/脱离正文聊天被当前存档长期剧情污染。
+- 柏宝书不存在、API 版本不兼容或读取失败时静默降级；最近正文机制继续正常工作。
+- 若 API `coverage.complete === false`，Prompt 明确把长期记忆视为可能有缺口，近期事实继续以最近正文为准。
+
+## 4. 上下文顺序
+
+正文世界动态上下文保持：`柏宝书长期剧情记忆 → 最近正文原文 → 本轮激活世界书/当前场外聊天`。柏宝书用于补较早历史，最近正文负责当前发生的事情；不得把柏宝书其他状态账本混入这一层。
