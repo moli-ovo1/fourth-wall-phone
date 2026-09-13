@@ -1784,3 +1784,24 @@ moli39 不能移除或回退：Conversation 四概念修正、主/Contact API �
 ## 回归要求
 
 继续保留：moli43 悬浮球展开热修、同步 Tavern 角色可重复选择、资料卡无“新建另一个聊天”、Conversation 设置、主/Contact API、Role Fidelity、世界书白名单与激活、柏宝书、消息/转发/搜索。状态栏仍延期。
+
+# moli45 节点：手机记忆自动压缩链
+
+- 唯一执行基线：用户上传、已应用 moli44 的完整仓库 `(22)`。
+- 新增 `src/generation/memory-service.js`：
+  - 只处理已经离开 `recentChatLimit` 的旧原始消息；
+  - 每累计 100 个未压缩的完整 AI 交互轮次生成 1 段自动近期记忆；同一次 AI 调用的多气泡共享 `generationTurnId`，仍只算 1 轮；旧记录兼容推断；
+  - 成功后才推进 `lastCondensedMessageId`，失败不推进；
+  - 自动近期记忆达到 8 段时，将最旧 5 段沉淀为长期总结追加段；
+  - manual 近期记忆不参与自动淘汰；
+  - Contact 独立 API > 主 API，酒馆 API 走 `generateRaw`。
+- `src/storage/data-store.js`：扩展 memory 元数据，兼容旧数据惰性补默认值，不迁移旧 Conversation。
+- `src/ui/phone-panel.js`：角色回复成功落盘后触发低频检查；未达阈值零额外 API；手机记忆页显示最近自动压缩/长期沉淀状态和最近错误。
+
+## 回归铁律
+
+自动记忆不得阻塞或破坏正常回复；不得压缩仍处于最近聊天窗口内的消息；不得因失败推进游标；不得删除人工近期记忆；不得重写人工长期总结。继续保留 moli43 悬浮球热修、同步 Tavern 角色重复选择、Conversation 设置、主/Contact API、Role Fidelity、世界书、柏宝书、消息/转发/搜索。状态栏仍延期。
+
+## 下一节点
+
+在实机确认自动记忆触发与失败恢复后，进入 **内置人格正式 Prompt / Generation**，让上帝、人类、吃瓜观察员从“可聊天 UI”推进到真正可生成；群聊轻编排仍排在内置人格之后。
