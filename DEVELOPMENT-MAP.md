@@ -1703,3 +1703,23 @@ moli39 不能移除或回退：Conversation 四概念修正、主/Contact API �
 下一节点：实现“本轮世界书激活层”。先继续核对 SillyTavern `getWorldInfoPrompt` / World Info 触发语义与 moli 独立 Conversation 上下文之间的适配，再做白名单交集和 Prompt 注入；不得跳过触发层。
 
 回归铁律：API 配置引用、Conversation 多私聊、角色来源开关/原文查看、消息/转发/搜索、悬浮球等既有能力不得回退。状态栏除外——它已由用户明确延期并从现行 UI 移除。
+
+# moli41 节点：添加好友归属 + Worldbook Activation
+
+## 本节点修改
+
+- `src/ui/phone-panel.js`
+  - 删除聊天信息/资料卡的“当前聊天”下拉框；内置人格、创建联系人、Tavern 联系人均不在资料卡选择归属。
+  - `同步酒馆角色` 添加后新增一次“正文角色 / 全局角色”选择；选择结果直接决定初始 Conversation 的 storage scope。
+  - 删除“已在当前聊天列表”展示文案。
+- `src/core/tavern-worldbook.js`
+  - 在 moli40 读取快照/白名单之上增加 Contact 隔离的本轮激活器。
+  - 支持本阶段常驻、关键词/正则、secondary selective logic、概率、有限递归。
+- `src/generation/generation-service.js`
+  - 生成前以当前 Conversation 消息 +（仅在开启时）最近正文构造世界书扫描文本。
+- `src/generation/prompt-builder.js`
+  - 只注入本轮实际激活且通过白名单的世界书内容。
+
+## 回归铁律
+
+后续不得重新把归属选择器放回角色资料卡；Tavern 初始正文/全局归属属于“同步酒馆角色”的添加流程。状态栏仍为延期功能，不得顺手恢复。
