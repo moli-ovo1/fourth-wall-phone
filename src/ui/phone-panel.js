@@ -1331,6 +1331,75 @@ export function createPhonePanel({
     show('chat');
   }
 
+  function renderConversationSettings() {
+    const conversation = currentConversation();
+    if (!conversation || conversation.type !== 'private') {
+      toast('当前私聊不存在');
+      show('info');
+      return;
+    }
+
+    if (conversationSettingsScope) {
+      const label = conversation.scopeMode === 'global' ? '全局' : '当前存档';
+      conversationSettingsScope.textContent = `当前聊天：${conversation.title || '默认聊天'} · ${label}。这里调整时间模式、正文读取与近期消息上下文。`;
+    }
+
+    if (conversationTitleInput) {
+      conversationTitleInput.value = conversation.title || '';
+    }
+
+    const timeMode = ['real', 'body', 'none'].includes(String(conversation.timeMode))
+      ? String(conversation.timeMode)
+      : (conversation.scopeMode === 'global' ? 'real' : 'body');
+    const timeInput = panel.querySelector(`input[name="moli-conversation-time-mode"][value="${timeMode}"]`);
+    if (timeInput) timeInput.checked = true;
+
+    if (conversationBodyContext) {
+      conversationBodyContext.checked = conversation.bodyContextEnabled !== false;
+    }
+
+    if (conversationRecentLimit) {
+      const value = Number(conversation.recentChatLimit);
+      conversationRecentLimit.value = Number.isFinite(value)
+        ? String(Math.max(10, Math.min(9999, Math.round(value))))
+        : '100';
+    }
+  }
+
+  function saveConversationSettings() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    const conversationKey = currentContactId;
+    if (!scopeKey || !conversation || conversation.type !== 'private' || !conversationKey) {
+      toast('当前私聊不存在');
+      return;
+    }
+
+    const selectedTimeMode = panel.querySelector('input[name="moli-conversation-time-mode"]:checked')?.value || 'body';
+    const rawLimit = Number(conversationRecentLimit?.value || 100);
+    if (!Number.isFinite(rawLimit)) {
+      toast('最近聊天读取上限必须是数字');
+      return;
+    }
+
+    const normalizedLimit = Math.max(10, Math.min(9999, Math.round(rawLimit)));
+    if (conversationRecentLimit) conversationRecentLimit.value = String(normalizedLimit);
+
+    try {
+      updatePrivateConversationSettings(scopeKey, conversationKey, {
+        title: conversationTitleInput?.value || '',
+        timeMode: selectedTimeMode,
+        bodyContextEnabled: Boolean(conversationBodyContext?.checked),
+        recentChatLimit: normalizedLimit,
+      });
+      toast('当前聊天设置已保存');
+      show('info');
+    } catch (error) {
+      console.error('[moli小手机] save conversation settings failed:', error);
+      toast(error?.message || '保存当前聊天设置失败');
+    }
+  }
+
   function renderChatInfo() {
     const conversation = currentConversation();
 
@@ -2088,9 +2157,6 @@ export function createPhonePanel({
     syncList.innerHTML = syncSnapshot
       .map(character => {
         const existing = findTavernContact(character.sourceId);
-        const alreadyInScope =
-          existing && activeContactIds.has(existing.id);
-
         return `
           <label class="moli-sync-item">
             <input
