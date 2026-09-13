@@ -2672,3 +2672,15 @@ Commentary 使用独立 Fourth Wall Commentary Prompt，只输出一个 `<msg>` 
 ### 6. 明确未完成但已进入复刻路线
 
 除图片/语音外，LittleWhiteBox 四次元壁其余能力继续逐项复刻。下一阶段优先补：多 Session、Fourth Wall Prompt 模板编辑/恢复、Assistant Prefill 开关、正文层数设置、皮下记忆整理/上下文统计、重答/清空时与原版一致的细节行为。
+
+## moli59 / 皮下 Fourth Wall 对齐第二阶段
+
+- `builtin:meta` 继续显示为“皮下（入戏…）”，并保持动态跟随当前正文 char 头像。
+- 皮下新增独立 Fourth Wall 设置：
+  - 普通聊天层数，默认 20；生成时直接限制读取的当前正文层数。
+  - 流式生成开关；关闭后本轮仍正常生成，但不向聊天框推送增量预览。
+  - 禁用 Assistant Prefill；开启后 Bottom Prompt 与 msg3 合并进 User 消息，不再作为 Assistant 预填充。
+- 皮下新增四段 Prompt 模板编辑：Top User / Confirm / Meta Protocol / Bottom，并支持恢复默认模板。
+- 皮下 Session 在 moli 中映射为同一个 `builtin:meta` 联系人的多个独立 Conversation：每个记录天然拥有独立消息、手机记忆、自动行为状态与 Fourth Wall 设置；切换记录不合并历史。此处属于宿主架构适配，行为目标与小白X Session 一致，但不额外复制第二套 session 存储。
+- 皮下记录支持新建、切换、重命名和删除；至少保留一条记录。
+- 图片与语音继续明确不移植。

@@ -629,3 +629,25 @@
   font-weight: 400;
   opacity: .52;
 }
+
+/* moli59 · 皮下 / 小白X Fourth Wall 对齐 */
+.moli-fourth-wall-session-section {
+  display: grid;
+  gap: 10px;
+}
+.moli-fourth-wall-session-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.moli-fourth-wall-session-row select,
+.moli-fourth-wall-session-row button {
+  min-height: 38px;
+}
+.moli-fourth-wall-session-row select {
+  width: 100%;
+}
+.moli-fourth-wall-session-row button {
+  min-width: 38px;
+}

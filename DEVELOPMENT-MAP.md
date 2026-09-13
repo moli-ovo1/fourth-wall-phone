@@ -1997,3 +1997,17 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - 图片 / 语音能力按用户明确要求不复刻。
 - LittleWhiteBox 的独立 Agent API 宿主被适配为 moli 已有 API/provider 层；这是宿主差异，不改变 Fourth Wall 的 Prompt / 会话语义。
 - 本阶段先复刻核心会话协议、外露 thinking、动态 char 头像与实时 Commentary。LittleWhiteBox 的多 Session、独立 Prompt 模板编辑器、Assistant Prefill 开关、上下文计数/手动整理皮下记忆等继续进入后续节点，不宣称已完成。
+
+## moli59 — 皮下 / LittleWhiteBox Fourth Wall 对齐第二阶段
+
+本阶段继续以 LittleWhiteBox `modules/xiaobai-os/apps/fourth-wall` 为行为基准：
+
+1. Session：使用 moli 原生“同一联系人多 Conversation”承载，补新建/切换/重命名/删除 UI；至少保留一条。
+2. Context：加入 `maxChatLayers`，默认 20，并实际控制 SillyTavern 主正文读取层数。
+3. Streaming：加入皮下独立流式开关。
+4. Assistant Prefill：加入 `disableAssistantPrefill`，语义与小白X一致。
+5. Prompt templates：Top User / Confirm / Meta Protocol / Bottom 均可独立编辑并恢复默认。
+6. 普通私聊 / 群聊的全局线上预设不受影响；这些设置仅属于皮下。
+7. 图片/语音继续排除。
+
+宿主适配说明：小白X将 Session 存在 Fourth Wall 自己的 session 数组里；moli 已经有成熟的 Conversation 隔离与记忆链，因此本阶段把一个 Fourth Wall Session 映射为一个 `builtin:meta` Private Conversation。这样不会复制两套会话生命周期，同时保留 Session 的独立历史/记忆/切换语义。
