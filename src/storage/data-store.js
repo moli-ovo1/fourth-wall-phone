@@ -54,6 +54,33 @@ function normalizeTavernRoleSources(value) {
   );
 }
 
+function normalizeConversationMemory(memoryValue) {
+  const memory = memoryValue && typeof memoryValue === 'object' ? memoryValue : {};
+  return {
+    recent: Array.isArray(memory.recent)
+      ? memory.recent.map(item => ({
+          id: String(item?.id || `memory:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`),
+          content: String(item?.content || '').trim(),
+          createdAt: Number(item?.createdAt || Date.now()),
+          updatedAt: Number(item?.updatedAt || item?.createdAt || Date.now()),
+          source: item?.source === 'auto' ? 'auto' : 'manual',
+          sourceMode: ['reading', 'role-chat'].includes(String(item?.sourceMode || '')) ? String(item.sourceMode) : '',
+          messageStartId: String(item?.messageStartId || ''),
+          messageEndId: String(item?.messageEndId || ''),
+        })).filter(item => item.content)
+      : [],
+    longTermSummary: String(memory.longTermSummary || '').trim(),
+    longTermByMode: {
+      reading: String(memory.longTermByMode?.reading || '').trim(),
+      roleChat: String(memory.longTermByMode?.roleChat || '').trim(),
+    },
+    lastCondensedMessageId: String(memory.lastCondensedMessageId || ''),
+    lastSummarizedAt: Number(memory.lastSummarizedAt || 0),
+    lastCondensedAt: Number(memory.lastCondensedAt || 0),
+    lastAutoError: String(memory.lastAutoError || ''),
+  };
+}
+
 function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
   if (!conversation || typeof conversation !== 'object') return conversation;
 
@@ -92,7 +119,7 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     if (conversation.scopeMode === 'current' && !conversation.boundScopeKey && scopeKey) {
       conversation.boundScopeKey = String(scopeKey);
     }
-    if (!conversation.timeMode) {
+    if (!['real', 'body'].includes(String(conversation.timeMode))) {
       conversation.timeMode = conversation.scopeMode === 'global' ? 'real' : 'body';
     }
     if (typeof conversation.bodyContextEnabled !== 'boolean') {
@@ -103,28 +130,16 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     } else {
       conversation.recentChatLimit = Math.max(10, Math.min(9999, Number(conversation.recentChatLimit)));
     }
-    const memory = conversation.memory && typeof conversation.memory === 'object'
-      ? conversation.memory
-      : {};
-    conversation.memory = {
-      recent: Array.isArray(memory.recent)
-        ? memory.recent.map(item => ({
-            id: String(item?.id || `memory:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`),
-            content: String(item?.content || '').trim(),
-            createdAt: Number(item?.createdAt || Date.now()),
-            updatedAt: Number(item?.updatedAt || item?.createdAt || Date.now()),
-            source: item?.source === 'auto' ? 'auto' : 'manual',
-            messageStartId: String(item?.messageStartId || ''),
-            messageEndId: String(item?.messageEndId || ''),
-          })).filter(item => item.content)
-        : [],
-      longTermSummary: String(memory.longTermSummary || '').trim(),
-      lastCondensedMessageId: String(memory.lastCondensedMessageId || ''),
-      lastSummarizedAt: Number(memory.lastSummarizedAt || 0),
-      lastCondensedAt: Number(memory.lastCondensedAt || 0),
-      lastAutoError: String(memory.lastAutoError || ''),
-    };
+    conversation.memory = normalizeConversationMemory(conversation.memory);
   } else if (conversation.type === 'group') {
+    conversation.groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
+    if (!['real', 'body'].includes(String(conversation.timeMode))) conversation.timeMode = 'body';
+    if (typeof conversation.bodyContextEnabled !== 'boolean') conversation.bodyContextEnabled = true;
+    if (conversation.groupMode === 'role-chat') conversation.bodyContextEnabled = false;
+    if (!Number.isFinite(Number(conversation.recentChatLimit))) conversation.recentChatLimit = 100;
+    else conversation.recentChatLimit = Math.max(10, Math.min(9999, Number(conversation.recentChatLimit)));
+    conversation.memory = normalizeConversationMemory(conversation.memory);
+
     const automation = conversation.automation && typeof conversation.automation === 'object'
       ? conversation.automation
       : {};
@@ -785,7 +800,7 @@ export function createGroupConversation(
 export function updateGroupConversation(
   scopeKey,
   groupId,
-  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval } = {}
+  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval, groupMode, timeMode, bodyContextEnabled, recentChatLimit } = {}
 ) {
   const data = ensureBuiltins(scopeKey);
   const conversation = data.conversations[groupId];
@@ -825,6 +840,25 @@ export function updateGroupConversation(
   conversation.memberIds = [...members];
 
   applyConversationDefaults(conversation, { scopeKey });
+  if (groupMode !== undefined) {
+    const mode = String(groupMode);
+    if (!['reading', 'role-chat'].includes(mode)) throw new Error('无效的群聊模式');
+    conversation.groupMode = mode;
+    if (mode === 'role-chat') conversation.bodyContextEnabled = false;
+  }
+  if (timeMode !== undefined) {
+    const mode = String(timeMode);
+    if (!['real', 'body'].includes(mode)) throw new Error('无效的时间模式');
+    conversation.timeMode = mode;
+  }
+  if (bodyContextEnabled !== undefined) {
+    conversation.bodyContextEnabled = conversation.groupMode === 'role-chat' ? false : Boolean(bodyContextEnabled);
+  }
+  if (recentChatLimit !== undefined) {
+    const value = Number(recentChatLimit);
+    if (!Number.isFinite(value)) throw new Error('最近聊天条数必须是数字');
+    conversation.recentChatLimit = Math.max(10, Math.min(9999, Math.round(value)));
+  }
   if (reviewEnabled !== undefined) {
     conversation.automation.reviewEnabled = Boolean(reviewEnabled);
   }
@@ -1116,7 +1150,7 @@ export function updatePrivateConversationSettings(
   }
 
   if (timeMode !== undefined) {
-    const allowed = new Set(['real', 'body', 'none']);
+    const allowed = new Set(['real', 'body']);
     if (!allowed.has(String(timeMode))) {
       throw new Error('无效的时间模式');
     }
@@ -1159,11 +1193,15 @@ export function updatePrivateConversationSettings(
 
 export function getConversationMemory(scopeKey, conversationKey) {
   const conversation = getConversation(scopeKey, conversationKey);
-  if (!conversation || conversation.type !== 'private') return null;
+  if (!conversation || !['private', 'group'].includes(conversation.type)) return null;
   applyConversationDefaults(conversation, { scopeKey });
   return {
     recent: conversation.memory.recent.map(item => ({ ...item })),
     longTermSummary: String(conversation.memory.longTermSummary || ''),
+    longTermByMode: {
+      reading: String(conversation.memory.longTermByMode?.reading || ''),
+      roleChat: String(conversation.memory.longTermByMode?.roleChat || ''),
+    },
     lastCondensedMessageId: String(conversation.memory.lastCondensedMessageId || ''),
     lastSummarizedAt: Number(conversation.memory.lastSummarizedAt || 0),
     lastCondensedAt: Number(conversation.memory.lastCondensedAt || 0),
@@ -1171,10 +1209,10 @@ export function getConversationMemory(scopeKey, conversationKey) {
   };
 }
 
-export function updateConversationMemory(scopeKey, conversationKey, { recent, longTermSummary, lastCondensedMessageId, lastSummarizedAt, lastCondensedAt, lastAutoError } = {}) {
+export function updateConversationMemory(scopeKey, conversationKey, { recent, longTermSummary, longTermByMode, lastCondensedMessageId, lastSummarizedAt, lastCondensedAt, lastAutoError } = {}) {
   const located = locateConversation(scopeKey, conversationKey);
   const conversation = located?.conversation;
-  if (!conversation || conversation.type !== 'private') throw new Error('私聊不存在');
+  if (!conversation || !['private', 'group'].includes(conversation.type)) throw new Error('会话不存在');
   applyConversationDefaults(conversation, { scopeKey });
 
   if (recent !== undefined) {
@@ -1185,11 +1223,19 @@ export function updateConversationMemory(scopeKey, conversationKey, { recent, lo
       createdAt: Number(item?.createdAt || Date.now()),
       updatedAt: Date.now(),
       source: item?.source === 'auto' ? 'auto' : 'manual',
+      sourceMode: ['reading', 'role-chat'].includes(String(item?.sourceMode || '')) ? String(item.sourceMode) : '',
       messageStartId: String(item?.messageStartId || ''),
       messageEndId: String(item?.messageEndId || ''),
     })).filter(item => item.content);
   }
   if (longTermSummary !== undefined) conversation.memory.longTermSummary = String(longTermSummary || '').trim();
+  if (longTermByMode !== undefined) {
+    const source = longTermByMode && typeof longTermByMode === 'object' ? longTermByMode : {};
+    conversation.memory.longTermByMode = {
+      reading: String(source.reading ?? conversation.memory.longTermByMode?.reading ?? '').trim(),
+      roleChat: String(source.roleChat ?? conversation.memory.longTermByMode?.roleChat ?? '').trim(),
+    };
+  }
   if (lastCondensedMessageId !== undefined) conversation.memory.lastCondensedMessageId = String(lastCondensedMessageId || '');
   if (lastSummarizedAt !== undefined) conversation.memory.lastSummarizedAt = Math.max(0, Number(lastSummarizedAt) || 0);
   if (lastCondensedAt !== undefined) conversation.memory.lastCondensedAt = Math.max(0, Number(lastCondensedAt) || 0);
