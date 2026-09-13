@@ -1750,3 +1750,37 @@ moli39 不能移除或回退：Conversation 四概念修正、主/Contact API �
 ## 下一节点
 
 柏宝书实机确认后，下一主功能节点进入 **手机近期记忆 / 长期总结数据层**；不要把柏宝书正文长期记忆和手机场外聊天记忆混成同一份数据。
+
+
+# moli44 节点：手机近期记忆 / 长期总结数据层
+
+- 唯一执行基线：用户上传、已应用 moli42 + moli43 热修的完整仓库 `(21)`。
+- `src/storage/data-store.js`：
+  - 私聊 Conversation 惰性补 `memory.recent / longTermSummary / lastCondensedMessageId / lastSummarizedAt`；
+  - 新增 Conversation 记忆读取/更新接口；
+  - 不改变 scope/contact/conversation id，不迁移或删除旧消息。
+- `src/ui/phone-panel.js`：
+  - “手机记忆”从占位页变为当前 Conversation 的近期记忆 + 长期总结编辑页；
+  - 支持人工编辑、删除/清空、保存；
+  - 不提供跨 Conversation 共享。
+- `src/generation/generation-service.js` / `prompt-builder.js`：
+  - 当前 Conversation 手机记忆正式进入私聊 Prompt；
+  - 明确它是场外聊天关系记忆，与柏宝书正文长期记忆分层；
+  - 当前/近期原始事实优先于记忆摘要。
+- `src/core/tavern-worldbook.js`：
+  - 修复 moli40 object-map `disabledEntries` 与 moli41 激活器只识别数组的兼容漏洞。
+
+## 本节点未伪装完成
+
+- 尚未自动生成近期记忆；
+- 尚未自动把近期记忆压缩为长期总结；
+- 尚未确定自动压缩触发阈值/时机；
+- 尚未做跨 Conversation 共享。
+
+## 下一节点
+
+进入 **手机记忆自动压缩链**：基于 `lastCondensedMessageId / lastSummarizedAt` 做增量处理，先明确触发阈值、生成 Prompt、失败重试与不重复总结规则，再接自动生成。不得每轮都总结，也不得把仍在最近聊天窗口内的消息重复塞进近期记忆。
+
+## 回归要求
+
+继续保留：moli43 悬浮球展开热修、同步 Tavern 角色可重复选择、资料卡无“新建另一个聊天”、Conversation 设置、主/Contact API、Role Fidelity、世界书白名单与激活、柏宝书、消息/转发/搜索。状态栏仍延期。
