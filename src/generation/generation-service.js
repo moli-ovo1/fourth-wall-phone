@@ -12,6 +12,7 @@ import {
   getRecentTavernBody,
 } from '../core/tavern-context.js';
 import { buildPrivateGenerationRequest } from './prompt-builder.js';
+import { getActivatedTavernWorldBook } from '../core/tavern-worldbook.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -132,11 +133,24 @@ export async function generatePrivateReply({
         charLimit: 24000,
       });
 
+  const worldBookScanParts = (conversation.messages || [])
+    .slice(-Math.max(1, Number(conversation.recentChatLimit) || 100))
+    .map(message => String(message?.content || ''))
+    .filter(Boolean);
+  if (recentBody?.messages?.length) {
+    worldBookScanParts.push(...recentBody.messages.map(message => String(message?.content || '')).filter(Boolean));
+  }
+  const activatedWorldBook = await getActivatedTavernWorldBook({
+    contact,
+    scanText: worldBookScanParts.join('\n'),
+  });
+
   const request = buildPrivateGenerationRequest({
     contact,
     conversation,
     otherContextSources,
     recentBody,
+    worldBookText: activatedWorldBook?.text || '',
     historyLimit: conversation.recentChatLimit || 100,
   });
 

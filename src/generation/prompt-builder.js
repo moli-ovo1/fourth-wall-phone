@@ -173,6 +173,7 @@ export function buildPrivateGenerationRequest({
   conversation,
   otherContextSources = [],
   recentBody = null,
+  worldBookText = '',
   historyLimit = 60,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
@@ -233,6 +234,13 @@ export function buildPrivateGenerationRequest({
   const bodyBlock = recentBodyBlock(recentBody);
   if (bodyBlock) {
     systemBlocks.push(bodyBlock);
+  }
+
+  if (clean(worldBookText)) {
+    systemBlocks.push(
+      '【本轮激活的世界书】\n以下条目已根据当前聊天/可用正文触发，并通过该 Contact 的世界书白名单。只把它们当作相关世界事实，不要为了展示世界书而强行改变当前话题。\n\n'
+      + clip(worldBookText, 18000)
+    );
   }
 
   const otherBlocks = (Array.isArray(otherContextSources) ? otherContextSources : [])
