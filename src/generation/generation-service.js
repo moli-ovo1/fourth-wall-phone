@@ -1,7 +1,6 @@
 import {
   getContacts,
   getConversation,
-  getContactContextSources,
 } from '../storage/data-store.js';
 import { getApiSettings } from '../storage/api-settings.js';
 import { generateProviderText } from '../api/providers/provider-registry.js';
@@ -109,25 +108,24 @@ export async function generatePrivateReply({
   const config = getApiSettings();
   assertIndependentConfig(config);
 
-  const otherContextSources = getContactContextSources(
-    scopeKey,
-    contact.id,
-    {
-      excludeConversationKey: conversationKey,
-      perConversationLimit: 20,
-    }
-  );
+  // 同一联系人可以拥有彼此独立的多个私聊现实。
+  // 在用户显式开放跨会话记忆之前，不默认把“同一联系人”的其他私聊注入当前生成，
+  // 避免现实陪伴 / 正文沉浸等不同 Conversation 相互污染。
+  const otherContextSources = [];
 
-  const recentBody = getRecentTavernBody({
-    messageLimit: 24,
-    charLimit: 24000,
-  });
+  const recentBody = conversation.bodyContextEnabled === false
+    ? null
+    : getRecentTavernBody({
+        messageLimit: 24,
+        charLimit: 24000,
+      });
 
   const request = buildPrivateGenerationRequest({
     contact,
     conversation,
     otherContextSources,
     recentBody,
+    historyLimit: conversation.recentChatLimit || 100,
   });
 
   const result = await generateProviderText(config, request, { signal, onDelta });

@@ -191,6 +191,16 @@ export function buildPrivateGenerationRequest({
     '只回复当前角色本人的消息，不要替用户发言，不要输出系统说明。',
   ];
 
+  const scopeLabel = conversation.scopeMode === 'global' ? '全局陪伴' : '随当前正文';
+  const timeLabel = conversation.timeMode === 'real'
+    ? '现实世界时间'
+    : conversation.timeMode === 'none'
+      ? '无时间感'
+      : '跟随正文时间';
+  systemBlocks.push(
+    `【当前聊天实例】\n归属：${scopeLabel}\n时间模式：${timeLabel}\n读取当前正文：${conversation.bodyContextEnabled === false ? '否' : '是'}`
+  );
+
   const onlinePreset = buildOnlinePresetPrompt();
   if (onlinePreset) {
     systemBlocks.push(`【moli小手机：线上聊天预设】\n${onlinePreset}`);
