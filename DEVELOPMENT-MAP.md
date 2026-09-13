@@ -1942,3 +1942,21 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - 不回退 moli52 普通群聊轻编排/逐人生成、每人单气泡、私聊/群聊桥接、世界书去重、主动私聊/正文吐槽 Automation、未读休眠、跨面板 Generation 状态。
 - `角色闲聊` 中不得出现最近正文或柏宝书注入；`围读会` 切回后恢复正文能力。
 - Review 必须以触发时正文快照为主要点评对象；切到角色闲聊后不得累计/触发 Review。
+
+
+## moli54 — Review resilience + visible runtime errors
+- Automatic group Review no longer discards the whole round when one member times out/fails; remaining members continue, while failures are surfaced per member.
+- Review requests avoid injecting the exact triggering assistant body twice and use a smaller supporting-body window to reduce timeout risk.
+- Generation/automation failures now raise a per-Conversation persistent error banner at the top of the chat; it remains until the user types or clicks/continues interacting.
+
+
+## moli55 - Group Batch Generation
+
+- [x] 普通群聊：选人 + 多成员回复合并为单次主 API 请求。
+- [x] 自动 Review：全员点评合并为单次主 API 请求。
+- [x] 返回 JSON `messages[{speakerId, content}]` 后拆成多个独立群气泡。
+- [x] 被 @ 成员仍为强制参与；普通轮默认 1～3 人。
+- [x] 批量请求按成员划分私有上下文区，禁止跨成员泄漏手机私聊桥。
+- [x] 围读会正文共享一次；角色闲聊无正文/柏宝书。
+- [x] 群批量调用统一使用主 API，Contact 独立 API 继续保留给私聊。
+- [x] moli55 累计包含 moli54 修复，可跳过 moli54 直接安装。

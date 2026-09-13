@@ -2589,3 +2589,17 @@ moli40 的世界书条目开关继续只表示 Contact 白名单。moli41 在生
 - 不回退 moli52 普通群聊轻编排/逐人生成、每人单气泡、私聊/群聊桥接、世界书去重、主动私聊/正文吐槽 Automation、未读休眠、跨面板 Generation 状态。
 - `角色闲聊` 中不得出现最近正文或柏宝书注入；`围读会` 切回后恢复正文能力。
 - Review 必须以触发时正文快照为主要点评对象；切到角色闲聊后不得累计/触发 Review。
+
+
+### Runtime generation error visibility (moli54)
+Generation, private automation, and group Review errors must be visible in the affected Conversation, not console-only. The chat error banner persists until the user resumes interaction (typing or clicking). Group Review isolates per-member failures: one member timeout must not cancel successful replies from other members.
+
+
+## moli55：群聊单次批量生成（2026-09-13）
+
+- 普通群聊由“编排器 1 次 + 入选成员逐人 N 次”改为 **一轮仅 1 次主 API 请求**：同一次请求完成发言者选择与 1～3 个成员的气泡生成，再按 `speakerId` 拆回独立气泡。
+- 自动点评同样改为 **一轮仅 1 次主 API 请求**，一次生成当前围读会全部成员的点评，再拆成各自气泡。
+- 群聊批量请求统一使用主 API；Contact 独立 API 继续用于私聊。原因是“一轮只调用一次”无法同时调用多个不同 Contact API。
+- 批量 Prompt 中每位成员拥有独立 `MEMBER PRIVATE ZONE`：角色卡/人格资料、本成员世界书、本成员自己的轻量手机私聊连续性。其他成员严禁引用该区内容，除非信息已由用户转发或出现在群公共历史。
+- 围读会只共享一份当前正文辅助上下文；不再为每个成员重复注入成员个人正文历史或柏宝书。角色闲聊仍完全禁止正文与柏宝书。
+- moli55 为累计补丁：包含 moli54 的 Review 错误提示、失败可见性与请求稳定性修复，因此从未安装 moli54 的 moli53/当前完整仓库可直接覆盖 moli55。

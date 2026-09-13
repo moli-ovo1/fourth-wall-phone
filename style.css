@@ -538,3 +538,20 @@
 #moli-phone-panel .moli-avatar-jump-hit .moli-mini-avatar{cursor:pointer}
 
 #moli-phone-panel .moli-switch-row.is-disabled{opacity:.58}
+
+
+/* moli54 persistent generation/review error banner */
+#moli-phone-panel .moli-chat-error{
+  flex:0 0 auto;
+  margin:0;
+  padding:8px 12px;
+  background:#fff3f2;
+  border-top:1px solid #f2d0cc;
+  border-bottom:1px solid #f2d0cc;
+  color:#b42318;
+  font-size:12px;
+  line-height:1.45;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+#moli-phone-panel .moli-chat-error[hidden]{display:none!important}
