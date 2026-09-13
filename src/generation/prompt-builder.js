@@ -197,8 +197,16 @@ export function buildPrivateGenerationRequest({
     : conversation.timeMode === 'none'
       ? '无时间感'
       : '跟随正文时间';
+  const timeDetails = conversation.timeMode === 'real'
+    ? (() => {
+        const now = new Date();
+        return `\n当前现实时间：${now.toLocaleString()}`;
+      })()
+    : conversation.timeMode === 'none'
+      ? '\n时间规则：不要主动推断当前日期、时刻或现实经过时长，除非用户消息明确提供。'
+      : '\n时间规则：以当前正文里能够确认的剧情时间为准；如果正文没有明确时间，不要自行编造精确日期或时刻。';
   systemBlocks.push(
-    `【当前聊天实例】\n归属：${scopeLabel}\n时间模式：${timeLabel}\n读取当前正文：${conversation.bodyContextEnabled === false ? '否' : '是'}`
+    `【当前聊天实例】\n归属：${scopeLabel}\n时间模式：${timeLabel}\n读取当前正文：${conversation.bodyContextEnabled === false ? '否' : '是'}${timeDetails}`
   );
 
   const onlinePreset = buildOnlinePresetPrompt();
