@@ -1,7 +1,7 @@
 import {
   appendMessage,
   getScopeConversations,
-  incrementConversationUnread,
+  recordAutomaticUnreadRound,
   updateGroupReviewRuntime,
 } from '../storage/data-store.js';
 import { getTavernAssistantTurnState } from '../core/tavern-context.js';
@@ -84,7 +84,7 @@ export function createReviewAutomation({ getScopeKey } = {}) {
         eligibleAssistantCount: nextEligible,
       });
 
-      if (!shouldTrigger) continue;
+      if (!shouldTrigger || automation.autoSuspended) continue;
       const key = String(group.conversationKey || group.id);
       if (runningGroups.has(key)) continue;
       const now = Date.now();
@@ -93,6 +93,7 @@ export function createReviewAutomation({ getScopeKey } = {}) {
       runningGroups.add(key);
       updateGroupReviewRuntime(scopeKey, key, { lastAttemptAt: now, lastError: '' });
       try {
+        window.dispatchEvent(new CustomEvent('moli:generation-state', { detail: { scopeKey, conversationKey: key, active: true, source: 'review' } }));
         const result = await generateGroupReview({ scopeKey, conversationKey: key });
         const generationTurnId = `review:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
         let messageCount = 0;
@@ -110,7 +111,7 @@ export function createReviewAutomation({ getScopeKey } = {}) {
             messageCount += 1;
           });
         });
-        if (messageCount) incrementConversationUnread(scopeKey, key, messageCount);
+        if (messageCount) recordAutomaticUnreadRound(scopeKey, key, messageCount);
         updateGroupReviewRuntime(scopeKey, key, {
           lastTriggeredEligibleCount: sameBoundaryReroll ? nextEligible : triggerEligibleCount,
           lastTriggeredSignature: String(body.lastSignature || ''),
@@ -125,6 +126,7 @@ export function createReviewAutomation({ getScopeKey } = {}) {
         });
         console.error('[moli小手机] automatic group review failed:', error);
       } finally {
+        window.dispatchEvent(new CustomEvent('moli:generation-state', { detail: { scopeKey, conversationKey: key, active: false, source: 'review' } }));
         runningGroups.delete(key);
       }
     }
