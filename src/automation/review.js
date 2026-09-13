@@ -4,7 +4,7 @@ import {
   recordAutomaticUnreadRound,
   updateGroupReviewRuntime,
 } from '../storage/data-store.js';
-import { getTavernAssistantTurnState } from '../core/tavern-context.js';
+import { getTavernAssistantTurnState, getCurrentTavernStoryTimeState } from '../core/tavern-context.js';
 import { generateGroupReview } from '../generation/generation-service.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
 import { beginGenerationTask, endGenerationTask, setGenerationError } from '../core/generation-runtime.js';
@@ -115,19 +115,25 @@ export function createReviewAutomation({ getScopeKey } = {}) {
         });
         const generationTurnId = `review:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
         let messageCount = 0;
+        const appendedMemberIds = new Set();
+        const storyTime = group.timeMode === 'body' ? getCurrentTavernStoryTimeState() : null;
         result.replies.forEach(batch => {
-          (batch.messages || []).forEach(content => {
-            appendMessage(scopeKey, key, 'assistant', content, {
-              source: 'review',
-              generationTurnId,
-              senderId: batch.contact.id,
-              senderSnapshot: {
-                name: batch.contact.remark || batch.contact.name || batch.contact.source?.originalName || '群成员',
-                avatar: batch.contact.customAvatar || batch.contact.source?.originalAvatarUrl || batch.contact.source?.originalAvatar || '',
-              },
-            });
-            messageCount += 1;
+          const memberId = String(batch?.contact?.id || '');
+          if (!memberId || appendedMemberIds.has(memberId)) return;
+          const content = String(batch?.messages?.[0] || '').trim();
+          if (!content) return;
+          appendedMemberIds.add(memberId);
+          appendMessage(scopeKey, key, 'assistant', content, {
+            source: 'review',
+            generationTurnId,
+            storyTime,
+            senderId: batch.contact.id,
+            senderSnapshot: {
+              name: batch.contact.remark || batch.contact.name || batch.contact.source?.originalName || '群成员',
+              avatar: batch.contact.customAvatar || batch.contact.source?.originalAvatarUrl || batch.contact.source?.originalAvatar || '',
+            },
           });
+          messageCount += 1;
         });
         if (messageCount) {
           recordAutomaticUnreadRound(scopeKey, key, messageCount);

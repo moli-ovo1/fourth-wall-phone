@@ -1,5 +1,5 @@
 import { appendMessage, getContacts, getScopeConversations, recordAutomaticUnreadRound, updatePrivateAutomationRuntime } from '../storage/data-store.js';
-import { getTavernAssistantTurnState } from '../core/tavern-context.js';
+import { getTavernAssistantTurnState, getCurrentTavernStoryTimeState } from '../core/tavern-context.js';
 import { generatePrivateReply } from '../generation/generation-service.js';
 import { parseGeneratedMessages } from '../generation/message-parser.js';
 import { beginGenerationTask, endGenerationTask, setGenerationError } from '../core/generation-runtime.js';
@@ -42,7 +42,8 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         if (String(result.text || '').trim() === '[SKIP]' || /\[SKIP\]/i.test(String(result.text || ''))) continue;
         const messages = parseGeneratedMessages(result.text).slice(0, 3); if (!messages.length) continue;
         const turnId = `auto:${mode}:${Date.now()}:${Math.random().toString(36).slice(2,8)}`;
-        messages.forEach(content => appendMessage(scopeKey, key, 'assistant', content, { source: mode === 'commentary' ? 'commentary' : 'auto-chat', generationTurnId: turnId, senderId: contact.id, senderSnapshot: { name: contact.remark || contact.name || '联系人', avatar: contact.customAvatar || contact.source?.originalAvatarUrl || '' } }));
+        const storyTime = conv.timeMode === 'body' ? getCurrentTavernStoryTimeState() : null;
+        messages.forEach(content => appendMessage(scopeKey, key, 'assistant', content, { source: mode === 'commentary' ? 'commentary' : 'auto-chat', generationTurnId: turnId, storyTime, senderId: contact.id, senderSnapshot: { name: contact.remark || contact.name || '联系人', avatar: contact.customAvatar || contact.source?.originalAvatarUrl || '' } }));
         recordAutomaticUnreadRound(scopeKey, key, messages.length);
         window.dispatchEvent(new CustomEvent('moli:conversation-updated', { detail: { scopeKey, conversationKey: key, source: mode } }));
       } catch (e) { setGenerationError(scopeKey, key, `自动行为失败：${String(e?.message || e || '请求失败')}`, mode); console.error('[moli小手机] private automation failed:', e); }
