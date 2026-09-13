@@ -112,3 +112,30 @@ export function getRecentTavernBody({
     textLength: used,
   };
 }
+
+export function getTavernAssistantTurnState() {
+  const ctx = getContext();
+  const chat = candidateChats(ctx)[0];
+  if (!chat) return { available: false, count: 0, lastSignature: '', signatures: [] };
+
+  const signatures = chat
+    .map((message, index) => ({ message, index }))
+    .filter(({ message }) => {
+      if (!message || typeof message !== 'object') return false;
+      const isUser = Boolean(message.is_user ?? message.isUser ?? message.role === 'user');
+      const isSystem = Boolean(message.is_system ?? message.isSystem ?? message.role === 'system');
+      return !isUser && !isSystem;
+    })
+    .map(({ message, index }) => {
+      const content = clean(message.mes ?? message.message ?? message.content ?? message.text);
+      const stable = clean(message.send_date ?? message.sendDate ?? message.extra?.gen_id ?? message.id ?? '');
+      return `${index}:${stable}:${content}`;
+    });
+
+  return {
+    available: true,
+    count: signatures.length,
+    lastSignature: signatures.at(-1) || '',
+    signatures,
+  };
+}

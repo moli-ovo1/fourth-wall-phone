@@ -2,6 +2,7 @@ import { loadUiState, saveUiState } from '../storage/ui-state.js';
 import { createFloatingBall } from '../ui/floating-ball.js';
 import { createPhonePanel } from '../ui/phone-panel.js';
 import { getCurrentScopeKey } from './tavern-scope.js';
+import { createReviewAutomation } from '../automation/review.js';
 import {
   getContacts,
   ensureBuiltins,
@@ -34,9 +35,12 @@ export function initApp() {
   });
 
   const destroyPanelController = () => {
+    panelController?.destroy?.();
     panelController?.element?.remove();
     panelController = null;
   };
+
+  const reviewAutomation = createReviewAutomation({ getScopeKey: getCurrentScopeKey });
 
   const handleController = createFloatingBall({
     uiState,
@@ -109,6 +113,7 @@ export function initApp() {
       );
 
       destroyPanelController();
+      reviewAutomation?.destroy?.();
       handleController.element.remove();
     },
   };
