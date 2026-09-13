@@ -359,13 +359,23 @@ function saveLocatedConversation(scopeKey, located) {
 export function ensureBuiltins(scopeKey) {
   const data = loadScope(scopeKey);
 
+  const globalConversations = loadGlobalConversationStore().conversations || {};
   for (
     const c of getContacts().filter(
       x => x.kind === 'builtin'
     )
   ) {
-    if (!data.conversations[c.id]) {
-      data.conversations[c.id] = createPrivateConversation(c.id);
+    const hasGlobalBuiltin = Object.values(globalConversations).some(conversation =>
+      conversation?.type === 'private'
+      && conversation?.scopeMode === 'global'
+      && String(conversation?.contactId || '') === String(c.id)
+    );
+    if (!data.conversations[c.id] && !hasGlobalBuiltin) {
+      data.conversations[c.id] = createPrivateConversation(c.id, {
+        conversationId: `private:${c.id}`,
+        scopeMode: 'current',
+        boundScopeKey: scopeKey,
+      });
     }
   }
 
@@ -920,12 +930,13 @@ export function updatePrivateConversationSettings(
   conversationKey,
   {
     title,
+    scopeMode,
     timeMode,
     bodyContextEnabled,
     recentChatLimit,
   } = {}
 ) {
-  const located = locateConversation(scopeKey, conversationKey);
+  let located = locateConversation(scopeKey, conversationKey);
   const conversation = located?.conversation;
   if (!conversation || conversation.type !== 'private') {
     throw new Error('私聊不存在');
@@ -933,6 +944,35 @@ export function updatePrivateConversationSettings(
 
   if (title !== undefined) {
     conversation.title = String(title || '').trim();
+  }
+
+  if (scopeMode !== undefined) {
+    const normalizedScopeMode = scopeMode === 'global' ? 'global' : 'current';
+    if (normalizedScopeMode !== conversation.scopeMode) {
+      // Conversation ownership is a move, not a copy: preserve the same key,
+      // messages and settings while relocating the single stored object.
+      delete located.data.conversations[conversationKey];
+      if (located.storage === 'global') {
+        saveGlobalConversationStore(located.data);
+      } else {
+        saveScope(scopeKey, located.data);
+      }
+
+      conversation.scopeMode = normalizedScopeMode;
+      conversation.boundScopeKey = normalizedScopeMode === 'current' ? String(scopeKey) : '';
+
+      if (normalizedScopeMode === 'global') {
+        const target = loadGlobalConversationStore();
+        target.conversations[conversationKey] = conversation;
+        saveGlobalConversationStore(target);
+        located = { storage: 'global', data: target, conversation, conversationKey };
+      } else {
+        const target = ensureBuiltins(scopeKey);
+        target.conversations[conversationKey] = conversation;
+        saveScope(scopeKey, target);
+        located = { storage: 'scope', data: target, conversation, conversationKey };
+      }
+    }
   }
 
   if (timeMode !== undefined) {
