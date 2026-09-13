@@ -33,6 +33,27 @@ const SCOPE_MIGRATIONS_KEY = 'moli-phone:scope-migrations:v1';
 const GLOBAL_CONVERSATIONS_KEY = 'moli-phone:global-conversations:v1';
 const SCOPE_SCHEMA_VERSION = 1;
 
+const DEFAULT_TAVERN_ROLE_SOURCES = Object.freeze({
+  description: true,
+  personality: true,
+  scenario: true,
+  mesExample: true,
+  systemPrompt: true,
+  postHistoryInstructions: true,
+  worldBook: true,
+  longTermMemory: true,
+});
+
+function normalizeTavernRoleSources(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return Object.fromEntries(
+    Object.entries(DEFAULT_TAVERN_ROLE_SOURCES).map(([key, defaultValue]) => [
+      key,
+      typeof source[key] === 'boolean' ? source[key] : defaultValue,
+    ])
+  );
+}
+
 function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
   if (!conversation || typeof conversation !== 'object') return conversation;
 
@@ -160,6 +181,12 @@ export function getContacts() {
   }
 
   const list = [...map.values()];
+
+  for (const contact of list) {
+    if (contact?.kind === 'tavern') {
+      contact.roleSources = normalizeTavernRoleSources(contact.roleSources);
+    }
+  }
 
   saveContacts(list);
 
@@ -564,7 +591,7 @@ export function createCustomContact({
 }
 
 
-export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, apiOverride, statusBar } = {}) {
+export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, roleSources, apiOverride, statusBar } = {}) {
   const list = getContacts();
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
@@ -578,6 +605,9 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
   if (customAvatar !== undefined) contact.customAvatar = String(customAvatar || '');
   if (intro !== undefined) contact.intro = String(intro || '').trim();
   if (prompt !== undefined) contact.prompt = String(prompt || '').trim();
+  if (roleSources !== undefined && contact.kind === 'tavern') {
+    contact.roleSources = normalizeTavernRoleSources(roleSources);
+  }
   if (apiOverride !== undefined) {
     contact.apiOverride = apiOverride && typeof apiOverride === 'object'
       ? JSON.parse(JSON.stringify(apiOverride))
