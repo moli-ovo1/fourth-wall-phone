@@ -73,12 +73,12 @@ export function getRecentTavernBody({
 
   const limit = Math.max(
     1,
-    Math.min(80, Number(messageLimit) || 24)
+    Math.min(9999, Number(messageLimit) || 24)
   );
 
   const maxChars = Math.max(
     1000,
-    Math.min(80000, Number(charLimit) || 24000)
+    Math.min(2000000, Number(charLimit) || 24000)
   );
 
   const normalized = chat
