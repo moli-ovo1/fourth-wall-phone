@@ -146,8 +146,10 @@ export async function generatePrivateReply({
   const recentBody = conversation.bodyContextEnabled === false
     ? null
     : getRecentTavernBody({
-        messageLimit: 24,
-        charLimit: 24000,
+        messageLimit: isFourthWall
+          ? Math.max(1, Math.min(9999, Number(conversation.fourthWall?.maxChatLayers) || 20))
+          : 24,
+        charLimit: isFourthWall ? 64000 : 24000,
       });
 
   const worldBookScanParts = (conversation.messages || [])
@@ -208,10 +210,10 @@ export async function generatePrivateReply({
       systemPrompt: String(request?.system || ''),
     }) || '').trim();
     if (!text) throw new Error('酒馆当前 API 返回了空回复');
-    onDelta?.(text, text);
+    if (!(isFourthWall && conversation.fourthWall?.stream === false)) onDelta?.(text, text);
     result = { text, raw: null };
   } else {
-    result = await generateProviderText(config, request, { signal, onDelta });
+    result = await generateProviderText(config, request, { signal, onDelta: isFourthWall && conversation.fourthWall?.stream === false ? undefined : onDelta });
   }
 
   return {
