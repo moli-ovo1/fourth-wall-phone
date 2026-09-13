@@ -2,6 +2,7 @@ import { appendMessage, getContacts, getScopeConversations, recordAutomaticUnrea
 import { getTavernAssistantTurnState } from '../core/tavern-context.js';
 import { generatePrivateReply } from '../generation/generation-service.js';
 import { parseGeneratedMessages } from '../generation/message-parser.js';
+import { beginGenerationTask, endGenerationTask } from '../core/generation-runtime.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -32,7 +33,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       else if (opportunity && a.autoChatEnabled && now - Number(a.lastAutoChatAt || 0) >= AUTO_CHAT_COOLDOWN_MS && chance(a.autoChatProbability)) mode = 'chat';
       if (!mode) continue;
       running.add(key);
-      window.dispatchEvent(new CustomEvent('moli:generation-state', { detail: { scopeKey, conversationKey: key, active: true, source: mode } }));
+      beginGenerationTask(scopeKey, key, null, mode);
       try {
         const instruction = mode === 'commentary'
           ? '这是正文刚发生后的场外私聊吐槽机会。你就是正文中的你本人，不是分析员。只在你本人此刻真的会想吐槽/联系用户时回复；若不想说，严格只输出 [SKIP]。若回复，像手机私聊一样简短自然。'
@@ -45,7 +46,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         recordAutomaticUnreadRound(scopeKey, key, messages.length);
         window.dispatchEvent(new CustomEvent('moli:conversation-updated', { detail: { scopeKey, conversationKey: key, source: mode } }));
       } catch (e) { console.error('[moli小手机] private automation failed:', e); }
-      finally { updatePrivateAutomationRuntime(scopeKey, key, { lastAutoChatAt: mode === 'chat' ? Date.now() : Number(a.lastAutoChatAt || 0) }); window.dispatchEvent(new CustomEvent('moli:generation-state', { detail: { scopeKey, conversationKey: key, active: false, source: mode } })); running.delete(key); }
+      finally { updatePrivateAutomationRuntime(scopeKey, key, { lastAutoChatAt: mode === 'chat' ? Date.now() : Number(a.lastAutoChatAt || 0) }); endGenerationTask(scopeKey, key); running.delete(key); }
     }
   };
   timer = window.setInterval(() => void tick(), POLL_MS); void tick();

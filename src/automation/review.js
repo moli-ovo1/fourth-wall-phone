@@ -6,6 +6,7 @@ import {
 } from '../storage/data-store.js';
 import { getTavernAssistantTurnState } from '../core/tavern-context.js';
 import { generateGroupReview } from '../generation/generation-service.js';
+import { beginGenerationTask, endGenerationTask } from '../core/generation-runtime.js';
 
 const POLL_MS = 2200;
 const RETRY_MS = 60000;
@@ -93,7 +94,7 @@ export function createReviewAutomation({ getScopeKey } = {}) {
       runningGroups.add(key);
       updateGroupReviewRuntime(scopeKey, key, { lastAttemptAt: now, lastError: '' });
       try {
-        window.dispatchEvent(new CustomEvent('moli:generation-state', { detail: { scopeKey, conversationKey: key, active: true, source: 'review' } }));
+        beginGenerationTask(scopeKey, key, null, 'review');
         const result = await generateGroupReview({ scopeKey, conversationKey: key });
         const generationTurnId = `review:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
         let messageCount = 0;
@@ -126,7 +127,7 @@ export function createReviewAutomation({ getScopeKey } = {}) {
         });
         console.error('[moli小手机] automatic group review failed:', error);
       } finally {
-        window.dispatchEvent(new CustomEvent('moli:generation-state', { detail: { scopeKey, conversationKey: key, active: false, source: 'review' } }));
+        endGenerationTask(scopeKey, key);
         runningGroups.delete(key);
       }
     }
