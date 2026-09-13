@@ -176,6 +176,7 @@ export function buildPrivateGenerationRequest({
   worldBookText = '',
   longTermMemoryText = '',
   longTermMemoryCoverage = null,
+  phoneMemory = null,
   historyLimit = 60,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
@@ -233,6 +234,24 @@ export function buildPrivateGenerationRequest({
     );
   }
 
+  const phoneRecentMemories = Array.isArray(phoneMemory?.recent)
+    ? phoneMemory.recent.map(item => clean(item?.content)).filter(Boolean)
+    : [];
+  const phoneLongTermSummary = clean(phoneMemory?.longTermSummary);
+  if (phoneLongTermSummary || phoneRecentMemories.length) {
+    const parts = [];
+    if (phoneLongTermSummary) {
+      parts.push(`【长期总结】\n${clip(phoneLongTermSummary, 12000)}`);
+    }
+    if (phoneRecentMemories.length) {
+      parts.push(`【近期记忆】\n${clip(phoneRecentMemories.join('\n\n'), 12000)}`);
+    }
+    systemBlocks.push(
+      '【当前手机 Conversation 的场外记忆】\n这是当前这一个手机聊天实例自身积累的关系与聊天记忆，不是正文世界记忆。优先级低于当前原始聊天和当前正文；若有冲突，以更近期、更直接的信息为准。\n\n'
+      + parts.join('\n\n')
+    );
+  }
+
   if (clean(longTermMemoryText)) {
     const coverageNote = longTermMemoryCoverage?.complete === false
       ? '\n\n注意：柏宝书报告这份长期记忆存在摘要缺口；不要把它当作毫无遗漏的完整历史，近期事实继续以最近正文为准。'
@@ -287,6 +306,8 @@ export function buildPrivateGenerationRequest({
       recentBodyMessageCount: Array.isArray(recentBody?.messages)
         ? recentBody.messages.length
         : 0,
+      phoneRecentMemoryCount: phoneRecentMemories.length,
+      phoneLongTermSummaryEnabled: Boolean(phoneLongTermSummary),
       roleFidelityEnabled:
         contact.kind === 'tavern'
         && Boolean(contact?.source?.roleFidelity),

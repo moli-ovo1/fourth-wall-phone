@@ -2,6 +2,7 @@ import { getContext as getTavernContext } from '../../../../../extensions.js';
 import {
   getContacts,
   getConversation,
+  getConversationMemory,
 } from '../storage/data-store.js';
 import { getApiSettings, getApiPreset, resolveApiRuntimeConfig } from '../storage/api-settings.js';
 import { generateProviderText } from '../api/providers/provider-registry.js';
@@ -162,6 +163,7 @@ export async function generatePrivateReply({
     worldBookText: activatedWorldBook?.text || '',
     longTermMemoryText: baiBaiMemory?.text || '',
     longTermMemoryCoverage: baiBaiMemory?.coverage || null,
+    phoneMemory: getConversationMemory(scopeKey, conversationKey),
     historyLimit: conversation.recentChatLimit || 100,
   });
 
