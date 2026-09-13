@@ -546,12 +546,13 @@ export function createPhonePanel({
         <div class="moli-nav-side">
           <button class="moli-icon-btn moli-back" data-action="contact-prompt-back" aria-label="返回">‹</button>
         </div>
-        <div class="moli-nav-title">人格与提示词</div>
+        <div class="moli-nav-title" data-contact-prompt-page-title>人格与提示词</div>
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-settings-list moli-contact-subpage">
         <div class="moli-settings-note" data-contact-prompt-owner></div>
-        <label class="moli-form-field">
+        <section data-contact-role-sources hidden></section>
+        <label class="moli-form-field" data-contact-intro-field>
           <span>简介 / 一句话描述</span>
           <textarea rows="4" data-contact-profile-intro placeholder="简单介绍这个人"></textarea>
         </label>
@@ -565,6 +566,20 @@ export function createPhonePanel({
         <button class="moli-secondary-btn" data-action="contact-prompt-cancel">取消</button>
         <button class="moli-primary-btn" data-action="contact-prompt-save">保存</button>
       </footer>
+    </section>
+
+    <section class="moli-page" data-page="contact-source-detail">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="contact-source-detail-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title" data-contact-source-detail-title>来源原文</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-settings-list moli-contact-subpage">
+        <div class="moli-source-detail-meta" data-contact-source-detail-meta></div>
+        <pre class="moli-source-detail-text" data-contact-source-detail-text></pre>
+      </main>
     </section>
 
     <section class="moli-page" data-page="contact-api-settings">
@@ -792,6 +807,12 @@ export function createPhonePanel({
   const newPrivateContactName = panel.querySelector('[data-new-private-contact-name]');
   const newPrivateTitle = panel.querySelector('[data-new-private-title]');
   const contactPromptOwner = panel.querySelector('[data-contact-prompt-owner]');
+  const contactPromptPageTitle = panel.querySelector('[data-contact-prompt-page-title]');
+  const contactRoleSources = panel.querySelector('[data-contact-role-sources]');
+  const contactIntroField = panel.querySelector('[data-contact-intro-field]');
+  const contactSourceDetailTitle = panel.querySelector('[data-contact-source-detail-title]');
+  const contactSourceDetailMeta = panel.querySelector('[data-contact-source-detail-meta]');
+  const contactSourceDetailText = panel.querySelector('[data-contact-source-detail-text]');
   const contactProfileIntro = panel.querySelector('[data-contact-profile-intro]');
   const contactProfilePrompt = panel.querySelector('[data-contact-profile-prompt]');
   const contactPromptField = panel.querySelector('[data-contact-prompt-field]');
@@ -1622,7 +1643,7 @@ export function createPhonePanel({
           <button type="button" class="moli-info-save-button" data-action="save-contact-info">保存基础资料</button>
         </div>
         <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings">
-          <span>人格与提示词</span><strong>›</strong>
+          <span>${isTavern ? '角色资料与提示词' : '人格与提示词'}</span><strong>›</strong>
         </button>
         <button type="button" class="moli-info-setting-row" data-action="contact-api-settings">
           <span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong>
@@ -1671,7 +1692,7 @@ export function createPhonePanel({
           <span>清空聊天记录</span>
           <strong>›</strong>
         </button>
-        ${isTavern ? `<div class="moli-info-note">角色卡设定与 Example Dialogue 会在生成时作为角色来源资料读取。${conversation.bodyContextEnabled === false ? '当前聊天默认不读取正文。' : '当前聊天会读取当前存档最近正文。'}自定义附加 Prompt 只作为可选补充，不会取代角色卡人格。酒馆角色改名或换头像时，备注名、自定义头像、简介和附加 Prompt 仍不会被自动覆盖。</div>` : ''}
+        ${isTavern ? `<div class="moli-info-note">角色资料来源由“角色资料与提示词”独立控制；当前正文、时间模式和聊天历史属于当前 Conversation。自定义附加 Prompt 只作为可选补充，不会取代角色卡人格。酒馆角色刷新时仍保留备注名、自定义头像、联系人简介、附加 Prompt 与来源开关。</div>` : ''}
       `;
       return;
     }
@@ -1729,6 +1750,58 @@ export function createPhonePanel({
     return contact(conversation.contactId || currentContactId);
   }
 
+  const TAVERN_ROLE_SOURCE_ITEMS = [
+    ['description', '角色设定', 'Description'],
+    ['personality', '性格', 'Personality'],
+    ['scenario', '场景', 'Scenario'],
+    ['mesExample', 'Example Dialogue', 'Example Dialogue'],
+    ['systemPrompt', 'System Prompt', 'System Prompt'],
+    ['postHistoryInstructions', 'Post-History Instructions', 'Post-History Instructions'],
+  ];
+
+  function tavernRoleSourceValue(item, key) {
+    return String(item?.source?.roleFidelity?.[key] || '').trim();
+  }
+
+  function renderTavernRoleSources(item) {
+    if (!contactRoleSources) return;
+    const roleSources = item?.roleSources && typeof item.roleSources === 'object'
+      ? item.roleSources
+      : {};
+    const sourceMissing = item?.source?.status === 'missing';
+
+    contactRoleSources.innerHTML = `
+      <div class="moli-source-section">
+        <div class="moli-source-section-title">角色卡资料</div>
+        <div class="moli-source-section-note">关闭只代表本轮生成不注入；不会删除已同步的角色卡快照。</div>
+        ${TAVERN_ROLE_SOURCE_ITEMS.map(([key, label]) => {
+          const hasValue = Boolean(tavernRoleSourceValue(item, key));
+          const enabled = roleSources[key] !== false;
+          return `
+            <div class="moli-role-source-row ${hasValue ? '' : 'is-empty'}">
+              <button type="button" class="moli-role-source-view" data-role-source-view="${escapeHtml(key)}">
+                <span><strong>${escapeHtml(label)}</strong><small>${hasValue ? (sourceMissing ? '最近同步快照' : '自动跟随角色卡') : '角色卡未提供'}</small></span>
+                <b>›</b>
+              </button>
+              <label class="moli-role-source-switch" title="${escapeHtml(label)}">
+                <input type="checkbox" data-role-source-toggle="${escapeHtml(key)}" ${enabled ? 'checked' : ''}>
+                <span></span>
+              </label>
+            </div>`;
+        }).join('')}
+      </div>
+      <div class="moli-source-section">
+        <div class="moli-source-section-title">世界书</div>
+        <button type="button" class="moli-source-placeholder" disabled><span>世界书条目</span><strong>尚未接入 ›</strong></button>
+        <div class="moli-source-section-note">这里未来只管理“允许使用哪些条目”；本轮实际激活仍按常驻、关键词和上下文触发，不会把全部勾选条目无条件塞入 API。</div>
+      </div>
+      <div class="moli-source-section">
+        <div class="moli-source-section-title">长期剧情记忆</div>
+        <button type="button" class="moli-source-placeholder" disabled><span>柏宝书长期记忆</span><strong>尚未接入 ›</strong></button>
+      </div>`;
+    contactRoleSources.hidden = false;
+  }
+
   function renderContactPromptSettings() {
     const item = currentPrivateContact();
     if (!item) return;
@@ -1736,10 +1809,20 @@ export function createPhonePanel({
     if (contactProfileIntro) contactProfileIntro.value = item.intro || '';
     if (contactProfilePrompt) contactProfilePrompt.value = item.prompt || '';
 
-    if (item.kind === 'tavern') {
+    const isTavern = item.kind === 'tavern';
+    if (contactPromptPageTitle) contactPromptPageTitle.textContent = isTavern ? '角色资料与提示词' : '人格与提示词';
+    if (contactRoleSources) {
+      contactRoleSources.hidden = true;
+      contactRoleSources.innerHTML = '';
+    }
+    if (contactIntroField) contactIntroField.hidden = false;
+
+    if (isTavern) {
+      renderTavernRoleSources(item);
+      if (contactIntroField) contactIntroField.hidden = true;
       if (contactPromptLabel) contactPromptLabel.textContent = '自定义附加 Prompt（可选）';
-      if (contactProfilePrompt) contactProfilePrompt.placeholder = '只填写你希望额外补充给这个酒馆角色的约束；角色本身的人格由角色卡等来源决定。';
-      if (contactPromptHint) contactPromptHint.textContent = '酒馆角色不需要额外“人格 Prompt”。角色卡、性格、场景、Example Dialogue、世界书、柏宝书长期记忆、最近正文与场外聊天历史会作为独立来源逐步接入；这里仅保留可选的自定义附加 Prompt。';
+      if (contactProfilePrompt) contactProfilePrompt.placeholder = '例如：手机聊天时比正文稍微松弛，但仍保持克制，不使用网络流行语。';
+      if (contactPromptHint) contactPromptHint.textContent = '酒馆角色的人格 Source of Truth 始终是 SillyTavern 角色卡及其关联资料。这里负责筛选来源与补充 Prompt；当前正文、聊天历史、时间模式等动态上下文由当前 Conversation 管理。联系人简介仅用于 UI 展示，不进入酒馆角色生成 Prompt。';
     } else if (item.kind === 'builtin') {
       if (contactPromptLabel) contactPromptLabel.textContent = '内置人格 Prompt';
       if (contactProfilePrompt) contactProfilePrompt.placeholder = '内置人格的系统 Prompt；后续提供恢复默认。';
@@ -1752,15 +1835,41 @@ export function createPhonePanel({
     if (contactPromptField) contactPromptField.hidden = false;
   }
 
+  function openContactSourceDetail(key) {
+    const item = currentPrivateContact();
+    if (!item || item.kind !== 'tavern') return;
+    const entry = TAVERN_ROLE_SOURCE_ITEMS.find(([sourceKey]) => sourceKey === key);
+    if (!entry) return;
+    const [, label, rawLabel] = entry;
+    const value = tavernRoleSourceValue(item, key);
+    if (contactSourceDetailTitle) contactSourceDetailTitle.textContent = label;
+    if (contactSourceDetailMeta) {
+      const sourceState = item.source?.status === 'missing' ? '来源角色当前不可用 · 使用最后同步快照' : '来源：SillyTavern 角色卡 · 自动跟随';
+      contactSourceDetailMeta.textContent = `${sourceState} · ${rawLabel}`;
+    }
+    if (contactSourceDetailText) contactSourceDetailText.textContent = value || '该角色卡当前没有提供这一项内容。';
+    show('contact-source-detail');
+  }
+
   function saveContactPromptSettings() {
     const item = currentPrivateContact();
     if (!item) return;
     try {
-      updateContact(item.id, {
-        intro: contactProfileIntro?.value || '',
+      const payload = {
         prompt: contactProfilePrompt?.value || '',
-      });
-      toast('人格与提示词已保存');
+      };
+      if (item.kind !== 'tavern') {
+        payload.intro = contactProfileIntro?.value || '';
+      } else {
+        payload.roleSources = Object.fromEntries(
+          TAVERN_ROLE_SOURCE_ITEMS.map(([key]) => [
+            key,
+            contactRoleSources?.querySelector(`[data-role-source-toggle="${key}"]`)?.checked !== false,
+          ])
+        );
+      }
+      updateContact(item.id, payload);
+      toast(item.kind === 'tavern' ? '角色资料与提示词已保存' : '人格与提示词已保存');
       show('info');
     } catch (error) {
       toast(error?.message || '保存失败');
@@ -3788,6 +3897,11 @@ export function createPhonePanel({
   panel.querySelector('[data-action="contact-prompt-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-save"]')?.addEventListener('click', saveContactPromptSettings);
+  panel.querySelector('[data-action="contact-source-detail-back"]')?.addEventListener('click', () => show('contact-prompt-settings'));
+  contactRoleSources?.addEventListener('click', event => {
+    const view = event.target.closest?.('[data-role-source-view]');
+    if (view) openContactSourceDetail(view.dataset.roleSourceView);
+  });
 
   panel.querySelector('[data-action="contact-api-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-api-cancel"]')?.addEventListener('click', () => show('info'));
