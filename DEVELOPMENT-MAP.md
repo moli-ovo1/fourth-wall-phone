@@ -1274,3 +1274,84 @@ Generation / Prompt 接入时使用 Data Store 的统一联系人上下文来源
 - 最终内置人格数量
 
 这些项目依赖后续 Conversation / Context / Memory 数据结构，不应为了当前预设 UI 冒险修改现有 scope schema。
+
+---
+
+# moli31 节点：自定义 Prompt 条目 + Conversation 2.0 第一阶段
+
+## 本节点实现
+
+### A. 线上聊天预设自定义条目
+
+- `src/storage/prompt-settings.js`
+  - 保留系统默认 8 个条目
+  - 保存未知 / custom 条目，不再在读取时丢弃
+  - 新增 `createCustomPromptBlock()`
+  - 新增 `deleteCustomPromptBlock()`
+  - 恢复默认预设时保留用户自定义条目
+- `src/ui/phone-panel.js`
+  - `＋ 添加自定义条目`
+  - 自定义条目名称编辑
+  - 自定义条目删除
+
+### B. Conversation 2.0 第一阶段
+
+- `src/storage/data-store.js`
+  - 新增 `moli-phone:global-conversations:v1`
+  - 新增多私聊实例 key
+  - 新增 `createPrivateConversationInstance()`
+  - 新增 `getPrivateConversationsForContact()`
+  - 新增 `updatePrivateConversationSettings()` 基础接口
+  - `getScopeConversations()` 合并当前 scope Conversation 与全局陪伴 Conversation
+  - `getConversation()` / 消息写入 / 删除 / 清空 / 置顶 / 未读同时支持 scope 与 global Conversation
+  - 旧 `contactId` 私聊 key 原位兼容，不做破坏性 schema 迁移
+- `src/ui/phone-panel.js`
+  - 私聊信息页显示 Conversation 归属
+  - `＋ 新建另一个聊天`
+  - 创建时选择 `随当前正文 / 全局陪伴`
+  - 首页与聊天标题可区分同联系人多个私聊
+  - 转发目标使用 Conversation key，不再把所有私聊压回 contactId
+- `src/generation/generation-service.js`
+  - Global companion 默认不读取当前正文
+  - 当前正文 Conversation 默认继续读取正文
+  - 当前阶段禁止默认注入同联系人其他私聊，避免不同现实污染
+  - 最近聊天窗口读取 `conversation.recentChatLimit`，默认 100
+- `src/generation/prompt-builder.js`
+  - 注入当前 Conversation 的归属 / 时间模式 / 正文读取状态
+
+## 兼容要求
+
+旧私聊：
+
+- key 仍可为 `contactId`
+- 历史原位保留
+- 视作 `scopeMode=current`
+- 不要求一次性重写用户 localStorage
+
+只有用户新建“另一个聊天”时才生成新的独立 Conversation key。
+
+## 当前阶段仍未完成
+
+- 通讯录中直接查看一个联系人的全部聊天实例
+- 新联系人创建时完全拆分“添加联系人”和“创建首个聊天”的 UX
+- Conversation 设置页中的时间模式切换 UI
+- 正文读取开关 UI
+- 最近聊天读取上限 UI
+- 自动吐槽 / 自动聊天
+- 手机日记 / 长期总结
+- 跨 Conversation 记忆共享开关
+- 群聊轻编排 + 逐人生成
+- 章鱼式状态栏
+- 最终表现层美化
+
+## 接下来
+
+下一节点优先继续 Conversation 2.0 第二阶段：
+
+1. Conversation 设置页
+2. 时间模式：现实 / 正文 / 无时间感
+3. 正文读取开关
+4. 最近聊天读取上限 10～9999
+5. 为后续手机记忆 / 自动吐槽 / 自动聊天预留同一 Conversation 配置入口
+
+完成后再进入联系人资料“人格与提示词”与手机记忆实现。
