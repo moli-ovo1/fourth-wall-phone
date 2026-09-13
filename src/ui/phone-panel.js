@@ -54,6 +54,7 @@ import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteC
 import { extensionTypes } from '../../../../../extensions.js';
 import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
+import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 
 export function createPhonePanel({
   documentRef = document,
@@ -532,6 +533,7 @@ export function createPhonePanel({
           <textarea rows="12" data-contact-profile-prompt></textarea>
         </label>
         <div class="moli-settings-note" data-contact-prompt-hint></div>
+        <button type="button" class="moli-secondary-btn moli-restore-builtin-prompt" data-action="restore-builtin-prompt" hidden>恢复默认人格 Prompt</button>
       </main>
       <footer class="moli-sync-footer">
         <button class="moli-secondary-btn" data-action="contact-prompt-cancel">取消</button>
@@ -790,6 +792,7 @@ export function createPhonePanel({
   const contactPromptField = panel.querySelector('[data-contact-prompt-field]');
   const contactPromptLabel = panel.querySelector('[data-contact-prompt-label]');
   const contactPromptHint = panel.querySelector('[data-contact-prompt-hint]');
+  const restoreBuiltinPromptButton = panel.querySelector('[data-action="restore-builtin-prompt"]');
   const contactApiEnabled = panel.querySelector('[data-contact-api-enabled]');
   const contactApiBody = panel.querySelector('[data-contact-api-body]');
   const contactApiPreset = panel.querySelector('[data-contact-api-preset]');
@@ -1697,7 +1700,12 @@ export function createPhonePanel({
     if (!item) return;
     if (contactPromptOwner) contactPromptOwner.textContent = `当前联系人：${displayName(item)}`;
     if (contactProfileIntro) contactProfileIntro.value = item.intro || '';
-    if (contactProfilePrompt) contactProfilePrompt.value = item.prompt || '';
+    if (contactProfilePrompt) {
+      const hasStoredPrompt = Object.prototype.hasOwnProperty.call(item, 'prompt');
+      contactProfilePrompt.value = item.kind === 'builtin' && !hasStoredPrompt
+        ? getBuiltinPersonaPrompt(item.id)
+        : (item.prompt || '');
+    }
 
     const isTavern = item.kind === 'tavern';
     if (contactPromptPageTitle) contactPromptPageTitle.textContent = isTavern ? '角色资料与提示词' : '人格与提示词';
@@ -1706,6 +1714,7 @@ export function createPhonePanel({
       contactRoleSources.innerHTML = '';
     }
     if (contactIntroField) contactIntroField.hidden = false;
+    if (restoreBuiltinPromptButton) restoreBuiltinPromptButton.hidden = item.kind !== 'builtin';
 
     if (isTavern) {
       renderTavernRoleSources(item);
@@ -1715,8 +1724,8 @@ export function createPhonePanel({
       if (contactPromptHint) contactPromptHint.textContent = '酒馆角色的人格 Source of Truth 始终是 SillyTavern 角色卡及其关联资料。这里负责筛选来源与补充 Prompt；当前正文、聊天历史、时间模式等动态上下文由当前 Conversation 管理。联系人简介仅用于 UI 展示，不进入酒馆角色生成 Prompt。';
     } else if (item.kind === 'builtin') {
       if (contactPromptLabel) contactPromptLabel.textContent = '内置人格 Prompt';
-      if (contactProfilePrompt) contactProfilePrompt.placeholder = '内置人格的系统 Prompt；后续提供恢复默认。';
-      if (contactPromptHint) contactPromptHint.textContent = '内置人格拥有系统默认人格，可编辑；恢复默认入口将在内置人格默认 Prompt 完整落地时接入。';
+      if (contactProfilePrompt) contactProfilePrompt.placeholder = '内置人格的系统 Prompt';
+      if (contactPromptHint) contactPromptHint.textContent = '内置人格使用独立系统人格 Prompt。你可以直接编辑；“恢复默认人格 Prompt”只重置这份人格文本，不影响聊天历史或手机记忆。';
     } else {
       if (contactPromptLabel) contactPromptLabel.textContent = '人格 Prompt';
       if (contactProfilePrompt) contactProfilePrompt.placeholder = '身份、性格、说话方式、关系习惯等';
@@ -1739,6 +1748,18 @@ export function createPhonePanel({
     }
     if (contactSourceDetailText) contactSourceDetailText.textContent = value || '该角色卡当前没有提供这一项内容。';
     show('contact-source-detail');
+  }
+
+  function restoreBuiltinPrompt() {
+    const item = currentPrivateContact();
+    if (!item || item.kind !== 'builtin') return;
+    const defaultPrompt = getBuiltinPersonaPrompt(item.id);
+    if (!defaultPrompt) {
+      toast('该内置人格没有可恢复的默认 Prompt');
+      return;
+    }
+    if (contactProfilePrompt) contactProfilePrompt.value = defaultPrompt;
+    toast('已恢复默认人格 Prompt，点击保存后生效');
   }
 
   function saveContactPromptSettings() {
@@ -2324,6 +2345,56 @@ export function createPhonePanel({
     }
   }
 
+  function compareVersions(a, b) {
+    const left = String(a || '').replace(/^v/i, '').split(/[.+-]/).map(part => Number.parseInt(part, 10) || 0);
+    const right = String(b || '').replace(/^v/i, '').split(/[.+-]/).map(part => Number.parseInt(part, 10) || 0);
+    const length = Math.max(left.length, right.length);
+    for (let i = 0; i < length; i += 1) {
+      const diff = (left[i] || 0) - (right[i] || 0);
+      if (diff) return diff > 0 ? 1 : -1;
+    }
+    return 0;
+  }
+
+  function setUpdateAvailable(available, remoteVersion = '') {
+    const button = panel.querySelector('[data-action="update"]');
+    if (!button) return;
+    button.classList.toggle('moli-update-available', Boolean(available));
+    button.dataset.updateAvailable = available ? 'true' : 'false';
+    button.title = available
+      ? `发现新版本${remoteVersion ? ` ${remoteVersion}` : ''}，点击更新`
+      : '更新 moli小手机';
+  }
+
+  async function fetchJson(url, timeoutMs = 12000) {
+    const response = await fetchWithTimeout(url, { credentials: url.startsWith('/') ? 'same-origin' : 'omit', cache: 'no-store' }, timeoutMs);
+    if (!response.ok) throw new Error(`请求失败（${response.status}）`);
+    return response.json();
+  }
+
+  async function checkExtensionUpdateAvailability() {
+    try {
+      const localManifestUrl = new URL('../../manifest.json', import.meta.url);
+      localManifestUrl.searchParams.set('_moli', String(Date.now()));
+      const localManifest = await fetchJson(localManifestUrl.href);
+      const homePage = String(localManifest?.homePage || '').replace(/\/$/, '');
+      const match = homePage.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/i);
+      if (!match) return;
+      const [, owner, repo] = match;
+      let remoteManifest = null;
+      for (const branch of ['main', 'master']) {
+        try {
+          remoteManifest = await fetchJson(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/manifest.json?_moli=${Date.now()}`);
+          break;
+        } catch {}
+      }
+      if (!remoteManifest?.version || !localManifest?.version) return;
+      setUpdateAvailable(compareVersions(remoteManifest.version, localManifest.version) > 0, remoteManifest.version);
+    } catch (error) {
+      console.debug('[moli小手机] update availability check skipped:', error);
+    }
+  }
+
   async function updateExtension() {
     const button = panel.querySelector('[data-action="update"]');
 
@@ -2392,10 +2463,12 @@ export function createPhonePanel({
       const result = await response.json();
 
       if (result?.isUpToDate) {
+        setUpdateAvailable(false);
         toast('已经是最新版');
         return;
       }
 
+      setUpdateAvailable(false);
       toast('更新完成，正在重新加载…');
 
       setTimeout(() => {
@@ -3574,6 +3647,9 @@ export function createPhonePanel({
   ).onclick =
     updateExtension;
 
+  // 非阻塞后台检查；失败不影响手机初始化。
+  checkExtensionUpdateAvailability();
+
   panel.querySelector('[data-action="prompt-settings"]')?.addEventListener('click', () => show('prompt-settings'));
   panel.querySelector('[data-action="prompt-settings-back"]')?.addEventListener('click', () => show('settings'));
   panel.querySelector('[data-action="prompt-editor-back"]')?.addEventListener('click', () => show('prompt-settings'));
@@ -3755,6 +3831,7 @@ export function createPhonePanel({
   panel.querySelector('[data-action="contact-prompt-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-save"]')?.addEventListener('click', saveContactPromptSettings);
+  restoreBuiltinPromptButton?.addEventListener('click', restoreBuiltinPrompt);
   panel.querySelector('[data-action="contact-source-detail-back"]')?.addEventListener('click', () => show('contact-prompt-settings'));
   panel.querySelector('[data-action="contact-worldbook-back"]')?.addEventListener('click', () => show('contact-prompt-settings'));
   panel.querySelector('[data-action="contact-worldbook-cancel"]')?.addEventListener('click', () => show('contact-prompt-settings'));
