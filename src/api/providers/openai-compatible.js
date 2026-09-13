@@ -51,6 +51,11 @@ export async function generateText(config, request, { fetchImpl = fetch, signal,
     body: JSON.stringify({
       model,
       stream: streaming,
+      ...(Number.isFinite(Number(config?.params?.temperature)) ? { temperature: Number(config.params.temperature) } : {}),
+      ...(Number.isFinite(Number(config?.params?.top_p)) ? { top_p: Number(config.params.top_p) } : {}),
+      ...(Number.isFinite(Number(config?.params?.frequency_penalty)) ? { frequency_penalty: Number(config.params.frequency_penalty) } : {}),
+      ...(Number.isFinite(Number(config?.params?.presence_penalty)) ? { presence_penalty: Number(config.params.presence_penalty) } : {}),
+      ...(Number.isFinite(Number(config?.params?.max_tokens)) ? { max_tokens: Math.round(Number(config.params.max_tokens)) } : {}),
       messages: [
         ...(request?.system ? [{ role: 'system', content: String(request.system) }] : []),
         ...(Array.isArray(request?.messages) ? request.messages : []).map(item => ({

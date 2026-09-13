@@ -54,7 +54,10 @@ export async function generateText(config, request, { fetchImpl = fetch, signal,
     },
     body: JSON.stringify({
       model,
-      max_tokens: 2048,
+      max_tokens: Number.isFinite(Number(config?.params?.max_tokens)) ? Math.round(Number(config.params.max_tokens)) : 2048,
+      ...(Number.isFinite(Number(config?.params?.temperature)) ? { temperature: Number(config.params.temperature) } : {}),
+      ...(Number.isFinite(Number(config?.params?.top_p)) ? { top_p: Number(config.params.top_p) } : {}),
+      ...(Number.isFinite(Number(config?.params?.top_k)) ? { top_k: Math.round(Number(config.params.top_k)) } : {}),
       stream: streaming,
       ...(request?.system ? { system: String(request.system) } : {}),
       messages: (Array.isArray(request?.messages) ? request.messages : []).map(item => ({

@@ -68,6 +68,12 @@ export async function generateText(config, request, { fetchImpl = fetch, signal,
       ...(request?.system
         ? { systemInstruction: { parts: [{ text: String(request.system) }] } }
         : {}),
+      generationConfig: {
+        ...(Number.isFinite(Number(config?.params?.temperature)) ? { temperature: Number(config.params.temperature) } : {}),
+        ...(Number.isFinite(Number(config?.params?.top_p)) ? { topP: Number(config.params.top_p) } : {}),
+        ...(Number.isFinite(Number(config?.params?.top_k)) ? { topK: Math.round(Number(config.params.top_k)) } : {}),
+        ...(Number.isFinite(Number(config?.params?.max_tokens)) ? { maxOutputTokens: Math.round(Number(config.params.max_tokens)) } : {}),
+      },
       contents,
     }),
     signal,
