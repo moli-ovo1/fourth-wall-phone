@@ -32,6 +32,8 @@ import {
   testProviderConnection,
 } from '../api/providers/provider-registry.js';
 import { generatePrivateReply } from '../generation/generation-service.js';
+import { parseGeneratedMessages, previewGeneratedMessages } from '../generation/message-parser.js';
+import { getPromptSettings, savePromptSettings, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
 
 export function createPhonePanel({
@@ -214,10 +216,53 @@ export function createPhonePanel({
           </span>
           <b>›</b>
         </button>
+        <button type="button" class="moli-settings-row" data-action="prompt-settings">
+          <span>
+            <strong>提示词与预设</strong>
+            <small>线上聊天规则</small>
+          </span>
+          <b>›</b>
+        </button>
         <div class="moli-settings-note">
-          自动行为、Markdown 与提示词 / 预设会继续按开发顺序接入。
+          当前聊天模式统一为线上即时通讯。预设负责所有联系人共用的线上聊天行为；联系人自身的人格与资料仍由联系人配置提供。
         </div>
       </main>
+    </section>
+
+    <section class="moli-page" data-page="prompt-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="prompt-settings-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">线上聊天预设</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-prompt-settings">
+        <label class="moli-switch-row moli-prompt-master">
+          <span><strong>启用线上聊天预设</strong><small>关闭后生成时不注入下面的全局线上规则</small></span>
+          <input type="checkbox" data-prompt-master>
+        </label>
+        <div class="moli-settings-note">每个条目都保留完整 Prompt，可独立开关和编辑。角色卡、Example Dialogue、正文等动态资料不写死在这里，而由上下文层实时提供。</div>
+        <div class="moli-prompt-block-list" data-prompt-block-list></div>
+        <button type="button" class="moli-secondary-btn moli-prompt-restore" data-action="prompt-restore">恢复默认预设</button>
+      </main>
+    </section>
+
+    <section class="moli-page" data-page="prompt-editor">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="prompt-editor-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title" data-prompt-editor-title>编辑 Prompt</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-prompt-editor">
+        <textarea data-prompt-editor-content spellcheck="false"></textarea>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="prompt-editor-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="prompt-editor-save">保存</button>
+      </footer>
     </section>
 
     <section class="moli-page" data-page="api-settings">
@@ -402,6 +447,10 @@ export function createPhonePanel({
   const apiModelPickerButton = panel.querySelector('[data-action="api-open-model-picker"]');
   const apiStatus = panel.querySelector('[data-api-status]');
   const apiStream = panel.querySelector('[data-api-stream]');
+  const promptMaster = panel.querySelector('[data-prompt-master]');
+  const promptBlockList = panel.querySelector('[data-prompt-block-list]');
+  const promptEditorTitle = panel.querySelector('[data-prompt-editor-title]');
+  const promptEditorContent = panel.querySelector('[data-prompt-editor-content]');
 
   let currentContactId = null;
   let syncSnapshot = [];
@@ -421,6 +470,7 @@ export function createPhonePanel({
   let generationController = null;
   let generationConversationKey = null;
   let apiModelListCache = [];
+  let activePromptBlockId = null;
 
   panel.addEventListener(
     'click',
@@ -1300,7 +1350,47 @@ export function createPhonePanel({
     if (name === 'api-settings') {
       loadApiSettingsForm();
     }
+
+    if (name === 'prompt-settings') {
+      renderPromptSettings();
+    }
   };
+
+  function renderPromptSettings() {
+    const settings = getPromptSettings();
+    if (promptMaster) promptMaster.checked = settings.enabled !== false;
+    if (!promptBlockList) return;
+    promptBlockList.innerHTML = settings.blocks.map(item => `
+      <div class="moli-prompt-block" data-prompt-block="${escapeHtml(item.id)}">
+        <label class="moli-prompt-block-toggle">
+          <input type="checkbox" data-prompt-block-enabled="${escapeHtml(item.id)}" ${item.enabled !== false ? 'checked' : ''}>
+          <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(String(item.content || '').split('\n').find(line => line.trim() && !line.startsWith('#')) || '完整 Prompt')}</small></span>
+        </label>
+        <button type="button" class="moli-prompt-edit-btn" data-prompt-edit="${escapeHtml(item.id)}">编辑</button>
+      </div>`).join('');
+  }
+
+  function openPromptEditor(blockId) {
+    const settings = getPromptSettings();
+    const item = settings.blocks.find(block => block.id === blockId);
+    if (!item) return;
+    activePromptBlockId = item.id;
+    if (promptEditorTitle) promptEditorTitle.textContent = item.title;
+    if (promptEditorContent) promptEditorContent.value = item.content || '';
+    show('prompt-editor');
+  }
+
+  function savePromptEditor() {
+    if (!activePromptBlockId) return;
+    const settings = getPromptSettings();
+    const item = settings.blocks.find(block => block.id === activePromptBlockId);
+    if (!item) return;
+    item.content = String(promptEditorContent?.value || '');
+    savePromptSettings(settings);
+    activePromptBlockId = null;
+    show('prompt-settings');
+    toast('Prompt 已保存');
+  }
 
   const toast = text => {
     const el = panel.querySelector('.moli-toast');
@@ -2271,7 +2361,7 @@ export function createPhonePanel({
     }
 
     const bubble = row.querySelector('[data-generation-preview-text]');
-    if (bubble) bubble.textContent = String(text || '');
+    if (bubble) bubble.textContent = previewGeneratedMessages(text);
     chatBody.scrollTop = chatBody.scrollHeight;
   }
 
@@ -2352,20 +2442,27 @@ export function createPhonePanel({
 
       clearGenerationPreview();
 
-      appendMessage(
-        requestScopeKey,
-        generationConversationKey,
-        'assistant',
-        result.text,
-        {
-          source: 'generation',
-          senderId: result.contact.id,
-          senderSnapshot: {
-            name: displayName(result.contact),
-            avatar: avatarUrl(result.contact),
-          },
-        }
-      );
+      const generatedMessages = parseGeneratedMessages(result.text);
+      if (!generatedMessages.length) {
+        throw new Error('模型没有返回可用消息');
+      }
+
+      generatedMessages.forEach(content => {
+        appendMessage(
+          requestScopeKey,
+          generationConversationKey,
+          'assistant',
+          content,
+          {
+            source: 'generation',
+            senderId: result.contact.id,
+            senderSnapshot: {
+              name: displayName(result.contact),
+              avatar: avatarUrl(result.contact),
+            },
+          }
+        );
+      });
 
       if (
         getScopeKey?.() === requestScopeKey
@@ -2693,6 +2790,37 @@ export function createPhonePanel({
     '[data-action="update"]'
   ).onclick =
     updateExtension;
+
+  panel.querySelector('[data-action="prompt-settings"]')?.addEventListener('click', () => show('prompt-settings'));
+  panel.querySelector('[data-action="prompt-settings-back"]')?.addEventListener('click', () => show('settings'));
+  panel.querySelector('[data-action="prompt-editor-back"]')?.addEventListener('click', () => show('prompt-settings'));
+  panel.querySelector('[data-action="prompt-editor-cancel"]')?.addEventListener('click', () => show('prompt-settings'));
+  panel.querySelector('[data-action="prompt-editor-save"]')?.addEventListener('click', savePromptEditor);
+  panel.querySelector('[data-action="prompt-restore"]')?.addEventListener('click', () => {
+    if (!windowRef.confirm('恢复 moli 默认线上聊天预设？当前修改会被覆盖。')) return;
+    restoreDefaultPromptSettings();
+    renderPromptSettings();
+    toast('已恢复默认预设');
+  });
+  promptMaster?.addEventListener('change', () => {
+    const settings = getPromptSettings();
+    settings.enabled = promptMaster.checked;
+    savePromptSettings(settings);
+  });
+  promptBlockList?.addEventListener('change', event => {
+    const input = event.target.closest?.('[data-prompt-block-enabled]');
+    if (!input) return;
+    const settings = getPromptSettings();
+    const item = settings.blocks.find(block => block.id === input.dataset.promptBlockEnabled);
+    if (!item) return;
+    item.enabled = input.checked;
+    savePromptSettings(settings);
+  });
+  promptBlockList?.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-prompt-edit]');
+    if (!button) return;
+    openPromptEditor(button.dataset.promptEdit);
+  });
 
   panel.querySelector(
     '[data-action="api-settings"]'
