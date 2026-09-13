@@ -24,16 +24,23 @@ import {
   getTavernCharactersSnapshot,
 } from '../core/tavern-contacts.js';
 import {
+  API_FORMATS,
   getApiSettings,
   saveApiSettings,
+  sanitizeApiConfig,
+  resolveApiRuntimeConfig,
+  getApiFormatDefault,
+  formatSupportsReverseProxy,
   getApiPresets,
   saveApiPreset,
   deleteApiPreset,
   getApiPreset,
+  getProxyPresets,
+  saveProxyPreset,
+  deleteProxyPreset,
+  getProxyPreset,
 } from '../storage/api-settings.js';
 import {
-  getProviderDefaultBaseUrl,
-  getProviderLabel,
   listProviderModels,
   testProviderConnection,
 } from '../api/providers/provider-registry.js';
@@ -282,101 +289,185 @@ export function createPhonePanel({
         <div class="moli-nav-side">
           <button class="moli-icon-btn moli-back" data-action="api-settings-back" aria-label="返回">‹</button>
         </div>
-        <div class="moli-nav-title">场外 API</div>
+        <div class="moli-nav-title">API 设置</div>
         <div class="moli-nav-side right"></div>
       </header>
-      <main class="moli-api-settings">
-        <div class="moli-conversation-section">
-          <div class="moli-conversation-section-title">API 预设</div>
-          <div class="moli-model-field">
-            <select data-api-preset><option value="">——选择预设——</option></select>
-            <button type="button" class="moli-model-picker-button" data-action="api-apply-preset">应用</button>
-          </div>
-          <div class="moli-api-actions">
-            <button type="button" class="moli-secondary-btn" data-action="api-save-preset">另存为预设</button>
-            <button type="button" class="moli-secondary-btn moli-danger-inline" data-action="api-delete-preset">删除所选预设</button>
-          </div>
-          <div class="moli-settings-note">预设保存在本机，可快速复用 API 类型、地址、Key、模型与流式设置。</div>
-        </div>
-
-        <label class="moli-form-field">
-          <span>API 来源</span>
-          <select data-api-source>
-            <option value="independent">独立场外 API</option>
-            <option value="tavern">使用酒馆当前 API</option>
+      <main class="moli-api-settings moli-api-clone-layout">
+        <section class="moli-api-section">
+          <div class="moli-api-section-title">API 来源</div>
+          <select class="moli-api-select" data-api-source>
+            <option value="default">跟随酒馆设置（默认）</option>
+            <option value="custom">自定义 API</option>
           </select>
-        </label>
+          <div class="moli-api-hint">跟随酒馆设置会使用酒馆当前 API 配置；自定义 API 可填写密钥、反代与模型。</div>
+        </section>
 
-        <div data-api-independent>
-          <label class="moli-form-field">
-            <span>Provider / API 类型</span>
-            <select data-api-provider>
-              <option value="openai-compatible">OpenAI Compatible</option>
-              <option value="claude">Claude</option>
-              <option value="gemini">Gemini</option>
+        <section class="moli-api-section">
+          <div class="moli-api-section-title">流式生成</div>
+          <label class="moli-api-check-row">
+            <input type="checkbox" data-api-stream>
+            <span>启用流式生成（实时显示回复）</span>
+          </label>
+        </section>
+
+        <section class="moli-api-section">
+          <div class="moli-api-section-title">工具调用（实验性）</div>
+          <label class="moli-api-check-row">
+            <input type="checkbox" data-api-tool-calling>
+            <span>启用 Function Calling（别开启）</span>
+          </label>
+          <div class="moli-api-hint">目前只作为兼容配置保留，普通手机聊天不依赖工具调用。</div>
+        </section>
+
+        <div data-api-custom-settings>
+          <section class="moli-api-section">
+            <div class="moli-api-section-title">API 类型</div>
+            <select class="moli-api-select" data-api-format>
+              <optgroup label="常用">
+                <option value="openai">OpenAI</option>
+                <option value="claude">Claude (Anthropic)</option>
+                <option value="makersuite">Google AI (Gemini)</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="deepseek">DeepSeek</option>
+              </optgroup>
+              <optgroup label="其他兼容 API">
+                <option value="mistralai">MistralAI</option>
+                <option value="groq">Groq</option>
+                <option value="xai">xAI (Grok)</option>
+                <option value="moonshot">Moonshot</option>
+                <option value="fireworks">Fireworks AI</option>
+                <option value="siliconflow">SiliconFlow</option>
+                <option value="zai">Z.AI (GLM)</option>
+              </optgroup>
+              <optgroup label="通用">
+                <option value="custom">自定义（OpenAI 兼容）</option>
+              </optgroup>
             </select>
-          </label>
+          </section>
 
-          <label class="moli-form-field">
-            <span>API 地址</span>
-            <input type="text" data-api-base-url placeholder="例如 https://api.example.com/v1">
-          </label>
-
-          <label class="moli-form-field">
-            <span>API Key</span>
-            <div class="moli-secret-field">
-              <input type="password" data-api-key autocomplete="off" placeholder="仅保存在本机">
-              <button type="button" data-action="toggle-api-key">显示</button>
+          <section class="moli-api-section" data-api-key-section>
+            <div class="moli-api-section-title">API 密钥</div>
+            <div class="moli-api-password-row">
+              <input class="moli-api-input" type="password" data-api-key autocomplete="off" placeholder="sk-...">
+              <button type="button" class="moli-api-mini-btn" data-action="toggle-api-key">显示</button>
             </div>
-          </label>
+            <div class="moli-api-hint">密钥只保存在浏览器本地存储中。</div>
+          </section>
 
-          <label class="moli-form-field">
-            <span>模型 ID</span>
-            <div class="moli-model-field">
-              <input type="text" data-api-model placeholder="可手动填写模型 ID">
-              <button type="button" class="moli-model-picker-button" data-action="api-open-model-picker">
-                选择
-              </button>
+          <section class="moli-api-section moli-api-drawer" data-api-reverse-proxy-section>
+            <button type="button" class="moli-api-drawer-head" data-action="api-toggle-proxy">
+              <span data-api-proxy-arrow>›</span>
+              <strong>反向代理</strong>
+            </button>
+            <div class="moli-api-drawer-body" data-api-proxy-body hidden>
+              <div class="moli-api-row">
+                <select class="moli-api-select" data-api-proxy-preset>
+                  <option value="">无</option>
+                </select>
+                <button type="button" class="moli-api-mini-btn" data-action="api-save-proxy" title="保存代理">保存</button>
+                <button type="button" class="moli-api-mini-btn danger" data-action="api-delete-proxy" title="删除代理">删除</button>
+              </div>
+              <label class="moli-api-label">
+                <span>代理服务器 URL</span>
+                <input class="moli-api-input" type="text" data-api-proxy-url placeholder="https://api.openai.com/v1">
+              </label>
+              <div class="moli-api-hint">备用服务器 URL；留空时使用对应 API 的官方地址。</div>
+              <label class="moli-api-label">
+                <span>代理密码</span>
+                <div class="moli-api-password-row">
+                  <input class="moli-api-input" type="password" data-api-proxy-password placeholder="将用作代理密码，而不是 API 密钥">
+                  <button type="button" class="moli-api-mini-btn" data-action="toggle-api-proxy-password">显示</button>
+                </div>
+              </label>
+              <div class="moli-api-hint warning">使用非自建代理存在数据隐私风险。</div>
             </div>
-          </label>
+          </section>
 
-          <div class="moli-api-actions">
-            <button type="button" class="moli-secondary-btn" data-action="api-refresh-models">刷新模型列表</button>
-            <button type="button" class="moli-secondary-btn" data-action="api-test-connection">测试连接</button>
-          </div>
-          <div class="moli-api-status" data-api-status></div>
-          <div class="moli-settings-note">
-            API 地址留空时使用该 Provider 的官方地址；模型列表失败时仍可手动填写模型 ID。
-          </div>
+          <section class="moli-api-section" data-api-openrouter-section hidden>
+            <div class="moli-api-section-title">OpenRouter API 密钥</div>
+            <div class="moli-api-password-row">
+              <input class="moli-api-input" type="password" data-api-openrouter-key autocomplete="off" placeholder="sk-or-...">
+              <button type="button" class="moli-api-mini-btn" data-action="toggle-api-openrouter-key">显示</button>
+            </div>
+            <div class="moli-api-row compact">
+              <button type="button" class="moli-api-mini-btn primary" data-action="api-openrouter-auth">打开 OpenRouter 授权页</button>
+            </div>
+          </section>
+
+          <section class="moli-api-section" data-api-custom-endpoint-section hidden>
+            <div class="moli-api-section-title">自定义端点（Base URL）</div>
+            <input class="moli-api-input" type="text" data-api-custom-base-url placeholder="例如：http://localhost:1234/v1">
+            <div class="moli-api-hint">OpenAI 兼容端点；如果连接失败，可检查末尾是否需要 /v1。</div>
+
+            <div class="moli-api-section-title sub">自定义 API 密钥 <small>（可选）</small></div>
+            <div class="moli-api-password-row">
+              <input class="moli-api-input" type="password" data-api-custom-key autocomplete="off" placeholder="sk-...">
+              <button type="button" class="moli-api-mini-btn" data-action="toggle-api-custom-key">显示</button>
+            </div>
+
+            <div class="moli-api-section-title sub">输入模型名</div>
+            <input class="moli-api-input" type="text" data-api-custom-model placeholder="例如：gpt-4o">
+
+            <div class="moli-api-section-title sub">可用模型</div>
+            <div class="moli-api-row">
+              <select class="moli-api-select" data-api-custom-model-select>
+                <option value="">无</option>
+              </select>
+              <button type="button" class="moli-api-mini-btn" data-action="api-refresh-custom-models">刷新</button>
+            </div>
+          </section>
+
+          <section class="moli-api-section" data-api-main-model-section>
+            <div class="moli-api-section-title">模型</div>
+            <div class="moli-api-row">
+              <select class="moli-api-select" data-api-model-select>
+                <option value="">请选择模型...</option>
+                <option value="__manual__">手动输入...</option>
+              </select>
+              <button type="button" class="moli-api-mini-btn" data-action="api-refresh-models">刷新</button>
+            </div>
+            <div data-api-model-manual-wrap hidden>
+              <input class="moli-api-input" type="text" data-api-model-manual placeholder="输入模型 ID">
+            </div>
+            <div class="moli-api-row compact">
+              <button type="button" class="moli-api-mini-btn primary" data-action="api-test-connection">测试连接</button>
+            </div>
+            <div class="moli-api-status" data-api-status></div>
+          </section>
+
+          <section class="moli-api-section moli-api-drawer">
+            <button type="button" class="moli-api-drawer-head" data-action="api-toggle-params">
+              <span data-api-params-arrow>⌄</span><strong>高级参数</strong>
+            </button>
+            <div class="moli-api-drawer-body" data-api-params-body>
+              <div class="moli-api-param-grid">
+                <label class="moli-api-label"><span>温度</span><input class="moli-api-input" type="number" min="0" max="2" step="0.01" data-api-param="temperature"></label>
+                <label class="moli-api-label"><span>Top P</span><input class="moli-api-input" type="number" min="0" max="1" step="0.01" data-api-param="top_p"></label>
+                <label class="moli-api-label"><span>Top K</span><input class="moli-api-input" type="number" min="0" max="500" step="1" data-api-param="top_k"></label>
+                <label class="moli-api-label"><span>最大 Token 数</span><input class="moli-api-input" type="number" min="100" max="100000" step="100" data-api-param="max_tokens"></label>
+                <label class="moli-api-label"><span>频率惩罚</span><input class="moli-api-input" type="number" min="-2" max="2" step="0.01" data-api-param="frequency_penalty"></label>
+                <label class="moli-api-label"><span>存在惩罚</span><input class="moli-api-input" type="number" min="-2" max="2" step="0.01" data-api-param="presence_penalty"></label>
+                <label class="moli-api-label"><span>重复惩罚</span><input class="moli-api-input" type="number" min="1" max="2" step="0.01" data-api-param="repetition_penalty"></label>
+                <label class="moli-api-label"><span>Min P</span><input class="moli-api-input" type="number" min="0" max="1" step="0.001" data-api-param="min_p"></label>
+                <label class="moli-api-label"><span>Top A</span><input class="moli-api-input" type="number" min="0" max="1" step="0.001" data-api-param="top_a"></label>
+              </div>
+            </div>
+          </section>
+
+          <section class="moli-api-section">
+            <div class="moli-api-section-title">API 配置预设</div>
+            <div class="moli-api-row">
+              <select class="moli-api-select" data-api-preset>
+                <option value="">无</option>
+              </select>
+              <button type="button" class="moli-api-mini-btn" data-action="api-apply-preset">读取</button>
+              <button type="button" class="moli-api-mini-btn" data-action="api-save-preset">保存</button>
+              <button type="button" class="moli-api-mini-btn danger" data-action="api-delete-preset">删除</button>
+            </div>
+          </section>
         </div>
-
-        <label class="moli-switch-row">
-          <span>
-            <strong>流式输出</strong>
-            <small>生成时逐步显示内容</small>
-          </span>
-          <input type="checkbox" data-api-stream>
-        </label>
       </main>
-      <footer class="moli-sync-footer">
-        <button class="moli-secondary-btn" data-action="api-settings-cancel">取消</button>
-        <button class="moli-primary-btn" data-action="api-settings-save">保存</button>
-      </footer>
     </section>
-
-    <div class="moli-model-sheet" data-api-model-sheet hidden>
-      <div class="moli-model-card">
-        <div class="moli-model-picker-head">
-          <strong>选择模型</strong>
-          <button type="button" class="moli-icon-btn" data-action="api-close-model-picker" aria-label="关闭">×</button>
-        </div>
-        <div class="moli-model-picker-search">
-          <input type="search" data-api-model-search placeholder="搜索模型 ID">
-          <span data-api-model-count></span>
-        </div>
-        <div class="moli-model-picker-list" data-api-model-list></div>
-      </div>
-    </div>
 
     <section class="moli-page" data-page="new-private-chat">
       <header class="moli-nav">
@@ -417,6 +508,139 @@ export function createPhonePanel({
       </header>
       <main class="moli-chat-info"></main>
       <input type="file" accept="image/*" data-info-avatar-input hidden>
+    </section>
+
+    <section class="moli-page" data-page="contact-prompt-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="contact-prompt-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">人格与提示词</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-settings-list moli-contact-subpage">
+        <div class="moli-settings-note" data-contact-prompt-owner></div>
+        <label class="moli-form-field">
+          <span>简介 / 一句话描述</span>
+          <textarea rows="4" data-contact-profile-intro placeholder="简单介绍这个人"></textarea>
+        </label>
+        <label class="moli-form-field">
+          <span>人格提示词 / 追加 Prompt</span>
+          <textarea rows="12" data-contact-profile-prompt placeholder="身份、性格、说话方式、关系习惯等"></textarea>
+        </label>
+        <div class="moli-settings-note">酒馆角色：这里是用户追加层，不会覆盖角色卡来源数据；自定义联系人：这里就是主要人格 Prompt。</div>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="contact-prompt-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="contact-prompt-save">保存</button>
+      </footer>
+    </section>
+
+    <section class="moli-page" data-page="contact-api-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="contact-api-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">独立 API</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-api-settings moli-contact-api-settings">
+        <section class="moli-api-section">
+          <div class="moli-api-section-title">联系人独立 API</div>
+          <label class="moli-api-check-row">
+            <input type="checkbox" data-contact-api-enabled>
+            <span>启用后，这个联系人不再跟随主设置 API</span>
+          </label>
+          <div class="moli-api-hint">关闭时自动继承“设置 → API 设置”。</div>
+        </section>
+
+        <div data-contact-api-body>
+          <section class="moli-api-section">
+            <div class="moli-api-section-title">读取 API 配置</div>
+            <div class="moli-api-row">
+              <select class="moli-api-select" data-contact-api-preset><option value="">无</option></select>
+              <button type="button" class="moli-api-mini-btn" data-action="contact-api-load-preset">读取</button>
+            </div>
+            <div class="moli-api-hint">读取后会复制一份到当前联系人；之后修改主预设不会偷偷改动这个联系人。</div>
+          </section>
+
+          <section class="moli-api-section">
+            <div class="moli-api-section-title">API 类型</div>
+            <select class="moli-api-select" data-contact-api-format>
+              <optgroup label="常用">
+                <option value="openai">OpenAI</option>
+                <option value="claude">Claude (Anthropic)</option>
+                <option value="makersuite">Google AI (Gemini)</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="deepseek">DeepSeek</option>
+              </optgroup>
+              <optgroup label="其他兼容 API">
+                <option value="mistralai">MistralAI</option>
+                <option value="groq">Groq</option>
+                <option value="xai">xAI (Grok)</option>
+                <option value="moonshot">Moonshot</option>
+                <option value="fireworks">Fireworks AI</option>
+                <option value="siliconflow">SiliconFlow</option>
+                <option value="zai">Z.AI (GLM)</option>
+              </optgroup>
+              <optgroup label="通用"><option value="custom">自定义（OpenAI 兼容）</option></optgroup>
+            </select>
+          </section>
+
+          <section class="moli-api-section" data-contact-api-standard>
+            <div class="moli-api-section-title">API Key</div>
+            <input class="moli-api-input" type="password" data-contact-api-key autocomplete="off">
+            <div class="moli-api-section-title sub">模型</div>
+            <input class="moli-api-input" type="text" data-contact-api-model placeholder="模型 ID">
+            <div class="moli-api-section-title sub">反向代理 URL <small>（可选）</small></div>
+            <input class="moli-api-input" type="text" data-contact-api-proxy-url placeholder="留空使用官方地址">
+            <div class="moli-api-section-title sub">代理密码 <small>（使用反代时）</small></div>
+            <input class="moli-api-input" type="password" data-contact-api-proxy-password>
+          </section>
+
+          <section class="moli-api-section" data-contact-api-custom hidden>
+            <div class="moli-api-section-title">Base URL</div>
+            <input class="moli-api-input" type="text" data-contact-api-custom-url placeholder="https://api.example.com/v1">
+            <div class="moli-api-section-title sub">API Key</div>
+            <input class="moli-api-input" type="password" data-contact-api-custom-key>
+            <div class="moli-api-section-title sub">模型</div>
+            <input class="moli-api-input" type="text" data-contact-api-custom-model placeholder="模型 ID">
+          </section>
+
+          <section class="moli-api-section">
+            <label class="moli-api-check-row">
+              <input type="checkbox" data-contact-api-stream>
+              <span>启用流式生成</span>
+            </label>
+          </section>
+        </div>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="contact-api-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="contact-api-save">保存</button>
+      </footer>
+    </section>
+
+    <section class="moli-page" data-page="contact-status-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="contact-status-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">状态栏</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-settings-list moli-contact-subpage">
+        <div class="moli-settings-note">状态栏已保留为联系人资料的正式模块。下一阶段按已确认的章鱼式结构接入：启用、预设、Prompt Suffix、Regex、HTML Template、最近 N 个状态上下文。</div>
+      </main>
+    </section>
+
+    <section class="moli-page" data-page="contact-memory-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="contact-memory-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">手机记忆</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-settings-list moli-contact-subpage">
+        <div class="moli-settings-note">记忆链固定为：近期原始聊天 → 近期记忆 → 长期总结。近期记忆名称已替代“日记”。具体自动生成与编辑页将在后续记忆阶段接入。</div>
+      </main>
     </section>
 
     <section class="moli-page" data-page="conversation-settings">
@@ -543,18 +767,33 @@ export function createPhonePanel({
   const apiSettingsSummary = panel.querySelector('[data-api-settings-summary]');
   const apiPreset = panel.querySelector('[data-api-preset]');
   const apiSource = panel.querySelector('[data-api-source]');
-  const apiProvider = panel.querySelector('[data-api-provider]');
-  const apiIndependent = panel.querySelector('[data-api-independent]');
-  const apiBaseUrl = panel.querySelector('[data-api-base-url]');
+  const apiCustomSettings = panel.querySelector('[data-api-custom-settings]');
+  const apiFormat = panel.querySelector('[data-api-format]');
   const apiKey = panel.querySelector('[data-api-key]');
-  const apiModel = panel.querySelector('[data-api-model]');
-  const apiModelSheet = panel.querySelector('[data-api-model-sheet]');
-  const apiModelSearch = panel.querySelector('[data-api-model-search]');
-  const apiModelList = panel.querySelector('[data-api-model-list]');
-  const apiModelCount = panel.querySelector('[data-api-model-count]');
-  const apiModelPickerButton = panel.querySelector('[data-action="api-open-model-picker"]');
+  const apiKeySection = panel.querySelector('[data-api-key-section]');
+  const apiOpenRouterSection = panel.querySelector('[data-api-openrouter-section]');
+  const apiOpenRouterKey = panel.querySelector('[data-api-openrouter-key]');
+  const apiReverseProxySection = panel.querySelector('[data-api-reverse-proxy-section]');
+  const apiProxyBody = panel.querySelector('[data-api-proxy-body]');
+  const apiProxyArrow = panel.querySelector('[data-api-proxy-arrow]');
+  const apiProxyPreset = panel.querySelector('[data-api-proxy-preset]');
+  const apiProxyUrl = panel.querySelector('[data-api-proxy-url]');
+  const apiProxyPassword = panel.querySelector('[data-api-proxy-password]');
+  const apiCustomEndpointSection = panel.querySelector('[data-api-custom-endpoint-section]');
+  const apiCustomBaseUrl = panel.querySelector('[data-api-custom-base-url]');
+  const apiCustomKey = panel.querySelector('[data-api-custom-key]');
+  const apiCustomModel = panel.querySelector('[data-api-custom-model]');
+  const apiCustomModelSelect = panel.querySelector('[data-api-custom-model-select]');
+  const apiMainModelSection = panel.querySelector('[data-api-main-model-section]');
+  const apiModelSelect = panel.querySelector('[data-api-model-select]');
+  const apiModelManualWrap = panel.querySelector('[data-api-model-manual-wrap]');
+  const apiModelManual = panel.querySelector('[data-api-model-manual]');
   const apiStatus = panel.querySelector('[data-api-status]');
   const apiStream = panel.querySelector('[data-api-stream]');
+  const apiToolCalling = panel.querySelector('[data-api-tool-calling]');
+  const apiParamsBody = panel.querySelector('[data-api-params-body]');
+  const apiParamsArrow = panel.querySelector('[data-api-params-arrow]');
+  const apiParamInputs = [...panel.querySelectorAll('[data-api-param]')];
   const promptMaster = panel.querySelector('[data-prompt-master]');
   const promptBlockList = panel.querySelector('[data-prompt-block-list]');
   const promptEditorTitle = panel.querySelector('[data-prompt-editor-title]');
@@ -564,6 +803,23 @@ export function createPhonePanel({
   const promptEditorDelete = panel.querySelector('[data-action="prompt-editor-delete"]');
   const newPrivateContactName = panel.querySelector('[data-new-private-contact-name]');
   const newPrivateTitle = panel.querySelector('[data-new-private-title]');
+  const contactPromptOwner = panel.querySelector('[data-contact-prompt-owner]');
+  const contactProfileIntro = panel.querySelector('[data-contact-profile-intro]');
+  const contactProfilePrompt = panel.querySelector('[data-contact-profile-prompt]');
+  const contactApiEnabled = panel.querySelector('[data-contact-api-enabled]');
+  const contactApiBody = panel.querySelector('[data-contact-api-body]');
+  const contactApiPreset = panel.querySelector('[data-contact-api-preset]');
+  const contactApiFormat = panel.querySelector('[data-contact-api-format]');
+  const contactApiStandard = panel.querySelector('[data-contact-api-standard]');
+  const contactApiCustom = panel.querySelector('[data-contact-api-custom]');
+  const contactApiKey = panel.querySelector('[data-contact-api-key]');
+  const contactApiModel = panel.querySelector('[data-contact-api-model]');
+  const contactApiProxyUrl = panel.querySelector('[data-contact-api-proxy-url]');
+  const contactApiProxyPassword = panel.querySelector('[data-contact-api-proxy-password]');
+  const contactApiCustomUrl = panel.querySelector('[data-contact-api-custom-url]');
+  const contactApiCustomKey = panel.querySelector('[data-contact-api-custom-key]');
+  const contactApiCustomModel = panel.querySelector('[data-contact-api-custom-model]');
+  const contactApiStream = panel.querySelector('[data-contact-api-stream]');
   const conversationSettingsScope = panel.querySelector('[data-conversation-settings-scope]');
   const conversationTitleInput = panel.querySelector('[data-conversation-title]');
   const conversationBodyContext = panel.querySelector('[data-conversation-body-context]');
@@ -586,7 +842,6 @@ export function createPhonePanel({
   let messagePressStartY = 0;
   let generationController = null;
   let generationConversationKey = null;
-  let apiModelListCache = [];
   let activePromptBlockId = null;
   let newPrivateContactId = null;
 
@@ -778,41 +1033,59 @@ export function createPhonePanel({
   }
 
   function apiSourceLabel(source) {
-    return source === 'tavern'
-      ? '使用酒馆当前 API'
-      : '独立场外 API';
+    return source === 'default'
+      ? '跟随酒馆设置'
+      : '自定义 API';
+  }
+
+  function apiFormatLabel(format) {
+    return API_FORMATS.find(item => item.value === format)?.label || format || 'OpenAI';
   }
 
   function updateApiSettingsSummary() {
     if (!apiSettingsSummary) return;
     const settings = getApiSettings();
-
-    if (settings.source === 'tavern') {
-      apiSettingsSummary.textContent = apiSourceLabel(settings.source);
+    if (settings.source === 'default') {
+      apiSettingsSummary.textContent = '跟随酒馆设置';
       return;
     }
-
-    let providerLabel = settings.provider;
-    try {
-      providerLabel = getProviderLabel(settings.provider);
-    } catch {}
-
+    const model = settings.format === 'custom'
+      ? settings.customApiConfig?.model
+      : settings.model;
     apiSettingsSummary.textContent = [
-      '独立场外 API',
-      providerLabel,
-      settings.model || '',
+      '自定义 API',
+      apiFormatLabel(settings.format),
+      model || '',
     ].filter(Boolean).join(' · ');
   }
 
   function currentApiFormConfig() {
-    return {
-      source: apiSource?.value || 'independent',
-      provider: apiProvider?.value || 'openai-compatible',
-      baseUrl: apiBaseUrl?.value?.trim() || '',
-      apiKey: apiKey?.value || '',
-      model: apiModel?.value?.trim() || '',
+    const current = getApiSettings();
+    return sanitizeApiConfig({
+      ...current,
+      source: apiSource?.value || 'default',
       stream: Boolean(apiStream?.checked),
-    };
+      useToolCalling: Boolean(apiToolCalling?.checked),
+      format: apiFormat?.value || 'openai',
+      apiKey: apiKey?.value || '',
+      openRouterKey: apiOpenRouterKey?.value || '',
+      model: apiModelSelect?.value === '__manual__'
+        ? (apiModelManual?.value?.trim() || '')
+        : (apiModelSelect?.value || apiModelManual?.value?.trim() || current.model || ''),
+      reverseProxy: {
+        ...(current.reverseProxy || {}),
+        presetId: apiProxyPreset?.value || '',
+        url: apiProxyUrl?.value?.trim() || '',
+        password: apiProxyPassword?.value || '',
+      },
+      customApiConfig: {
+        ...(current.customApiConfig || {}),
+        baseUrl: apiCustomBaseUrl?.value?.trim() || '',
+        apiKey: apiCustomKey?.value || '',
+        model: apiCustomModel?.value?.trim() || '',
+      },
+      params: Object.fromEntries(apiParamInputs.map(input => [input.dataset.apiParam, input.value])),
+    });
   }
 
   function setApiStatus(text = '', kind = '') {
@@ -821,133 +1094,129 @@ export function createPhonePanel({
     apiStatus.dataset.kind = kind;
   }
 
-  function updateProviderPlaceholder() {
-    if (!apiBaseUrl || !apiProvider) return;
-    try {
-      apiBaseUrl.placeholder = `留空使用 ${getProviderDefaultBaseUrl(apiProvider.value)}`;
-    } catch {
-      apiBaseUrl.placeholder = 'API 地址';
-    }
-  }
-
-  function updateApiSettingsModeUi() {
-    if (!apiIndependent || !apiSource) return;
-    apiIndependent.hidden = apiSource.value === 'tavern';
-    updateProviderPlaceholder();
-  }
-
   function setApiActionBusy(busy) {
     panel
-      .querySelectorAll('[data-action="api-refresh-models"], [data-action="api-test-connection"]')
+      .querySelectorAll('[data-action="api-refresh-models"], [data-action="api-refresh-custom-models"], [data-action="api-test-connection"]')
       .forEach(button => {
         button.disabled = Boolean(busy);
       });
   }
 
-  function normalizedApiModels(models = []) {
-    const seen = new Set();
-    const result = [];
-
-    for (const value of Array.isArray(models) ? models : []) {
-      const id = String(value || '').trim();
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      result.push(id);
+  function populateSelect(select, models = [], selected = '') {
+    if (!select) return;
+    const clean = [...new Set((Array.isArray(models) ? models : []).map(value => String(value || '').trim()).filter(Boolean))];
+    select.innerHTML = '<option value="">请选择模型...</option>'
+      + clean.map(model => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join('')
+      + (select === apiModelSelect ? '<option value="__manual__">手动输入...</option>' : '');
+    if (selected && clean.includes(selected)) select.value = selected;
+    else if (select === apiModelSelect && selected) {
+      select.value = '__manual__';
+      if (apiModelManual) apiModelManual.value = selected;
+      if (apiModelManualWrap) apiModelManualWrap.hidden = false;
     }
-
-    return result;
   }
 
-  function renderApiModelPicker(query = '') {
-    if (!apiModelList) return;
-
-    const keyword = String(query || '').trim().toLowerCase();
-    const filtered = keyword
-      ? apiModelListCache.filter(model => model.toLowerCase().includes(keyword))
-      : apiModelListCache;
-
-    if (apiModelCount) {
-      apiModelCount.textContent = keyword
-        ? `${filtered.length} / ${apiModelListCache.length}`
-        : `${apiModelListCache.length} 个`;
-    }
-
-    if (!filtered.length) {
-      apiModelList.innerHTML = `
-        <div class="moli-model-empty">
-          ${apiModelListCache.length ? '没有匹配的模型。' : '请先刷新模型列表。'}
-        </div>
-      `;
-      return;
-    }
-
-    const selected = String(apiModel?.value || '');
-    apiModelList.innerHTML = filtered
-      .map(model => `
-        <button
-          type="button"
-          class="moli-model-option${model === selected ? ' selected' : ''}"
-          data-api-model-value="${escapeHtml(model)}"
-        >
-          <span>${escapeHtml(model)}</span>
-          ${model === selected ? '<b>✓</b>' : ''}
-        </button>
-      `)
+  function renderApiPresets(selectedId = '') {
+    if (!apiPreset) return;
+    const presets = getApiPresets();
+    apiPreset.innerHTML = '<option value="">无</option>' + presets
+      .map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
       .join('');
+    if (selectedId && presets.some(item => item.id === selectedId)) apiPreset.value = selectedId;
   }
 
-  function populateApiModelOptions(models = []) {
-    apiModelListCache = normalizedApiModels(models);
-
-    if (apiModelPickerButton) {
-      apiModelPickerButton.textContent = apiModelListCache.length
-        ? `选择 (${apiModelListCache.length})`
-        : '选择';
-    }
-
-    renderApiModelPicker(apiModelSearch?.value || '');
+  function renderProxyPresets(selectedId = '') {
+    if (!apiProxyPreset) return;
+    const presets = getProxyPresets();
+    apiProxyPreset.innerHTML = '<option value="">无</option>' + presets
+      .map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
+      .join('');
+    if (selectedId && presets.some(item => item.id === selectedId)) apiProxyPreset.value = selectedId;
   }
 
-  function openApiModelPicker() {
-    if (!apiModelSheet) return;
-
-    if (apiModelSearch) apiModelSearch.value = '';
-    renderApiModelPicker('');
-    apiModelSheet.hidden = false;
-
-    setTimeout(() => apiModelSearch?.focus(), 0);
+  function syncApiSourceForms() {
+    const source = apiSource?.value || 'default';
+    if (apiCustomSettings) apiCustomSettings.hidden = source !== 'custom';
   }
 
-  function closeApiModelPicker() {
-    if (!apiModelSheet) return;
-    apiModelSheet.hidden = true;
+  function syncApiFormatForms() {
+    const format = apiFormat?.value || 'openai';
+    if (apiKeySection) apiKeySection.hidden = format === 'openrouter' || format === 'custom';
+    if (apiOpenRouterSection) apiOpenRouterSection.hidden = format !== 'openrouter';
+    if (apiCustomEndpointSection) apiCustomEndpointSection.hidden = format !== 'custom';
+    if (apiMainModelSection) apiMainModelSection.hidden = format === 'custom';
+    if (apiReverseProxySection) apiReverseProxySection.hidden = !formatSupportsReverseProxy(format);
+    if (apiProxyUrl) apiProxyUrl.placeholder = getApiFormatDefault(format).baseUrl || 'https://api.example.com/v1';
   }
 
-  async function refreshApiModels({ quiet = false } = {}) {
-    const config = currentApiFormConfig();
+  function applyApiConfigToForm(rawConfig = {}) {
+    const config = sanitizeApiConfig(rawConfig);
+    if (apiSource) apiSource.value = config.source;
+    if (apiStream) apiStream.checked = config.stream !== false;
+    if (apiToolCalling) apiToolCalling.checked = config.useToolCalling === true;
+    if (apiFormat) apiFormat.value = config.format;
+    apiParamInputs.forEach(input => {
+      const key = input.dataset.apiParam;
+      if (key && config.params && config.params[key] !== undefined) input.value = String(config.params[key]);
+    });
+    if (apiKey) { apiKey.value = config.apiKey || ''; apiKey.type = 'password'; }
+    if (apiOpenRouterKey) { apiOpenRouterKey.value = config.openRouterKey || ''; apiOpenRouterKey.type = 'password'; }
+    if (apiProxyUrl) apiProxyUrl.value = config.reverseProxy?.url || '';
+    if (apiProxyPassword) { apiProxyPassword.value = config.reverseProxy?.password || ''; apiProxyPassword.type = 'password'; }
+    if (apiCustomBaseUrl) apiCustomBaseUrl.value = config.customApiConfig?.baseUrl || '';
+    if (apiCustomKey) { apiCustomKey.value = config.customApiConfig?.apiKey || ''; apiCustomKey.type = 'password'; }
+    if (apiCustomModel) apiCustomModel.value = config.customApiConfig?.model || '';
+    if (apiModelManual) apiModelManual.value = config.model || '';
+    populateSelect(apiModelSelect, [], config.model || '');
+    if (apiCustomModelSelect) apiCustomModelSelect.innerHTML = '<option value="">无</option>';
+    renderProxyPresets(config.reverseProxy?.presetId || '');
+    syncApiSourceForms();
+    syncApiFormatForms();
+    setApiStatus('');
+  }
 
-    if (config.source !== 'independent') {
-      if (!quiet) setApiStatus('酒馆当前 API 的模型列表将在兼容层接入。', 'info');
+  function loadApiSettingsForm() {
+    renderApiPresets();
+    applyApiConfigToForm(getApiSettings());
+    updateApiSettingsSummary();
+  }
+
+  function saveApiSettingsForm({ quiet = true } = {}) {
+    const next = saveApiSettings(currentApiFormConfig());
+    updateApiSettingsSummary();
+    if (!quiet) toast('API 设置已保存');
+    return next;
+  }
+
+  async function refreshApiModels({ customOnly = false, quiet = false } = {}) {
+    const raw = currentApiFormConfig();
+    const runtime = resolveApiRuntimeConfig(raw);
+    if (runtime.source === 'tavern') {
+      if (!quiet) setApiStatus('跟随酒馆设置时，模型由酒馆主界面控制。', 'info');
       return [];
     }
 
+    if (customOnly && raw.format !== 'custom') return [];
+
     setApiActionBusy(true);
     setApiStatus('正在读取模型列表…', 'loading');
-
     try {
-      const models = await listProviderModels(config);
-      populateApiModelOptions(models);
-
-      if (!apiModel?.value && models[0]) {
-        apiModel.value = models[0];
+      const models = await listProviderModels(runtime);
+      if (raw.format === 'custom') {
+        if (apiCustomModelSelect) {
+          apiCustomModelSelect.innerHTML = '<option value="">无</option>' + models
+            .map(model => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join('');
+          if (raw.customApiConfig?.model && models.includes(raw.customApiConfig.model)) {
+            apiCustomModelSelect.value = raw.customApiConfig.model;
+          }
+        }
+        if (!apiCustomModel?.value && models[0]) apiCustomModel.value = models[0];
+      } else {
+        populateSelect(apiModelSelect, models, raw.model || '');
+        if (!raw.model && models[0]) apiModelSelect.value = models[0];
       }
-
-      setApiStatus(
-        models.length
-          ? `已读取 ${models.length} 个模型，可点击“选择”查看完整列表。`
-          : '连接成功，但接口没有返回可用模型。',
-        'success'
-      );
+      setApiStatus(models.length ? `已读取 ${models.length} 个模型。` : '连接成功，但接口没有返回模型。', 'success');
+      saveApiSettingsForm({ quiet: true });
       return models;
     } catch (error) {
       console.error('[moli小手机] model list failed:', error);
@@ -960,25 +1229,16 @@ export function createPhonePanel({
   }
 
   async function testApiConnection() {
-    const config = currentApiFormConfig();
-
-    if (config.source !== 'independent') {
-      setApiStatus('酒馆当前 API 的测试连接将在 Generation 兼容层接入。', 'info');
+    const runtime = resolveApiRuntimeConfig(currentApiFormConfig());
+    if (runtime.source === 'tavern') {
+      setApiStatus('跟随酒馆设置时无需在这里测试连接。', 'info');
       return;
     }
-
     setApiActionBusy(true);
     setApiStatus('正在测试连接…', 'loading');
-
     try {
-      const result = await testProviderConnection(config);
-      populateApiModelOptions(result.models);
-      setApiStatus(
-        result.modelCount
-          ? `连接成功，接口返回 ${result.modelCount} 个模型。`
-          : '连接成功。',
-        'success'
-      );
+      const result = await testProviderConnection(runtime);
+      setApiStatus(result.modelCount ? `连接成功，接口返回 ${result.modelCount} 个模型。` : '连接成功。', 'success');
       toast('API 连接成功');
     } catch (error) {
       console.error('[moli小手机] api test failed:', error);
@@ -989,58 +1249,11 @@ export function createPhonePanel({
     }
   }
 
-  function renderApiPresets(selectedId = '') {
-    if (!apiPreset) return;
-    const presets = getApiPresets();
-    apiPreset.innerHTML = '<option value="">——选择预设——</option>' + presets
-      .map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
-      .join('');
-    if (selectedId && presets.some(item => item.id === selectedId)) apiPreset.value = selectedId;
-  }
-
-  function applyApiConfigToForm(config = {}) {
-    if (apiSource) apiSource.value = config.source || 'independent';
-    if (apiProvider) apiProvider.value = config.provider || 'openai-compatible';
-    if (apiBaseUrl) apiBaseUrl.value = config.baseUrl || '';
-    if (apiKey) apiKey.value = config.apiKey || '';
-    if (apiModel) apiModel.value = config.model || '';
-    if (apiStream) apiStream.checked = config.stream !== false;
-    populateApiModelOptions([]);
-    updateApiSettingsModeUi();
-    setApiStatus('');
-  }
-
-  function loadApiSettingsForm() {
-    const settings = getApiSettings();
-    renderApiPresets();
-
-    if (apiSource) apiSource.value = settings.source;
-    if (apiProvider) apiProvider.value = settings.provider;
-    if (apiBaseUrl) apiBaseUrl.value = settings.baseUrl;
-    if (apiKey) {
-      apiKey.value = settings.apiKey;
-      apiKey.type = 'password';
-    }
-    if (apiModel) apiModel.value = settings.model;
-    if (apiStream) apiStream.checked = settings.stream !== false;
-
-    populateApiModelOptions([]);
-    populateApiModelOptions([]);
-    setApiStatus('');
-    updateProviderPlaceholder();
-
-    const toggleKeyButton = panel.querySelector('[data-action="toggle-api-key"]');
-    if (toggleKeyButton) toggleKeyButton.textContent = '显示';
-
-    updateApiSettingsModeUi();
-  }
-
-  function saveApiSettingsForm() {
-    const next = saveApiSettings(currentApiFormConfig());
-
-    updateApiSettingsSummary();
-    toast('API 设置已保存');
-    return next;
+  function toggleSecret(input, button) {
+    if (!input || !button) return;
+    const reveal = input.type === 'password';
+    input.type = reveal ? 'text' : 'password';
+    button.textContent = reveal ? '隐藏' : '显示';
   }
 
   function searchableMessageText(message) {
@@ -1301,10 +1514,20 @@ export function createPhonePanel({
         ${isTavern ? `<div class="moli-info-source"><div><span>酒馆原名</span><strong>${escapeHtml(item.source?.originalName || item.name || '未知')}</strong></div><div><span>来源状态</span><strong class="${sourceMissing ? 'is-missing' : ''}">${sourceMissing ? '来源角色不可用' : '已关联'}</strong></div></div>` : ''}
         <div class="moli-info-form">
           ${item.kind === 'custom' ? `<label class="moli-form-field"><span>名称</span><input type="text" maxlength="80" data-info-contact-name value="${escapeHtml(item.name || '')}"></label>` : `<label class="moli-form-field"><span>备注名</span><input type="text" maxlength="80" data-info-contact-remark value="${escapeHtml(item.remark || '')}" placeholder="不填写则跟随角色原名"></label>`}
-          <label class="moli-form-field"><span>简介 / 一句话描述</span><textarea rows="3" data-info-contact-intro placeholder="简单介绍这个人">${escapeHtml(item.intro || '')}</textarea></label>
-          <label class="moli-form-field"><span>人格提示词</span><textarea rows="7" data-info-contact-prompt placeholder="身份、性格、说话方式等">${escapeHtml(item.prompt || '')}</textarea></label>
-          <button type="button" class="moli-info-save-button" data-action="save-contact-info">保存资料</button>
+          <button type="button" class="moli-info-save-button" data-action="save-contact-info">保存基础资料</button>
         </div>
+        <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings">
+          <span>人格与提示词</span><strong>›</strong>
+        </button>
+        <button type="button" class="moli-info-setting-row" data-action="contact-api-settings">
+          <span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong>
+        </button>
+        <button type="button" class="moli-info-setting-row" data-action="contact-status-settings">
+          <span>状态栏</span><strong>›</strong>
+        </button>
+        <button type="button" class="moli-info-setting-row" data-action="contact-memory-settings">
+          <span>手机记忆</span><strong>›</strong>
+        </button>
         <div class="moli-info-source moli-conversation-identity">
           <div><span>当前聊天</span><strong>${escapeHtml(conversation.title || (conversation.scopeMode === 'global' ? '全局陪伴' : '随当前正文'))}</strong></div>
           <div><span>归属</span><strong>${conversation.scopeMode === 'global' ? '全局陪伴' : '随当前正文'}</strong></div>
@@ -1380,6 +1603,142 @@ export function createPhonePanel({
     `;
   }
 
+
+  function currentPrivateContact() {
+    const conversation = currentConversation();
+    if (!conversation || conversation.type === 'group') return null;
+    return contact(conversation.contactId || currentContactId);
+  }
+
+  function renderContactPromptSettings() {
+    const item = currentPrivateContact();
+    if (!item) return;
+    if (contactPromptOwner) contactPromptOwner.textContent = `当前联系人：${displayName(item)}`;
+    if (contactProfileIntro) contactProfileIntro.value = item.intro || '';
+    if (contactProfilePrompt) contactProfilePrompt.value = item.prompt || '';
+  }
+
+  function saveContactPromptSettings() {
+    const item = currentPrivateContact();
+    if (!item) return;
+    try {
+      updateContact(item.id, {
+        intro: contactProfileIntro?.value || '',
+        prompt: contactProfilePrompt?.value || '',
+      });
+      toast('人格与提示词已保存');
+      show('info');
+    } catch (error) {
+      toast(error?.message || '保存失败');
+    }
+  }
+
+  let contactApiDraftConfig = null;
+
+  function renderContactApiPresets(selectedId = '') {
+    if (!contactApiPreset) return;
+    const presets = getApiPresets();
+    contactApiPreset.innerHTML = '<option value="">无</option>' + presets
+      .map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
+      .join('');
+    if (selectedId && presets.some(item => item.id === selectedId)) contactApiPreset.value = selectedId;
+  }
+
+  function syncContactApiUi() {
+    const enabled = Boolean(contactApiEnabled?.checked);
+    if (contactApiBody) contactApiBody.hidden = !enabled;
+    const format = contactApiFormat?.value || 'openai';
+    if (contactApiStandard) contactApiStandard.hidden = format === 'custom';
+    if (contactApiCustom) contactApiCustom.hidden = format !== 'custom';
+  }
+
+  function contactApiConfigFromForm() {
+    const format = contactApiFormat?.value || 'openai';
+    const draft = sanitizeApiConfig({
+      ...(contactApiDraftConfig || {}),
+      source: 'custom',
+      format,
+    });
+    const base = sanitizeApiConfig({
+      ...draft,
+      source: 'custom',
+      format,
+      stream: contactApiStream?.checked !== false,
+      apiKey: format === 'openrouter' ? '' : (contactApiKey?.value || ''),
+      openRouterKey: format === 'openrouter' ? (contactApiKey?.value || '') : '',
+      model: contactApiModel?.value?.trim() || '',
+      reverseProxy: {
+        ...(draft.reverseProxy || {}),
+        url: contactApiProxyUrl?.value?.trim() || '',
+        password: contactApiProxyPassword?.value || '',
+      },
+      customApiConfig: {
+        ...(draft.customApiConfig || {}),
+        baseUrl: contactApiCustomUrl?.value?.trim() || '',
+        apiKey: contactApiCustomKey?.value || '',
+        model: contactApiCustomModel?.value?.trim() || '',
+      },
+    });
+    contactApiDraftConfig = base;
+    return base;
+  }
+
+  function applyContactApiConfig(rawConfig = {}, { presetId = '' } = {}) {
+    const config = sanitizeApiConfig({ ...rawConfig, source: 'custom' });
+    contactApiDraftConfig = config;
+    if (contactApiFormat) contactApiFormat.value = config.format || 'openai';
+    if (contactApiKey) {
+      contactApiKey.value = config.format === 'openrouter'
+        ? (config.openRouterKey || '')
+        : (config.apiKey || '');
+      contactApiKey.type = 'password';
+    }
+    if (contactApiModel) contactApiModel.value = config.model || '';
+    if (contactApiProxyUrl) contactApiProxyUrl.value = config.reverseProxy?.url || '';
+    if (contactApiProxyPassword) {
+      contactApiProxyPassword.value = config.reverseProxy?.password || '';
+      contactApiProxyPassword.type = 'password';
+    }
+    if (contactApiCustomUrl) contactApiCustomUrl.value = config.customApiConfig?.baseUrl || '';
+    if (contactApiCustomKey) {
+      contactApiCustomKey.value = config.customApiConfig?.apiKey || '';
+      contactApiCustomKey.type = 'password';
+    }
+    if (contactApiCustomModel) contactApiCustomModel.value = config.customApiConfig?.model || '';
+    if (contactApiStream) contactApiStream.checked = config.stream !== false;
+    renderContactApiPresets(presetId);
+    syncContactApiUi();
+  }
+
+  function renderContactApiSettings() {
+    const item = currentPrivateContact();
+    if (!item) return;
+    const override = item.apiOverride && typeof item.apiOverride === 'object'
+      ? item.apiOverride
+      : { enabled: false };
+    if (contactApiEnabled) contactApiEnabled.checked = override.enabled === true;
+    const config = override.config || getApiSettings();
+    applyContactApiConfig(config, { presetId: override.presetId || '' });
+    syncContactApiUi();
+  }
+
+  function saveContactApiSettings() {
+    const item = currentPrivateContact();
+    if (!item) return;
+    try {
+      updateContact(item.id, {
+        apiOverride: {
+          enabled: Boolean(contactApiEnabled?.checked),
+          presetId: contactApiPreset?.value || '',
+          config: contactApiConfigFromForm(),
+        },
+      });
+      toast(contactApiEnabled?.checked ? '联系人独立 API 已保存' : '已恢复跟随主设置 API');
+      show('info');
+    } catch (error) {
+      toast(error?.message || '保存独立 API 失败');
+    }
+  }
 
   function toggleCurrentConversationPin() {
     const scopeKey = getScopeKey?.();
@@ -1610,6 +1969,14 @@ export function createPhonePanel({
 
     if (name === 'conversation-settings') {
       renderConversationSettings();
+    }
+
+    if (name === 'contact-prompt-settings') {
+      renderContactPromptSettings();
+    }
+
+    if (name === 'contact-api-settings') {
+      renderContactApiSettings();
     }
 
     if (name === 'forward-detail') {
@@ -3152,98 +3519,139 @@ export function createPhonePanel({
     '[data-action="api-settings-back"]'
   ).onclick = () => show('settings');
 
-  panel.querySelector(
-    '[data-action="api-settings-cancel"]'
-  ).onclick = () => show('settings');
-
-  panel.querySelector(
-    '[data-action="api-settings-save"]'
-  ).onclick = () => {
-    saveApiSettingsForm();
-    show('settings');
-  };
-
-  panel.querySelector('[data-action="api-apply-preset"]').onclick = () => {
+  panel.querySelector('[data-action="api-apply-preset"]')?.addEventListener('click', () => {
     const preset = getApiPreset(apiPreset?.value);
     if (!preset) { toast('请先选择 API 预设'); return; }
     applyApiConfigToForm(preset.config);
+    saveApiSettings(preset.config);
+    updateApiSettingsSummary();
     toast(`已读取预设：${preset.name}`);
-  };
+  });
 
-  panel.querySelector('[data-action="api-save-preset"]').onclick = () => {
-    const name = windowRef.prompt('预设名称');
+  panel.querySelector('[data-action="api-save-preset"]')?.addEventListener('click', () => {
+    const name = windowRef.prompt('API 配置名称');
     if (!String(name || '').trim()) return;
     try {
-      const preset = saveApiPreset(name, currentApiFormConfig());
+      const config = saveApiSettingsForm({ quiet: true });
+      const preset = saveApiPreset(name, config);
       renderApiPresets(preset.id);
-      toast('API 预设已保存');
-    } catch (error) { toast(error?.message || '保存预设失败'); }
-  };
+      toast('API 配置已保存');
+    } catch (error) { toast(error?.message || '保存 API 配置失败'); }
+  });
 
-  panel.querySelector('[data-action="api-delete-preset"]').onclick = () => {
+  panel.querySelector('[data-action="api-delete-preset"]')?.addEventListener('click', () => {
     const preset = getApiPreset(apiPreset?.value);
     if (!preset) { toast('请先选择 API 预设'); return; }
-    if (!windowRef.confirm(`删除 API 预设“${preset.name}”？`)) return;
+    if (!windowRef.confirm(`删除 API 配置“${preset.name}”？`)) return;
     deleteApiPreset(preset.id);
     renderApiPresets();
-    toast('API 预设已删除');
-  };
-
-  panel.querySelector(
-    '[data-action="toggle-api-key"]'
-  ).onclick = event => {
-    if (!apiKey) return;
-    const showKey = apiKey.type === 'password';
-    apiKey.type = showKey ? 'text' : 'password';
-    event.currentTarget.textContent = showKey ? '隐藏' : '显示';
-  };
-
-  apiSource?.addEventListener('change', () => {
-    updateApiSettingsModeUi();
-    setApiStatus('');
+    toast('API 配置已删除');
   });
 
-  apiProvider?.addEventListener('change', () => {
-    updateProviderPlaceholder();
-    populateApiModelOptions([]);
-    setApiStatus('');
+  panel.querySelector('[data-action="toggle-api-key"]')?.addEventListener('click', event => {
+    toggleSecret(apiKey, event.currentTarget);
+  });
+  panel.querySelector('[data-action="toggle-api-openrouter-key"]')?.addEventListener('click', event => {
+    toggleSecret(apiOpenRouterKey, event.currentTarget);
+  });
+  panel.querySelector('[data-action="toggle-api-custom-key"]')?.addEventListener('click', event => {
+    toggleSecret(apiCustomKey, event.currentTarget);
+  });
+  panel.querySelector('[data-action="toggle-api-proxy-password"]')?.addEventListener('click', event => {
+    toggleSecret(apiProxyPassword, event.currentTarget);
   });
 
-  panel.querySelector(
-    '[data-action="api-refresh-models"]'
-  ).onclick = () => refreshApiModels();
-
-  panel.querySelector(
-    '[data-action="api-test-connection"]'
-  ).onclick = () => testApiConnection();
-
-
-  panel.querySelector(
-    '[data-action="api-open-model-picker"]'
-  ).onclick = () => openApiModelPicker();
-
-  panel.querySelector(
-    '[data-action="api-close-model-picker"]'
-  ).onclick = () => closeApiModelPicker();
-
-  apiModelSearch?.addEventListener('input', () => {
-    renderApiModelPicker(apiModelSearch.value);
+  panel.querySelector('[data-action="api-toggle-proxy"]')?.addEventListener('click', () => {
+    if (!apiProxyBody) return;
+    apiProxyBody.hidden = !apiProxyBody.hidden;
+    if (apiProxyArrow) apiProxyArrow.textContent = apiProxyBody.hidden ? '›' : '⌄';
   });
 
-  apiModelList?.addEventListener('click', event => {
-    const option = event.target.closest?.('[data-api-model-value]');
-    if (!option || !apiModel) return;
-
-    apiModel.value = String(option.dataset.apiModelValue || '');
-    closeApiModelPicker();
-    setApiStatus(`已选择模型：${apiModel.value}`, 'success');
+  apiProxyPreset?.addEventListener('change', () => {
+    const preset = getProxyPreset(apiProxyPreset.value);
+    if (!preset) {
+      saveApiSettingsForm({ quiet: true });
+      return;
+    }
+    if (apiProxyUrl) apiProxyUrl.value = preset.url || '';
+    if (apiProxyPassword) apiProxyPassword.value = preset.password || '';
+    saveApiSettingsForm({ quiet: true });
   });
 
-  apiModelSheet?.addEventListener('click', event => {
-    if (event.target === apiModelSheet) {
-      closeApiModelPicker();
+  panel.querySelector('[data-action="api-save-proxy"]')?.addEventListener('click', () => {
+    const name = windowRef.prompt('代理预设名称');
+    if (!String(name || '').trim()) return;
+    try {
+      const preset = saveProxyPreset(name, {
+        url: apiProxyUrl?.value || '',
+        password: apiProxyPassword?.value || '',
+      });
+      renderProxyPresets(preset.id);
+      saveApiSettingsForm({ quiet: true });
+      toast('代理预设已保存');
+    } catch (error) { toast(error?.message || '保存代理预设失败'); }
+  });
+
+  panel.querySelector('[data-action="api-delete-proxy"]')?.addEventListener('click', () => {
+    const preset = getProxyPreset(apiProxyPreset?.value);
+    if (!preset) { toast('请先选择代理预设'); return; }
+    if (!windowRef.confirm(`删除代理预设“${preset.name}”？`)) return;
+    deleteProxyPreset(preset.id);
+    renderProxyPresets();
+    if (apiProxyPreset) apiProxyPreset.value = '';
+    saveApiSettingsForm({ quiet: true });
+    toast('代理预设已删除');
+  });
+
+  panel.querySelector('[data-action="api-openrouter-auth"]')?.addEventListener('click', () => {
+    try {
+      windowRef.open(`https://openrouter.ai/auth?callback_url=${encodeURIComponent(windowRef.location?.origin || '')}`, '_blank');
+    } catch {
+      toast('无法打开 OpenRouter 授权页');
     }
   });
+
+  apiSource?.addEventListener('change', () => {
+    syncApiSourceForms();
+    saveApiSettingsForm({ quiet: true });
+    setApiStatus('');
+  });
+
+  apiFormat?.addEventListener('change', async () => {
+    syncApiFormatForms();
+    if (apiModelManualWrap) apiModelManualWrap.hidden = true;
+    if (apiModelManual) apiModelManual.value = '';
+    populateSelect(apiModelSelect, [], '');
+    saveApiSettingsForm({ quiet: true });
+    setApiStatus('');
+  });
+
+  apiStream?.addEventListener('change', () => saveApiSettingsForm({ quiet: true }));
+  apiToolCalling?.addEventListener('change', () => saveApiSettingsForm({ quiet: true }));
+  apiParamInputs.forEach(input => input.addEventListener('change', () => saveApiSettingsForm({ quiet: true })));
+  panel.querySelector('[data-action="api-toggle-params"]')?.addEventListener('click', () => {
+    if (!apiParamsBody) return;
+    apiParamsBody.hidden = !apiParamsBody.hidden;
+    if (apiParamsArrow) apiParamsArrow.textContent = apiParamsBody.hidden ? '›' : '⌄';
+  });
+  [apiKey, apiOpenRouterKey, apiProxyUrl, apiProxyPassword, apiCustomBaseUrl, apiCustomKey, apiCustomModel, apiModelManual]
+    .filter(Boolean)
+    .forEach(input => input.addEventListener('change', () => saveApiSettingsForm({ quiet: true })));
+
+  apiModelSelect?.addEventListener('change', () => {
+    if (apiModelManualWrap) apiModelManualWrap.hidden = apiModelSelect.value !== '__manual__';
+    if (apiModelSelect.value !== '__manual__' && apiModelManual) apiModelManual.value = apiModelSelect.value || '';
+    saveApiSettingsForm({ quiet: true });
+  });
+
+  apiCustomModelSelect?.addEventListener('change', () => {
+    if (apiCustomModelSelect.value && apiCustomModel) apiCustomModel.value = apiCustomModelSelect.value;
+    saveApiSettingsForm({ quiet: true });
+  });
+
+  panel.querySelector('[data-action="api-refresh-models"]')?.addEventListener('click', () => refreshApiModels());
+  panel.querySelector('[data-action="api-refresh-custom-models"]')?.addEventListener('click', () => refreshApiModels({ customOnly: true }));
+  panel.querySelector('[data-action="api-test-connection"]')?.addEventListener('click', testApiConnection);
 
   panel.querySelector('[data-action="new-private-back"]')?.addEventListener('click', () => {
     newPrivateContactId = null;
@@ -3258,6 +3666,27 @@ export function createPhonePanel({
   panel.querySelector('[data-action="conversation-settings-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="conversation-settings-save"]')?.addEventListener('click', saveConversationSettings);
+
+  panel.querySelector('[data-action="contact-prompt-back"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-prompt-cancel"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-prompt-save"]')?.addEventListener('click', saveContactPromptSettings);
+
+  panel.querySelector('[data-action="contact-api-back"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-api-cancel"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-api-save"]')?.addEventListener('click', saveContactApiSettings);
+  panel.querySelector('[data-action="contact-status-back"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-memory-back"]')?.addEventListener('click', () => show('info'));
+
+  contactApiEnabled?.addEventListener('change', syncContactApiUi);
+  contactApiFormat?.addEventListener('change', syncContactApiUi);
+  panel.querySelector('[data-action="contact-api-load-preset"]')?.addEventListener('click', () => {
+    const preset = getApiPreset(contactApiPreset?.value);
+    if (!preset) { toast('请先选择 API 配置'); return; }
+    applyContactApiConfig({ ...preset.config, source: 'custom' }, { presetId: preset.id });
+    if (contactApiEnabled) contactApiEnabled.checked = true;
+    syncContactApiUi();
+    toast(`已读取：${preset.name}`);
+  });
 
   panel
     .querySelectorAll(
@@ -3329,6 +3758,14 @@ export function createPhonePanel({
       if (conversation?.type === 'private') {
         show('conversation-settings');
       }
+    } else if (action === 'contact-prompt-settings') {
+      show('contact-prompt-settings');
+    } else if (action === 'contact-api-settings') {
+      show('contact-api-settings');
+    } else if (action === 'contact-status-settings') {
+      show('contact-status-settings');
+    } else if (action === 'contact-memory-settings') {
+      show('contact-memory-settings');
     }
   });
 
