@@ -49,7 +49,7 @@ import {
   testProviderConnection,
 } from '../api/providers/provider-registry.js';
 import { generatePrivateReply, generateGroupReply } from '../generation/generation-service.js';
-import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive } from '../core/generation-runtime.js';
+import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
 import { parseGeneratedMessages, previewGeneratedMessages } from '../generation/message-parser.js';
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
@@ -197,6 +197,7 @@ export function createPhonePanel({
           <button class="moli-icon-btn" data-action="chat-info" aria-label="聊天信息">…</button>
         </div>
       </header>
+      <div class="moli-chat-error" data-chat-error hidden role="alert"></div>
       <main class="moli-chat-body"></main>
       <div class="moli-quote-draft" data-quote-draft hidden>
         <div class="moli-quote-draft-text" data-quote-draft-text></div>
@@ -725,6 +726,7 @@ export function createPhonePanel({
   const chatList = panel.querySelector('.moli-chat-list');
   const chatBody = panel.querySelector('.moli-chat-body');
   const chatTitle = panel.querySelector('[data-chat-title]');
+  const chatError = panel.querySelector('[data-chat-error]');
   const input = panel.querySelector('.moli-input');
   const sendButton = panel.querySelector('[data-action="send"]');
   const addMenu = panel.querySelector('[data-add-menu]');
@@ -845,6 +847,11 @@ export function createPhonePanel({
     },
     true,
   );
+
+  // 失败提示保持到用户继续操作为止：输入文字、发送/点击任意聊天区域都会清除。
+  const chatPage = panel.querySelector('[data-page="chat"]');
+  chatPage?.addEventListener('pointerdown', () => dismissCurrentGenerationError(), true);
+  input?.addEventListener('input', () => dismissCurrentGenerationError());
 
   const escapeHtml = value => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -3016,6 +3023,7 @@ export function createPhonePanel({
   }
 
   function renderChat() {
+    renderGenerationErrorBanner();
     if (!currentContactId) {
       return;
     }
@@ -3384,6 +3392,20 @@ export function createPhonePanel({
     return true;
   }
 
+  function renderGenerationErrorBanner() {
+    if (!chatError) return;
+    const scopeKey = getScopeKey?.();
+    const error = scopeKey && currentContactId ? getGenerationError(scopeKey, currentContactId) : null;
+    chatError.textContent = error?.message || '';
+    chatError.hidden = !error?.message;
+  }
+
+  function dismissCurrentGenerationError() {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey || !currentContactId) return;
+    if (clearGenerationError(scopeKey, currentContactId)) renderGenerationErrorBanner();
+  }
+
   async function requestReply() {
     if (!currentContactId) return;
 
@@ -3505,8 +3527,11 @@ export function createPhonePanel({
       if (error?.name === 'AbortError' || controller.signal.aborted) {
         toast('已停止生成');
       } else {
+        const errorMessage = String(error?.message || '生成失败，可再次空输入重试');
         console.error('[moli小手机] generation failed:', error);
-        toast(error?.message || '生成失败，可再次空输入重试');
+        setGenerationError(requestScopeKey, generationConversationKey, errorMessage, 'manual');
+        renderGenerationErrorBanner();
+        toast(errorMessage);
       }
     } finally {
       endGenerationTask(requestScopeKey, generationConversationKey, controller);
@@ -4292,6 +4317,14 @@ export function createPhonePanel({
   };
   windowRef.addEventListener('moli:generation-state', externalGenerationState);
 
+  const externalGenerationError = event => {
+    const detail = event?.detail || {};
+    if (detail.scopeKey && detail.scopeKey !== getScopeKey?.()) return;
+    if (detail.conversationKey !== currentContactId) return;
+    renderGenerationErrorBanner();
+  };
+  windowRef.addEventListener('moli:generation-error', externalGenerationError);
+
   const externalConversationUpdate = event => {
     const detail = event?.detail || {};
     if (detail.scopeKey && detail.scopeKey !== getScopeKey?.()) return;
@@ -4330,6 +4363,7 @@ open(handleElement) {
     destroy() {
       windowRef.removeEventListener('moli:conversation-updated', externalConversationUpdate);
       windowRef.removeEventListener('moli:generation-state', externalGenerationState);
+      windowRef.removeEventListener('moli:generation-error', externalGenerationError);
       panel.remove();
     },
 
