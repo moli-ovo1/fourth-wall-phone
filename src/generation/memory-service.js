@@ -153,7 +153,10 @@ function eligibleTurns(conversation, memory) {
   });
 }
 function transcript(messages) {
-  return messages.map(item => `${item?.role === 'user' ? '用户' : '角色'}：${String(item?.content || '').trim()}`).filter(Boolean).join('\n');
+  return messages.map(item => {
+    const role = item?.role === 'user' ? '用户' : (item?.senderSnapshot?.name || '角色');
+    return `${role}：${String(item?.content || '').trim()}`;
+  }).filter(Boolean).join('\n');
 }
 
 async function condenseRecent(scopeKey, conversationKey, conversation, memory, config) {
@@ -174,6 +177,7 @@ async function condenseRecent(scopeKey, conversationKey, conversation, memory, c
     createdAt: now,
     updatedAt: now,
     source: 'auto',
+    sourceMode: conversation?.type === 'group' ? String(conversation.groupMode || 'reading') : '',
     messageStartId: String(batch[0]?.id || ''),
     messageEndId: String(batch.at(-1)?.id || ''),
   }];
@@ -186,8 +190,9 @@ async function condenseRecent(scopeKey, conversationKey, conversation, memory, c
   return { changed: true, memory: next };
 }
 
-async function promoteLongTerm(scopeKey, conversationKey, memory, config) {
-  const autoEntries = (memory?.recent || []).filter(item => item?.source === 'auto');
+async function promoteLongTerm(scopeKey, conversationKey, conversation, memory, config) {
+  const mode = conversation?.type === 'group' ? String(conversation.groupMode || 'reading') : '';
+  const autoEntries = (memory?.recent || []).filter(item => item?.source === 'auto' && (!mode || !item?.sourceMode || item.sourceMode === mode));
   if (autoEntries.length < LONG_TERM_AUTO_THRESHOLD) return { changed: false, memory };
   const take = autoEntries.slice(0, LONG_TERM_AUTO_TAKE);
   const text = await generateMemoryText(
@@ -198,16 +203,30 @@ async function promoteLongTerm(scopeKey, conversationKey, memory, config) {
   if (!text) throw new Error('长期总结压缩返回空内容');
   const takeIds = new Set(take.map(item => item.id));
   const retained = (memory.recent || []).filter(item => !takeIds.has(item.id));
-  // 只追加新沉淀段，不重写用户手工维护的既有长期总结。
-  const existing = String(memory.longTermSummary || '').trim();
-  const nextLong = [existing, text].filter(Boolean).join('\n\n');
   const now = Date.now();
-  const next = updateConversationMemory(scopeKey, conversationKey, {
-    recent: retained,
-    longTermSummary: nextLong,
-    lastSummarizedAt: now,
-    lastAutoError: '',
-  });
+  let patch;
+  if (conversation?.type === 'group') {
+    const key = mode === 'role-chat' ? 'roleChat' : 'reading';
+    const existing = String(memory.longTermByMode?.[key] || (key === 'reading' ? memory.longTermSummary || '' : '')).trim();
+    patch = {
+      recent: retained,
+      longTermByMode: {
+        ...(memory.longTermByMode || {}),
+        [key]: [existing, text].filter(Boolean).join('\n\n'),
+      },
+      lastSummarizedAt: now,
+      lastAutoError: '',
+    };
+  } else {
+    const existing = String(memory.longTermSummary || '').trim();
+    patch = {
+      recent: retained,
+      longTermSummary: [existing, text].filter(Boolean).join('\n\n'),
+      lastSummarizedAt: now,
+      lastAutoError: '',
+    };
+  }
+  const next = updateConversationMemory(scopeKey, conversationKey, patch);
   return { changed: true, memory: next };
 }
 
@@ -218,9 +237,9 @@ export async function maybeAutoCompactConversationMemory({ scopeKey, conversatio
   running.add(runKey);
   try {
     const conversation = getConversation(scopeKey, conversationKey);
-    if (!conversation || conversation.type !== 'private') return { changed: false, reason: 'not-private' };
-    const contact = contactFor(conversation);
-    if (!contact) return { changed: false, reason: 'unsupported-contact' };
+    if (!conversation || !['private', 'group'].includes(conversation.type)) return { changed: false, reason: 'unsupported-conversation' };
+    const contact = conversation.type === 'private' ? contactFor(conversation) : null;
+    if (conversation.type === 'private' && !contact) return { changed: false, reason: 'unsupported-contact' };
     const config = runtimeConfig(contact);
     if (config?.source !== 'tavern' && !String(config?.model || '').trim()) return { changed: false, reason: 'no-model' };
     let memory = getConversationMemory(scopeKey, conversationKey);
@@ -228,7 +247,7 @@ export async function maybeAutoCompactConversationMemory({ scopeKey, conversatio
     const condensed = await condenseRecent(scopeKey, conversationKey, conversation, memory, config);
     changed ||= condensed.changed;
     memory = condensed.memory;
-    const promoted = await promoteLongTerm(scopeKey, conversationKey, memory, config);
+    const promoted = await promoteLongTerm(scopeKey, conversationKey, conversation, memory, config);
     changed ||= promoted.changed;
     return { changed, memory: promoted.memory };
   } catch (error) {

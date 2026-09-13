@@ -296,25 +296,42 @@ function parseSpeakerOrder(text, members, forcedIds) {
   return order;
 }
 
-async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, members, workingMessages }) {
+async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, members, workingMessages, reviewTarget = null }) {
   const syntheticMessages = workingMessages.map(message => {
     if (message?.role === 'user') return { ...message, role: 'user' };
     if (String(message?.senderId || '') === String(contact.id)) return { ...message, role: 'assistant' };
     return { ...message, role: 'user', content: groupMessageText(message, new Map(members.map(item => [String(item.id), item]))) };
   });
+  const groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
+  const readingMode = groupMode === 'reading';
+  const groupMemory = getConversationMemory(scopeKey, conversation.conversationKey || conversation.id) || { recent: [], longTermSummary: '' };
+  // 角色闲聊不注入带有明确“围读会”来源的近期群记忆，避免分析口吻污染日常群聊。
+  const modeMemory = {
+    ...groupMemory,
+    recent: (groupMemory.recent || []).filter(item => groupMode === 'reading'
+      ? (!item?.sourceMode || item.sourceMode === 'reading')
+      : (!item?.sourceMode || item.sourceMode === 'role-chat')),
+    longTermSummary: groupMode === 'reading'
+      ? String(groupMemory.longTermByMode?.reading || groupMemory.longTermSummary || '')
+      : String(groupMemory.longTermByMode?.roleChat || ''),
+  };
   const syntheticConversation = {
     ...conversation,
     type: 'private',
     contactId: contact.id,
+    bodyContextEnabled: readingMode && conversation.bodyContextEnabled !== false,
     messages: syntheticMessages,
-    memory: { recent: [], longTermSummary: '' },
+    memory: modeMemory,
   };
-  const recentBody = conversation.bodyContextEnabled === false ? null : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 });
+  const recentBody = syntheticConversation.bodyContextEnabled === false
+    ? null
+    : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 });
   const scanParts = workingMessages.map(message => String(message?.content || '')).filter(Boolean);
   if (recentBody?.messages?.length) scanParts.push(...recentBody.messages.map(message => String(message?.content || '')).filter(Boolean));
   const activatedWorldBook = await getActivatedTavernWorldBook({ contact, scanText: scanParts.join('\n') });
   const baiBaiMemory = (
-    conversation.bodyContextEnabled !== false
+    readingMode
+    && syntheticConversation.bodyContextEnabled !== false
     && (contact?.kind === 'builtin' || (contact?.kind === 'tavern' && contact?.roleSources?.longTermMemory !== false))
   ) ? getBaiBaiLongTermMemory() : null;
   const request = buildPrivateGenerationRequest({
@@ -324,7 +341,7 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
     worldBookText: activatedWorldBook?.text || '',
     longTermMemoryText: baiBaiMemory?.text || '',
     longTermMemoryCoverage: baiBaiMemory?.coverage || null,
-    phoneMemory: null,
+    phoneMemory: modeMemory,
     otherContextSources: getScopeConversations(scopeKey)
       .filter(source => source?.type === 'private' && String(source.contactId || '') === String(contact.id))
       .map(source => ({ type: 'private', name: contactLabel(contact), messages: (source.messages || []).slice(-12).map(message => ({ ...message, senderName: message?.senderSnapshot?.name || contactLabel(contact) })) }))
@@ -333,7 +350,13 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
     historyLimit: conversation.recentChatLimit || 100,
   });
   const selfRule = contact?.kind === 'tavern' ? `\n【本人视角铁律】正文中与你同名、同身份的角色就是你本人。谈到正文中的自己时必须保持第一人称与本人立场，不得称自己为“他/她”“这个角色”或切换成作者、分析员、旁观者。你可以辩解、隐瞒、否认、反思、恼火或拒绝讨论，但必须是你本人在说话。分析剧情不是普通 Tavern 角色的默认职责。\n` : '';
-  request.system = `【群聊短消息规则】本轮你若被选中，只发送 1 个气泡，正文最多 80 个中文字符（标点计入近似长度）。不要写小作文，不要拆成多条消息。\n你现在位于群聊「${String(conversation.name || '群聊')}」。你只扮演「${contactLabel(contact)}」，绝不能替其他群成员或用户发言。其他成员刚刚说出的内容属于真实的同轮群消息；要自然接住前文，不要把群聊变成分别回答用户的独立问答。可以赞同、反驳、补充、调侃、转移话题，也可以保持简短。\n当前群成员：${members.map(contactLabel).join('、')}\n${selfRule}\n${request.system}`;
+  const modeRule = readingMode
+    ? '【群聊模式：围读会】本群允许读取当前正文，用于围绕正文阅读、点评和讨论。群内共同手机记忆可辅助理解，但不能取代当前原始群聊与明确正文事实。'
+    : '【群聊模式：角色闲聊】这是日常微信群聊。严禁使用当前正文、柏宝书或成员各自正文历史来推动本轮回复；只依据成员自身必要身份资料/世界书、该成员手机聊天连续性、当前群聊天与群手机记忆。';
+  const reviewRule = reviewTarget?.content
+    ? `\n【PRIMARY REVIEW TARGET｜本轮唯一主要点评对象】\n签名：${String(reviewTarget.signature || '')}\n${String(reviewTarget.content || '')}\n【边界】上面的正文快照是这次自动点评的主要对象。群聊天、群记忆、其他正文片段都只能作为 SUPPORTING CONTEXT，绝不能把群闲聊误当成本轮点评对象。\n`
+    : '';
+  request.system = `【群聊短消息规则】本轮你若被选中，只发送 1 个气泡，正文最多 80 个中文字符（标点计入近似长度）。不要写小作文，不要拆成多条消息。\n${modeRule}\n你现在位于群聊「${String(conversation.name || '群聊')}」。你只扮演「${contactLabel(contact)}」，绝不能替其他群成员或用户发言。其他成员刚刚说出的内容属于真实的同轮群消息；要自然接住前文，不要把群聊变成分别回答用户的独立问答。可以赞同、反驳、补充、调侃、转移话题，也可以保持简短。\n当前群成员：${members.map(contactLabel).join('、')}\n${selfRule}${reviewRule}\n${request.system}`;
   return request;
 }
 
@@ -405,10 +428,11 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   return { replies, speakerIds };
 }
 
-export async function generateGroupReview({ scopeKey, conversationKey, signal, onDelta } = {}) {
+export async function generateGroupReview({ scopeKey, conversationKey, signal, onDelta, reviewTarget = null } = {}) {
   if (!scopeKey || !conversationKey) throw new Error('当前群聊不可用');
   const conversation = getConversation(scopeKey, conversationKey);
   if (!conversation || conversation.type !== 'group') throw new Error('群聊不存在');
+  if (conversation.groupMode === 'role-chat') throw new Error('角色闲聊模式不运行正文自动点评');
 
   const allContacts = getContacts();
   const members = (conversation.memberIds || [])
@@ -434,8 +458,9 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
       contact: speaker,
       members,
       workingMessages,
+      reviewTarget,
     });
-    request.system = `这是群聊「${String(conversation.name || '群聊')}」的一轮自动点评。${speaker?.kind === 'tavern' ? '正文中与你同名同身份的人就是你本人；必须以第一人称本人立场回应，不得把自己称为“他/她/这个角色”，也不得变成剧情分析员。' : ''}请以「${contactLabel(speaker)}」自己的立场点评当前最新正文与局势，不要替其他成员发言；前面本轮已经出现的群消息都是真实新消息，要自然接着讨论。可以赞同、反驳、补充或改变重点。保持线上群聊口吻，不要写小说旁白。\n\n${request.system}`;
+    request.system = `这是群聊「${String(conversation.name || '群聊')}」的一轮自动点评。请严格点评 system 中标记为 PRIMARY REVIEW TARGET 的触发正文快照；群聊历史与群记忆仅用于理解。${speaker?.kind === 'tavern' ? '正文中与你同名同身份的人就是你本人；必须以第一人称本人立场回应，不得把自己称为“他/她/这个角色”，也不得变成剧情分析员。' : ''}请以「${contactLabel(speaker)}」自己的立场点评这次 PRIMARY REVIEW TARGET 正文快照及其局势，不要替其他成员发言；前面本轮已经出现的群消息都是真实新消息，要自然接着讨论。可以赞同、反驳、补充或改变重点。保持线上群聊口吻，不要写小说旁白。\n\n${request.system}`;
     const config = resolveContactApiConfig(speaker);
     const result = await runGeneration(config, request, {
       signal,
