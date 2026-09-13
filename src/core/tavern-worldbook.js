@@ -44,6 +44,11 @@ function normalizeEntry(raw, { bookKey, kind, index }) {
     secondaryKeys: secondary.map(String).filter(Boolean),
     constant: raw?.constant === true,
     selective: raw?.selective === true,
+    selectiveLogic: Number(raw?.selectiveLogic ?? raw?.selective_logic ?? 0),
+    caseSensitive: raw?.caseSensitive ?? raw?.case_sensitive ?? null,
+    matchWholeWords: raw?.matchWholeWords ?? raw?.match_whole_words ?? null,
+    useProbability: raw?.useProbability !== false && raw?.use_probability !== false,
+    probability: Number(raw?.probability ?? 100),
     disabled,
     order: Number(raw?.order ?? raw?.insertion_order ?? 100),
   };
@@ -98,5 +103,93 @@ export async function getTavernWorldBookSnapshot(sourceId) {
     linkedName,
     books: usableBooks.map(({ entries, ...book }) => ({ ...book, entryCount: entries.length })),
     entries: usableBooks.flatMap(book => book.entries),
+  };
+}
+
+
+function regexFromKey(value) {
+  const text = String(value || '').trim();
+  if (!text.startsWith('/') || text.lastIndexOf('/') <= 0) return null;
+  const end = text.lastIndexOf('/');
+  try { return new RegExp(text.slice(1, end), text.slice(end + 1)); } catch { return null; }
+}
+
+function keyMatches(buffer, key, entry) {
+  const needle = String(key || '').trim();
+  if (!needle) return false;
+  const regex = regexFromKey(needle);
+  if (regex) return regex.test(buffer);
+  const caseSensitive = entry.caseSensitive === true;
+  const haystack = caseSensitive ? buffer : buffer.toLowerCase();
+  const target = caseSensitive ? needle : needle.toLowerCase();
+  if (entry.matchWholeWords === true && /^\w+$/u.test(target)) {
+    try { return new RegExp(`(?:^|\\W)${target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|\\W)`, caseSensitive ? '' : 'i').test(buffer); } catch {}
+  }
+  return haystack.includes(target);
+}
+
+function entryTriggered(entry, buffer) {
+  if (entry.disabled) return false;
+  if (entry.constant) return true;
+  const primary = entry.keys.filter(key => keyMatches(buffer, key, entry));
+  if (!primary.length) return false;
+  if (!entry.selective || !entry.secondaryKeys.length) return true;
+  const secondaryHits = entry.secondaryKeys.filter(key => keyMatches(buffer, key, entry)).length;
+  switch (Number(entry.selectiveLogic || 0)) {
+    case 1: return secondaryHits < entry.secondaryKeys.length; // NOT_ALL
+    case 2: return secondaryHits === 0; // NOT_ANY
+    case 3: return secondaryHits === entry.secondaryKeys.length; // AND_ALL
+    default: return secondaryHits > 0; // AND_ANY
+  }
+}
+
+function passesProbability(entry) {
+  if (entry.useProbability === false) return true;
+  const probability = Number.isFinite(entry.probability) ? Math.max(0, Math.min(100, entry.probability)) : 100;
+  return probability >= 100 || Math.random() * 100 < probability;
+}
+
+/**
+ * moli scoped activation layer for a Tavern contact's own linked/embedded books.
+ * It deliberately scans only this contact's snapshot and then applies moli's whitelist,
+ * so another currently-open SillyTavern character cannot leak its lore into this phone chat.
+ */
+export async function getActivatedTavernWorldBook({ contact, scanText = '' } = {}) {
+  if (contact?.kind !== 'tavern' || contact?.roleSources?.worldBook === false) {
+    return { available: true, entries: [], text: '' };
+  }
+  const sourceId = String(contact?.source?.sourceId || '');
+  if (!sourceId) return { available: false, entries: [], text: '' };
+  const snapshot = await getTavernWorldBookSnapshot(sourceId);
+  if (!snapshot.available) return { ...snapshot, entries: [], text: '' };
+
+  const disabled = new Set(
+    Array.isArray(contact?.worldBookPolicy?.disabledEntries)
+      ? contact.worldBookPolicy.disabledEntries.map(String)
+      : []
+  );
+  const candidates = snapshot.entries.filter(entry => !disabled.has(String(entry.key)) && !entry.disabled);
+  const activated = [];
+  const seen = new Set();
+  let buffer = String(scanText || '');
+
+  // A bounded recursion pass mirrors the important ST behavior: activated lore may trigger related lore.
+  for (let pass = 0; pass < 4; pass += 1) {
+    let changed = false;
+    for (const entry of candidates) {
+      if (seen.has(entry.key) || !entryTriggered(entry, buffer) || !passesProbability(entry)) continue;
+      seen.add(entry.key);
+      activated.push(entry);
+      if (entry.content) buffer += `\n${entry.content}`;
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
+  activated.sort((a, b) => Number(b.order || 0) - Number(a.order || 0));
+  return {
+    available: true,
+    entries: activated,
+    text: activated.map(entry => entry.content).filter(Boolean).join('\n\n'),
   };
 }
