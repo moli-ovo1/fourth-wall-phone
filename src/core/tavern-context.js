@@ -116,9 +116,9 @@ export function getRecentTavernBody({
 export function getTavernAssistantTurnState() {
   const ctx = getContext();
   const chat = candidateChats(ctx)[0];
-  if (!chat) return { available: false, count: 0, lastSignature: '', signatures: [] };
+  if (!chat) return { available: false, count: 0, lastSignature: '', signatures: [], lastTurn: null, recentTurns: [] };
 
-  const signatures = chat
+  const turns = chat
     .map((message, index) => ({ message, index }))
     .filter(({ message }) => {
       if (!message || typeof message !== 'object') return false;
@@ -129,13 +129,22 @@ export function getTavernAssistantTurnState() {
     .map(({ message, index }) => {
       const content = clean(message.mes ?? message.message ?? message.content ?? message.text);
       const stable = clean(message.send_date ?? message.sendDate ?? message.extra?.gen_id ?? message.id ?? '');
-      return `${index}:${stable}:${content}`;
+      const name = clean(message.name ?? message.sender ?? message.character_name ?? message.characterName);
+      return {
+        index,
+        name,
+        content,
+        signature: `${index}:${stable}:${content}`,
+      };
     });
+  const signatures = turns.map(item => item.signature);
 
   return {
     available: true,
     count: signatures.length,
     lastSignature: signatures.at(-1) || '',
     signatures,
+    lastTurn: turns.at(-1) || null,
+    recentTurns: turns.slice(-3),
   };
 }
