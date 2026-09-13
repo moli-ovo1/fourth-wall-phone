@@ -27,6 +27,7 @@ import {
 import {
   getTavernCharactersSnapshot,
 } from '../core/tavern-contacts.js';
+import { getCurrentTavernStoryTimeState } from '../core/tavern-context.js';
 import {
   API_FORMATS,
   getApiSettings,
@@ -2916,6 +2917,7 @@ export function createPhonePanel({
         'user',
         `转发的聊天记录（${items.length}条）`,
         {
+          storyTime: messageStoryTimeMeta(target),
           forward: {
             mode: 'merged',
             sourceConversationId: String(pendingForward.sourceConversationId || ''),
@@ -2930,7 +2932,8 @@ export function createPhonePanel({
         scopeKey,
         targetConversationKey,
         'user',
-        String(first?.content || '')
+        String(first?.content || ''),
+        { storyTime: messageStoryTimeMeta(target) }
       );
     }
 
@@ -3022,6 +3025,46 @@ export function createPhonePanel({
     hideMessageMenu();
   }
 
+  function messageStoryTimeMeta(conversation) {
+    return conversation?.timeMode === 'body' ? getCurrentTavernStoryTimeState() : null;
+  }
+
+  function sameCalendarDay(a, b) {
+    const da = new Date(Number(a || 0));
+    const db = new Date(Number(b || 0));
+    return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
+  }
+
+  function formatRealTimeLabel(ts) {
+    const date = new Date(Number(ts || Date.now()));
+    const now = new Date();
+    const hhmm = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    if (sameCalendarDay(date.getTime(), now.getTime())) return hhmm;
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    if (sameCalendarDay(date.getTime(), yesterday.getTime())) return `昨天 ${hhmm}`;
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${hhmm}`;
+  }
+
+  function shouldShowMessageTime(conversation, message, previousMessage, previousShownStoryTime) {
+    if (conversation?.timeMode === 'real') {
+      if (!previousMessage) return true;
+      const currentTs = Number(message?.ts || 0);
+      const previousTs = Number(previousMessage?.ts || 0);
+      if (!currentTs || !previousTs) return false;
+      return !sameCalendarDay(currentTs, previousTs) || currentTs - previousTs >= 5 * 60 * 1000;
+    }
+    const current = message?.storyTime;
+    if (!current?.label) return false;
+    if (!previousShownStoryTime?.label) return true;
+    if (current.label === previousShownStoryTime.label) return false;
+    const currentMinute = current.minuteOfDay === null || current.minuteOfDay === undefined ? null : Number(current.minuteOfDay);
+    const previousMinute = previousShownStoryTime.minuteOfDay === null || previousShownStoryTime.minuteOfDay === undefined ? null : Number(previousShownStoryTime.minuteOfDay);
+    if (currentMinute !== null && previousMinute !== null && Number.isFinite(currentMinute) && Number.isFinite(previousMinute) && String(current.dateKey || '') === String(previousShownStoryTime.dateKey || '')) {
+      return Math.abs(currentMinute - previousMinute) >= 5;
+    }
+    return true;
+  }
+
   function renderChat() {
     renderGenerationErrorBanner();
     if (!currentContactId) {
@@ -3069,8 +3112,9 @@ export function createPhonePanel({
       return;
     }
 
+    let previousShownStoryTime = null;
     chatBody.innerHTML = messages
-      .map(message => {
+      .map((message, messageIndex) => {
         const isUser = message.role === 'user';
         let sender = null;
 
@@ -3090,8 +3134,15 @@ export function createPhonePanel({
           isGroup && !isUser && sender
             ? `<div class="moli-msg-name">${escapeHtml(displayName(sender))}</div>`
             : '';
+        const showTime = shouldShowMessageTime(conversation, message, messages[messageIndex - 1] || null, previousShownStoryTime);
+        let timeLabel = '';
+        if (showTime) {
+          timeLabel = conversation.timeMode === 'real' ? formatRealTimeLabel(message.ts) : String(message.storyTime?.label || '');
+          if (conversation.timeMode === 'body' && message.storyTime?.label) previousShownStoryTime = message.storyTime;
+        }
 
         return `
+          ${timeLabel ? `<div class="moli-chat-time-label">${escapeHtml(timeLabel)}</div>` : ''}
           <div class="moli-msg ${
             isUser ? 'user' : 'assistant'
           } ${multiSelectMode && selectedMessageIds.has(String(message.id || '')) ? 'selected' : ''}" data-message-id="${escapeHtml(message.id || '')}">
@@ -3488,6 +3539,7 @@ export function createPhonePanel({
             {
               source: 'generation',
               generationTurnId,
+              storyTime: messageStoryTimeMeta(conversation),
               senderId: batch.contact.id,
               senderSnapshot: {
                 name: displayName(batch.contact),
@@ -3565,7 +3617,7 @@ export function createPhonePanel({
       currentContactId,
       'user',
       text,
-      pendingQuote ? { quote: pendingQuote } : {}
+      { ...(pendingQuote ? { quote: pendingQuote } : {}), storyTime: messageStoryTimeMeta(currentConversation()) }
     );
 
     input.value = '';
