@@ -1471,3 +1471,105 @@ moli32 不重写这些逻辑，只把已有能力开放为可配置 UI。
 4. 实现近期记忆 / 长期总结的数据层与生成触发。
 5. 再接角色自主判断的自动聊天。
 
+
+---
+
+# moli34 节点：主 API 重做 + Contact 独立 API 第一阶段
+
+## 本轮原因
+
+moli33 的主 API 页面仍不符合酒馆用户熟悉的手机扩展使用方式，因此本轮不在旧 UI 上继续修补，而是把**主设置 API 部分整体替换**。
+
+## 已完成
+
+### 主 API 设置
+
+`src/storage/api-settings.js`
+
+- API 配置 schema 升到内部 v2，但继续使用原 `moli-phone:api-settings:v1` key，做惰性兼容迁移。
+- 新结构：
+  - `source = default | custom`
+  - `format`
+  - `stream`
+  - 通用 API Key
+  - OpenRouter Key
+  - 模型
+  - reverse proxy
+  - custom OpenAI-compatible endpoint
+- 增加反向代理预设库。
+- moli33 API 预设继续可读，自动转换到新结构。
+- 提供 `resolveApiRuntimeConfig()`，把 UI 配置解析为现有 Provider Adapter 能消费的运行配置。
+
+`src/ui/phone-panel.js`
+
+主 API 页替换为酒馆手机扩展熟悉结构：
+
+- 跟随酒馆设置 / 自定义 API
+- 流式生成
+- API 类型
+- API Key
+- 反向代理折叠区
+- 代理预设读取 / 保存 / 删除
+- OpenRouter 独立 Key
+- 自定义 Base URL / Key / 模型
+- 普通模型选择 / 刷新 / 手填
+- 测试连接
+- API 配置预设读取 / 保存 / 删除
+
+不再保留 moli33 那套“Provider + Base URL + Key + 模型”四项平铺的主设置页面。
+
+### 跟随酒馆当前 API
+
+`src/generation/generation-service.js`
+
+- `source=default` 解析为 Tavern current API。
+- 使用 SillyTavern `generateRaw()` 执行当前 API 生成。
+- 因此“跟随酒馆设置”不再只是占位选项。
+
+### Contact 独立 API
+
+`src/storage/data-store.js`
+
+- Contact 新增兼容式 `apiOverride` 数据，不改 contact id / scope key / conversation id。
+- `updateContact()` 支持更新 `apiOverride`。
+
+`src/ui/phone-panel.js`
+
+联系人聊天信息拆出：
+
+- 人格与提示词
+- 独立 API
+- 状态栏
+- 手机记忆
+
+独立 API 页面支持：
+
+- 开 / 关
+- 读取全局 API 预设
+- API 类型
+- Key / 模型
+- 反向代理
+- 自定义 OpenAI-compatible Base URL
+- 流式
+
+读取预设后复制配置到 Contact，不建立会被主预设后续修改牵连的动态引用。
+
+`src/generation/generation-service.js`
+
+- Contact 开启 `apiOverride` 时优先使用 Contact API。
+- 未开启则继续使用主设置 API。
+
+## 本轮明确未做
+
+- Conversation 独立 API override（下一层）
+- 状态栏完整编辑 / 预设库
+- 近期记忆 / 长期总结数据层
+- 自动聊天调度
+- 内置人格正式 Prompt 与生成开放
+
+## 下一步
+
+1. 完成 Contact 状态栏：启用、预设、Prompt Suffix、Regex、HTML Template、最近 N 状态。
+2. 状态历史落到 Conversation，避免多世界线串状态。
+3. 再做近期记忆 / 长期总结。
+4. 再接 Conversation API override，最终形成：`Conversation > Contact > 主设置`。

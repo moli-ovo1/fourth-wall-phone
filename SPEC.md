@@ -2015,3 +2015,85 @@ Conversation 表示：
 - Conversation：保存本聊天实际状态历史，避免同一 Contact 的不同世界线串状态。
 - 生成上下文只读取最近 N 个状态；完整状态历史不因此删除。
 
+
+---
+
+# moli34 确认：主 API 设置按酒馆手机扩展习惯重做 + Contact 独立 API 第一阶段
+
+> 本节覆盖 moli33 中仍然偏“自建 API Profile 管理器”的 UI 方案。后续 API 页面不得再自行发明另一套交互。
+
+## 1. 主设置 API 页面
+
+主设置中的 API 页面采用酒馆用户熟悉的手机扩展结构：
+
+1. `API 来源`
+   - `跟随酒馆设置（默认）`
+   - `自定义 API`
+2. `流式生成`
+3. 自定义 API 下选择 `API 类型`
+4. 按 API 类型显示对应密钥 / 反向代理 / 模型区域
+5. 反向代理支持单独的代理预设：读取、保存、删除
+6. OpenRouter 使用自己的 Key 区域
+7. 自定义 OpenAI 兼容端点使用 Base URL + 可选 Key + 模型
+8. 非自定义端点使用模型选择 + 刷新 + 手动模型
+9. 提供测试连接
+10. API 配置本身仍支持保存 / 读取 / 删除预设，供 Contact / Conversation 独立 API 复用
+
+`跟随酒馆设置`不是假选项：生成时调用 SillyTavern 当前 API。
+
+当前 moli 独立实现，不直接依赖其他扩展运行时；但交互结构保持酒馆用户熟悉的形式。
+
+## 2. API 数据兼容
+
+旧 `moli-phone:api-settings:v1` 不物理删除。
+
+读取旧配置时兼容迁移：
+
+- 旧 `source=tavern` → 新 `source=default`
+- 旧 `source=independent` → 新 `source=custom`
+- 旧 Claude → `format=claude`
+- 旧 Gemini → `format=makersuite`
+- 旧 OpenAI Compatible：有自定义 Base URL 时迁到 `format=custom`，否则迁到 `format=openai`
+
+API 预设同样做惰性兼容读取，不让 moli33 已保存配置消失。
+
+## 3. Contact 独立 API
+
+联系人资料正式拆出 `独立 API`。
+
+规则：
+
+- 默认关闭：跟随主设置 API。
+- 开启：当前 Contact 保存自己的 API 配置副本。
+- 可以从主 API 预设库“读取配置”。
+- 读取预设是**复制当前配置**，不是永久绑定；之后修改主预设不能偷偷改变该联系人。
+- Contact 独立 API 已接入私聊生成。
+- 后续 Conversation 独立 API 的优先级高于 Contact；尚未开启 Conversation override 时，不得越级发明。
+
+最终优先级仍为：
+
+`Conversation 独立 API > Contact 独立 API > 主设置 API`
+
+## 4. 联系人资料入口
+
+私聊 `聊天信息` 中正式拆出：
+
+- 人格与提示词
+- 独立 API
+- 状态栏
+- 手机记忆
+- 当前聊天设置 / 新建聊天
+
+其中：
+
+- `人格与提示词` 已成为独立编辑页。
+- `独立 API` 已成为独立编辑页并接入生成。
+- `状态栏` 与 `手机记忆` 入口已固定，不允许后续再次遗漏；完整功能继续按既定节点实现。
+
+## 5. 既有命名继续有效
+
+手机记忆仍统一称：
+
+`近期原始聊天 → 近期记忆 → 长期总结`
+
+不得再把“近期记忆”改回“日记”。
