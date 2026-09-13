@@ -1,4 +1,5 @@
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
+import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 function clean(value) {
   return String(value || '').trim();
 }
@@ -185,7 +186,10 @@ export function buildPrivateGenerationRequest({
 
   const name = contactName(contact);
   const intro = clean(contact.intro);
-  const prompt = clean(contact.prompt);
+  const builtinDefaultPrompt = contact.kind === 'builtin' ? getBuiltinPersonaPrompt(contact.id) : '';
+  const prompt = contact.kind === 'builtin'
+    ? (Object.prototype.hasOwnProperty.call(contact, 'prompt') ? clean(contact.prompt) : clean(builtinDefaultPrompt))
+    : clean(contact.prompt);
   const messages = Array.isArray(conversation.messages)
     ? conversation.messages
     : [];
@@ -230,7 +234,7 @@ export function buildPrivateGenerationRequest({
 
   if (prompt) {
     systemBlocks.push(
-      `${contact.kind === 'tavern' ? '【自定义附加 Prompt】' : '【用户追加的人格提示词】'}\n${prompt}`
+      `${contact.kind === 'tavern' ? '【自定义附加 Prompt】' : contact.kind === 'builtin' ? '【内置人格 Prompt】' : '【用户追加的人格提示词】'}\n${prompt}`
     );
   }
 

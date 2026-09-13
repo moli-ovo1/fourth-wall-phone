@@ -15,6 +15,7 @@ import {
 import { buildPrivateGenerationRequest } from './prompt-builder.js';
 import { getActivatedTavernWorldBook } from '../core/tavern-worldbook.js';
 import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
+import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -30,8 +31,8 @@ function assertApiConfig(config) {
 function assertContactReady(contact) {
   if (!contact) throw new Error('联系人不存在');
 
-  if (contact.kind === 'builtin') {
-    throw new Error('内置人格的正式 Prompt 尚未接入，暂不生成以免串人设');
+  if (contact.kind === 'builtin' && !getBuiltinPersonaPrompt(contact.id) && !String(contact.prompt || '').trim()) {
+    throw new Error('该内置人格没有可用的系统 Prompt');
   }
 
   if (contact.kind === 'tavern') {
@@ -150,9 +151,11 @@ export async function generatePrivateReply({
   // 柏宝书是正文世界的长期历史来源。Contact 决定是否允许，
   // Conversation 的正文读取开关决定本次聊天是否接入动态剧情上下文。
   const baiBaiMemory = (
-    contact?.kind === 'tavern'
-    && contact?.roleSources?.longTermMemory !== false
-    && conversation.bodyContextEnabled !== false
+    conversation.bodyContextEnabled !== false
+    && (
+      contact?.kind === 'builtin'
+      || (contact?.kind === 'tavern' && contact?.roleSources?.longTermMemory !== false)
+    )
   ) ? getBaiBaiLongTermMemory() : null;
 
   const request = buildPrivateGenerationRequest({

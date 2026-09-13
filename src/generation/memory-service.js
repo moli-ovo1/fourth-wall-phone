@@ -220,7 +220,7 @@ export async function maybeAutoCompactConversationMemory({ scopeKey, conversatio
     const conversation = getConversation(scopeKey, conversationKey);
     if (!conversation || conversation.type !== 'private') return { changed: false, reason: 'not-private' };
     const contact = contactFor(conversation);
-    if (!contact || contact.kind === 'builtin') return { changed: false, reason: 'unsupported-contact' };
+    if (!contact) return { changed: false, reason: 'unsupported-contact' };
     const config = runtimeConfig(contact);
     if (config?.source !== 'tavern' && !String(config?.model || '').trim()) return { changed: false, reason: 'no-model' };
     let memory = getConversationMemory(scopeKey, conversationKey);
