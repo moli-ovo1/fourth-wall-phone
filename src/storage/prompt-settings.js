@@ -556,39 +556,131 @@ Example Dialogue 用于理解角色习惯怎样表达自己。
 ];
 
 function cloneDefaults() {
-  return DEFAULT_ONLINE_PROMPT_BLOCKS.map(item => ({ ...item }));
+  return DEFAULT_ONLINE_PROMPT_BLOCKS.map(item => ({
+    ...item,
+    custom: false,
+  }));
+}
+
+function normalizeCustomBlock(item, index = 0) {
+  if (!item || typeof item !== 'object') return null;
+  const title = String(item.title || '').trim();
+  const content = String(item.content || '');
+  const id = String(item.id || '').trim()
+    || `custom:${Date.now()}:${index}:${Math.random().toString(36).slice(2, 8)}`;
+
+  if (!title && !content.trim()) return null;
+
+  return {
+    id,
+    title: title || '自定义条目',
+    enabled: item.enabled !== false,
+    content,
+    custom: true,
+  };
 }
 
 export function getPromptSettings() {
   const saved = readJson(KEY, null);
   const savedBlocks = Array.isArray(saved?.blocks) ? saved.blocks : [];
-  const byId = new Map(savedBlocks.map(item => [item.id, item]));
-  const blocks = cloneDefaults().map(defaultItem => ({
+  const defaults = cloneDefaults();
+  const defaultIds = new Set(defaults.map(item => item.id));
+  const byId = new Map(savedBlocks.map(item => [String(item?.id || ''), item]));
+
+  const defaultBlocks = defaults.map(defaultItem => ({
     ...defaultItem,
     ...(byId.get(defaultItem.id) || {}),
     id: defaultItem.id,
-    title: (byId.get(defaultItem.id)?.title || defaultItem.title),
+    title: byId.get(defaultItem.id)?.title || defaultItem.title,
+    custom: false,
   }));
+
+  const customBlocks = savedBlocks
+    .filter(item => item?.custom === true || !defaultIds.has(String(item?.id || '')))
+    .map((item, index) => normalizeCustomBlock(item, index))
+    .filter(Boolean);
+
+  const savedOrder = savedBlocks.map(item => String(item?.id || ''));
+  const allById = new Map(
+    [...defaultBlocks, ...customBlocks].map(item => [item.id, item])
+  );
+
+  const ordered = [];
+  for (const id of savedOrder) {
+    const item = allById.get(id);
+    if (!item || ordered.includes(item)) continue;
+    ordered.push(item);
+  }
+  for (const item of [...defaultBlocks, ...customBlocks]) {
+    if (!ordered.includes(item)) ordered.push(item);
+  }
+
   return {
     schemaVersion: 1,
     enabled: saved?.enabled !== false,
-    blocks,
+    blocks: ordered,
   };
 }
 
 export function savePromptSettings(next) {
   const current = getPromptSettings();
+  const blocks = Array.isArray(next?.blocks) ? next.blocks : current.blocks;
   const value = {
     schemaVersion: 1,
     enabled: next?.enabled !== false,
-    blocks: Array.isArray(next?.blocks) ? next.blocks : current.blocks,
+    blocks: blocks.map((item, index) => {
+      const defaultItem = DEFAULT_ONLINE_PROMPT_BLOCKS.find(block => block.id === item?.id);
+      if (defaultItem) {
+        return {
+          id: defaultItem.id,
+          title: String(item?.title || defaultItem.title),
+          enabled: item?.enabled !== false,
+          content: String(item?.content ?? defaultItem.content),
+          custom: false,
+        };
+      }
+      return normalizeCustomBlock(item, index);
+    }).filter(Boolean),
   };
   writeJson(KEY, value);
   return value;
 }
 
+export function createCustomPromptBlock({ title = '自定义条目', content = '' } = {}) {
+  const settings = getPromptSettings();
+  const item = {
+    id: `custom:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+    title: String(title || '').trim() || '自定义条目',
+    enabled: true,
+    content: String(content || ''),
+    custom: true,
+  };
+  settings.blocks.push(item);
+  savePromptSettings(settings);
+  return item;
+}
+
+export function deleteCustomPromptBlock(blockId) {
+  const settings = getPromptSettings();
+  const index = settings.blocks.findIndex(
+    item => item.id === blockId && item.custom === true
+  );
+  if (index < 0) return false;
+  settings.blocks.splice(index, 1);
+  savePromptSettings(settings);
+  return true;
+}
+
 export function restoreDefaultPromptSettings() {
-  const value = { schemaVersion: 1, enabled: true, blocks: cloneDefaults() };
+  const current = getPromptSettings();
+  const customBlocks = current.blocks
+    .filter(item => item.custom === true)
+    .map(item => ({ ...item }));
+  const value = {
+    schemaVersion: 1,
+    enabled: true,
+    blocks: [...cloneDefaults(), ...customBlocks],
+  };
   writeJson(KEY, value);
   return value;
 }

@@ -30,9 +30,10 @@ const BUILTIN_CONTACTS = [
 const CONTACTS_KEY = 'moli-phone:contacts:v1';
 const SCOPE_PREFIX = 'moli-phone:scope:v1:';
 const SCOPE_MIGRATIONS_KEY = 'moli-phone:scope-migrations:v1';
+const GLOBAL_CONVERSATIONS_KEY = 'moli-phone:global-conversations:v1';
 const SCOPE_SCHEMA_VERSION = 1;
 
-function applyConversationDefaults(conversation) {
+function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
   if (!conversation || typeof conversation !== 'object') return conversation;
 
   if (typeof conversation.pinned !== 'boolean') {
@@ -49,19 +50,54 @@ function applyConversationDefaults(conversation) {
     conversation.messages = [];
   }
 
+  if (conversation.type === 'private') {
+    if (conversation.scopeMode !== 'global') {
+      conversation.scopeMode = 'current';
+    }
+    if (conversation.scopeMode === 'current' && !conversation.boundScopeKey && scopeKey) {
+      conversation.boundScopeKey = String(scopeKey);
+    }
+    if (!conversation.timeMode) {
+      conversation.timeMode = conversation.scopeMode === 'global' ? 'real' : 'body';
+    }
+    if (typeof conversation.bodyContextEnabled !== 'boolean') {
+      conversation.bodyContextEnabled = conversation.scopeMode !== 'global';
+    }
+    if (!Number.isFinite(Number(conversation.recentChatLimit))) {
+      conversation.recentChatLimit = 100;
+    } else {
+      conversation.recentChatLimit = Math.max(10, Math.min(9999, Number(conversation.recentChatLimit)));
+    }
+  }
+
   return conversation;
 }
 
-function createPrivateConversation(contactId) {
+function makePrivateConversationKey(contactId) {
+  return `private:${String(contactId || '').replace(/[^a-zA-Z0-9:_-]/g, '_')}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createPrivateConversation(contactId, {
+  conversationId = `private:${contactId}`,
+  scopeMode = 'current',
+  boundScopeKey = '',
+  title = '',
+} = {}) {
   const now = Date.now();
   return applyConversationDefaults({
-    id: `private:${contactId}`,
+    id: conversationId,
     type: 'private',
     contactId,
+    title: String(title || '').trim(),
+    scopeMode: scopeMode === 'global' ? 'global' : 'current',
+    boundScopeKey: scopeMode === 'global' ? '' : String(boundScopeKey || ''),
+    timeMode: scopeMode === 'global' ? 'real' : 'body',
+    bodyContextEnabled: scopeMode !== 'global',
+    recentChatLimit: 100,
     messages: [],
     createdAt: now,
     updatedAt: now,
-  });
+  }, { scopeKey: boundScopeKey });
 }
 
 function migrateScopeData(raw) {
@@ -237,6 +273,76 @@ function saveScope(scopeKey, data) {
   );
 }
 
+function loadGlobalConversationStore() {
+  const raw = readJson(GLOBAL_CONVERSATIONS_KEY, null);
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const conversations =
+    source.conversations && typeof source.conversations === 'object'
+      ? source.conversations
+      : {};
+
+  for (const conversation of Object.values(conversations)) {
+    applyConversationDefaults(conversation);
+    if (conversation?.type === 'private') {
+      conversation.scopeMode = 'global';
+      conversation.boundScopeKey = '';
+    }
+  }
+
+  return {
+    schemaVersion: 1,
+    conversations,
+  };
+}
+
+function saveGlobalConversationStore(data) {
+  writeJson(GLOBAL_CONVERSATIONS_KEY, {
+    schemaVersion: 1,
+    conversations:
+      data?.conversations && typeof data.conversations === 'object'
+        ? data.conversations
+        : {},
+  });
+}
+
+function locateConversation(scopeKey, conversationKey) {
+  const current = ensureBuiltins(scopeKey);
+  if (current.conversations?.[conversationKey]) {
+    const conversation = applyConversationDefaults(
+      current.conversations[conversationKey],
+      { scopeKey }
+    );
+    return {
+      storage: 'scope',
+      data: current,
+      conversation,
+      conversationKey,
+    };
+  }
+
+  const global = loadGlobalConversationStore();
+  if (global.conversations?.[conversationKey]) {
+    const conversation = applyConversationDefaults(global.conversations[conversationKey]);
+    return {
+      storage: 'global',
+      data: global,
+      conversation,
+      conversationKey,
+    };
+  }
+
+  return null;
+}
+
+function saveLocatedConversation(scopeKey, located) {
+  if (!located) return;
+  if (located.storage === 'global') {
+    saveGlobalConversationStore(located.data);
+  } else {
+    saveScope(scopeKey, located.data);
+  }
+}
+
 export function ensureBuiltins(scopeKey) {
   const data = loadScope(scopeKey);
 
@@ -256,9 +362,21 @@ export function ensureBuiltins(scopeKey) {
 }
 
 export function getScopeConversations(scopeKey) {
-  return Object.values(
-    ensureBuiltins(scopeKey).conversations
-  );
+  const current = Object.entries(ensureBuiltins(scopeKey).conversations || {})
+    .map(([conversationKey, conversation]) => {
+      applyConversationDefaults(conversation, { scopeKey });
+      conversation.conversationKey = conversationKey;
+      return conversation;
+    });
+
+  const globals = Object.entries(loadGlobalConversationStore().conversations || {})
+    .map(([conversationKey, conversation]) => {
+      applyConversationDefaults(conversation);
+      conversation.conversationKey = conversationKey;
+      return conversation;
+    });
+
+  return [...current, ...globals];
 }
 
 export function ensureConversation(
@@ -268,21 +386,62 @@ export function ensureConversation(
   const data = ensureBuiltins(scopeKey);
 
   if (!data.conversations[contactId]) {
-    data.conversations[contactId] = createPrivateConversation(contactId);
+    data.conversations[contactId] = createPrivateConversation(contactId, {
+      conversationId: `private:${contactId}`,
+      scopeMode: 'current',
+      boundScopeKey: scopeKey,
+    });
     saveScope(scopeKey, data);
   }
 
-  return applyConversationDefaults(data.conversations[contactId]);
+  return applyConversationDefaults(data.conversations[contactId], { scopeKey });
+}
+
+export function createPrivateConversationInstance(
+  scopeKey,
+  contactId,
+  {
+    scopeMode = 'current',
+    title = '',
+  } = {}
+) {
+  const normalizedMode = scopeMode === 'global' ? 'global' : 'current';
+  const conversationKey = makePrivateConversationKey(contactId);
+  const conversation = createPrivateConversation(contactId, {
+    conversationId: conversationKey,
+    scopeMode: normalizedMode,
+    boundScopeKey: normalizedMode === 'current' ? scopeKey : '',
+    title,
+  });
+
+  if (normalizedMode === 'global') {
+    const data = loadGlobalConversationStore();
+    data.conversations[conversationKey] = conversation;
+    saveGlobalConversationStore(data);
+  } else {
+    const data = ensureBuiltins(scopeKey);
+    data.conversations[conversationKey] = conversation;
+    saveScope(scopeKey, data);
+  }
+
+  conversation.conversationKey = conversationKey;
+  return conversation;
+}
+
+export function getPrivateConversationsForContact(scopeKey, contactId) {
+  return getScopeConversations(scopeKey)
+    .filter(conversation =>
+      conversation?.type === 'private'
+      && String(conversation.contactId || '') === String(contactId || '')
+    )
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
 }
 
 export function getConversation(
   scopeKey,
-  contactId
+  conversationKey
 ) {
-  return (
-    ensureBuiltins(scopeKey)
-      .conversations[contactId] || null
-  );
+  return locateConversation(scopeKey, conversationKey)?.conversation || null;
 }
 
 export function findTavernContact(sourceId) {
@@ -552,16 +711,25 @@ export function updateGroupConversation(
 
 export function appendMessage(
   scopeKey,
-  contactId,
+  conversationKey,
   role,
   content,
   options = {}
 ) {
-  const data = ensureBuiltins(scopeKey);
+  let located = locateConversation(scopeKey, conversationKey);
 
-  const conv = applyConversationDefaults(
-    data.conversations[contactId] || createPrivateConversation(contactId)
-  );
+  if (!located) {
+    const data = ensureBuiltins(scopeKey);
+    data.conversations[conversationKey] = createPrivateConversation(conversationKey, {
+      conversationId: `private:${conversationKey}`,
+      scopeMode: 'current',
+      boundScopeKey: scopeKey,
+    });
+    saveScope(scopeKey, data);
+    located = locateConversation(scopeKey, conversationKey);
+  }
+
+  const conv = applyConversationDefaults(located.conversation, { scopeKey });
 
   const normalizedRole = String(role || 'user');
   const message = {
@@ -623,46 +791,42 @@ export function appendMessage(
   conv.messages.push(message);
   conv.updatedAt = Date.now();
 
-  data.conversations[contactId] = conv;
-
-  saveScope(scopeKey, data);
+  located.data.conversations[conversationKey] = conv;
+  saveLocatedConversation(scopeKey, located);
 
   return conv;
 }
 
 export function setConversationPinned(scopeKey, conversationKey, pinned) {
-  const data = ensureBuiltins(scopeKey);
-  const conversation = data.conversations[conversationKey];
-  if (!conversation) throw new Error('会话不存在');
+  const located = locateConversation(scopeKey, conversationKey);
+  if (!located) throw new Error('会话不存在');
 
-  applyConversationDefaults(conversation);
+  const conversation = applyConversationDefaults(located.conversation, { scopeKey });
   conversation.pinned = Boolean(pinned);
   conversation.updatedAt = Date.now();
-  saveScope(scopeKey, data);
+  saveLocatedConversation(scopeKey, located);
 
   return conversation;
 }
 
 export function markConversationRead(scopeKey, conversationKey) {
-  const data = ensureBuiltins(scopeKey);
-  const conversation = data.conversations[conversationKey];
-  if (!conversation) return null;
+  const located = locateConversation(scopeKey, conversationKey);
+  if (!located) return null;
 
-  applyConversationDefaults(conversation);
+  const conversation = applyConversationDefaults(located.conversation, { scopeKey });
   conversation.unreadCount = 0;
-  saveScope(scopeKey, data);
+  saveLocatedConversation(scopeKey, located);
 
   return conversation;
 }
 
 export function incrementConversationUnread(scopeKey, conversationKey, amount = 1) {
-  const data = ensureBuiltins(scopeKey);
-  const conversation = data.conversations[conversationKey];
-  if (!conversation) return null;
+  const located = locateConversation(scopeKey, conversationKey);
+  if (!located) return null;
 
-  applyConversationDefaults(conversation);
+  const conversation = applyConversationDefaults(located.conversation, { scopeKey });
   conversation.unreadCount += Math.max(0, Number(amount) || 0);
-  saveScope(scopeKey, data);
+  saveLocatedConversation(scopeKey, located);
 
   return conversation;
 }
@@ -676,8 +840,8 @@ export function getMessageById(scopeKey, conversationKey, messageId) {
 }
 
 export function deleteMessage(scopeKey, conversationKey, messageId) {
-  const data = ensureBuiltins(scopeKey);
-  const conversation = data.conversations[conversationKey];
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
   if (!conversation || !Array.isArray(conversation.messages)) return false;
 
   const index = conversation.messages.findIndex(message => message.id === messageId);
@@ -685,7 +849,7 @@ export function deleteMessage(scopeKey, conversationKey, messageId) {
 
   conversation.messages.splice(index, 1);
   conversation.updatedAt = Date.now();
-  saveScope(scopeKey, data);
+  saveLocatedConversation(scopeKey, located);
   return true;
 }
 
@@ -693,8 +857,8 @@ export function deleteMessages(scopeKey, conversationKey, messageIds) {
   const ids = new Set((Array.isArray(messageIds) ? messageIds : []).map(String));
   if (!ids.size) return 0;
 
-  const data = ensureBuiltins(scopeKey);
-  const conversation = data.conversations[conversationKey];
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
   if (!conversation || !Array.isArray(conversation.messages)) return 0;
 
   const before = conversation.messages.length;
@@ -703,7 +867,7 @@ export function deleteMessages(scopeKey, conversationKey, messageIds) {
 
   if (deleted > 0) {
     conversation.updatedAt = Date.now();
-    saveScope(scopeKey, data);
+    saveLocatedConversation(scopeKey, located);
   }
 
   return deleted;
@@ -711,20 +875,64 @@ export function deleteMessages(scopeKey, conversationKey, messageIds) {
 
 
 export function clearConversationMessages(scopeKey, conversationKey) {
-  const data = ensureBuiltins(scopeKey);
-  const conversation = data.conversations[conversationKey];
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
 
   if (!conversation) {
     return false;
   }
 
-  applyConversationDefaults(conversation);
+  applyConversationDefaults(conversation, { scopeKey });
   conversation.messages = [];
   conversation.unreadCount = 0;
   conversation.updatedAt = Date.now();
 
-  saveScope(scopeKey, data);
+  saveLocatedConversation(scopeKey, located);
   return true;
+}
+
+
+export function updatePrivateConversationSettings(
+  scopeKey,
+  conversationKey,
+  {
+    title,
+    timeMode,
+    bodyContextEnabled,
+    recentChatLimit,
+  } = {}
+) {
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation || conversation.type !== 'private') {
+    throw new Error('私聊不存在');
+  }
+
+  if (title !== undefined) {
+    conversation.title = String(title || '').trim();
+  }
+
+  if (timeMode !== undefined) {
+    const allowed = new Set(['real', 'body', 'none']);
+    if (!allowed.has(String(timeMode))) {
+      throw new Error('无效的时间模式');
+    }
+    conversation.timeMode = String(timeMode);
+  }
+
+  if (bodyContextEnabled !== undefined) {
+    conversation.bodyContextEnabled = Boolean(bodyContextEnabled);
+  }
+
+  if (recentChatLimit !== undefined) {
+    const value = Number(recentChatLimit);
+    if (!Number.isFinite(value)) throw new Error('最近聊天条数必须是数字');
+    conversation.recentChatLimit = Math.max(10, Math.min(9999, Math.round(value)));
+  }
+
+  conversation.updatedAt = Date.now();
+  saveLocatedConversation(scopeKey, located);
+  return conversation;
 }
 
 
