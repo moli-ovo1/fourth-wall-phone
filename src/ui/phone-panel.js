@@ -1500,12 +1500,12 @@ export function createPhonePanel({
             <input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}>
             <span><strong>自动聊天 / 主动私聊</strong><small>角色自主判断是否主动联系；百分比控制主动倾向，不是机械定时器。</small></span>
           </label>
-          <label class="moli-automation-slider"><span>主动私聊频率</span><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}" aria-label="主动私聊频率"></label>
+          <label class="moli-automation-slider"><span>主动私聊频率</span><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}" aria-label="主动私聊频率"><small class="moli-automation-value" data-auto-chat-value>${Number(conversation.automation?.autoChatProbability ?? 30)}%</small></label>
           <label class="moli-choice-card">
             <input type="checkbox" data-commentary-enabled ${conversation.automation?.commentaryEnabled ? 'checked' : ''}>
             <span><strong>自动吐槽正文</strong><small>只针对正文事件吐槽，与主动私聊是两个独立系统。</small></span>
           </label>
-          <label class="moli-automation-slider"><span>正文吐槽频率</span><input type="range" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}" aria-label="正文吐槽频率"></label>
+          <label class="moli-automation-slider"><span>正文吐槽频率</span><input type="range" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}" aria-label="正文吐槽频率"><small class="moli-automation-value" data-commentary-value>${Number(conversation.automation?.commentaryProbability ?? 30)}%</small></label>
           <button type="button" class="moli-info-save-button" data-action="save-private-automation">保存自动行为</button>
         </div>` : ''}
         <button type="button" class="moli-info-setting-row" data-action="toggle-pin">
@@ -1575,7 +1575,7 @@ export function createPhonePanel({
         <label class="moli-form-field"><span>每 N 个有效正文 AI 回合点评</span><input type="number" min="1" max="9999" step="1" data-review-interval value="${Number(conversation.automation?.reviewInterval ?? 5)}"></label>
         <button type="button" class="moli-info-save-button" data-action="save-group-review">保存自动点评</button>
       </div>
-      <div class="moli-info-coming">自动点评真正触发与全员逐人生成将在群聊编排器接通后启用；当前先保存配置，不伪造已运行状态。</div>
+      <div class="moli-info-coming">自动点评已接入正文回合监测：达到设定的 N 个有效 AI 正文回合后，群内成员会依次进行一轮点评。</div>
     `;
   }
 
@@ -4146,6 +4146,34 @@ export function createPhonePanel({
   );
 
 
+  chatInfo.addEventListener('input', event => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || target.type !== 'range') return;
+    if (target.matches('[data-auto-chat-probability]')) {
+      const value = chatInfo.querySelector('[data-auto-chat-value]');
+      if (value) value.textContent = `${target.value}%`;
+    }
+    if (target.matches('[data-commentary-probability]')) {
+      const value = chatInfo.querySelector('[data-commentary-value]');
+      if (value) value.textContent = `${target.value}%`;
+    }
+  });
+
+  const externalConversationUpdate = event => {
+    const detail = event?.detail || {};
+    if (detail.scopeKey && detail.scopeKey !== getScopeKey?.()) return;
+    renderChatList();
+    if (detail.conversationKey && detail.conversationKey === currentContactId) {
+      const chatPage = panel.querySelector('[data-page="chat"]');
+      if (panel.classList.contains('open') && chatPage?.classList.contains('active')) {
+        markConversationRead(getScopeKey?.(), currentContactId);
+        renderChat();
+      }
+    }
+  };
+  windowRef.addEventListener('moli:conversation-updated', externalConversationUpdate);
+
+
 
   renderChatList();
 
@@ -4165,6 +4193,11 @@ open(handleElement) {
   panel.classList.add('open');
   show('home');
 },
+
+    destroy() {
+      windowRef.removeEventListener('moli:conversation-updated', externalConversationUpdate);
+      panel.remove();
+    },
 
     close() {
       panel.classList.remove('open');
