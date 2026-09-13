@@ -89,6 +89,22 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     } else {
       conversation.recentChatLimit = Math.max(10, Math.min(9999, Number(conversation.recentChatLimit)));
     }
+    const memory = conversation.memory && typeof conversation.memory === 'object'
+      ? conversation.memory
+      : {};
+    conversation.memory = {
+      recent: Array.isArray(memory.recent)
+        ? memory.recent.map(item => ({
+            id: String(item?.id || `memory:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`),
+            content: String(item?.content || '').trim(),
+            createdAt: Number(item?.createdAt || Date.now()),
+            updatedAt: Number(item?.updatedAt || item?.createdAt || Date.now()),
+          })).filter(item => item.content)
+        : [],
+      longTermSummary: String(memory.longTermSummary || '').trim(),
+      lastCondensedMessageId: String(memory.lastCondensedMessageId || ''),
+      lastSummarizedAt: Number(memory.lastSummarizedAt || 0),
+    };
   }
 
   return conversation;
@@ -1028,6 +1044,54 @@ export function updatePrivateConversationSettings(
   return conversation;
 }
 
+
+
+export function getConversationMemory(scopeKey, conversationKey) {
+  const conversation = getConversation(scopeKey, conversationKey);
+  if (!conversation || conversation.type !== 'private') return null;
+  applyConversationDefaults(conversation, { scopeKey });
+  return {
+    recent: conversation.memory.recent.map(item => ({ ...item })),
+    longTermSummary: String(conversation.memory.longTermSummary || ''),
+    lastCondensedMessageId: String(conversation.memory.lastCondensedMessageId || ''),
+    lastSummarizedAt: Number(conversation.memory.lastSummarizedAt || 0),
+  };
+}
+
+export function updateConversationMemory(scopeKey, conversationKey, { recent, longTermSummary, lastCondensedMessageId, lastSummarizedAt } = {}) {
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation || conversation.type !== 'private') throw new Error('私聊不存在');
+  applyConversationDefaults(conversation, { scopeKey });
+
+  if (recent !== undefined) {
+    if (!Array.isArray(recent)) throw new Error('近期记忆格式无效');
+    conversation.memory.recent = recent.map(item => ({
+      id: String(item?.id || `memory:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`),
+      content: String(item?.content || '').trim(),
+      createdAt: Number(item?.createdAt || Date.now()),
+      updatedAt: Date.now(),
+    })).filter(item => item.content);
+  }
+  if (longTermSummary !== undefined) conversation.memory.longTermSummary = String(longTermSummary || '').trim();
+  if (lastCondensedMessageId !== undefined) conversation.memory.lastCondensedMessageId = String(lastCondensedMessageId || '');
+  if (lastSummarizedAt !== undefined) conversation.memory.lastSummarizedAt = Math.max(0, Number(lastSummarizedAt) || 0);
+
+  conversation.updatedAt = Date.now();
+  saveLocatedConversation(scopeKey, located);
+  return getConversationMemory(scopeKey, conversationKey);
+}
+
+export function replaceRecentConversationMemories(scopeKey, conversationKey, contents = []) {
+  const now = Date.now();
+  return updateConversationMemory(scopeKey, conversationKey, {
+    recent: (Array.isArray(contents) ? contents : []).map((content, index) => ({
+      id: `memory:${now}:${index}:${Math.random().toString(36).slice(2, 6)}`,
+      content: String(content || '').trim(),
+      createdAt: now + index,
+    })).filter(item => item.content),
+  });
+}
 
 function conversationIncludesContact(conversation, contactId) {
   if (!conversation || !contactId) return false;
