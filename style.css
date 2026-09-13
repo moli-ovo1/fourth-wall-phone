@@ -530,3 +530,10 @@
 @keyframes moliTypingTitle{from{opacity:.55}to{opacity:1}}
 #moli-phone-panel .moli-chat-avatar-wrap{position:relative;flex:0 0 auto}
 #moli-phone-panel .moli-avatar-unread-dot{position:absolute;right:-2px;top:-2px;width:9px;height:9px;border-radius:50%;background:#ff3b30;box-shadow:0 0 0 2px rgba(255,255,255,.92);pointer-events:none}
+
+/* moli52 unread/jump hardening */
+#moli-phone-handle{overflow:visible!important}
+#moli-phone-handle.has-unread .moli-handle-unread-dot{display:block!important;visibility:visible!important;opacity:1!important}
+#moli-phone-panel .moli-chat-avatar-wrap{overflow:visible!important}
+#moli-phone-panel .moli-avatar-jump-hit{border:0;padding:0;margin:0;background:transparent;display:block;flex:0 0 auto}
+#moli-phone-panel .moli-avatar-jump-hit .moli-mini-avatar{cursor:pointer}
