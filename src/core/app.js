@@ -3,8 +3,10 @@ import { createFloatingBall } from '../ui/floating-ball.js';
 import { createPhonePanel } from '../ui/phone-panel.js';
 import { getCurrentScopeKey } from './tavern-scope.js';
 import { createReviewAutomation } from '../automation/review.js';
+import { createPrivateAutomation } from '../automation/private-automation.js';
 import {
   getContacts,
+  getScopeConversations,
   ensureBuiltins,
 } from '../storage/data-store.js';
 
@@ -41,6 +43,7 @@ export function initApp() {
   };
 
   const reviewAutomation = createReviewAutomation({ getScopeKey: getCurrentScopeKey });
+  const privateAutomation = createPrivateAutomation({ getScopeKey: getCurrentScopeKey });
 
   const handleController = createFloatingBall({
     uiState,
@@ -62,6 +65,15 @@ export function initApp() {
       saveUiState(uiState);
     },
   });
+
+  const syncHandleUnread = () => {
+    const scopeKey = getCurrentScopeKey();
+    const hasUnread = Boolean(scopeKey && getScopeConversations(scopeKey).some(item => Number(item?.unreadCount || 0) > 0));
+    handleController.setUnread?.(hasUnread);
+  };
+  window.addEventListener('moli:unread-changed', syncHandleUnread);
+  window.addEventListener('moli:conversation-updated', syncHandleUnread);
+  syncHandleUnread();
 
   const outsidePointerHandler = event => {
     if (!panelController?.isOpen()) return;
@@ -114,6 +126,9 @@ export function initApp() {
 
       destroyPanelController();
       reviewAutomation?.destroy?.();
+      privateAutomation?.destroy?.();
+      window.removeEventListener('moli:unread-changed', syncHandleUnread);
+      window.removeEventListener('moli:conversation-updated', syncHandleUnread);
       handleController.element.remove();
     },
   };
