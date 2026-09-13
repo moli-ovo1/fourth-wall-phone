@@ -1,3 +1,4 @@
+import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 function clean(value) {
   return String(value || '').trim();
 }
@@ -189,6 +190,11 @@ export function buildPrivateGenerationRequest({
     `你正在 moli小手机 的私聊中作为「${name}」回复用户。`,
     '只回复当前角色本人的消息，不要替用户发言，不要输出系统说明。',
   ];
+
+  const onlinePreset = buildOnlinePresetPrompt();
+  if (onlinePreset) {
+    systemBlocks.push(`【moli小手机：线上聊天预设】\n${onlinePreset}`);
+  }
 
   if (intro) {
     systemBlocks.push(`【角色简介】\n${intro}`);
