@@ -92,6 +92,16 @@ const SYSTEM_PROMPT = [
 
 const DEFAULT_BOTTOM = '我将根据你的回应: {{USER_INPUT}}｜按照<meta_protocol>内要求，进行<thinking>和<msg>互动，开始内省:';
 
+
+export function getFourthWallDefaultPromptTemplates() {
+  return {
+    topUser: DEFAULT_TOP_USER,
+    confirm: DEFAULT_CONFIRM,
+    metaProtocol: META_PROTOCOL,
+    bottom: DEFAULT_BOTTOM,
+  };
+}
+
 export function getFourthWallMetaProtocol() {
   return META_PROTOCOL;
 }
@@ -231,7 +241,16 @@ export function buildFourthWallRequest({
     ...recentMemories,
   ].filter(Boolean).join('\n\n');
 
-  const protocol = replaceNames(commentary ? COMMENTARY_PROTOCOL : META_PROTOCOL, characterName);
+  const fourthWallSettings = conversation?.fourthWall && typeof conversation.fourthWall === 'object'
+    ? conversation.fourthWall
+    : {};
+  const templates = fourthWallSettings.promptTemplates && typeof fourthWallSettings.promptTemplates === 'object'
+    ? fourthWallSettings.promptTemplates
+    : {};
+  const topUser = String(templates.topUser || DEFAULT_TOP_USER);
+  const confirm = String(templates.confirm || DEFAULT_CONFIRM);
+  const baseProtocol = commentary ? COMMENTARY_PROTOCOL : String(templates.metaProtocol || META_PROTOCOL);
+  const protocol = replaceNames(baseProtocol, characterName);
   const msg3 = `首先查看你们的历史过往:
 <chat_history>
 ${formatMainChat(recentBody)}
@@ -252,16 +271,18 @@ ${protocol}`.replace(/\|/g, '｜').trim();
     };
     msg4 = prompts[commentary.type] || '';
   } else {
-    msg4 = DEFAULT_BOTTOM.replace('{{USER_INPUT}}', latestPendingUser(conversation?.messages || []));
+    msg4 = String(templates.bottom || DEFAULT_BOTTOM).replace('{{USER_INPUT}}', latestPendingUser(conversation?.messages || []));
   }
 
+  const disableAssistantPrefill = fourthWallSettings.disableAssistantPrefill === true;
+  const finalUser = disableAssistantPrefill && msg4 ? `${msg3}\n\n${msg4}` : msg3;
   return {
     system: SYSTEM_PROMPT,
     messages: [
-      { role: 'user', content: DEFAULT_TOP_USER },
-      { role: 'assistant', content: DEFAULT_CONFIRM },
-      { role: 'user', content: msg3 },
-      ...(msg4 ? [{ role: 'assistant', content: msg4 }] : []),
+      { role: 'user', content: replaceNames(topUser, characterName) },
+      { role: 'assistant', content: confirm },
+      { role: 'user', content: finalUser },
+      ...(!disableAssistantPrefill && msg4 ? [{ role: 'assistant', content: msg4 }] : []),
     ],
     meta: {
       fourthWallProtocolEnabled: true,
