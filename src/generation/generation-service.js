@@ -3,6 +3,7 @@ import {
   getContacts,
   getConversation,
   getConversationMemory,
+  getScopeConversations,
 } from '../storage/data-store.js';
 import { getApiSettings, getApiPreset, resolveApiRuntimeConfig } from '../storage/api-settings.js';
 import { generateProviderText } from '../api/providers/provider-registry.js';
@@ -128,7 +129,15 @@ export async function generatePrivateReply({
   // 同一联系人可以拥有彼此独立的多个私聊现实。
   // 在用户显式开放跨会话记忆之前，不默认把“同一联系人”的其他私聊注入当前生成，
   // 避免现实陪伴 / 正文沉浸等不同 Conversation 相互污染。
-  const otherContextSources = [];
+  const otherContextSources = getScopeConversations(scopeKey)
+    .filter(source => source?.conversationKey !== conversationKey)
+    .filter(source => source?.type === 'group' && (source.memberIds || []).map(String).includes(String(contact.id)))
+    .map(source => ({
+      type: 'group', name: source.name || '未命名群聊',
+      messages: (source.messages || []).slice(-12).map(message => ({ ...message, senderName: message?.senderSnapshot?.name || '' })),
+    }))
+    .filter(source => source.messages.length)
+    .slice(-2);
 
   const recentBody = conversation.bodyContextEnabled === false
     ? null
@@ -316,10 +325,15 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
     longTermMemoryText: baiBaiMemory?.text || '',
     longTermMemoryCoverage: baiBaiMemory?.coverage || null,
     phoneMemory: null,
+    otherContextSources: getScopeConversations(scopeKey)
+      .filter(source => source?.type === 'private' && String(source.contactId || '') === String(contact.id))
+      .map(source => ({ type: 'private', name: contactLabel(contact), messages: (source.messages || []).slice(-12).map(message => ({ ...message, senderName: message?.senderSnapshot?.name || contactLabel(contact) })) }))
+      .filter(source => source.messages.length)
+      .slice(-2),
     historyLimit: conversation.recentChatLimit || 100,
   });
   const selfRule = contact?.kind === 'tavern' ? `\n【本人视角铁律】正文中与你同名、同身份的角色就是你本人。谈到正文中的自己时必须保持第一人称与本人立场，不得称自己为“他/她”“这个角色”或切换成作者、分析员、旁观者。你可以辩解、隐瞒、否认、反思、恼火或拒绝讨论，但必须是你本人在说话。分析剧情不是普通 Tavern 角色的默认职责。\n` : '';
-  request.system = `你现在位于群聊「${String(conversation.name || '群聊')}」。你只扮演「${contactLabel(contact)}」，绝不能替其他群成员或用户发言。其他成员刚刚说出的内容属于真实的同轮群消息；要自然接住前文，不要把群聊变成分别回答用户的独立问答。可以赞同、反驳、补充、调侃、转移话题，也可以保持简短。\n当前群成员：${members.map(contactLabel).join('、')}\n${selfRule}\n${request.system}`;
+  request.system = `【群聊短消息规则】本轮你若被选中，只发送 1 个气泡，正文最多 80 个中文字符（标点计入近似长度）。不要写小作文，不要拆成多条消息。\n你现在位于群聊「${String(conversation.name || '群聊')}」。你只扮演「${contactLabel(contact)}」，绝不能替其他群成员或用户发言。其他成员刚刚说出的内容属于真实的同轮群消息；要自然接住前文，不要把群聊变成分别回答用户的独立问答。可以赞同、反驳、补充、调侃、转移话题，也可以保持简短。\n当前群成员：${members.map(contactLabel).join('、')}\n${selfRule}\n${request.system}`;
   return request;
 }
 
@@ -378,7 +392,7 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
       onDelta: (chunk, fullText) => onDelta?.(chunk, fullText, speaker),
     });
     const { parseGeneratedMessages } = await import('./message-parser.js');
-    const generated = parseGeneratedMessages(result.text).slice(0, 3);
+    const generated = parseGeneratedMessages(result.text).slice(0, 1).map(text => String(text).slice(0, 80));
     if (!generated.length) continue;
     replies.push({ contact: speaker, messages: generated, text: result.text });
     generated.forEach(content => workingMessages.push({
@@ -428,7 +442,7 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
       onDelta: (chunk, fullText) => onDelta?.(chunk, fullText, speaker),
     });
     const { parseGeneratedMessages } = await import('./message-parser.js');
-    const generated = parseGeneratedMessages(result.text).slice(0, 2);
+    const generated = parseGeneratedMessages(result.text).slice(0, 1).map(text => String(text).slice(0, 100));
     if (!generated.length) continue;
     replies.push({ contact: speaker, messages: generated, text: result.text });
     generated.forEach(content => workingMessages.push({
