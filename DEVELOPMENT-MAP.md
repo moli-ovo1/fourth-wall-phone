@@ -1824,17 +1824,3 @@ moli39 不能移除或回退：Conversation 四概念修正、主/Contact API �
 ## 下一节点
 
 实机确认内置人格生成与更新提示后，进入 **群聊轻编排 + 逐人生成**。
-
-# moli47 节点：第四面墙纠偏 + 自动行为设置补齐
-
-## 已落地
-- 第四面墙不再使用 moli46 的通用幕后分析 Prompt，改为按 LittleWhiteBox Fourth Wall 的核心行为结构重新实现：语C搭档/皮下私聊、正文作为共同剧本背景、场外关系历史、时间与消息间隔、自然短聊、内部自检与统一手机消息输出。
-- 私聊 Conversation 增加 automation 持久化默认值与兼容读取：commentaryEnabled / commentaryProbability / proactiveEnabled / proactiveFrequency。
-- 当前聊天设置页增加自动吐槽与主动私聊设置；主动私聊频率 0–100 只作为自主判断的主动倾向，不等于机械定时概率。
-- 群聊 Conversation 增加 commentaryEnabled / commentaryProbability / reviewEnabled / reviewEveryTurns，并在群聊信息页可直接编辑保存。
-- 旧 Conversation 没有 automation 字段时惰性补默认值，不迁移/删除旧消息。
-
-## 仍需后续生成节点执行
-- 自动吐槽真正监听正文事件、去重、概率命中和后台写入消息，由 commentary/event-bridge 节点实现。
-- 自动点评真正按有效正文回合计数并全员逐人生成，必须在群聊轻编排 + 逐人生成后接通。
-- 主动私聊真正的角色自主 SEND/SKIP 调度仍属于自动聊天节点。本节点先把用户要求的 Conversation 级开关与频率控制正式落到数据/UI。
