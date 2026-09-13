@@ -464,3 +464,26 @@
 #moli-phone-panel .moli-api-param-grid .moli-api-label{margin-top:0}
 #moli-phone-panel [data-api-params-body][hidden]{display:none!important}
 @media (max-width:420px){#moli-phone-panel .moli-api-param-grid{grid-template-columns:1fr}}
+
+/* moli39: Tavern role source control */
+#moli-phone-panel [data-contact-role-sources][hidden],#moli-phone-panel [data-contact-intro-field][hidden]{display:none!important}
+#moli-phone-panel .moli-source-section{margin:0 0 12px;border-radius:14px;background:#fff;overflow:hidden;border:1px solid #e7e7e7}
+#moli-phone-panel .moli-source-section-title{padding:13px 14px 6px;font-size:13px;font-weight:700;color:#222}
+#moli-phone-panel .moli-source-section-note{padding:0 14px 11px;font-size:11px;line-height:1.5;color:#888}
+#moli-phone-panel .moli-role-source-row{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;padding:0 12px 0 0;background:#fff}
+#moli-phone-panel .moli-role-source-view{min-width:0;flex:1;border:0;background:transparent;padding:11px 0 11px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;color:#222}
+#moli-phone-panel .moli-role-source-view>span{min-width:0;display:flex;flex-direction:column;gap:2px}
+#moli-phone-panel .moli-role-source-view strong{font-size:13px;font-weight:500}
+#moli-phone-panel .moli-role-source-view small{font-size:10px;color:#999}
+#moli-phone-panel .moli-role-source-view>b{font-size:18px;color:#aaa;font-weight:400}
+#moli-phone-panel .moli-role-source-row.is-empty .moli-role-source-view strong{color:#888}
+#moli-phone-panel .moli-role-source-switch{position:relative;width:38px;height:22px;flex:0 0 38px}
+#moli-phone-panel .moli-role-source-switch input{position:absolute;opacity:0;pointer-events:none}
+#moli-phone-panel .moli-role-source-switch span{position:absolute;inset:0;border-radius:999px;background:#d1d1d1;transition:.16s}
+#moli-phone-panel .moli-role-source-switch span:after{content:"";position:absolute;width:18px;height:18px;left:2px;top:2px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18);transition:.16s}
+#moli-phone-panel .moli-role-source-switch input:checked+span{background:#222}
+#moli-phone-panel .moli-role-source-switch input:checked+span:after{transform:translateX(16px)}
+#moli-phone-panel .moli-source-placeholder{width:100%;border:0;border-top:1px solid #eee;background:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;text-align:left;color:#777}
+#moli-phone-panel .moli-source-placeholder strong{font-weight:400;font-size:11px;color:#aaa}
+#moli-phone-panel .moli-source-detail-meta{padding:10px 12px;border-radius:12px;background:#fff;font-size:11px;line-height:1.5;color:#777}
+#moli-phone-panel .moli-source-detail-text{white-space:pre-wrap;word-break:break-word;margin:10px 0 0;padding:14px;border-radius:12px;background:#fff;border:1px solid #e7e7e7;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#222;min-height:180px}

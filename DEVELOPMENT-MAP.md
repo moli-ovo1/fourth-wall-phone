@@ -1652,3 +1652,33 @@ moli38：酒馆角色人格来源开关 + 世界书地基。进入前继续以�
 - 回归原则新增：后续每个 patch 必须检查上一节点已完成入口，禁止“新包让旧功能消失”。
 
 下一节点在确认 moli38 实机行为后，再进入酒馆角色来源开关 / 世界书地基；若 Conversation 仍有交互问题，优先继续修复，不向后堆功能。
+
+
+# moli39 节点：Tavern 角色资料来源控制页
+
+- 以应用 moli38 后的完整仓库 `(16)` 为唯一执行基线；状态栏预设已确认存在并作为回归项保留。
+- `src/storage/data-store.js`
+  - Tavern Contact 新增 `roleSources`，默认 Description / Personality / Scenario / Example Dialogue / System Prompt / Post-History / worldBook / longTermMemory 全开；
+  - 老 Contact 懒迁移补默认值；
+  - 关闭来源不删除 `contact.source.roleFidelity` 快照。
+- `src/generation/prompt-builder.js`
+  - Role Fidelity 按 `roleSources` 分项注入；
+  - Tavern `intro` 不再进入生成 Prompt；
+  - Tavern `prompt` 明确作为“自定义附加 Prompt”；
+  - System Prompt / Post-History 开启时仍受 moli 线上聊天输出协议约束。
+- `src/ui/phone-panel.js`
+  - Tavern 入口改名“角色资料与提示词”；
+  - 增加六个独立角色卡来源开关；
+  - 每项可进入只读原文查看页，并显示自动跟随/最近同步快照/未提供状态；
+  - Tavern 页面隐藏联系人简介编辑，避免误把 UI 简介理解成模型人格来源；
+  - 世界书、柏宝书只展示架构占位并明确“尚未接入”，不伪装成功能完成。
+- `style.css`
+  - 增加来源列表、开关和只读原文页样式。
+
+## 回归要求
+
+moli39 不能移除或回退：Conversation 四概念修正、主/Contact API 引用、状态栏预设与 Contact 状态栏、已有消息/转发/搜索能力。
+
+## 下一节点
+
+在实机确认 moli39 来源开关与原文查看正常后，再实现世界书读取地基；不得先把所有世界书条目无条件注入 Prompt。

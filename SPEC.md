@@ -2217,3 +2217,54 @@ API 预设同样做惰性兼容读取，不让 moli33 已保存配置消失。
 ## 4. 状态栏回归规则
 
 moli36 已实现的“全局状态栏预设 + Contact 状态栏默认配置”属于已完成能力，不得因后续 Conversation 校准而消失。moli38 恢复该 UI 与读写链。Conversation 状态历史/提取/展示仍属于后续阶段，不在本节宣称完成。
+
+
+# moli39 现行规则：角色资料卡 = Contact 来源控制中心
+
+> 本节正式取代历史章节中把“最近正文 / 场外聊天历史”列为 Contact 人格来源开关、以及给 Tavern 角色再写一份“大人格 Prompt”的旧表述。
+
+## 1. 三层职责
+
+- **Contact**：这个人是谁，以及允许哪些稳定角色来源参与生成。
+- **Conversation**：这一次聊天发生在哪个世界/时间线，是否读取当前正文，以及读取多少当前聊天历史。
+- **Role Fidelity / Sources**：Tavern 角色生成时从角色卡哪些字段还原人格。
+
+角色资料卡不是第二张角色卡。Tavern 角色的人格 Source of Truth 始终是 SillyTavern 角色卡及其关联资料；moli小手机只负责读取、筛选、补充与 Conversation 级上下文拼装。
+
+## 2. Tavern「角色资料与提示词」
+
+Tavern 联系人不显示竞争性的“大人格 Prompt”。其页面包含独立来源开关：
+
+- Description / 角色设定
+- Personality / 性格
+- Scenario / 场景
+- Example Dialogue
+- System Prompt
+- Post-History Instructions
+
+默认全部开启。关闭仅表示生成时不注入；不得删除 `contact.source.roleFidelity` 中已保存的快照。每项可查看当前保存的原文，只读；来源角色存在时自动刷新，来源丢失时保留最后一次同步快照。
+
+System Prompt 与 Post-History Instructions 必须单独暴露。即使开启，其中小说正文格式、第三人称、篇幅等要求也不得覆盖 moli小手机的线上聊天输出协议。
+
+## 3. 动态上下文归 Conversation
+
+以下内容不得再作为 Contact 来源开关：
+
+- 最近正文：由 Conversation 的“读取当前正文”控制；
+- 当前场外聊天历史：由当前 Conversation 的 messages 与“最近聊天读取上限”控制；
+- 时间模式、当前存档/全局归属：均属于 Conversation。
+
+## 4. Intro 与附加 Prompt 语义
+
+- Tavern 联系人的 `intro` 是联系人简介/展示信息，默认不注入模型；
+- 真正要影响 Tavern 角色生成的用户补充统一写入“自定义附加 Prompt”；
+- 自定义联系人没有角色卡，仍保留人格 Prompt；
+- 内置人格仍使用其内置人格 Prompt 体系。
+
+## 5. 世界书与长期剧情记忆边界
+
+本节点只固定 UI/架构位置，不宣称已经接通世界书或柏宝书。
+
+- 世界书资料卡开关未来表示“允许使用哪些条目”的白名单；
+- 本轮实际注入仍需按常驻、关键词、当前正文/聊天等触发规则激活，禁止把全部勾选条目每轮无条件塞入 API；
+- 柏宝书属于 Contact 的长期剧情记忆来源，具体 Provider 接入另行实现。
