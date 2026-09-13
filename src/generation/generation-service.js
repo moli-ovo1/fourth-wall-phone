@@ -15,6 +15,7 @@ import {
   getRecentTavernBody,
 } from '../core/tavern-context.js';
 import { buildPrivateGenerationRequest } from './prompt-builder.js';
+import { prepareFourthWallContext, getFourthWallContextStats } from './fourth-wall-context-service.js';
 import { getActivatedTavernWorldBook } from '../core/tavern-worldbook.js';
 import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
@@ -143,14 +144,14 @@ export async function generatePrivateReply({
     .filter(source => source.messages.length)
     .slice(-2);
 
-  const recentBody = conversation.bodyContextEnabled === false
-    ? null
-    : getRecentTavernBody({
-        messageLimit: isFourthWall
-          ? Math.max(1, Math.min(9999, Number(conversation.fourthWall?.maxChatLayers) || 20))
-          : 24,
-        charLimit: isFourthWall ? 64000 : 24000,
-      });
+  const recentBody = isFourthWall
+    ? getRecentTavernBody({
+        messageLimit: Math.max(1, Math.min(9999, Number((contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.maxChatLayers) || 20)),
+        charLimit: 1000000,
+      })
+    : (conversation.bodyContextEnabled === false
+        ? null
+        : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 }));
 
   const worldBookScanParts = (conversation.messages || [])
     .slice(-Math.max(1, Number(conversation.recentChatLimit) || 100))
@@ -177,19 +178,32 @@ export async function generatePrivateReply({
     )
   ) ? getBaiBaiLongTermMemory() : null;
 
-  const request = buildPrivateGenerationRequest({
-    contact,
-    conversation,
-    otherContextSources,
-    recentBody,
-    worldBookText: activatedWorldBook?.text || '',
-    longTermMemoryText: baiBaiMemory?.text || '',
-    longTermMemoryCoverage: baiBaiMemory?.coverage || null,
-    phoneMemory: getConversationMemory(scopeKey, conversationKey),
-    historyLimit: conversation.recentChatLimit || 100,
-    fourthWallCharacterName: currentTavernCharacter?.name || '',
-    fourthWallCommentary,
-  });
+  const buildRequest = () => {
+    const currentConversation = getConversation(scopeKey, conversationKey) || conversation;
+    return buildPrivateGenerationRequest({
+      contact,
+      conversation: currentConversation,
+      otherContextSources,
+      recentBody,
+      worldBookText: activatedWorldBook?.text || '',
+      longTermMemoryText: baiBaiMemory?.text || '',
+      longTermMemoryCoverage: baiBaiMemory?.coverage || null,
+      phoneMemory: getConversationMemory(scopeKey, conversationKey),
+      historyLimit: currentConversation.recentChatLimit || 100,
+      fourthWallCharacterName: currentTavernCharacter?.name || '',
+      fourthWallCommentary,
+    });
+  };
+
+  let request = isFourthWall
+    ? await prepareFourthWallContext({
+        scopeKey,
+        conversationKey,
+        config,
+        signal,
+        buildRequest,
+      })
+    : buildRequest();
 
   if (String(automationInstruction || '').trim() && !fourthWallCommentary) {
     request.messages = [...(request.messages || []), { role: 'user', content: String(automationInstruction).trim() }];
@@ -210,10 +224,10 @@ export async function generatePrivateReply({
       systemPrompt: String(request?.system || ''),
     }) || '').trim();
     if (!text) throw new Error('酒馆当前 API 返回了空回复');
-    if (!(isFourthWall && conversation.fourthWall?.stream === false)) onDelta?.(text, text);
+    if (!(isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false)) onDelta?.(text, text);
     result = { text, raw: null };
   } else {
-    result = await generateProviderText(config, request, { signal, onDelta: isFourthWall && conversation.fourthWall?.stream === false ? undefined : onDelta });
+    result = await generateProviderText(config, request, { signal, onDelta: isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false ? undefined : onDelta });
   }
 
   return {
@@ -222,6 +236,76 @@ export async function generatePrivateReply({
     requestMeta: request.meta,
   };
 }
+
+
+function fourthWallRuntime(scopeKey, conversationKey) {
+  const conversation = getConversation(scopeKey, conversationKey);
+  if (!conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') {
+    throw new Error('当前不是皮下会话');
+  }
+  const storedContact = findContact(conversation.contactId);
+  const contact = hydratedContact(storedContact);
+  assertContactReady(contact);
+  let rawConfig = getApiSettings();
+  if (contact?.apiOverride?.enabled === true) {
+    const preset = getApiPreset(contact.apiOverride.presetId);
+    if (preset?.config) rawConfig = preset.config;
+    else if (contact.apiOverride.config) rawConfig = contact.apiOverride.config;
+    else throw new Error('联系人选择的 API 配置已不存在，请重新选择');
+  }
+  const config = resolveApiRuntimeConfig(rawConfig);
+  assertApiConfig(config);
+  const currentTavernCharacter = getCurrentTavernCharacterSnapshot();
+  const chatSettings = contact.fourthWallChatSettingsInitialized
+    ? contact.fourthWallChatSettings
+    : (conversation.fourthWall || contact.fourthWallChatSettings);
+  const recentBody = getRecentTavernBody({
+    messageLimit: Math.max(1, Math.min(9999, Number(chatSettings?.maxChatLayers) || 20)),
+    charLimit: 1000000,
+  });
+  const buildRequest = () => {
+    const currentConversation = getConversation(scopeKey, conversationKey) || conversation;
+    return buildPrivateGenerationRequest({
+      contact,
+      conversation: currentConversation,
+      otherContextSources: [],
+      recentBody,
+      worldBookText: '',
+      longTermMemoryText: '',
+      longTermMemoryCoverage: null,
+      phoneMemory: getConversationMemory(scopeKey, conversationKey),
+      historyLimit: currentConversation.recentChatLimit || 100,
+      fourthWallCharacterName: currentTavernCharacter?.name || '',
+      fourthWallCommentary: null,
+      fourthWallAllowNoPendingUser: true,
+    });
+  };
+  return { conversation, contact, config, buildRequest };
+}
+
+export async function inspectFourthWallContext({ scopeKey, conversationKey } = {}) {
+  const runtime = fourthWallRuntime(scopeKey, conversationKey);
+  return getFourthWallContextStats({
+    scopeKey,
+    conversationKey,
+    buildRequest: runtime.buildRequest,
+  });
+}
+
+export async function summarizeFourthWallMemory({ scopeKey, conversationKey, signal, onPhase } = {}) {
+  const runtime = fourthWallRuntime(scopeKey, conversationKey);
+  await prepareFourthWallContext({
+    scopeKey,
+    conversationKey,
+    config: runtime.config,
+    signal,
+    buildRequest: runtime.buildRequest,
+    manual: true,
+    onPhase,
+  });
+  return inspectFourthWallContext({ scopeKey, conversationKey });
+}
+
 
 function contactLabel(contact) {
   return String(contact?.remark || contact?.displayName || contact?.name || contact?.source?.originalName || '联系人').trim();

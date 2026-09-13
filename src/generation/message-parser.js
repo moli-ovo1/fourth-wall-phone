@@ -8,32 +8,40 @@ function stripCodeFence(value) {
 export function parseFourthWallResponse(rawText) {
   const raw = stripCodeFence(rawText);
   if (!raw) return { thinking: '', messages: [] };
+  const msgIndex = raw.toLowerCase().indexOf('<msg');
+  const thinkingSource = msgIndex < 0 ? raw : raw.slice(0, msgIndex);
+  const thinkingMatch = thinkingSource.match(/<(?:think|thinking)\b[^>]*>([\s\S]*?)(?:<\/(?:think|thinking)>|$)/i);
+  const thinking = String(thinkingMatch?.[1] || (msgIndex > 0 ? thinkingSource : '')).trim()
+    .replace(/^<(?:think|thinking)\b[^>]*>/i, '').trim();
 
-  const thinkingMatch = raw.match(/<(?:think|thinking)\b[^>]*>([\s\S]*?)(?:<\/(?:think|thinking)>|$)/i);
-  const thinking = String(thinkingMatch?.[1] || '').trim();
-  const messages = [];
-  const pattern = /<(?:message|msg)\b[^>]*>([\s\S]*?)<\/(?:message|msg)>/gi;
+  const parts = [];
+  const pattern = /<msg\b[^>]*>([\s\S]*?)<\/msg>/gi;
   let match;
   while ((match = pattern.exec(raw))) {
-    const content = String(match[1] || '').trim();
-    if (content) messages.push(content);
+    const value = String(match[1] || '').trim();
+    if (value) parts.push(value);
   }
-
-  if (messages.length) return { thinking, messages };
-
-  const cleaned = raw
-    .replace(/<(?:think|thinking)\b[^>]*>[\s\S]*?(?:<\/(?:think|thinking)>|$)/gi, '')
-    .replace(/<\/?(?:message|msg)\b[^>]*>/gi, '')
-    .trim();
-  return { thinking, messages: cleaned ? [cleaned] : [] };
+  let message = parts.join('\n').trim();
+  if (!message) {
+    const open = raw.toLowerCase().lastIndexOf('<msg');
+    if (open >= 0) {
+      const contentIndex = raw.indexOf('>', open);
+      if (contentIndex >= 0) {
+        const remainder = raw.slice(contentIndex + 1);
+        const close = remainder.toLowerCase().indexOf('</msg>');
+        message = (close < 0 ? remainder : remainder.slice(0, close)).trim();
+      }
+    }
+  }
+  if (!message) {
+    message = raw.replace(/<(?:think|thinking)\b[^>]*>[\s\S]*?(?:<\/(?:think|thinking)>|$)/gi, '').trim();
+  }
+  return { thinking, messages: message ? [message] : [] };
 }
 
 export function previewFourthWallResponse(rawText) {
   const parsed = parseFourthWallResponse(rawText);
-  return {
-    thinking: parsed.thinking,
-    message: parsed.messages.join('\n').trim(),
-  };
+  return { thinking: parsed.thinking, message: parsed.messages[0] || '' };
 }
 
 export function parseGeneratedMessages(rawText) {

@@ -183,6 +183,7 @@ export function buildPrivateGenerationRequest({
   historyLimit = 60,
   fourthWallCharacterName = '',
   fourthWallCommentary = null,
+  fourthWallAllowNoPendingUser = false,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
     throw new Error('当前只支持私聊生成');
@@ -199,7 +200,7 @@ export function buildPrivateGenerationRequest({
     ? conversation.messages
     : [];
 
-  if (!pendingUserCount(messages) && !fourthWallCommentary) {
+  if (!pendingUserCount(messages) && !fourthWallCommentary && !(isFourthWall && fourthWallAllowNoPendingUser)) {
     throw new Error('没有等待回复的新消息');
   }
 
@@ -209,8 +210,17 @@ export function buildPrivateGenerationRequest({
       recentBody,
       phoneMemory,
       historyLimit,
-      characterName: fourthWallCharacterName || '当前角色',
+      characterName: fourthWallCharacterName || 'Assistant',
       commentary: fourthWallCommentary,
+      globalSettings: {
+        ...(contact.fourthWallGlobalSettings || {}),
+        promptTemplates: Object.values(contact.fourthWallGlobalSettings?.promptTemplates || {}).some(value => String(value || '').trim())
+          ? contact.fourthWallGlobalSettings.promptTemplates
+          : (conversation.fourthWall?.promptTemplates || {}),
+      },
+      chatSettings: contact.fourthWallChatSettingsInitialized
+        ? contact.fourthWallChatSettings
+        : (conversation.fourthWall || contact.fourthWallChatSettings || {}),
     });
   }
 
