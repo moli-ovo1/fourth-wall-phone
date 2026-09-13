@@ -657,14 +657,6 @@ export function createPhonePanel({
           <input type="checkbox" data-conversation-body-context>
         </label>
 
-        <div class="moli-conversation-section" data-automation-private-settings>
-          <div class="moli-conversation-section-title">自动行为</div>
-          <label class="moli-switch-row moli-conversation-switch"><span><strong>自动吐槽</strong><small>正文事件后按本聊天自己的概率判定；上帝 / 人类 / 吃瓜观察员不提供此项。</small></span><input type="checkbox" data-conversation-commentary-enabled></label>
-          <label class="moli-form-field"><span>吐槽触发概率（0–100%）</span><input type="number" min="0" max="100" step="1" inputmode="numeric" data-conversation-commentary-probability></label>
-          <label class="moli-switch-row moli-conversation-switch"><span><strong>主动私聊</strong><small>供酒馆角色 / 自创联系人自主判断是否主动联系；频率只表示主动倾向，不是机械定时器。</small></span><input type="checkbox" data-conversation-proactive-enabled></label>
-          <label class="moli-form-field"><span>主动私聊频率（0–100）</span><input type="range" min="0" max="100" step="1" data-conversation-proactive-frequency><small data-conversation-proactive-frequency-label>35</small></label>
-        </div>
-
         <label class="moli-form-field moli-conversation-limit-field">
           <span>最近聊天读取上限</span>
           <input type="number" min="10" max="9999" step="1" inputmode="numeric" data-conversation-recent-limit>
@@ -1422,22 +1414,6 @@ export function createPhonePanel({
       conversationBodyContext.checked = conversation.bodyContextEnabled !== false;
     }
 
-    const automation = conversation.automation || {};
-    const item = contact(conversation.contactId || currentContactId);
-    const autoBox = panel.querySelector('[data-automation-private-settings]');
-    const commentaryAllowed = !['builtin:writer','builtin:guide','builtin:redpen'].includes(String(item?.id || ''));
-    if (autoBox) autoBox.hidden = !commentaryAllowed && item?.kind === 'builtin';
-    const ce = panel.querySelector('[data-conversation-commentary-enabled]');
-    const cp = panel.querySelector('[data-conversation-commentary-probability]');
-    const pe = panel.querySelector('[data-conversation-proactive-enabled]');
-    const pf = panel.querySelector('[data-conversation-proactive-frequency]');
-    const pfl = panel.querySelector('[data-conversation-proactive-frequency-label]');
-    if (ce) ce.checked = Boolean(automation.commentaryEnabled);
-    if (cp) cp.value = String(automation.commentaryProbability ?? 30);
-    if (pe) pe.checked = Boolean(automation.proactiveEnabled);
-    if (pf) pf.value = String(automation.proactiveFrequency ?? 35);
-    if (pfl) pfl.textContent = String(automation.proactiveFrequency ?? 35);
-
     if (conversationRecentLimit) {
       const value = Number(conversation.recentChatLimit);
       conversationRecentLimit.value = Number.isFinite(value)
@@ -1471,10 +1447,6 @@ export function createPhonePanel({
         timeMode: selectedTimeMode,
         bodyContextEnabled: Boolean(conversationBodyContext?.checked),
         recentChatLimit: normalizedLimit,
-        commentaryEnabled: Boolean(panel.querySelector('[data-conversation-commentary-enabled]')?.checked),
-        commentaryProbability: Number(panel.querySelector('[data-conversation-commentary-probability]')?.value || 0),
-        proactiveEnabled: Boolean(panel.querySelector('[data-conversation-proactive-enabled]')?.checked),
-        proactiveFrequency: Number(panel.querySelector('[data-conversation-proactive-frequency]')?.value || 0),
       });
       toast('当前聊天设置已保存');
       show('info');
@@ -1581,14 +1553,7 @@ export function createPhonePanel({
         <strong>›</strong>
       </button>
 
-      <div class="moli-conversation-section">
-        <div class="moli-conversation-section-title">自动行为</div>
-        <label class="moli-switch-row"><span><strong>自动吐槽</strong></span><input type="checkbox" data-group-commentary-enabled ${conversation.automation?.commentaryEnabled ? 'checked' : ''}></label>
-        <label class="moli-form-field"><span>吐槽概率（0–100%）</span><input type="number" min="0" max="100" value="${escapeHtml(String(conversation.automation?.commentaryProbability ?? 30))}" data-group-commentary-probability></label>
-        <label class="moli-switch-row"><span><strong>自动点评</strong><small>只属于群聊；按有效 AI 正文回合计数。</small></span><input type="checkbox" data-group-review-enabled ${conversation.automation?.reviewEnabled ? 'checked' : ''}></label>
-        <label class="moli-form-field"><span>每 N 个正文回合点评</span><input type="number" min="1" max="9999" value="${escapeHtml(String(conversation.automation?.reviewEveryTurns ?? 10))}" data-group-review-turns></label>
-        <button type="button" class="moli-info-save-button" data-action="save-group-automation">保存自动行为设置</button>
-      </div>
+      <div class="moli-info-coming">自动吐槽、自动点评等设置将在后续阶段继续接入。</div>
     `;
   }
 
@@ -3937,12 +3902,6 @@ export function createPhonePanel({
       openGroupMemberEditor('remove');
     } else if (action === 'save-group-name') {
       saveGroupName();
-    } else if (action === 'save-group-automation') {
-      const scopeKey = getScopeKey?.(); const c = currentConversation();
-      if (scopeKey && c?.type === 'group') {
-        updateGroupConversation(scopeKey, c.id, { commentaryEnabled: Boolean(chatInfo.querySelector('[data-group-commentary-enabled]')?.checked), commentaryProbability: Number(chatInfo.querySelector('[data-group-commentary-probability]')?.value || 0), reviewEnabled: Boolean(chatInfo.querySelector('[data-group-review-enabled]')?.checked), reviewEveryTurns: Number(chatInfo.querySelector('[data-group-review-turns]')?.value || 10) });
-        toast('自动行为设置已保存'); renderChatInfo();
-      }
     } else if (action === 'change-contact-avatar') {
       infoAvatarInput.click();
     } else if (action === 'restore-source-avatar') {
@@ -3966,8 +3925,6 @@ export function createPhonePanel({
       show('contact-memory-settings');
     }
   });
-
-  panel.addEventListener('input', event => { if (event.target?.matches?.('[data-conversation-proactive-frequency]')) { const label = panel.querySelector('[data-conversation-proactive-frequency-label]'); if (label) label.textContent = event.target.value; } });
 
   infoAvatarInput.onchange = () => {
     const file = infoAvatarInput.files?.[0];
