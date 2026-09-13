@@ -1238,3 +1238,39 @@ Generation / Prompt 接入时使用 Data Store 的统一联系人上下文来源
 > ⚠️ 上下文预警：我已经无法完整确认这个模块上次 SPEC 之后的全部设计。请先更新 / 读取 SPEC 或回到原设计节点确认，再继续写代码。
 
 禁止“差不多记得”然后自行补设计。
+
+---
+
+# moli30 节点：默认线上聊天预设
+
+## 已接入
+
+- `src/storage/prompt-settings.js`
+  - `moli-phone:prompt-settings:v1`
+  - 全局线上预设总开关
+  - 8 个完整默认 Prompt 条目
+  - 条目独立开关 / 编辑 / 恢复默认
+- `src/generation/prompt-builder.js`
+  - 私聊生成正式注入启用的线上聊天预设
+- `src/generation/message-parser.js`
+  - `<message>...</message>` 多气泡解析
+  - 无标签时单气泡容错
+  - 流式预览隐藏 message 标签
+- `src/ui/phone-panel.js`
+  - 设置 → 提示词与预设 → 线上聊天预设
+  - 总开关、条目开关、完整 Prompt 编辑、恢复默认
+  - 生成完成后把多 message 解析为多个真实 assistant 气泡
+- `style.css`
+  - 预设列表与编辑页基础样式
+
+## 本节点只记录、暂不提前实现
+
+- 日记 / 长期总结实际生成与编辑 UI
+- 柏宝书接入
+- Conversation 级最近消息读取上限（设计：默认 100，10～9999）
+- Conversation 多私聊实例 / 随当前正文 / 全局陪伴
+- Conversation 级时间模式
+- 自动吐槽 / 自动聊天
+- 最终内置人格数量
+
+这些项目依赖后续 Conversation / Context / Memory 数据结构，不应为了当前预设 UI 冒险修改现有 scope schema。
