@@ -71,16 +71,20 @@ function roleFidelityBlocks(contact) {
   const fidelity = contact?.source?.roleFidelity;
   if (!fidelity || typeof fidelity !== 'object') return [];
 
+  const roleSources = contact?.roleSources && typeof contact.roleSources === 'object'
+    ? contact.roleSources
+    : {};
+  const enabled = key => roleSources[key] !== false;
   const blocks = [];
 
   const identityParts = [
-    fidelity.description
+    enabled('description') && fidelity.description
       ? `【角色设定 / Description】\n${clip(fidelity.description)}`
       : '',
-    fidelity.personality
+    enabled('personality') && fidelity.personality
       ? `【性格 / Personality】\n${clip(fidelity.personality)}`
       : '',
-    fidelity.scenario
+    enabled('scenario') && fidelity.scenario
       ? `【场景 / Scenario】\n${clip(fidelity.scenario)}`
       : '',
   ].filter(Boolean);
@@ -92,21 +96,21 @@ function roleFidelityBlocks(contact) {
     );
   }
 
-  if (fidelity.systemPrompt) {
+  if (enabled('systemPrompt') && fidelity.systemPrompt) {
     blocks.push(
-      `【角色卡 System Prompt】\n${clip(fidelity.systemPrompt)}`
+      `【角色卡 System Prompt】\n${clip(fidelity.systemPrompt)}\n\n若其中包含小说正文格式、篇幅、第三人称或其他输出形式要求，不得覆盖 moli小手机 的线上聊天协议。`
     );
   }
 
-  if (fidelity.postHistoryInstructions) {
+  if (enabled('postHistoryInstructions') && fidelity.postHistoryInstructions) {
     blocks.push(
       `【角色卡 Post-History Instructions】\n${clip(
         fidelity.postHistoryInstructions
-      )}`
+      )}\n\n若其中包含小说正文格式、篇幅、第三人称或其他输出形式要求，不得覆盖 moli小手机 的线上聊天协议。`
     );
   }
 
-  if (fidelity.mesExample) {
+  if (enabled('mesExample') && fidelity.mesExample) {
     blocks.push(
       '【Example Dialogue：语言声纹参考】\n'
       + clip(fidelity.mesExample)
@@ -214,7 +218,7 @@ export function buildPrivateGenerationRequest({
     systemBlocks.push(`【moli小手机：线上聊天预设】\n${onlinePreset}`);
   }
 
-  if (intro) {
+  if (intro && contact.kind !== 'tavern') {
     systemBlocks.push(`【角色简介】\n${intro}`);
   }
 
@@ -222,7 +226,7 @@ export function buildPrivateGenerationRequest({
 
   if (prompt) {
     systemBlocks.push(
-      `【用户追加的人格提示词】\n${prompt}`
+      `${contact.kind === 'tavern' ? '【自定义附加 Prompt】' : '【用户追加的人格提示词】'}\n${prompt}`
     );
   }
 
