@@ -426,8 +426,32 @@ async function runGeneration(config, request, { signal, onDelta } = {}) {
   return { text, raw: null };
 }
 
+function momentForwardSemanticText(message, participantIds = new Set()) {
+  const moment = message?.momentForward;
+  if (!moment) return '';
+  const author = String(moment.authorName || moment.author?.name || '未知');
+  const content = String(moment.content || '').trim();
+  const likes = (moment.likes || []).map(actor => String(actor?.name || '')).filter(Boolean);
+  const comments = (moment.comments || []).map(comment => {
+    const actorId = String(comment?.actorId || comment?.actor?.id || '');
+    const actorName = String(comment?.actorName || comment?.actor?.name || '未知');
+    const own = participantIds.has(actorId) ? '（你本人此前留下）' : '';
+    return comment?.deletedAt
+      ? `${actorName}${own} 删除了评论${comment?.deletionReason ? `：${comment.deletionReason}` : ''}`
+      : `${actorName}${own}：${String(comment?.content || '')}`;
+  });
+  return [
+    `[朋友圈转发｜${author}]`,
+    content,
+    likes.length ? `点赞：${likes.join('、')}` : '',
+    comments.length ? `评论：\n${comments.join('\n')}` : '',
+  ].filter(Boolean).join('\n');
+}
+
 function groupMessageText(message, membersById) {
-  const content = String(message?.content || '').trim();
+  const participantIds = new Set([...membersById.keys()]);
+  const semanticForward = momentForwardSemanticText(message, participantIds);
+  const content = semanticForward || String(message?.content || '').trim();
   if (!content) return '';
   if (message?.role === 'user') return content;
   const member = membersById.get(String(message?.senderId || ''));
@@ -686,9 +710,9 @@ async function buildBatchGroupRequest({
   const membersById = new Map(members.map(item => [String(item.id), item]));
   const groupHistory = messages.slice(-Math.min(40, Math.max(8, Number(conversation.recentChatLimit) || 40)))
     .map(message => {
-      if (message?.role === 'user') return `用户：${String(message?.content || '').trim()}`;
-      const member = membersById.get(String(message?.senderId || ''));
-      return `${member ? contactLabel(member) : String(message?.senderSnapshot?.name || '群成员')}：${String(message?.content || '').trim()}`;
+      const text = groupMessageText(message, membersById);
+      if (!text) return '';
+      return message?.role === 'user' ? `用户：${text}` : text;
     }).filter(Boolean).join('\n');
 
   const groupMemory = getConversationMemory(scopeKey, conversation.conversationKey || conversation.id) || {};
@@ -946,7 +970,6 @@ export async function generateContactMoment({ scopeKey, contactId, signal } = {}
   const storedContact = findContact(contactId);
   const contact = hydratedContact(storedContact);
   assertContactReady(contact);
-  if (String(contact?.id || '') === 'builtin:meta') throw new Error('皮下不使用普通角色朋友圈');
 
   let rawConfig = getApiSettings();
   if (contact?.apiOverride?.enabled === true) {

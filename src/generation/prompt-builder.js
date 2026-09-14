@@ -16,8 +16,28 @@ function contactName(contact) {
   );
 }
 
+function momentForwardText(message) {
+  const moment = message?.momentForward;
+  if (!moment) return '';
+  const author = clean(moment.authorName || moment.author?.name) || '未知';
+  const lines = [`[朋友圈转发｜${author}]`, clean(moment.content)];
+  const likes = (moment.likes || []).map(actor => clean(actor?.name)).filter(Boolean);
+  if (likes.length) lines.push(`点赞：${likes.join('、')}`);
+  const comments = (moment.comments || []).map(comment => {
+    const actor = clean(comment?.actorName || comment?.actor?.name) || '未知';
+    return comment?.deletedAt
+      ? `${actor} 删除了评论${comment?.deletionReason ? `：${clean(comment.deletionReason)}` : ''}`
+      : `${actor}：${clean(comment?.content)}`;
+  }).filter(Boolean);
+  if (comments.length) lines.push(`评论：\n${comments.join('\n')}`);
+  return lines.filter(Boolean).join('\n');
+}
+
 function messageText(message) {
   if (!message) return '';
+
+  const semanticMoment = momentForwardText(message);
+  if (semanticMoment) return semanticMoment;
 
   if (message.forward?.mode === 'merged' && Array.isArray(message.forward.items)) {
     const forwarded = message.forward.items
