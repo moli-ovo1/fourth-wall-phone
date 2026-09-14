@@ -2705,3 +2705,15 @@ Commentary 使用独立 Fourth Wall Commentary Prompt，只输出一个 `<msg>` 
 - 皮下正文读取只服从 `maxChatLayers`，移除旧 80 条/64k 字符限制；普通联系人保持原读取窗口。
 - Session 仍使用已批准的 `builtin:meta` Private Conversation 映射。
 - 用户自行维护的 Top User 前缀视为本地资产，后续补丁不得擅自覆盖。
+
+
+## 0.4.6 / moli62 — Fourth Wall 消息/任务交互对齐
+- 基线采用用户最新 `(39).zip`；仅修复用户手改 `META_PROTOCOL` 后缺失的模板字符串收尾 `` `; ``，不改写 Prompt 正文。
+- 皮下消息菜单新增“编辑”。已归档消息编辑前提示：修改原文不会改写长期记忆，需要同步纠正时应编辑皮下记忆。
+- 皮下删除已归档消息前同样显示记忆不会自动遗忘的提示；删除行为继续同步 `archivedCount`。
+- 新增皮下“重答”按钮：按小白X `prepareRegeneration` 语义找到最后一条用户消息，截断其后的普通回复/Commentary，再以该用户消息重新生成；`archivedCount = min(archivedCount, userIndex)`。
+- 生成错误时皮下错误条显示“重试回复”；仅当最后用户消息仍未被普通 AI 回复时允许重试。
+- 皮下聊天页头部加入 Context ring + popover：展示总占用 / 主剧情 / 皮下记忆 / 皮下聊天 / Prompt 与输入，并可立即总结。
+- 手动总结支持取消：Context popover/设置页按钮在总结中再次点击可 Abort。
+- 皮下聊天页新增清空入口：可选择仅清聊天（保留 memory）或聊天与 memory 一起清空。
+- 图片/语音仍不移植；Session→Private Conversation 仍沿用已批准宿主适配。

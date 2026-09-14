@@ -41,3 +41,19 @@
 - 消息编辑、删除、重答、停止生成、错误重试与上游 FourthWallConversation/FourthWallMessage 的逐项交互一致性。
 - Session 删除/重命名/切换的边缘状态继续回归测试。
 - UI CSS 不要求复制小白X视觉皮肤；功能与交互语义优先保持一致，并保持 moli 手机整体视觉体系。
+
+
+## moli62 审计：消息编辑 / 重答 / 错误恢复 / ContextButton
+
+对照当前上游 `FourthWallConversation.vue`、`FourthWallMessage.vue`、`FourthWallApp.vue`、`host/controller.ts`、`domain/state.ts`：
+
+- **对齐**：编辑消息只改 `content`；已归档消息编辑前提示 memory 不会自动改写。
+- **对齐**：删除已归档消息提示 memory 不会自动遗忘；删除原文仍维护 `archivedCount`。
+- **对齐**：Regenerate 找最后 user，保留到该 user（含）并删除之后所有消息，然后重新生成；同时收缩 `archivedCount`。
+- **对齐**：Retry 只允许“最后 user 尚未出现普通 AI 回复”的失败场景；Commentary 不算普通回答。
+- **对齐**：Clear History 可保留或同时清除 memory。
+- **对齐**：Context ring 展示约占用比例；popover 展示主剧情/皮下记忆/皮下聊天/提示词输入，支持立即总结；128k 自动总结说明保留。
+- **对齐**：手动 summarize 可取消（AbortController）。
+- **宿主 UI 适配**：小白X消息编辑为气泡内 textarea；moli62 暂使用已有长按菜单 + `window.prompt`，数据语义一致但交互外观未完全复制。
+- **仍有差异**：小白X对“生成完成但持久化失败”会保留 unsaved draft 并在错误气泡展示；moli 当前存储为同步本地写入，尚未建立等价的 unsaved-draft 状态。
+- **仍有差异**：小白X聊天 UI 使用 20/60 条历史分页窗口并保持滚动锚点；moli 当前直接渲染当前 Conversation 全部消息。

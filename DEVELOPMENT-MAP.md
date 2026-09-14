@@ -2042,3 +2042,18 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [x] 旧 moli 皮下手机记忆一次性迁移
 - [ ] FourthWall ContextButton 的环形入口/取消处理中交互视觉复刻
 - [ ] FourthWallMessage 编辑/重答/错误重试逐项审计
+
+
+## moli62 — Fourth Wall Message / Task Interaction
+- [x] 保留用户最新 Prompt，只补缺失 JS 模板字符串闭合
+- [x] 皮下消息编辑 + 已归档提示
+- [x] 皮下删除已归档提示
+- [x] 重答：截断最后 user 后全部消息并重新生成
+- [x] 错误条“重试回复”与待回答判断
+- [x] Context ring / popover + 分项 token 展示
+- [x] Context popover 立即总结
+- [x] 手动总结可取消
+- [x] 清空聊天 / 可选同时清空 memory
+- [ ] 小白X inline 编辑 UI（当前 moli 使用手机端 prompt 编辑，行为语义已接通）
+- [ ] 保存失败时“已生成但未保存 draft”恢复交互
+- [ ] 历史分页窗口（小白X 20/60）是否值得在 moli 长聊天 UI 引入
