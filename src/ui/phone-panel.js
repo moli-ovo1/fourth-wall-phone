@@ -1606,12 +1606,13 @@ export function createPhonePanel({
         : (memory.longTermSummary || '');
     }
     if (phoneMemoryAutoStatus) {
-      const autoCount = memory.recent.filter(item => item?.source === 'auto').length;
+      const autoCount = visibleRecent.filter(item => item?.source === 'auto').length;
+      const modeLabel = conversation.type === 'group' ? (groupMode === 'role-chat' ? '角色闲聊记忆 · ' : '围读会记忆 · ') : '';
       const condensed = memory.lastCondensedAt ? new Date(memory.lastCondensedAt).toLocaleString() : '尚未运行';
       const summarized = memory.lastSummarizedAt ? new Date(memory.lastSummarizedAt).toLocaleString() : '尚未沉淀';
       phoneMemoryAutoStatus.textContent = memory.needsReview
         ? `⚠ ${memory.needsReviewReason || '聊天历史已修改，已有记忆需要核对'}`
-        : `自动近期记忆 ${autoCount} 段 · 上次压缩：${condensed} · 上次长期沉淀：${summarized}${memory.lastAutoError ? ` · 最近失败：${memory.lastAutoError}` : ''}`;
+        : `${modeLabel}自动近期记忆 ${autoCount} 段 · 上次压缩：${condensed} · 上次长期沉淀：${summarized}${memory.lastAutoError ? ` · 最近失败：${memory.lastAutoError}` : ''}`;
       phoneMemoryAutoStatus.classList.toggle('is-warning', Boolean(memory.needsReview));
     }
   }
