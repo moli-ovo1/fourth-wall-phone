@@ -2549,3 +2549,30 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 ### moli97 / v0.4.40 — 朋友圈 User 评论可见性
 - `style.css`: 删除 `.moli-user-comment-hold{display:none}`。该 class 仅用于标识 User 自己的评论并支持长按删除，不再控制可见性。
 - `src/ui/phone-panel.js`: 沿用 moli96 的 `addMomentComment -> render` 简单发送链，不做额外功能改动。
+
+## v0.4.41 / moli98 — 人物行为 Automation 第一阶段
+
+### 代码变更
+- `src/automation/private-automation.js`
+  - 增加统一行为 JSON 解析：`SKIP / POST / PRIVATE_CHAT / POST+PRIVATE_CHAT`。
+  - 普通主动行为与朋友圈社交事件开始共享最终动作决策。
+  - POST 直接写入角色资料朋友圈并向对应私聊追加 `moment-event`；PRIVATE_CHAT 继续走原消息/未读链。
+  - 新增通用 `notifyBehaviorOpportunity()`；旧 `notifyMomentInteractionOpportunity()` 保留为兼容别名，避免已有调用点失效。
+  - `chat-progress` 可在主动私聊关闭时仅提供 POST/SKIP；User 评论仍遵守“主动私聊开启才唤醒私下行为”的旧边界。
+  - 吐槽正文 / Fourth Wall Commentary 暂不改成 POST 行为。
+- `src/ui/phone-panel.js`
+  - 原 `maybeTriggerMomentFromChat()` 不再直接调用 `generateContactMoment()`。
+  - 保留原成本门控（约 3 个新 AI 轮次 / 30 分钟），门控通过后只排 `chat-progress` 事件，避免“朋友圈判断 + 私聊判断”重复 API。
+
+### 本轮没有恢复的旧/废弃方案
+- [x] 不恢复固定 18% 聊天→朋友圈随机门控。
+- [x] 不恢复主动私聊百分比硬骰子。
+- [x] 不把删除评论重新设为立即触发额外 API。
+- [x] 不把正文吐槽、群 Review、Fourth Wall 强行揉进同一个无来源随机池。
+
+### 下一阶段候选（开发前先与 User 逐项确认，不直接开工）
+- [ ] 盘点可进入人物行为层的事件：普通时间机会、聊天进展、User 评论、已看公共朋友圈、点赞/评论变化、删除痕迹、未解决话题等；逐项确定是否只作为上下文、是否形成主动机会。
+- [ ] 明确“公开互动（LIKE/COMMENT/DELETE_COMMENT）”是否也并入同一次动作决策，还是继续留给公共朋友圈刷新；不得重复生成两套社交行为。
+- [ ] 设计跨事件冷却/去重：短时间多个事件聚合、刚 POST 后抑制重复 POST、刚主动私聊后抑制机械追聊，但不能把人物真实连续行动硬禁掉。
+- [ ] 明确行为结果的可观察性与测试矩阵：只 POST、只私聊、两者都做、SKIP、主动私聊关闭但仍可 POST、评论事件批处理、正文吐槽保持独立。
+- [ ] 再决定是否把“已看但未互动”的 `seenBy` 变成主动机会；当前只保留为连续性事实，不能擅自变成每次看见就触发 API。
