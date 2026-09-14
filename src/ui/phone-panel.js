@@ -102,7 +102,6 @@ export function createPhonePanel({
         <div class="moli-nav-title">moli小手机</div>
         <div class="moli-nav-side right">
           <button class="moli-icon-btn" data-action="add" aria-label="添加">＋</button>
-          <button class="moli-icon-btn" data-action="settings" aria-label="设置">⚙</button>
         </div>
       </header>
       <main class="moli-chat-list"></main>
@@ -2957,6 +2956,7 @@ export function createPhonePanel({
   const show = name => {
     if (addMenu) addMenu.hidden = true;
     hideMessageMenu();
+    hideChatListMenu();
 
     pages.forEach(page => {
       page.classList.toggle('active', page.dataset.page === name);
@@ -3121,6 +3121,19 @@ export function createPhonePanel({
       return `${base} · 当前正文`;
     }
     return base;
+  }
+
+  function privateConversationListIdentity(conversation, item) {
+    if (isFourthWallContact(item)) {
+      return { name: '皮下', annotation: '我在这边，你呢？' };
+    }
+    const ownTitle = String(conversation?.title || '').trim();
+    let annotation = ownTitle;
+    if (!annotation && conversation?.scopeMode === 'global') annotation = '全局陪伴';
+    if (!annotation && String(conversation?.id || '').startsWith('private:') && String(conversation?.id || '') !== `private:${item?.id}`) {
+      annotation = '当前正文';
+    }
+    return { name: displayName(item), annotation };
   }
 
   function refreshTavernSources() {
@@ -3513,9 +3526,9 @@ export function createPhonePanel({
       const messages = conversation?.messages || [];
       const last = messages[messages.length - 1];
       const isGroup = conversation.type === 'group';
-      const title = isGroup
-        ? conversation.name || '未命名群聊'
-        : privateConversationTitle(conversation, item);
+      const listIdentity = isGroup
+        ? { name: conversation.name || '未命名群聊', annotation: '' }
+        : privateConversationListIdentity(conversation, item);
 
       return `
         <button
@@ -3530,8 +3543,8 @@ export function createPhonePanel({
           <div class="moli-item-main">
             <div class="moli-item-top">
               <div class="moli-name">
-                ${escapeHtml(title)}
-                ${!isGroup && isFourthWallContact(item) ? '<small class="moli-fourth-wall-list-subtitle" style="display:inline;margin:0 0 0 8px;vertical-align:baseline;">我在这边，你呢？</small>' : ''}
+                <span>${escapeHtml(listIdentity.name)}</span>
+                ${listIdentity.annotation ? `<small class="moli-chat-list-annotation">${escapeHtml(listIdentity.annotation)}</small>` : ''}
               </div>
               ${conversation.pinned ? '<span class="moli-pin-mark">置顶</span>' : ''}
             </div>
@@ -5353,8 +5366,7 @@ export function createPhonePanel({
       conversationKey = String(conversation?.conversationKey || contactId);
     }
     currentContactId = conversationKey;
-    markConversationRead(scopeKey, conversationKey);
-    show('chat');
+    show('info');
   });
 
   momentsFeed?.addEventListener('click', event => {
@@ -5585,6 +5597,11 @@ export function createPhonePanel({
     } else if (action === 'delete' && !isProtectedDefaultConversation(conversation)) {
       const id = activeListConversationId; hideChatListMenu(); openDeleteConversationConfirm(id);
     }
+  });
+  panel.addEventListener('pointerdown', event => {
+    if (!chatListMenu || chatListMenu.hidden) return;
+    if (event.target?.closest?.('[data-chat-list-menu]')) return;
+    hideChatListMenu();
   });
   panel.querySelector('[data-action="cancel-delete-conversation"]')?.addEventListener('click', closeDeleteConversationConfirm);
   panel.querySelector('[data-action="confirm-delete-conversation"]')?.addEventListener('click', event => {
