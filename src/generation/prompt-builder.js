@@ -1,5 +1,6 @@
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
+import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildFourthWallRequest, sanitizeFourthWallContext } from '../prompts/fourth-wall.js';
 function clean(value) {
   return String(value || '').trim();
@@ -259,8 +260,14 @@ export function buildPrivateGenerationRequest({
   systemBlocks.push(...roleFidelityBlocks(contact));
 
   if (contact.kind === 'custom' && Array.isArray(contact.profileEntries)) {
-    const enabledEntries = contact.profileEntries.filter(entry => entry?.enabled !== false && clean(entry?.content));
-    if (enabledEntries.length) systemBlocks.push(`【角色资料条目】\n${enabledEntries.map(entry => `【${clean(entry.title) || '未命名条目'}】\n${clean(entry.content)}`).join('\n\n')}`);
+    const profileScanText = [
+      ...messages.slice(-Math.max(12, Number(historyLimit || 0))).map(messageText),
+      ...(Array.isArray(recentBody?.messages) ? recentBody.messages.map(messageText) : []),
+      clean(phoneMemory?.longTermSummary),
+      ...(Array.isArray(phoneMemory?.recent) ? phoneMemory.recent.slice(-4).map(item => clean(item?.content)) : []),
+    ].filter(Boolean).join('\n');
+    const activatedEntries = getActivatedProfileEntries(contact.profileEntries, profileScanText);
+    if (activatedEntries.length) systemBlocks.push(`【角色资料条目｜本轮激活】\n${activatedEntries.map(entry => `【${clean(entry.title) || '未命名条目'}】\n${clean(entry.content)}`).join('\n\n')}`);
   }
 
   if (prompt) {

@@ -19,6 +19,7 @@ import { prepareFourthWallContext, getFourthWallContextStats } from './fourth-wa
 import { getActivatedTavernWorldBook } from '../core/tavern-worldbook.js';
 import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
+import { getActivatedProfileEntries } from './profile-entry-service.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -492,7 +493,7 @@ function clipBatchText(value, max = 4000) {
   return text.length <= max ? text : `${text.slice(0, max)}\n[已截断]`;
 }
 
-function batchRoleProfile(contact) {
+function batchRoleProfile(contact, scanText = '') {
   const fidelity = contact?.source?.roleFidelity || {};
   const sources = contact?.roleSources || {};
   const blocks = [];
@@ -511,7 +512,7 @@ function batchRoleProfile(contact) {
   } else {
     add('角色简介', contact.intro, 2000);
     if (contact?.kind === 'custom' && Array.isArray(contact.profileEntries)) {
-      for (const entry of contact.profileEntries) if (entry?.enabled !== false) add(`资料条目：${String(entry?.title || '未命名')}`, entry?.content, 3500);
+      for (const entry of getActivatedProfileEntries(contact.profileEntries, scanText)) add(`资料条目（本轮激活）：${String(entry?.title || '未命名')}`, entry?.content, 3500);
     }
     const protectedBuiltin = ['builtin:writer', 'builtin:guide'].includes(String(contact?.id || ''));
     add(contact?.kind === 'builtin' ? '内置人格 Prompt' : '人格 Prompt',
@@ -648,7 +649,7 @@ async function buildBatchGroupRequest({
     const worldBook = await getActivatedTavernWorldBook({ contact: member, scanText });
     memberBlocks.push(
       `===== MEMBER PRIVATE ZONE: ${contactLabel(member)} | id=${member.id} =====\n`
-      + `【身份资料】\n${batchRoleProfile(member)}\n\n`
+      + `【身份资料】\n${batchRoleProfile(member, scanText)}\n\n`
       + `【本成员自己的世界书】\n${clipBatchText(worldBook?.text || '', 6000) || '本轮无激活条目。'}\n\n`
       + `【本成员自己的手机连续性｜仅允许 ${contactLabel(member)} 使用】\n${formatPhoneBridge(scopeKey, member)}\n`
       + `===== END PRIVATE ZONE =====`
