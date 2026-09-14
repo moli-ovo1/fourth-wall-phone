@@ -348,7 +348,7 @@ export function getContacts() {
 
   for (const contact of list) {
     if (contact?.kind === 'custom') {
-      contact.profileEntries = Array.isArray(contact.profileEntries) ? contact.profileEntries.map((entry, index) => ({ id: String(entry?.id || `entry:${index}`), title: String(entry?.title || `条目 ${index + 1}`), content: String(entry?.content || ''), enabled: entry?.enabled !== false })) : [];
+      contact.profileEntries = Array.isArray(contact.profileEntries) ? contact.profileEntries.map((entry, index) => ({ id: String(entry?.id || `entry:${index}`), title: String(entry?.title || `条目 ${index + 1}`), content: String(entry?.content || ''), enabled: entry?.enabled !== false, activationMode: entry?.activationMode === 'keywords' ? 'keywords' : 'always', keywords: String(entry?.keywords || '') })) : [];
     }
     if (contact?.kind === 'tavern') {
       contact.roleSources = normalizeTavernRoleSources(contact.roleSources);
@@ -839,7 +839,7 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
   if (profileEntries !== undefined && contact.kind === 'custom') {
-    contact.profileEntries = Array.isArray(profileEntries) ? profileEntries.map((entry, index) => ({ id: String(entry?.id || `entry:${Date.now()}:${index}`), title: String(entry?.title || `条目 ${index + 1}`).trim() || `条目 ${index + 1}`, content: String(entry?.content || ''), enabled: entry?.enabled !== false })) : [];
+    contact.profileEntries = Array.isArray(profileEntries) ? profileEntries.map((entry, index) => ({ id: String(entry?.id || `entry:${Date.now()}:${index}`), title: String(entry?.title || `条目 ${index + 1}`).trim() || `条目 ${index + 1}`, content: String(entry?.content || ''), enabled: entry?.enabled !== false, activationMode: entry?.activationMode === 'keywords' ? 'keywords' : 'always', keywords: String(entry?.keywords || '') })) : [];
   }
   if (name !== undefined && contact.kind === 'custom') {
     const trimmedName = String(name || '').trim();
