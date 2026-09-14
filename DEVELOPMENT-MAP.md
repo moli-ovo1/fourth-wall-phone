@@ -2381,3 +2381,8 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [ ] 朋友圈清空前记忆整理：角色 profile feed 达到整理节点后，可由 user 选择先生成朋友圈记忆再清空原始动态；记忆进入该角色手机连续性，但不默认逐字永久注入。
 - [ ] 在主要手机内容源稳定后进入 Phone Context Injection 大工程：可选最近 N 条聊天、聊天记忆、朋友圈、小剧场/群聊等注入 SillyTavern 正文，并区分临时本轮注入与持久绑定。
 
+
+### moli85 / v0.4.28 — launcher startup hardening
+- `src/ui/floating-ball.js`: launcher 关键 inline 可见性样式 + 非有限坐标恢复。
+- `src/core/app.js`: 先创建悬浮入口，再进行联系人/内置联系人数据初始化；数据异常时入口保持可见并记录错误。
+- `manifest.json`: 0.4.28。
