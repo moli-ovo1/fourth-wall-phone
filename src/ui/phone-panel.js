@@ -6,6 +6,7 @@ import {
   createPrivateConversationInstance,
   getPrivateConversationsForContact,
   deletePrivateConversationInstance,
+  deleteConversationInstance,
   findTavernContact,
   refreshTavernContacts,
   syncTavernContacts,
@@ -75,6 +76,12 @@ import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
+
+const BUILTIN_AVATAR_URLS = Object.freeze({
+  'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
+  'builtin:writer': new URL('../../assets/avatars/little-god.png', import.meta.url).href,
+  'builtin:guide': new URL('../../assets/avatars/moli.png', import.meta.url).href,
+});
 
 export function createPhonePanel({
   documentRef = document,
@@ -557,6 +564,12 @@ export function createPhonePanel({
           <textarea rows="12" data-contact-profile-prompt></textarea>
         </label>
         <div class="moli-settings-note" data-contact-prompt-hint></div>
+        <section class="moli-profile-entry-section" data-custom-profile-entries hidden>
+          <div class="moli-conversation-section-title">角色资料条目</div>
+          <div class="moli-settings-note">可像角色专属小型世界书一样保存多条人设资料。只有启用的条目会进入该角色的手机生成。</div>
+          <div data-custom-profile-entry-list></div>
+          <button type="button" class="moli-secondary-btn" data-action="custom-profile-entry-add">＋ 添加条目</button>
+        </section>
         <button type="button" class="moli-secondary-btn moli-restore-builtin-prompt" data-action="restore-builtin-prompt" hidden>恢复默认人格 Prompt</button>
       </main>
       <footer class="moli-sync-footer">
@@ -672,7 +685,7 @@ export function createPhonePanel({
           </label>
         </div>
 
-        <div class="moli-conversation-section">
+        <div class="moli-conversation-section" data-time-mode-section>
           <div class="moli-conversation-section-title">时间模式</div>
           <label class="moli-choice-card">
             <input type="radio" name="moli-conversation-time-mode" value="body">
@@ -808,6 +821,21 @@ export function createPhonePanel({
       </footer>
     </section>
 
+    <div class="moli-chat-list-menu" data-chat-list-menu hidden>
+      <button data-chat-list-action="pin">置顶该聊天</button>
+      <button data-chat-list-action="delete" class="danger">删除该聊天</button>
+    </div>
+
+    <div class="moli-delete-conversation-sheet" data-delete-conversation-sheet hidden>
+      <div class="moli-delete-conversation-card">
+        <strong data-delete-conversation-title>删除该聊天？</strong>
+        <p>删除后，该聊天的全部聊天记录、手机记忆及相关状态都会永久删除，无法恢复。</p>
+        <button class="moli-danger-confirm" data-action="confirm-delete-conversation">确认删除</button>
+        <small>为避免误删，需要连续确认两次。</small>
+        <button class="moli-secondary-btn" data-action="cancel-delete-conversation">取消</button>
+      </div>
+    </div>
+
     <div class="moli-message-menu" data-message-menu hidden>
       <button data-message-action="edit" hidden>编辑</button>
       <button data-message-action="regenerate" hidden>重答</button>
@@ -855,6 +883,8 @@ export function createPhonePanel({
   const infoAvatarInput = panel.querySelector('[data-info-avatar-input]');
   const groupMembersEditList = panel.querySelector('[data-group-members-edit-list]');
   const groupMembersTitle = panel.querySelector('[data-group-members-title]');
+  const chatListMenu = panel.querySelector('[data-chat-list-menu]');
+  const deleteConversationSheet = panel.querySelector('[data-delete-conversation-sheet]');
   const messageMenu = panel.querySelector('[data-message-menu]');
   const quoteDraft = panel.querySelector('[data-quote-draft]');
   const quoteDraftText = panel.querySelector('[data-quote-draft-text]');
@@ -917,6 +947,8 @@ export function createPhonePanel({
   const contactPromptField = panel.querySelector('[data-contact-prompt-field]');
   const contactPromptLabel = panel.querySelector('[data-contact-prompt-label]');
   const contactPromptHint = panel.querySelector('[data-contact-prompt-hint]');
+  const customProfileEntries = panel.querySelector('[data-custom-profile-entries]');
+  const customProfileEntryList = panel.querySelector('[data-custom-profile-entry-list]');
   const restoreBuiltinPromptButton = panel.querySelector('[data-action="restore-builtin-prompt"]');
   const contactApiEnabled = panel.querySelector('[data-contact-api-enabled]');
   const contactApiBody = panel.querySelector('[data-contact-api-body]');
@@ -1009,9 +1041,8 @@ export function createPhonePanel({
       );
 
   const avatarUrl = item => {
-    if (isFourthWallContact(item)) {
-      return String(getCurrentTavernCharacterSnapshot()?.avatarUrl || '');
-    }
+    const builtinAsset = BUILTIN_AVATAR_URLS[String(item?.id || '')];
+    if (builtinAsset) return builtinAsset;
     return item?.customAvatar || item?.source?.originalAvatarUrl || '';
   };
 
@@ -1639,7 +1670,9 @@ export function createPhonePanel({
 
     if (conversationSettingsScope) {
       if (conversation.type === 'group') {
-        conversationSettingsScope.textContent = `当前群聊：${conversation.name || '未命名群聊'}。模式决定正文与 Review 是否进入这个 Conversation。`;
+        conversationSettingsScope.textContent = conversation.systemDefault === 'reading' ? '默认围读会：固定读取正文并跟随正文时间。' : `当前群聊：${conversation.name || '未命名群聊'}。模式决定正文与 Review 是否进入这个 Conversation。`;
+        const timeModeSection = panel.querySelector('[data-time-mode-section]');
+        if (timeModeSection) timeModeSection.hidden = conversation.systemDefault === 'reading';
       } else {
         const label = conversation.scopeMode === 'global' ? '全局' : '当前存档';
         conversationSettingsScope.textContent = `当前聊天：${conversation.title || '默认聊天'} · ${label}。这里调整时间模式、正文读取与近期消息上下文。`;
@@ -1650,7 +1683,7 @@ export function createPhonePanel({
       conversationTitleInput.value = conversation.type === 'group' ? (conversation.name || '') : (conversation.title || '');
     }
 
-    if (groupModeSection) groupModeSection.hidden = conversation.type !== 'group';
+    if (groupModeSection) groupModeSection.hidden = conversation.type !== 'group' || conversation.systemDefault === 'reading';
     if (conversation.type === 'group') {
       const groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
       const modeInput = panel.querySelector(`input[name="moli-group-mode"][value="${groupMode}"]`);
@@ -2151,7 +2184,7 @@ export function createPhonePanel({
       <div class="moli-info-form" data-group-review-settings>
         <label class="moli-choice-card">
           <input type="checkbox" data-review-enabled ${conversation.automation?.reviewEnabled ? 'checked' : ''} ${conversation.groupMode === 'role-chat' ? 'disabled' : ''}>
-          <span><strong>自动围读</strong><small>${conversation.groupMode === 'role-chat' ? '角色闲聊模式不读取正文，因此暂停自动围读。切回围读会后恢复。' : '围读会按正文回合触发；群聊不提供自动吐槽。'}</small></span>
+          <span><strong>自动围读</strong><small>${conversation.groupMode === 'role-chat' ? '角色闲聊模式不读取正文，因此暂停自动围读。切回围读会后恢复。' : '达到设定的正文回合后，围读会会围绕最新正文自然展开一轮讨论。'}</small></span>
         </label>
         <label class="moli-form-field"><span>围读频率（每 N 个有效正文 AI 回合）</span><input type="number" min="1" max="9999" step="1" data-review-interval value="${Number(conversation.automation?.reviewInterval ?? 1)}"></label>
         <button type="button" class="moli-info-save-button" data-action="save-group-review">保存自动围读</button>
@@ -2379,6 +2412,11 @@ export function createPhonePanel({
     }
     if (contactIntroField) contactIntroField.hidden = false;
     if (restoreBuiltinPromptButton) restoreBuiltinPromptButton.hidden = item.kind !== 'builtin' || protectedBuiltinPersona;
+    if (customProfileEntries) customProfileEntries.hidden = item.kind !== 'custom';
+    if (customProfileEntryList) {
+      const entries = Array.isArray(item.profileEntries) ? item.profileEntries : [];
+      customProfileEntryList.innerHTML = entries.map((entry, index) => `<div class="moli-profile-entry" data-profile-entry="${index}"><div class="moli-profile-entry-head"><input type="checkbox" data-profile-entry-enabled ${entry.enabled !== false ? 'checked' : ''}><input type="text" data-profile-entry-title value="${escapeHtml(entry.title || `条目 ${index + 1}`)}" placeholder="条目名称"><button type="button" data-profile-entry-delete="${index}">删除</button></div><textarea rows="6" data-profile-entry-content placeholder="填写这条人物设定、关系、习惯或其他资料">${escapeHtml(entry.content || '')}</textarea></div>`).join('');
+    }
 
     if (isTavern) {
       renderTavernRoleSources(item);
@@ -2436,6 +2474,7 @@ export function createPhonePanel({
       };
       if (item.kind !== 'tavern') {
         payload.intro = contactProfileIntro?.value || '';
+        if (item.kind === 'custom') payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false }));
       } else {
         payload.roleSources = {
           ...(item.roleSources || {}),
@@ -3163,6 +3202,56 @@ export function createPhonePanel({
     }
   }
 
+  let activeListConversationId = '';
+  let pendingDeleteConversationId = '';
+  let deleteConfirmArmed = false;
+
+  function isProtectedDefaultConversation(conversation) {
+    if (!conversation) return false;
+    if (conversation.type === 'private') return ['builtin:meta', 'builtin:writer', 'builtin:guide'].includes(String(conversation.contactId || ''));
+    return conversation.type === 'group' && conversation.systemDefault === 'reading';
+  }
+
+  function hideChatListMenu() {
+    if (chatListMenu) chatListMenu.hidden = true;
+    activeListConversationId = '';
+  }
+
+  function showChatListMenu(conversationId, clientX, clientY) {
+    const scopeKey = getScopeKey?.();
+    const conversation = scopeKey ? getConversation(scopeKey, conversationId) : null;
+    if (!chatListMenu || !conversation) return;
+    activeListConversationId = String(conversationId || '');
+    const pin = chatListMenu.querySelector('[data-chat-list-action="pin"]');
+    const del = chatListMenu.querySelector('[data-chat-list-action="delete"]');
+    if (pin) pin.textContent = conversation.pinned ? '取消置顶' : '置顶该聊天';
+    if (del) del.hidden = isProtectedDefaultConversation(conversation);
+    chatListMenu.hidden = false;
+    const rect = panel.getBoundingClientRect();
+    const width = 172;
+    chatListMenu.style.left = `${Math.max(8, Math.min(rect.width - width - 8, clientX - rect.left))}px`;
+    chatListMenu.style.top = `${Math.max(8, Math.min(rect.height - 120, clientY - rect.top))}px`;
+  }
+
+  function openDeleteConversationConfirm(conversationId) {
+    const scopeKey = getScopeKey?.();
+    const conversation = scopeKey ? getConversation(scopeKey, conversationId) : null;
+    if (!conversation || isProtectedDefaultConversation(conversation) || !deleteConversationSheet) return;
+    pendingDeleteConversationId = String(conversationId || '');
+    deleteConfirmArmed = false;
+    const title = deleteConversationSheet.querySelector('[data-delete-conversation-title]');
+    const button = deleteConversationSheet.querySelector('[data-action="confirm-delete-conversation"]');
+    if (title) title.textContent = `删除「${conversation.type === 'group' ? (conversation.name || '群聊') : privateConversationTitle(conversation, contact(conversation.contactId))}」？`;
+    if (button) button.textContent = '确认删除';
+    deleteConversationSheet.hidden = false;
+  }
+
+  function closeDeleteConversationConfirm() {
+    if (deleteConversationSheet) deleteConversationSheet.hidden = true;
+    pendingDeleteConversationId = '';
+    deleteConfirmArmed = false;
+  }
+
   function renderChatList() {
     refreshTavernSources();
 
@@ -3242,7 +3331,8 @@ export function createPhonePanel({
     chatList
       .querySelectorAll('[data-conversation-id]')
       .forEach(button => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', event => {
+          if (button.dataset.longPressed === '1') { button.dataset.longPressed = ''; event.preventDefault(); return; }
           multiSelectMode = false;
           selectedMessageIds = new Set();
           updateMultiSelectUi();
@@ -3256,6 +3346,18 @@ export function createPhonePanel({
 
           show('chat');
         });
+        let listPressTimer = null;
+        let listPressStart = null;
+        button.addEventListener('pointerdown', event => {
+          listPressStart = { x: event.clientX, y: event.clientY };
+          clearTimeout(listPressTimer);
+          listPressTimer = setTimeout(() => { button.dataset.longPressed = '1'; showChatListMenu(button.dataset.conversationId, event.clientX, event.clientY); }, 520);
+        });
+        button.addEventListener('pointermove', event => {
+          if (!listPressStart) return;
+          if (Math.hypot(event.clientX - listPressStart.x, event.clientY - listPressStart.y) > 10) clearTimeout(listPressTimer);
+        });
+        ['pointerup','pointercancel','pointerleave'].forEach(type => button.addEventListener(type, () => { clearTimeout(listPressTimer); listPressStart = null; }));
       });
   }
 
@@ -5187,6 +5289,34 @@ export function createPhonePanel({
   panel.querySelector('[data-action="fourth-wall-prompts-cancel"]')?.addEventListener('click', () => show('fourth-wall-settings'));
   panel.querySelector('[data-action="fourth-wall-prompts-save"]')?.addEventListener('click', saveFourthWallPrompts);
   panel.querySelector('[data-action="fourth-wall-context-refresh"]')?.addEventListener('click', () => void refreshFourthWallContextStats());
+  chatListMenu?.addEventListener('click', event => {
+    const action = event.target?.closest?.('[data-chat-list-action]')?.dataset?.chatListAction;
+    if (!action || !activeListConversationId) return;
+    const scopeKey = getScopeKey?.();
+    const conversation = scopeKey ? getConversation(scopeKey, activeListConversationId) : null;
+    if (!conversation) return hideChatListMenu();
+    if (action === 'pin') {
+      setConversationPinned(scopeKey, activeListConversationId, !conversation.pinned);
+      hideChatListMenu(); renderChatList();
+    } else if (action === 'delete' && !isProtectedDefaultConversation(conversation)) {
+      const id = activeListConversationId; hideChatListMenu(); openDeleteConversationConfirm(id);
+    }
+  });
+  panel.querySelector('[data-action="cancel-delete-conversation"]')?.addEventListener('click', closeDeleteConversationConfirm);
+  panel.querySelector('[data-action="confirm-delete-conversation"]')?.addEventListener('click', event => {
+    if (!pendingDeleteConversationId) return;
+    if (!deleteConfirmArmed) { deleteConfirmArmed = true; event.currentTarget.textContent = '再次点击确认删除'; return; }
+    const scopeKey = getScopeKey?.();
+    try { deleteConversationInstance(scopeKey, pendingDeleteConversationId); closeDeleteConversationConfirm(); renderChatList(); toast('聊天及全部记忆已删除'); }
+    catch (error) { toast(error?.message || '删除失败'); }
+  });
+  panel.querySelector('[data-action="custom-profile-entry-add"]')?.addEventListener('click', () => {
+    if (!customProfileEntryList) return;
+    const index = customProfileEntryList.querySelectorAll('[data-profile-entry]').length;
+    customProfileEntryList.insertAdjacentHTML('beforeend', `<div class="moli-profile-entry" data-profile-entry="${index}"><div class="moli-profile-entry-head"><input type="checkbox" data-profile-entry-enabled checked><input type="text" data-profile-entry-title value="条目 ${index + 1}" placeholder="条目名称"><button type="button" data-profile-entry-delete="${index}">删除</button></div><textarea rows="6" data-profile-entry-content placeholder="填写这条人物设定、关系、习惯或其他资料"></textarea></div>`);
+  });
+  customProfileEntryList?.addEventListener('click', event => { const button = event.target?.closest?.('[data-profile-entry-delete]'); if (button) button.closest('[data-profile-entry]')?.remove(); });
+
   panel.querySelector('[data-action="fourth-wall-memory-save"]')?.addEventListener('click', saveFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-clear"]')?.addEventListener('click', clearFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-summarize"]')?.addEventListener('click', () => void summarizeFourthWallMemoryNow());
