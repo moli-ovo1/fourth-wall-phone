@@ -27,6 +27,8 @@ import {
   updatePrivateConversationSettings,
   getConversationMemory,
   updateConversationMemory,
+  markConversationMemoryNeedsReview,
+  clearConversationMemoryNeedsReview,
   getFourthWallSessionState,
   updateFourthWallSessionState,
 } from '../storage/data-store.js';
@@ -210,7 +212,6 @@ export function createPhonePanel({
         </div>
         <div class="moli-nav-title" data-chat-title></div>
         <div class="moli-nav-side right">
-          <button class="moli-icon-btn" data-action="fourth-wall-clear-chat" aria-label="清空当前聊天" title="清空当前聊天" hidden>⌫</button>
           <button class="moli-icon-btn" data-action="chat-info" aria-label="聊天信息">…</button>
         </div>
       </header>
@@ -839,7 +840,6 @@ export function createPhonePanel({
   const chatTitle = panel.querySelector('[data-chat-title]');
   const chatError = panel.querySelector('[data-chat-error]');
   const chatErrorText = panel.querySelector('[data-chat-error-text]');
-  const fourthWallClearChatButton = panel.querySelector('[data-action="fourth-wall-clear-chat"]');
   const input = panel.querySelector('.moli-input');
   const sendButton = panel.querySelector('[data-action="send"]');
   const addMenu = panel.querySelector('[data-add-menu]');
@@ -1475,24 +1475,59 @@ export function createPhonePanel({
     const conversation = currentConversation();
     if (!scopeKey || !conversation || !currentContactId) return;
 
-    const count = Array.isArray(conversation.messages)
-      ? conversation.messages.length
-      : 0;
+    if (generationController || isGenerationActive(scopeKey, currentContactId) || fourthWallSummaryController) {
+      toast('请先停止当前任务');
+      return;
+    }
 
+    const count = Array.isArray(conversation.messages) ? conversation.messages.length : 0;
     if (!count) {
       toast('当前没有聊天记录');
       return;
     }
 
     const confirmed = windowRef.confirm?.(
-      `确定清空这段聊天记录吗？\n\n将删除当前会话中的 ${count} 条消息，联系人/群聊和会话设置会保留。`
+      `确定清空这段聊天记录吗？\n\n将删除当前会话中的 ${count} 条消息。下一步可以选择“保留记忆”或“聊天和记忆全部清除”。`
     ) ?? true;
-
     if (!confirmed) return;
 
-    const cleared = clearConversationMessages(scopeKey, currentContactId);
-    if (!cleared) {
-      toast('清空失败');
+    const clearMemory = windowRef.confirm?.(
+      '是否同时清空手机记忆？\n\n确定＝聊天和记忆全部清除\n取消＝只清聊天，保留现有记忆'
+    ) ?? false;
+
+    try {
+      if (conversation.type === 'private' && String(conversation.contactId || '') === 'builtin:meta') {
+        clearFourthWallSession(scopeKey, currentContactId, { clearMemory });
+      } else {
+        clearConversationMessages(scopeKey, currentContactId);
+        if (clearMemory) {
+          updateConversationMemory(scopeKey, currentContactId, {
+            recent: [],
+            longTermSummary: '',
+            longTermByMode: { reading: '', roleChat: '' },
+            lastCondensedMessageId: '',
+            lastSummarizedAt: 0,
+            lastCondensedAt: 0,
+            lastAutoError: '',
+            needsReview: false,
+            needsReviewAt: 0,
+            needsReviewReason: '',
+            needsReviewMessageId: '',
+          });
+        } else {
+          updateConversationMemory(scopeKey, currentContactId, {
+            lastCondensedMessageId: '',
+            lastCondensedAt: 0,
+            lastAutoError: '',
+            needsReview: false,
+            needsReviewAt: 0,
+            needsReviewReason: '',
+            needsReviewMessageId: '',
+          });
+        }
+      }
+    } catch (error) {
+      toast(error?.message || '清空失败');
       return;
     }
 
@@ -1500,12 +1535,23 @@ export function createPhonePanel({
     activeForwardMessageId = null;
     multiSelectMode = false;
     selectedMessageIds = new Set();
+    editingMessageId = null;
+    editingMessageDraft = '';
+    chatHistoryWindows.delete(String(currentContactId));
+
+    if (
+      unsavedGenerationDraft
+      && String(unsavedGenerationDraft.scopeKey || '') === String(scopeKey)
+      && String(unsavedGenerationDraft.conversationKey || '') === String(currentContactId)
+    ) {
+      unsavedGenerationDraft = null;
+    }
 
     if (quoteDraft) quoteDraft.hidden = true;
     if (quoteDraftText) quoteDraftText.textContent = '';
-
     updateMultiSelectUi();
-    toast('聊天记录已清空');
+
+    toast(clearMemory ? '聊天和记忆已全部清除' : '聊天已清空，记忆已保留');
     show('chat');
   }
 
@@ -1532,7 +1578,10 @@ export function createPhonePanel({
       const autoCount = memory.recent.filter(item => item?.source === 'auto').length;
       const condensed = memory.lastCondensedAt ? new Date(memory.lastCondensedAt).toLocaleString() : '尚未运行';
       const summarized = memory.lastSummarizedAt ? new Date(memory.lastSummarizedAt).toLocaleString() : '尚未沉淀';
-      phoneMemoryAutoStatus.textContent = `自动近期记忆 ${autoCount} 段 · 上次压缩：${condensed} · 上次长期沉淀：${summarized}${memory.lastAutoError ? ` · 最近失败：${memory.lastAutoError}` : ''}`;
+      phoneMemoryAutoStatus.textContent = memory.needsReview
+        ? `⚠ ${memory.needsReviewReason || '聊天历史已修改，已有记忆需要核对'}`
+        : `自动近期记忆 ${autoCount} 段 · 上次压缩：${condensed} · 上次长期沉淀：${summarized}${memory.lastAutoError ? ` · 最近失败：${memory.lastAutoError}` : ''}`;
+      phoneMemoryAutoStatus.classList.toggle('is-warning', Boolean(memory.needsReview));
     }
   }
 
@@ -1561,11 +1610,19 @@ export function createPhonePanel({
       updateConversationMemory(scopeKey, currentContactId, {
         recent: [...preserved, ...editedRecent],
         longTermByMode,
+        needsReview: false,
+        needsReviewAt: 0,
+        needsReviewReason: '',
+        needsReviewMessageId: '',
       });
     } else {
       updateConversationMemory(scopeKey, currentContactId, {
         recent: editedRecent,
         longTermSummary: phoneLongMemoryInput?.value || '',
+        needsReview: false,
+        needsReviewAt: 0,
+        needsReviewReason: '',
+        needsReviewMessageId: '',
       });
     }
     toast('手机记忆已保存');
@@ -1853,52 +1910,6 @@ export function createPhonePanel({
     void requestReply();
   }
 
-  function clearCurrentChatNow() {
-    const scopeKey = getScopeKey?.();
-    const conversation = scopeKey && currentContactId ? getConversation(scopeKey, currentContactId) : null;
-    if (!scopeKey || !conversation) return;
-    if (generationController || isGenerationActive(scopeKey, currentContactId) || fourthWallSummaryController) {
-      toast('请先停止当前任务');
-      return;
-    }
-    if (!(windowRef.confirm?.('清空当前聊天记录？') ?? true)) return;
-    const clearMemory = windowRef.confirm?.('是否同时清空这段聊天的手机记忆？\n确定＝聊天和记忆一起清空；取消＝只清聊天。') ?? false;
-
-    if (conversation.type === 'private' && String(conversation.contactId || '') === 'builtin:meta') {
-      clearFourthWallSession(scopeKey, currentContactId, { clearMemory });
-    } else {
-      clearConversationMessages(scopeKey, currentContactId);
-      if (clearMemory) {
-        updateConversationMemory(scopeKey, currentContactId, {
-          recent: [],
-          longTermSummary: '',
-          longTermByMode: { reading: '', roleChat: '' },
-          lastCondensedMessageId: '',
-          lastSummarizedAt: 0,
-          lastCondensedAt: 0,
-          lastAutoError: '',
-        });
-      } else {
-        updateConversationMemory(scopeKey, currentContactId, {
-          lastCondensedMessageId: '',
-          lastCondensedAt: 0,
-          lastAutoError: '',
-        });
-      }
-    }
-
-    editingMessageId = null;
-    editingMessageDraft = '';
-    if (
-      unsavedGenerationDraft
-      && String(unsavedGenerationDraft.scopeKey || '') === String(scopeKey)
-      && String(unsavedGenerationDraft.conversationKey || '') === String(currentContactId)
-    ) {
-      unsavedGenerationDraft = null;
-    }
-    renderChat();
-    toast(clearMemory ? '聊天和手机记忆已清空' : '聊天已清空，手机记忆已保留');
-  }
 
 
   function saveFourthWallSettings() {
@@ -2081,7 +2092,7 @@ export function createPhonePanel({
           <span>清空聊天记录</span>
           <strong>›</strong>
         </button>
-        ${isTavern ? `<div class="moli-info-note">角色资料来源由“角色资料与提示词”独立控制；当前正文、时间模式和聊天历史属于当前 Conversation。自定义附加 Prompt 只作为可选补充，不会取代角色卡人格。酒馆角色刷新时仍保留备注名、自定义头像、联系人简介、附加 Prompt 与来源开关。</div>` : ''}
+        <div class="moli-info-note moli-info-note-slot" data-info-note-slot hidden></div>
       `;
       return;
     }
@@ -3570,6 +3581,7 @@ export function createPhonePanel({
       const confirmed = windowRef.confirm?.(`${archivedHint}确定删除这条消息吗？`) ?? true;
       if (!confirmed) return;
 
+      markPhoneMemoryReviewForMutation(scopeKey, currentContactId, conversation, messageId, '删除消息');
       const removed = deleteMessage(scopeKey, currentContactId, messageId);
       if (removed) {
         renderChat();
@@ -3668,9 +3680,50 @@ export function createPhonePanel({
     const avatarId = String(user_avatar || '').trim();
     const src = avatarId ? String(getThumbnailUrl('persona', avatarId) || '').trim() : '';
     if (!src) return `<div class="${escapeHtml(className)}">我</div>`;
-    return `<img class="${escapeHtml(className)}" src="${escapeHtml(src)}" alt="">`;
+    return `<div class="${escapeHtml(className)} has-image"><img src="${escapeHtml(src)}" alt=""></div>`;
   }
 
+
+  function messageTouchesCondensedPhoneMemory(scopeKey, conversationKey, conversation, messageId) {
+    if (!conversation || String(conversation.contactId || '') === 'builtin:meta') return false;
+    const memory = getConversationMemory(scopeKey, conversationKey);
+    if (!memory) return false;
+    const messages = conversation.messages || [];
+    const targetIndex = messages.findIndex(message => String(message?.id || '') === String(messageId || ''));
+    if (targetIndex < 0) return false;
+
+    const cursorId = String(memory.lastCondensedMessageId || '');
+    if (cursorId) {
+      const cursorIndex = messages.findIndex(message => String(message?.id || '') === cursorId);
+      if (cursorIndex >= 0 && targetIndex <= cursorIndex) return true;
+      if (cursorIndex < 0 && (
+        (memory.recent || []).some(item => item?.source === 'auto')
+        || Boolean(memory.longTermSummary)
+        || Boolean(memory.longTermByMode?.reading)
+        || Boolean(memory.longTermByMode?.roleChat)
+      )) return true;
+    }
+
+    return (memory.recent || []).some(item => {
+      if (item?.source !== 'auto') return false;
+      const start = messages.findIndex(message => String(message?.id || '') === String(item.messageStartId || ''));
+      const end = messages.findIndex(message => String(message?.id || '') === String(item.messageEndId || ''));
+      return start >= 0 && end >= start && targetIndex >= start && targetIndex <= end;
+    });
+  }
+
+  function markPhoneMemoryReviewForMutation(scopeKey, conversationKey, conversation, messageId, actionLabel) {
+    if (!conversation || !messageId || !messageTouchesCondensedPhoneMemory(scopeKey, conversationKey, conversation, messageId)) return false;
+    try {
+      return markConversationMemoryNeedsReview(scopeKey, conversationKey, {
+        reason: `${actionLabel}影响了已经进入手机记忆的旧消息；自动记忆已暂停，请到“手机记忆”核对并保存后继续。`,
+        messageId,
+      });
+    } catch (error) {
+      console.warn('[moli小手机] mark memory needs review failed:', error);
+      return false;
+    }
+  }
 
   function renderInlineEditBubble() {
     if (!editingMessageId || !chatBody) return;
@@ -3918,7 +3971,6 @@ export function createPhonePanel({
     }
 
     const isFourthWall = !isGroup && isFourthWallContact(item);
-    if (fourthWallClearChatButton) fourthWallClearChatButton.hidden = false;
 
     chatTitle.textContent = isGenerationActive(scopeKey, currentContactId)
       ? '对方正在输入中…'
@@ -4095,7 +4147,9 @@ export function createPhonePanel({
       const content = String(editingMessageDraft || '').trim();
       if (!content) { toast('消息不能为空'); return; }
       try {
+        const conversation = getConversation(scopeKey, currentContactId);
         updateMessageContent(scopeKey, currentContactId, editingMessageId, content);
+        markPhoneMemoryReviewForMutation(scopeKey, currentContactId, conversation, editingMessageId, '编辑消息');
         editingMessageId = null;
         editingMessageDraft = '';
         renderChat();
@@ -4239,6 +4293,10 @@ export function createPhonePanel({
       const confirmed = windowRef.confirm?.(`删除选中的 ${selectedMessageIds.size} 条消息？`) ?? true;
       if (!confirmed) return;
       const scopeKey = getScopeKey?.();
+      const conversation = getConversation(scopeKey, currentContactId);
+      [...selectedMessageIds].forEach(messageId => {
+        markPhoneMemoryReviewForMutation(scopeKey, currentContactId, conversation, messageId, '批量删除消息');
+      });
       const removed = deleteMessages(scopeKey, currentContactId, [...selectedMessageIds]);
       if (removed > 0) {
         toast(`已删除 ${removed} 条`);
@@ -4508,9 +4566,11 @@ export function createPhonePanel({
         const replacement = flatItems.find(item => String(item.senderId) === String(targetGroupMemberId)) || flatItems[0];
         if (!replacement) throw new Error('指定成员没有返回可用重答');
         try {
+          const beforeReplaceConversation = getConversation(requestScopeKey, requestConversationKey);
           if (!updateMessageContent(requestScopeKey, requestConversationKey, regenerateMessageId, replacement.content)) {
             throw new Error('原群消息已经不存在');
           }
+          markPhoneMemoryReviewForMutation(requestScopeKey, requestConversationKey, beforeReplaceConversation, regenerateMessageId, '重答消息');
         } catch (saveError) {
           unsavedGenerationDraft = {
             scopeKey: requestScopeKey,
@@ -4546,7 +4606,10 @@ export function createPhonePanel({
             : String(message?.id || '') === String(regenerateMessageId))
           .map(message => String(message.id || ''))
           .filter(Boolean);
-        if (idsToRemove.length) deleteMessages(requestScopeKey, requestConversationKey, idsToRemove);
+        if (idsToRemove.length) {
+          markPhoneMemoryReviewForMutation(requestScopeKey, requestConversationKey, latest, regenerateMessageId, '重答消息');
+          deleteMessages(requestScopeKey, requestConversationKey, idsToRemove);
+        }
       }
 
       let savedCount = 0;
@@ -5125,7 +5188,6 @@ export function createPhonePanel({
   panel.querySelector('[data-action="fourth-wall-memory-save"]')?.addEventListener('click', saveFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-clear"]')?.addEventListener('click', clearFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-summarize"]')?.addEventListener('click', () => void summarizeFourthWallMemoryNow());
-  panel.querySelector('[data-action="fourth-wall-clear-chat"]')?.addEventListener('click', clearCurrentChatNow);
   panel.querySelector('[data-action="dismiss-chat-error"]')?.addEventListener('click', dismissCurrentGenerationError);
   panel.querySelector('[data-action="fourth-wall-prompts-restore"]')?.addEventListener('click', restoreFourthWallPrompts);
   panel.querySelector('[data-action="fourth-wall-session-add"]')?.addEventListener('click', addFourthWallSession);
