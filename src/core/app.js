@@ -15,13 +15,6 @@ let appInstance = null;
 export function initApp() {
   appInstance?.destroy?.();
 
-  getContacts();
-
-
-  ensureBuiltins(
-    getCurrentScopeKey(),
-  );
-
   const uiState = loadUiState();
 
   let panelController = null;
@@ -65,6 +58,22 @@ export function initApp() {
       saveUiState(uiState);
     },
   });
+
+  // Create the launcher before touching stored contact/runtime data.
+  // A bad legacy record must never make the entire phone disappear.
+  try {
+    getContacts();
+    ensureBuiltins(getCurrentScopeKey());
+  } catch (error) {
+    console.error('[moli小手机] startup data init failed; launcher kept visible', error);
+    try {
+      window.toastr?.error?.(
+        `moli小手机数据初始化异常：${error?.message || error}`,
+        '',
+        { timeOut: 5000, positionClass: 'toast-top-center' },
+      );
+    } catch {}
+  }
 
   const syncHandleUnread = () => {
     const scopeKey = getCurrentScopeKey();
