@@ -177,6 +177,14 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
       autoSuspended: Boolean(automation.autoSuspended),
       lastBodyAssistantCount: Math.max(0, Number.isFinite(Number(automation.lastBodyAssistantCount)) ? Math.round(Number(automation.lastBodyAssistantCount)) : 0),
       lastAutoChatAt: Math.max(0, Number(automation.lastAutoChatAt || 0)),
+      lastCommentaryEvaluationBodyCount: Math.max(0, Number(automation.lastCommentaryEvaluationBodyCount || 0)),
+      lastCommentaryEvaluationAt: Math.max(0, Number(automation.lastCommentaryEvaluationAt || 0)),
+      pendingSocialEvents: Array.isArray(automation.pendingSocialEvents)
+        ? automation.pendingSocialEvents.filter(Boolean).slice(-12)
+        : [],
+      recentBehaviorActions: Array.isArray(automation.recentBehaviorActions)
+        ? automation.recentBehaviorActions.filter(Boolean).slice(-8)
+        : [],
     };
 
     if (conversation.scopeMode !== 'global') {
