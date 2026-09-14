@@ -243,6 +243,9 @@ export async function maybeAutoCompactConversationMemory({ scopeKey, conversatio
     const config = runtimeConfig(contact);
     if (config?.source !== 'tavern' && !String(config?.model || '').trim()) return { changed: false, reason: 'no-model' };
     let memory = getConversationMemory(scopeKey, conversationKey);
+    if (memory?.needsReview) {
+      return { changed: false, reason: 'memory-needs-review', memory };
+    }
     let changed = false;
     const condensed = await condenseRecent(scopeKey, conversationKey, conversation, memory, config);
     changed ||= condensed.changed;
