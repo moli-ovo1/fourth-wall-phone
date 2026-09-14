@@ -2,6 +2,7 @@ import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildFourthWallRequest, sanitizeFourthWallContext } from '../prompts/fourth-wall.js';
+import { replaceUserPlaceholder } from '../core/tavern-user.js';
 function clean(value) {
   return String(value || '').trim();
 }
@@ -55,14 +56,14 @@ function messageText(message) {
   return parts.filter(Boolean).join('\n');
 }
 
-function senderName(message, conversation, contact) {
-  if (message?.role === 'user') return '用户';
+function senderName(message, conversation, contact, userName = 'User') {
+  if (message?.role === 'user') return clean(userName) || 'User';
   if (message?.senderSnapshot?.name) return clean(message.senderSnapshot.name);
   if (conversation?.type === 'private') return contactName(contact);
   return clean(message?.senderName) || '联系人';
 }
 
-function formatOtherConversation(source, contact, { fourthWall = false } = {}) {
+function formatOtherConversation(source, contact, { fourthWall = false, userName = 'User' } = {}) {
   const label = source.type === 'group'
     ? `群聊「${clean(source.name) || '未命名群聊'}」`
     : `与用户的私聊`;
@@ -70,7 +71,7 @@ function formatOtherConversation(source, contact, { fourthWall = false } = {}) {
   const lines = (source.messages || [])
     .map(message => {
       const who = message.role === 'user'
-        ? '用户'
+        ? (clean(userName) || 'User')
         : (clean(message.senderName) || contactName(contact));
       const rawContent = messageText(message);
       const content = fourthWall ? sanitizeFourthWallContext(rawContent) : rawContent;
@@ -149,7 +150,7 @@ function roleFidelityBlocks(contact) {
   return blocks;
 }
 
-function recentBodyBlock(recentBody, { fourthWall = false } = {}) {
+function recentBodyBlock(recentBody, { fourthWall = false, userName = 'User' } = {}) {
   const messages = Array.isArray(recentBody?.messages)
     ? recentBody.messages
     : [];
@@ -164,7 +165,7 @@ function recentBodyBlock(recentBody, { fourthWall = false } = {}) {
       const who = clean(message?.name)
         || (
           message?.role === 'user'
-            ? '用户'
+            ? (clean(userName) || 'User')
             : message?.role === 'system'
               ? '系统'
               : '角色'
@@ -211,6 +212,7 @@ export function buildPrivateGenerationRequest({
   fourthWallCommentary = null,
   fourthWallAllowNoPendingUser = false,
   fourthWallDisableAssistantPrefill = null,
+  userContext = null,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
     throw new Error('当前只支持私聊生成');
@@ -218,10 +220,13 @@ export function buildPrivateGenerationRequest({
 
   const name = contactName(contact);
   const isFourthWall = String(contact?.id || '') === 'builtin:meta';
+  const tavernUserName = clean(userContext?.name) || 'User';
+  const tavernUserDescription = clean(userContext?.description);
+  const contactUserProfile = clean(contact?.userProfile);
   const intro = clean(contact.intro);
-  const builtinDefaultPrompt = contact.kind === 'builtin' ? getBuiltinPersonaPrompt(contact.id) : '';
+  const builtinDefaultPrompt = contact.kind === 'builtin' ? replaceUserPlaceholder(getBuiltinPersonaPrompt(contact.id), tavernUserName) : '';
   const prompt = contact.kind === 'builtin'
-    ? (Object.prototype.hasOwnProperty.call(contact, 'prompt') ? clean(contact.prompt) : clean(builtinDefaultPrompt))
+    ? (Object.prototype.hasOwnProperty.call(contact, 'prompt') ? replaceUserPlaceholder(clean(contact.prompt), tavernUserName) : clean(builtinDefaultPrompt))
     : clean(contact.prompt);
   const messages = Array.isArray(conversation.messages)
     ? conversation.messages
@@ -239,6 +244,9 @@ export function buildPrivateGenerationRequest({
       historyLimit,
       characterName: fourthWallCharacterName || 'Assistant',
       commentary: fourthWallCommentary,
+      userName: tavernUserName,
+      tavernUserProfile: tavernUserDescription,
+      phoneUserProfile: contactUserProfile,
       globalSettings: {
         ...(contact.fourthWallGlobalSettings || {}),
         promptTemplates: Object.values(contact.fourthWallGlobalSettings?.promptTemplates || {}).some(value => String(value || '').trim())
@@ -257,8 +265,8 @@ export function buildPrivateGenerationRequest({
   }
 
   const systemBlocks = [
-    `你正在 moli小手机 的私聊中作为「${name}」回复用户。`,
-    '只回复当前角色本人的消息，不要替用户发言，不要输出系统说明。',
+    `你正在 moli小手机 的私聊中作为「${name}」与「${tavernUserName}」私聊。`,
+    `当前与你聊天的人叫「${tavernUserName}」。只回复当前角色本人的消息，不要替「${tavernUserName}」发言，不要输出系统说明。`,
   ];
 
   const scopeLabel = conversation.scopeMode === 'global' ? '全局' : '当前存档';
@@ -278,6 +286,14 @@ export function buildPrivateGenerationRequest({
   systemBlocks.push(
     `【当前聊天实例】\n归属：${scopeLabel}\n时间模式：${timeLabel}\n读取当前正文：${conversation.bodyContextEnabled === false ? '否' : '是'}${timeDetails}`
   );
+
+  systemBlocks.push(`【当前聊天对象】\n姓名：${tavernUserName}`);
+  if (contactUserProfile) {
+    systemBlocks.push(`【这个联系人保存的 User 设定】\n${clip(contactUserProfile, 8000)}`);
+  }
+  if (conversation.bodyContextEnabled !== false && tavernUserDescription) {
+    systemBlocks.push(`【当前 SillyTavern User Persona】\n${clip(tavernUserDescription, 8000)}`);
+  }
 
   const onlinePreset = buildOnlinePresetPrompt();
   if (onlinePreset) {
@@ -348,7 +364,7 @@ export function buildPrivateGenerationRequest({
     );
   }
 
-  const bodyBlock = recentBodyBlock(recentBody, { fourthWall: isFourthWall });
+  const bodyBlock = recentBodyBlock(recentBody, { fourthWall: isFourthWall, userName: tavernUserName });
   if (bodyBlock) {
     systemBlocks.push(bodyBlock);
   }
@@ -361,7 +377,7 @@ export function buildPrivateGenerationRequest({
   }
 
   const otherBlocks = (Array.isArray(otherContextSources) ? otherContextSources : [])
-    .map(source => formatOtherConversation(source, contact, { fourthWall: isFourthWall }))
+    .map(source => formatOtherConversation(source, contact, { fourthWall: isFourthWall, userName: tavernUserName }))
     .filter(Boolean);
 
   if (otherBlocks.length) {
@@ -376,7 +392,7 @@ export function buildPrivateGenerationRequest({
     .map(message => ({
       role: message.role === 'user' ? 'user' : 'assistant',
       content: messageText(message),
-      name: senderName(message, conversation, contact),
+      name: senderName(message, conversation, contact, tavernUserName),
     }))
     .filter(message => message.content);
 

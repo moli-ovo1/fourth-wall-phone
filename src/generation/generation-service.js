@@ -20,6 +20,7 @@ import { resolveFourthWallPrefillCompatibility } from './fourth-wall-prefill.js'
 import { getActivatedTavernWorldBook, getActivatedCustomWorldBook } from '../core/tavern-worldbook.js';
 import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
+import { getTavernUserContext, replaceUserPlaceholder } from '../core/tavern-user.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory } from '../storage/moments-store.js';
@@ -177,6 +178,7 @@ export async function generatePrivateReply({
   assertContactReady(contact);
   const isFourthWall = String(contact?.id || '') === 'builtin:meta';
   const currentTavernCharacter = isFourthWall ? getCurrentTavernCharacterSnapshot() : null;
+  const userContext = getTavernUserContext();
 
   let rawConfig = getApiSettings();
   if (contact?.apiOverride?.enabled === true) {
@@ -267,6 +269,7 @@ export async function generatePrivateReply({
       fourthWallCharacterName: currentTavernCharacter?.name || '',
       fourthWallCommentary,
       fourthWallDisableAssistantPrefill: fourthWallPrefillCompatibility?.disableAssistantPrefill,
+      userContext,
     });
   };
 
@@ -336,6 +339,7 @@ function fourthWallRuntime(scopeKey, conversationKey) {
   const config = resolveApiRuntimeConfig(rawConfig);
   assertApiConfig(config);
   const currentTavernCharacter = getCurrentTavernCharacterSnapshot();
+  const userContext = getTavernUserContext();
   const chatSettings = contact.fourthWallChatSettingsInitialized
     ? contact.fourthWallChatSettings
     : (conversation.fourthWall || contact.fourthWallChatSettings);
@@ -360,6 +364,7 @@ function fourthWallRuntime(scopeKey, conversationKey) {
       fourthWallCommentary: null,
       fourthWallAllowNoPendingUser: true,
       fourthWallDisableAssistantPrefill: prefillCompatibility.disableAssistantPrefill,
+      userContext,
     });
   };
   return { conversation, contact, config, buildRequest };
@@ -498,6 +503,7 @@ function parseSpeakerOrder(text, members, forcedIds) {
 }
 
 async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, members, workingMessages, reviewTarget = null }) {
+  const userContext = getTavernUserContext();
   const syntheticMessages = workingMessages.map(message => {
     if (message?.role === 'user') return { ...message, role: 'user' };
     if (String(message?.senderId || '') === String(contact.id)) return { ...message, role: 'assistant' };
@@ -562,6 +568,7 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
       .filter(source => source.messages.length)
       .slice(-2),
     historyLimit: conversation.recentChatLimit || 100,
+    userContext,
   });
   const selfRule = contact?.kind === 'tavern' ? `\n【本人视角铁律】正文中与你同名、同身份的角色就是你本人。谈到正文中的自己时必须保持第一人称与本人立场，不得称自己为“他/她”“这个角色”或切换成作者、分析员、旁观者。你可以辩解、隐瞒、否认、反思、恼火或拒绝讨论，但必须是你本人在说话。分析剧情不是普通 Tavern 角色的默认职责。\n` : '';
   const modeRule = readingMode
@@ -570,7 +577,7 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
   const reviewRule = reviewTarget?.content
     ? `\n【PRIMARY REVIEW TARGET｜本轮唯一主要点评对象】\n签名：${String(reviewTarget.signature || '')}\n${String(reviewTarget.content || '')}\n【边界】上面的正文快照是这次自动点评的主要对象。群聊天、群记忆、其他正文片段都只能作为 SUPPORTING CONTEXT，绝不能把群闲聊误当成本轮点评对象。\n`
     : '';
-  request.system = `【群聊短消息规则】本轮你若被选中，只发送 1 个气泡，正文最多 80 个中文字符（标点计入近似长度）。不要写小作文，不要拆成多条消息。\n${modeRule}\n你现在位于群聊「${String(conversation.name || '群聊')}」。你只扮演「${contactLabel(contact)}」，绝不能替其他群成员或用户发言。其他成员刚刚说出的内容属于真实的同轮群消息；要自然接住前文，不要把群聊变成分别回答用户的独立问答。可以赞同、反驳、补充、调侃、转移话题，也可以保持简短。\n当前群成员：${members.map(contactLabel).join('、')}\n${selfRule}${reviewRule}\n${request.system}`;
+  request.system = `【群聊短消息规则】本轮你若被选中，只发送 1 个气泡，正文最多 80 个中文字符（标点计入近似长度）。不要写小作文，不要拆成多条消息。\n${modeRule}\n你现在位于群聊「${String(conversation.name || '群聊')}」。当前与你们聊天的人叫「${userContext.name || 'User'}」。你只扮演「${contactLabel(contact)}」，绝不能替其他群成员或「${userContext.name || 'User'}」发言。其他成员刚刚说出的内容属于真实的同轮群消息；要自然接住前文，不要把群聊变成分别回答用户的独立问答。可以赞同、反驳、补充、调侃、转移话题，也可以保持简短。\n当前群成员：${members.map(contactLabel).join('、')}\n${selfRule}${reviewRule}\n${request.system}`;
   return request;
 }
 
@@ -580,7 +587,13 @@ function clipBatchText(value, max = 4000) {
   return text.length <= max ? text : `${text.slice(0, max)}\n[已截断]`;
 }
 
-function batchRoleProfile(contact, scanText = '') {
+function clipBatchTail(value, max = 4000) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text.length <= max ? text : `[较早内容已截断]\n${text.slice(-max)}`;
+}
+
+function batchRoleProfile(contact, scanText = '', userName = 'User') {
   const fidelity = contact?.source?.roleFidelity || {};
   const sources = contact?.roleSources || {};
   const blocks = [];
@@ -606,14 +619,14 @@ function batchRoleProfile(contact, scanText = '') {
     const protectedBuiltin = ['builtin:writer', 'builtin:guide'].includes(String(contact?.id || ''));
     add(contact?.kind === 'builtin' ? '内置人格 Prompt' : '人格 Prompt',
       contact?.kind === 'builtin'
-        ? (protectedBuiltin ? getBuiltinPersonaPrompt(contact.id) : (Object.prototype.hasOwnProperty.call(contact, 'prompt') ? contact.prompt : getBuiltinPersonaPrompt(contact.id)))
+        ? replaceUserPlaceholder((protectedBuiltin ? getBuiltinPersonaPrompt(contact.id) : (Object.prototype.hasOwnProperty.call(contact, 'prompt') ? contact.prompt : getBuiltinPersonaPrompt(contact.id))), userName)
         : contact.prompt,
       protectedBuiltin ? 12000 : 5000);
   }
   return blocks.join('\n\n') || '无额外人格资料。';
 }
 
-function formatPhoneBridge(scopeKey, contact) {
+function formatPhoneBridge(scopeKey, contact, userName = 'User') {
   const sources = getScopeConversations(scopeKey)
     .filter(item => item?.type === 'private' && String(item.contactId || '') === String(contact.id))
     .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
@@ -624,7 +637,7 @@ function formatPhoneBridge(scopeKey, contact) {
     const longTerm = clipBatchText(memory.longTermSummary, 1600);
     const recentMemory = (memory.recent || []).slice(-2).map(item => String(item?.content || '').trim()).filter(Boolean).join('\n');
     const recentMessages = (source.messages || []).slice(-6).map(message => {
-      const who = message?.role === 'user' ? '用户' : contactLabel(contact);
+      const who = message?.role === 'user' ? (String(userName || 'User')) : contactLabel(contact);
       const content = String(message?.content || '').trim();
       return content ? `${who}：${content}` : '';
     }).filter(Boolean).join('\n');
@@ -699,6 +712,7 @@ async function buildBatchGroupRequest({
   excludeMessageId = '',
   targetedRegeneration = false,
 } = {}) {
+  const userContext = getTavernUserContext();
   const review = Boolean(reviewTarget?.content);
   const groupBubbleMin = Math.max(1, Math.min(12, Number(conversation.groupReplyBubbleRange?.min) || 1));
   const groupBubbleMax = Math.max(groupBubbleMin, Math.min(12, Number(conversation.groupReplyBubbleRange?.max) || 8));
@@ -712,7 +726,7 @@ async function buildBatchGroupRequest({
     .map(message => {
       const text = groupMessageText(message, membersById);
       if (!text) return '';
-      return message?.role === 'user' ? `用户：${text}` : text;
+      return message?.role === 'user' ? `${userContext.name || 'User'}：${text}` : text;
     }).filter(Boolean).join('\n');
 
   const groupMemory = getConversationMemory(scopeKey, conversation.conversationKey || conversation.id) || {};
@@ -738,7 +752,7 @@ async function buildBatchGroupRequest({
       messages: recentBody.messages.filter(message => !(message.role === 'assistant' && String(message.content || '').trim() === target)),
     };
   }
-  const bodyText = recentBody?.messages?.map(message => `${message?.name || (message?.role === 'user' ? '用户' : '正文角色')}：${String(message?.content || '').trim()}`).filter(Boolean).join('\n') || '';
+  const bodyText = recentBody?.messages?.map(message => `${message?.name || (message?.role === 'user' ? (userContext.name || 'User') : '正文角色')}：${String(message?.content || '').trim()}`).filter(Boolean).join('\n') || '';
   const scanText = [groupHistory, recentMemory, longMemory, bodyText, reviewTarget?.content || ''].filter(Boolean).join('\n');
 
   const memberBlocks = [];
@@ -749,9 +763,11 @@ async function buildBatchGroupRequest({
       : await getActivatedTavernWorldBook({ contact: member, scanText });
     memberBlocks.push(
       `===== MEMBER PRIVATE ZONE: ${contactLabel(member)} | id=${member.id} =====\n`
-      + `【身份资料】\n${batchRoleProfile(member, scanText)}\n\n`
+      + `【身份资料】\n${batchRoleProfile(member, scanText, userContext.name)}\n\n`
+      + `${String(member?.userProfile || '').trim() ? `【这个成员保存的 User 设定】\n${clipBatchText(member.userProfile, 5000)}\n\n` : ''}`
+      + `${readingMode && String(userContext.description || '').trim() ? `【当前 SillyTavern User Persona】\n${clipBatchText(userContext.description, 5000)}\n\n` : ''}`
       + `【本成员自己的世界书】\n${clipBatchText(worldBook?.text || '', 6000) || '本轮无激活条目。'}\n\n`
-      + `【本成员自己的手机连续性｜仅允许 ${contactLabel(member)} 使用】\n${formatPhoneBridge(scopeKey, member)}\n`
+      + `【本成员自己的手机连续性｜仅允许 ${contactLabel(member)} 使用】\n${formatPhoneBridge(scopeKey, member, userContext.name)}\n`
       + `===== END PRIVATE ZONE =====`
     );
   }
@@ -800,7 +816,7 @@ ${onlinePreset}
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
       : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
-  const shared = `【群聊】${String(conversation.name || '群聊')}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchText(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || '暂无可确认正文上下文'}` : ''}\n\n${memberBlocks.join('\n\n')}`;
+  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || '暂无可确认正文上下文'}` : ''}\n\n${memberBlocks.join('\n\n')}`;
   return { system, messages: [{ role: 'user', content: shared }] };
 }
 
@@ -1021,7 +1037,7 @@ export async function generateContactMoment({ scopeKey, contactId, signal } = {}
   }).join('\n');
 
   const personaParts = [
-    contact.kind === 'builtin' ? getBuiltinPersonaPrompt(contact.id) : '',
+    contact.kind === 'builtin' ? replaceUserPlaceholder(getBuiltinPersonaPrompt(contact.id), getTavernUserContext().name) : '',
     contact.intro,
     contact.prompt,
     contact.kind === 'tavern' ? Object.values(contact?.source?.roleFidelity || {}).filter(Boolean).join('\n\n') : '',
@@ -1080,10 +1096,10 @@ ${profileSocial || momentHistory || '暂无'}
 ${npcSources.length ? npcSources.map(entry => `npcSourceKey=${entry.key}｜${entry.title}\n${entry.content}`).join('\n\n') : '暂无明确世界书来源'}
 
 【小上帝】
-${getBuiltinPersonaPrompt('builtin:writer')}
+${replaceUserPlaceholder(getBuiltinPersonaPrompt('builtin:writer'), getTavernUserContext().name)}
 
 【moli】
-${getBuiltinPersonaPrompt('builtin:guide')}
+${replaceUserPlaceholder(getBuiltinPersonaPrompt('builtin:guide'), getTavernUserContext().name)}
 
 请只返回一个 JSON：
 {"action":"SKIP|POST","content":"POST 时填写朋友圈正文，否则空字符串","ageMinutes":0,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论时填写；DELETE_COMMENT 时作为 deletionReason","replyToId":"可选，回复某条评论 id"}]}。
