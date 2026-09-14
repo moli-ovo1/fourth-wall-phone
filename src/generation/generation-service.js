@@ -58,19 +58,13 @@ function getContactMomentsContinuity(scopeKey, contactId) {
   const blocks = [];
   if (ownProfile.length) {
     blocks.push(`【这个角色自己的朋友圈】
-${ownProfile.map(formatMomentContinuityItem).join('
-
-')}`);
+${ownProfile.map(formatMomentContinuityItem).join('\n\n')}`);
   }
   if (seenPublic.length) {
     blocks.push(`【这个角色已经看过的公共朋友圈】
-${seenPublic.map(formatMomentContinuityItem).join('
-
-')}`);
+${seenPublic.map(formatMomentContinuityItem).join('\n\n')}`);
   }
-  return blocks.join('
-
-');
+  return blocks.join('\n\n');
 }
 
 function assertApiConfig(config) {
