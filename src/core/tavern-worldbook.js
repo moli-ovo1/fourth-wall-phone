@@ -203,3 +203,90 @@ export async function getActivatedTavernWorldBook({ contact, scanText = '' } = {
     text: activated.map(entry => entry.content).filter(Boolean).join('\n\n'),
   };
 }
+
+function discoverWorldBookNames(ctx) {
+  const names = new Set();
+  const candidates = [
+    ctx?.world_names,
+    ctx?.worldNames,
+    (() => { try { return window?.world_names; } catch { return null; } })(),
+    (() => { try { return window?.parent?.world_names; } catch { return null; } })(),
+  ];
+  for (const value of candidates) {
+    if (Array.isArray(value)) value.forEach(name => { if (String(name || '').trim()) names.add(String(name).trim()); });
+  }
+  const characters = Array.isArray(ctx?.characters) ? ctx.characters : [];
+  characters.forEach(character => {
+    const data = character?.data && typeof character.data === 'object' ? character.data : character;
+    const linked = String(data?.extensions?.world || character?.extensions?.world || '').trim();
+    if (linked) names.add(linked);
+  });
+  return [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+}
+
+export async function getTavernWorldBookCatalog() {
+  const ctx = getContext();
+  if (!ctx || typeof ctx.loadWorldInfo !== 'function') {
+    return { available: false, reason: '当前 SillyTavern 未提供世界书读取接口。', books: [] };
+  }
+  const names = discoverWorldBookNames(ctx);
+  const books = [];
+  for (const name of names) {
+    try {
+      const raw = await ctx.loadWorldInfo(name);
+      if (!raw) continue;
+      const book = normalizeBook(raw, { key: `global:${name}`, name, kind: 'global' });
+      if (book.entries.length) books.push(book);
+    } catch (error) {
+      console.warn('[moli小手机] global world book load failed:', name, error);
+    }
+  }
+  return { available: true, books };
+}
+
+export async function getActivatedCustomWorldBook({ contact, scanText = '' } = {}) {
+  if (contact?.kind !== 'custom') return { available: true, entries: [], text: '' };
+  const config = contact?.customWorldBook && typeof contact.customWorldBook === 'object'
+    ? contact.customWorldBook
+    : {};
+  const bookName = String(config.bookName || '').trim();
+  if (!bookName) return { available: true, entries: [], text: '' };
+
+  const catalog = await getTavernWorldBookCatalog();
+  if (!catalog.available) return { ...catalog, entries: [], text: '' };
+  const book = catalog.books.find(item => item.name === bookName);
+  if (!book) return { available: false, reason: `找不到世界书：${bookName}`, entries: [], text: '' };
+
+  const mainEntryKey = String(config.mainEntryKey || '');
+  const main = book.entries.find(entry => entry.key === mainEntryKey) || null;
+  const activated = [];
+  const seen = new Set();
+  let buffer = String(scanText || '');
+
+  if (main?.content) {
+    activated.push({ ...main, __main: true });
+    seen.add(main.key);
+    buffer += `\n${main.content}`;
+  }
+
+  const candidates = book.entries.filter(entry => entry.key !== mainEntryKey && !entry.disabled);
+  for (let pass = 0; pass < 4; pass += 1) {
+    let changed = false;
+    for (const entry of candidates) {
+      if (seen.has(entry.key) || !entryTriggered(entry, buffer) || !passesProbability(entry)) continue;
+      seen.add(entry.key);
+      activated.push(entry);
+      if (entry.content) buffer += `\n${entry.content}`;
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
+  const mainText = main?.content ? `【角色主条目：${main.title || '未命名条目'}】\n${main.content}` : '';
+  const dynamicText = activated.filter(entry => !entry.__main).sort((a,b)=>Number(b.order||0)-Number(a.order||0)).map(entry => entry.content).filter(Boolean).join('\n\n');
+  return {
+    available: true,
+    entries: activated,
+    text: [mainText, dynamicText].filter(Boolean).join('\n\n'),
+  };
+}
