@@ -102,6 +102,16 @@
     cursor:pointer;
 }
 
+#moli-phone-panel [data-action="contact-moments-refresh"].is-spinning{
+  animation: moli-moment-refresh-spin .8s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes moli-moment-refresh-spin{
+  from{ transform: rotate(0deg); }
+  to{ transform: rotate(360deg); }
+}
+
 #moli-phone-panel .moli-icon-btn.moli-update-available{
     color:#d70015;
     font-weight:700;
