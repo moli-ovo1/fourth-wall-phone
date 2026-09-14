@@ -67,6 +67,8 @@ import { maybeAutoCompactConversationMemory } from '../generation/memory-service
 import { parseGeneratedMessages, previewGeneratedMessages, parseFourthWallResponse, previewFourthWallResponse } from '../generation/message-parser.js';
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
+import { user_avatar } from '../../../../../personas.js';
+import { getThumbnailUrl } from '../../../../../utils.js';
 import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
@@ -208,7 +210,7 @@ export function createPhonePanel({
         </div>
         <div class="moli-nav-title" data-chat-title></div>
         <div class="moli-nav-side right">
-          <button class="moli-icon-btn" data-action="fourth-wall-clear-chat" aria-label="清空皮下聊天" title="清空皮下聊天" hidden>⌫</button>
+          <button class="moli-icon-btn" data-action="fourth-wall-clear-chat" aria-label="清空当前聊天" title="清空当前聊天" hidden>⌫</button>
           <button class="moli-icon-btn" data-action="chat-info" aria-label="聊天信息">…</button>
         </div>
       </header>
@@ -963,7 +965,10 @@ export function createPhonePanel({
   let fourthWallSummaryController = null;
   let editingMessageId = null;
   let editingMessageDraft = '';
-  let unsavedFourthWallDraft = null;
+  let unsavedGenerationDraft = null;
+  const CHAT_HISTORY_PAGE_SIZE = 20;
+  const CHAT_HISTORY_WINDOW_LIMIT = 60;
+  const chatHistoryWindows = new Map();
   let activePromptBlockId = null;
 
   panel.addEventListener(
@@ -978,9 +983,9 @@ export function createPhonePanel({
     true,
   );
 
-  // 失败提示保持到用户继续操作为止：输入文字、发送/点击任意聊天区域都会清除。
+  // 失败提示保留到用户明确关闭、重新输入或成功重试；不能在长按气泡时先清掉，
+  // 否则“重试回复”菜单还没出现就失去错误状态。
   const chatPage = panel.querySelector('[data-page="chat"]');
-  chatPage?.addEventListener('pointerdown', () => dismissCurrentGenerationError(), true);
   input?.addEventListener('input', () => dismissCurrentGenerationError());
 
   const escapeHtml = value => String(value ?? '')
@@ -1796,51 +1801,103 @@ export function createPhonePanel({
     }
   }
 
-  function regenerateFourthWallReply() {
+  function regenerateMessageReply(messageId) {
     const scopeKey = getScopeKey?.();
     const conversation = scopeKey && currentContactId ? getConversation(scopeKey, currentContactId) : null;
-    if (!scopeKey || !conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') return;
+    const message = scopeKey && currentContactId ? getMessageById(scopeKey, currentContactId, messageId) : null;
+    if (!scopeKey || !conversation || !message || message.role !== 'assistant') return;
     if (generationController || isGenerationActive(scopeKey, currentContactId) || fourthWallSummaryController) {
       toast('已有任务正在进行');
       return;
     }
-    try {
-      prepareFourthWallRegeneration(scopeKey, currentContactId);
-      renderChat();
-      requestReply();
-    } catch (error) {
-      toast(error?.message || '没有可重答的用户消息');
+
+    if (conversation.type === 'group') {
+      const targetMemberId = String(message.senderId || '');
+      if (!targetMemberId) {
+        toast('无法识别这条群消息的成员');
+        return;
+      }
+      void requestReply({ regenerateMessageId: messageId, targetGroupMemberId: targetMemberId });
+      return;
     }
+
+    const isFourthWall = String(conversation.contactId || '') === 'builtin:meta';
+    if (isFourthWall) {
+      try {
+        prepareFourthWallRegeneration(scopeKey, currentContactId);
+        renderChat();
+        void requestReply();
+      } catch (error) {
+        toast(error?.message || '没有可重答的用户消息');
+      }
+      return;
+    }
+
+    void requestReply({ regenerateMessageId: messageId });
   }
 
-  function retryFourthWallReply() {
+  function retryFailedReply() {
     const scopeKey = getScopeKey?.();
     const conversation = scopeKey && currentContactId ? getConversation(scopeKey, currentContactId) : null;
-    if (!scopeKey || !conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') return;
+    if (!scopeKey || !conversation) return;
     const messages = conversation.messages || [];
     let userIndex = messages.length - 1;
     while (userIndex >= 0 && messages[userIndex]?.role !== 'user') userIndex -= 1;
-    if (userIndex < 0 || messages.slice(userIndex + 1).some(item => item?.role === 'assistant' && String(item?.messageType || '') !== 'commentary')) {
+    const hasAnswer = userIndex >= 0 && messages.slice(userIndex + 1)
+      .some(item => item?.role === 'assistant' && String(item?.messageType || '') !== 'commentary');
+    if (userIndex < 0 || hasAnswer) {
       toast('没有待回答的用户消息');
       return;
     }
     clearGenerationError(scopeKey, currentContactId);
-    requestReply();
+    void requestReply();
   }
 
-  function clearFourthWallChatNow() {
+  function clearCurrentChatNow() {
     const scopeKey = getScopeKey?.();
     const conversation = scopeKey && currentContactId ? getConversation(scopeKey, currentContactId) : null;
-    if (!scopeKey || !conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') return;
+    if (!scopeKey || !conversation) return;
     if (generationController || isGenerationActive(scopeKey, currentContactId) || fourthWallSummaryController) {
       toast('请先停止当前任务');
       return;
     }
-    if (!(windowRef.confirm?.('清空当前皮下聊天记录？') ?? true)) return;
-    const clearMemory = windowRef.confirm?.('是否同时清空皮下长期记忆？\n确定＝聊天和记忆一起清空；取消＝只清聊天。') ?? false;
-    clearFourthWallSession(scopeKey, currentContactId, { clearMemory });
+    if (!(windowRef.confirm?.('清空当前聊天记录？') ?? true)) return;
+    const clearMemory = windowRef.confirm?.('是否同时清空这段聊天的手机记忆？\n确定＝聊天和记忆一起清空；取消＝只清聊天。') ?? false;
+
+    if (conversation.type === 'private' && String(conversation.contactId || '') === 'builtin:meta') {
+      clearFourthWallSession(scopeKey, currentContactId, { clearMemory });
+    } else {
+      clearConversationMessages(scopeKey, currentContactId);
+      if (clearMemory) {
+        updateConversationMemory(scopeKey, currentContactId, {
+          recent: [],
+          longTermSummary: '',
+          longTermByMode: { reading: '', roleChat: '' },
+          lastCondensedMessageId: '',
+          lastSummarizedAt: 0,
+          lastCondensedAt: 0,
+          lastAutoError: '',
+        });
+      } else {
+        updateConversationMemory(scopeKey, currentContactId, {
+          lastCondensedMessageId: '',
+          lastCondensedAt: 0,
+          lastAutoError: '',
+        });
+      }
+    }
+
+    editingMessageId = null;
+    editingMessageDraft = '';
+    if (
+      unsavedGenerationDraft
+      && String(unsavedGenerationDraft.scopeKey || '') === String(scopeKey)
+      && String(unsavedGenerationDraft.conversationKey || '') === String(currentContactId)
+    ) {
+      unsavedGenerationDraft = null;
+    }
     renderChat();
-    toast(clearMemory ? '皮下聊天与记忆已清空' : '皮下聊天已清空，长期记忆已保留');
+    toast(clearMemory ? '聊天和手机记忆已清空' : '聊天已清空，手机记忆已保留');
   }
 
 
@@ -3201,13 +3258,15 @@ export function createPhonePanel({
     activeMessageId = messageId;
     const scopeKey = getScopeKey?.();
     const conversation = scopeKey && currentContactId ? getConversation(scopeKey, currentContactId) : null;
-    const isFourthWall = conversation?.type === 'private' && String(conversation.contactId || '') === 'builtin:meta';
     const messages = conversation?.messages || [];
     const messageIndex = messages.findIndex(item => String(item?.id || '') === String(messageId || ''));
+    const selected = messageIndex >= 0 ? messages[messageIndex] : null;
+
     let lastUserIndex = -1;
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       if (messages[index]?.role === 'user') { lastUserIndex = index; break; }
     }
+
     let latestNormalAssistantIndex = -1;
     for (let index = messages.length - 1; index > lastUserIndex; index -= 1) {
       if (messages[index]?.role === 'assistant' && String(messages[index]?.messageType || '') !== 'commentary') {
@@ -3215,29 +3274,45 @@ export function createPhonePanel({
         break;
       }
     }
+
+    let canRegenerate = false;
+    if (selected?.role === 'assistant') {
+      if (conversation?.type === 'group') {
+        const latestAssistant = [...messages].reverse().find(message => message?.role === 'assistant');
+        const latestTurnId = String(latestAssistant?.generationTurnId || '');
+        const selectedTurnId = String(selected?.generationTurnId || '');
+        canRegenerate = Boolean(selected?.senderId) && (
+          (latestTurnId && selectedTurnId === latestTurnId)
+          || (!latestTurnId && messageIndex === latestNormalAssistantIndex)
+        );
+      } else {
+        canRegenerate = messageIndex === latestNormalAssistantIndex;
+      }
+    }
+
     const error = scopeKey && currentContactId ? getGenerationError(scopeKey, currentContactId) : null;
-    const selected = messageIndex >= 0 ? messages[messageIndex] : null;
+    const hasNormalAssistantAfterLastUser = lastUserIndex >= 0 && messages
+      .slice(lastUserIndex + 1)
+      .some(message => message?.role === 'assistant' && String(message?.messageType || '') !== 'commentary');
+
     const editButton = messageMenu.querySelector('[data-message-action="edit"]');
     const regenerateButton = messageMenu.querySelector('[data-message-action="regenerate"]');
     const retryButton = messageMenu.querySelector('[data-message-action="retry"]');
-    if (editButton) editButton.hidden = !isFourthWall;
-    if (regenerateButton) regenerateButton.hidden = !(
-      isFourthWall
-      && selected?.role === 'assistant'
-      && messageIndex === latestNormalAssistantIndex
-    );
+
+    if (editButton) editButton.hidden = !selected;
+    if (regenerateButton) regenerateButton.hidden = !canRegenerate;
     if (retryButton) retryButton.hidden = !(
-      isFourthWall
-      && Boolean(error?.message)
+      Boolean(error?.message)
       && selected?.role === 'user'
       && messageIndex === lastUserIndex
-      && latestNormalAssistantIndex < 0
+      && !hasNormalAssistantAfterLastUser
     );
+
     messageMenu.hidden = false;
 
     const panelRect = panel.getBoundingClientRect();
     const menuWidth = messageMenu.offsetWidth || 170;
-    const menuHeight = messageMenu.offsetHeight || 220;
+    const menuHeight = messageMenu.offsetHeight || 260;
     const localX = clientX - panelRect.left;
     const localY = clientY - panelRect.top;
 
@@ -3247,6 +3322,7 @@ export function createPhonePanel({
     messageMenu.style.left = `${left}px`;
     messageMenu.style.top = `${top}px`;
   }
+
 
   async function copyMessageText(message) {
     const text = String(message?.content || '');
@@ -3458,12 +3534,13 @@ export function createPhonePanel({
       const conversation = getConversation(scopeKey, currentContactId);
       const isFourthWall = conversation?.type === 'private' && String(conversation.contactId || '') === 'builtin:meta';
       hideMessageMenu();
-      if (!isFourthWall) return;
-      const index = (conversation.messages || []).findIndex(item => String(item?.id || '') === String(messageId));
-      const archivedCount = Number(conversation.fourthWallSession?.archivedCount || 0);
-      if (index >= 0 && index < archivedCount) {
-        const ok = windowRef.confirm?.('这条消息已经归档，修改原文不会改写记忆；需要同步更正时请编辑皮下记忆。继续修改？') ?? true;
-        if (!ok) return;
+      if (isFourthWall) {
+        const index = (conversation.messages || []).findIndex(item => String(item?.id || '') === String(messageId));
+        const archivedCount = Number(conversation.fourthWallSession?.archivedCount || 0);
+        if (index >= 0 && index < archivedCount) {
+          const ok = windowRef.confirm?.('这条消息已经归档，修改原文不会改写记忆；需要同步更正时请编辑皮下记忆。继续修改？') ?? true;
+          if (!ok) return;
+        }
       }
       beginInlineMessageEdit(messageId);
       return;
@@ -3471,13 +3548,13 @@ export function createPhonePanel({
 
     if (action === 'regenerate') {
       hideMessageMenu();
-      regenerateFourthWallReply();
+      regenerateMessageReply(messageId);
       return;
     }
 
     if (action === 'retry') {
       hideMessageMenu();
-      retryFourthWallReply();
+      retryFailedReply();
       return;
     }
 
@@ -3588,14 +3665,12 @@ export function createPhonePanel({
   }
 
   function currentTavernUserAvatarMarkup(className = 'moli-mini-avatar') {
-    const image =
-      documentRef.querySelector('#user_avatar_block .avatar-container.selected img')
-      || documentRef.querySelector('#user_avatar_block .selected img')
-      || documentRef.querySelector('#user_avatar_block img[data-selected="true"]');
-    const src = String(image?.currentSrc || image?.src || '').trim();
+    const avatarId = String(user_avatar || '').trim();
+    const src = avatarId ? String(getThumbnailUrl('persona', avatarId) || '').trim() : '';
     if (!src) return `<div class="${escapeHtml(className)}">我</div>`;
     return `<img class="${escapeHtml(className)}" src="${escapeHtml(src)}" alt="">`;
   }
+
 
   function renderInlineEditBubble() {
     if (!editingMessageId || !chatBody) return;
@@ -3603,83 +3678,120 @@ export function createPhonePanel({
       .find(node => String(node.dataset.messageId || '') === String(editingMessageId));
     const bubble = row?.querySelector?.('.moli-bubble');
     if (!bubble) return;
-    bubble.innerHTML = `
-      <textarea class="moli-inline-message-edit" data-inline-message-edit rows="3">${escapeHtml(editingMessageDraft)}</textarea>
-      <div class="moli-inline-message-edit-actions">
-        <button type="button" data-action="inline-edit-save">保存</button>
-        <button type="button" data-action="inline-edit-cancel">取消</button>
-      </div>
+
+    bubble.innerHTML = '';
+    bubble.textContent = editingMessageDraft;
+    bubble.contentEditable = 'true';
+    bubble.spellcheck = false;
+    bubble.dataset.inlineMessageEdit = 'true';
+    bubble.classList.add('is-inline-editing');
+
+    const actions = documentRef.createElement('div');
+    actions.className = 'moli-inline-message-edit-actions';
+    actions.innerHTML = `
+      <button type="button" data-action="inline-edit-save">保存</button>
+      <button type="button" data-action="inline-edit-cancel">取消</button>
     `;
-    const textarea = bubble.querySelector('[data-inline-message-edit]');
-    textarea?.focus();
-    textarea?.setSelectionRange?.(textarea.value.length, textarea.value.length);
+    bubble.insertAdjacentElement('afterend', actions);
+
+    bubble.focus();
+    try {
+      const range = documentRef.createRange();
+      range.selectNodeContents(bubble);
+      range.collapse(false);
+      const selection = windowRef.getSelection?.();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    } catch {}
   }
 
-  function renderUnsavedFourthWallDraft() {
-    if (!unsavedFourthWallDraft || !chatBody) return;
+
+  function renderUnsavedGenerationDraft() {
+    const draft = unsavedGenerationDraft;
+    if (!draft || !chatBody) return;
     if (
-      String(unsavedFourthWallDraft.scopeKey || '') !== String(getScopeKey?.() || '')
-      || String(unsavedFourthWallDraft.conversationKey || '') !== String(currentContactId || '')
+      String(draft.scopeKey || '') !== String(getScopeKey?.() || '')
+      || String(draft.conversationKey || '') !== String(currentContactId || '')
     ) return;
-    const item = contact('builtin:meta');
-    const row = documentRef.createElement('div');
-    row.className = 'moli-msg assistant moli-fourth-wall-unsaved';
-    row.dataset.unsavedFourthWall = 'true';
-    row.innerHTML = `
-      ${avatarMarkup(item, 'moli-mini-avatar')}
-      <div class="moli-msg-content">
-        ${unsavedFourthWallDraft.thinking ? `
-          <details class="moli-fourth-wall-thinking">
-            <summary>思考过程</summary>
-            <div>${escapeHtml(unsavedFourthWallDraft.thinking)}</div>
-          </details>` : ''}
-        <div class="moli-bubble">
-          ${unsavedFourthWallDraft.messages.map(content => `<div>${escapeHtml(content)}</div>`).join('')}
-          <small class="moli-unsaved-label">未保存</small>
-          <div class="moli-unsaved-actions">
-            <button type="button" data-action="unsaved-save-retry">重新保存</button>
-            <button type="button" data-action="unsaved-discard">丢弃</button>
+
+    (draft.items || []).forEach((entry, index) => {
+      const item = entry.contact || contact(entry.senderId || '');
+      const row = documentRef.createElement('div');
+      row.className = 'moli-msg assistant moli-generation-unsaved';
+      row.dataset.unsavedGeneration = 'true';
+      row.innerHTML = `
+        ${item ? avatarMarkup(item, 'moli-mini-avatar') : '<div class="moli-mini-avatar">AI</div>'}
+        <div class="moli-msg-content">
+          ${entry.thinking ? `
+            <details class="moli-fourth-wall-thinking">
+              <summary>思考过程</summary>
+              <div>${escapeHtml(entry.thinking)}</div>
+            </details>` : ''}
+          <div class="moli-bubble">
+            ${escapeHtml(entry.content || '')}
+            <small class="moli-unsaved-label">未保存</small>
+            ${index === (draft.items || []).length - 1 ? `
+              <div class="moli-unsaved-actions">
+                <button type="button" data-action="unsaved-save-retry">重新保存</button>
+                <button type="button" data-action="unsaved-discard">丢弃</button>
+              </div>` : ''}
           </div>
         </div>
-      </div>
-    `;
-    chatBody.appendChild(row);
+      `;
+      chatBody.appendChild(row);
+    });
   }
 
-  function retrySaveUnsavedFourthWallDraft() {
-    const draft = unsavedFourthWallDraft;
+  function retrySaveUnsavedGenerationDraft() {
+    const draft = unsavedGenerationDraft;
     if (!draft) return;
     try {
-      draft.messages.forEach(content => {
-        appendMessage(
+      if (draft.mode === 'replace-message') {
+        const replacement = draft.items?.[0];
+        if (!replacement || !updateMessageContent(
           draft.scopeKey,
           draft.conversationKey,
-          'assistant',
-          content,
-          {
-            source: 'generation',
-            generationTurnId: draft.generationTurnId,
-            storyTime: draft.storyTime || null,
-            thinking: draft.thinking || '',
-            messageType: 'message',
-            senderId: draft.contact?.id || 'builtin:meta',
-            senderSnapshot: {
-              name: displayName(draft.contact || contact('builtin:meta')),
-              avatar: avatarUrl(draft.contact || contact('builtin:meta')),
-            },
-          }
-        );
-      });
-      unsavedFourthWallDraft = null;
+          draft.targetMessageId,
+          replacement.content,
+        )) {
+          throw new Error('原消息已经不存在');
+        }
+      } else {
+        while ((draft.items || []).length) {
+          const entry = draft.items[0];
+          appendMessage(
+            draft.scopeKey,
+            draft.conversationKey,
+            'assistant',
+            entry.content,
+            {
+              source: 'generation',
+              generationTurnId: entry.generationTurnId || draft.generationTurnId,
+              storyTime: entry.storyTime || draft.storyTime || null,
+              thinking: entry.thinking || '',
+              messageType: entry.messageType || '',
+              senderId: entry.senderId || entry.contact?.id || '',
+              senderSnapshot: entry.senderSnapshot || {
+                name: displayName(entry.contact || contact(entry.senderId || '')),
+                avatar: avatarUrl(entry.contact || contact(entry.senderId || '')),
+              },
+            }
+          );
+          draft.items.shift();
+        }
+      }
+      unsavedGenerationDraft = null;
       clearGenerationError(draft.scopeKey, draft.conversationKey);
       renderChat();
       toast('未保存回复已恢复');
     } catch (error) {
       setGenerationError(draft.scopeKey, draft.conversationKey, `回复仍未能保存：${error?.message || error}`, 'save');
       renderGenerationErrorBanner();
+      renderChat();
       toast('仍未保存，请稍后重试');
     }
   }
+
 
   function beginInlineMessageEdit(messageId) {
     const scopeKey = getScopeKey?.();
@@ -3690,7 +3802,95 @@ export function createPhonePanel({
     renderChat();
   }
 
-  function renderChat() {
+  function chatHistoryWindow(conversationKey, total) {
+    const key = String(conversationKey || '');
+    let state = chatHistoryWindows.get(key);
+    if (!state) {
+      state = { start: Math.max(0, total - CHAT_HISTORY_WINDOW_LIMIT), end: total, total };
+      chatHistoryWindows.set(key, state);
+      return state;
+    }
+
+    const wasAtLatest = state.end >= state.total;
+    if (total !== state.total) {
+      if (wasAtLatest || total < state.total) {
+        state.end = total;
+        state.start = Math.max(0, state.end - CHAT_HISTORY_WINDOW_LIMIT);
+      } else {
+        state.end = Math.min(total, state.end);
+        state.start = Math.max(0, Math.min(state.start, Math.max(0, state.end - 1)));
+      }
+      state.total = total;
+    }
+
+    state.start = Math.max(0, Math.min(state.start, total));
+    state.end = Math.max(state.start, Math.min(state.end, total));
+    if (state.end - state.start > CHAT_HISTORY_WINDOW_LIMIT) {
+      state.start = state.end - CHAT_HISTORY_WINDOW_LIMIT;
+    }
+    return state;
+  }
+
+  function captureChatScrollAnchor() {
+    if (!chatBody) return null;
+    const top = chatBody.getBoundingClientRect().top;
+    const row = [...chatBody.querySelectorAll('[data-message-id]')]
+      .find(node => node.getBoundingClientRect().bottom > top);
+    return row ? {
+      messageId: String(row.dataset.messageId || ''),
+      offset: row.getBoundingClientRect().top - top,
+    } : null;
+  }
+
+  function restoreChatScrollAnchor(anchor) {
+    if (!anchor?.messageId || !chatBody) return false;
+    const row = [...chatBody.querySelectorAll('[data-message-id]')]
+      .find(node => String(node.dataset.messageId || '') === anchor.messageId);
+    if (!row) return false;
+    const top = chatBody.getBoundingClientRect().top;
+    chatBody.scrollTop += row.getBoundingClientRect().top - top - anchor.offset;
+    return true;
+  }
+
+  function loadChatHistoryWindow(direction) {
+    const scopeKey = getScopeKey?.();
+    const conversation = scopeKey && currentContactId ? getConversation(scopeKey, currentContactId) : null;
+    if (!conversation) return;
+    const total = (conversation.messages || []).length;
+    const state = chatHistoryWindow(currentContactId, total);
+    const anchor = captureChatScrollAnchor();
+
+    if (direction === 'earlier' && state.start > 0) {
+      const nextStart = Math.max(0, state.start - CHAT_HISTORY_PAGE_SIZE);
+      state.start = nextStart;
+      state.end = Math.min(total, nextStart + CHAT_HISTORY_WINDOW_LIMIT);
+    } else if (direction === 'later' && state.end < total) {
+      const nextEnd = Math.min(total, state.end + CHAT_HISTORY_PAGE_SIZE);
+      state.end = nextEnd;
+      state.start = Math.max(0, nextEnd - CHAT_HISTORY_WINDOW_LIMIT);
+    } else if (direction === 'latest') {
+      state.end = total;
+      state.start = Math.max(0, total - CHAT_HISTORY_WINDOW_LIMIT);
+    }
+
+    state.total = total;
+    renderChat({ preserveScrollAnchor: direction === 'latest' ? null : anchor, forceLatest: direction === 'latest' });
+  }
+
+  function focusChatHistoryMessage(messageId) {
+    const scopeKey = getScopeKey?.();
+    const conversation = scopeKey && currentContactId ? getConversation(scopeKey, currentContactId) : null;
+    if (!conversation) return;
+    const messages = conversation.messages || [];
+    const index = messages.findIndex(message => String(message?.id || '') === String(messageId || ''));
+    if (index < 0) return;
+    let start = Math.max(0, index - Math.floor(CHAT_HISTORY_WINDOW_LIMIT / 2));
+    let end = Math.min(messages.length, start + CHAT_HISTORY_WINDOW_LIMIT);
+    start = Math.max(0, end - CHAT_HISTORY_WINDOW_LIMIT);
+    chatHistoryWindows.set(String(currentContactId), { start, end, total: messages.length });
+  }
+
+  function renderChat({ preserveScrollAnchor = null, forceLatest = false } = {}) {
     renderGenerationErrorBanner();
     if (!currentContactId) {
       return;
@@ -3718,7 +3918,7 @@ export function createPhonePanel({
     }
 
     const isFourthWall = !isGroup && isFourthWallContact(item);
-    if (fourthWallClearChatButton) fourthWallClearChatButton.hidden = !isFourthWall;
+    if (fourthWallClearChatButton) fourthWallClearChatButton.hidden = false;
 
     chatTitle.textContent = isGenerationActive(scopeKey, currentContactId)
       ? '对方正在输入中…'
@@ -3729,9 +3929,18 @@ export function createPhonePanel({
       sendButton.classList.toggle('is-generating', busy);
     }
 
-    const messages = conversation?.messages || [];
+    const allMessages = conversation?.messages || [];
+    const historyWindow = chatHistoryWindow(currentContactId, allMessages.length);
+    if (forceLatest) {
+      historyWindow.end = allMessages.length;
+      historyWindow.start = Math.max(0, historyWindow.end - CHAT_HISTORY_WINDOW_LIMIT);
+      historyWindow.total = allMessages.length;
+    }
+    const visibleStart = historyWindow.start;
+    const visibleEnd = historyWindow.end;
+    const messages = allMessages.slice(visibleStart, visibleEnd);
 
-    if (!messages.length) {
+    if (!allMessages.length) {
       chatBody.innerHTML = `
         <div class="moli-empty">
           还没有聊天记录。
@@ -3741,8 +3950,9 @@ export function createPhonePanel({
     }
 
     let previousShownStoryTime = null;
-    chatBody.innerHTML = messages
+    const messageHtml = messages
       .map((message, messageIndex) => {
+        const globalMessageIndex = visibleStart + messageIndex;
         const isUser = message.role === 'user';
         let sender = null;
 
@@ -3762,7 +3972,12 @@ export function createPhonePanel({
           isGroup && !isUser && sender
             ? `<div class="moli-msg-name">${escapeHtml(displayName(sender))}</div>`
             : '';
-        const showTime = shouldShowMessageTime(conversation, message, messages[messageIndex - 1] || null, previousShownStoryTime);
+        const showTime = shouldShowMessageTime(
+          conversation,
+          message,
+          allMessages[globalMessageIndex - 1] || null,
+          previousShownStoryTime
+        );
         let timeLabel = '';
         if (showTime) {
           timeLabel = conversation.timeMode === 'real' ? formatRealTimeLabel(message.ts) : String(message.storyTime?.label || '');
@@ -3825,27 +4040,47 @@ export function createPhonePanel({
       })
       .join('');
 
-    renderInlineEditBubble();
-    renderUnsavedFourthWallDraft();
+    chatBody.innerHTML = `
+      ${visibleStart > 0 ? '<button type="button" class="moli-history-window-btn" data-action="history-earlier">查看更早的记录</button>' : ''}
+      ${messageHtml}
+      ${visibleEnd < allMessages.length ? '<button type="button" class="moli-history-window-btn" data-action="history-later">查看后面的记录</button>' : ''}
+    `;
 
-    chatBody.scrollTop =
-      chatBody.scrollHeight;
+    renderInlineEditBubble();
+    renderUnsavedGenerationDraft();
+
+    const restored = preserveScrollAnchor ? restoreChatScrollAnchor(preserveScrollAnchor) : false;
+    if (!restored && (forceLatest || visibleEnd >= allMessages.length)) {
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
   }
 
   chatBody.addEventListener('input', event => {
-    const textarea = event.target.closest?.('[data-inline-message-edit]');
-    if (!textarea) return;
-    editingMessageDraft = textarea.value;
+    const editable = event.target.closest?.('[data-inline-message-edit]');
+    if (!editable) return;
+    editingMessageDraft = editable.textContent || '';
+  });
+
+  chatBody.addEventListener('click', event => {
+    const historyAction = event.target.closest?.('[data-action]')?.dataset?.action;
+    if (historyAction === 'history-earlier') {
+      loadChatHistoryWindow('earlier');
+      return;
+    }
+    if (historyAction === 'history-later') {
+      loadChatHistoryWindow('later');
+      return;
+    }
   });
 
   chatBody.addEventListener('click', event => {
     const action = event.target.closest?.('[data-action]')?.dataset?.action;
     if (action === 'unsaved-save-retry') {
-      retrySaveUnsavedFourthWallDraft();
+      retrySaveUnsavedGenerationDraft();
       return;
     }
     if (action === 'unsaved-discard') {
-      unsavedFourthWallDraft = null;
+      unsavedGenerationDraft = null;
       renderChat();
       return;
     }
@@ -4025,6 +4260,7 @@ export function createPhonePanel({
     const messageId = String(row.dataset.searchMessageId || '');
     if (!messageId) return;
 
+    focusChatHistoryMessage(messageId);
     show('chat');
 
     requestAnimationFrame(() => {
@@ -4154,7 +4390,7 @@ export function createPhonePanel({
     if (clearGenerationError(scopeKey, currentContactId)) renderGenerationErrorBanner();
   }
 
-  async function requestReply() {
+  async function requestReply({ regenerateMessageId = '', targetGroupMemberId = '' } = {}) {
     if (!currentContactId) return;
 
     if (generationController) {
@@ -4174,7 +4410,7 @@ export function createPhonePanel({
       return;
     }
 
-
+    const isRegeneration = Boolean(regenerateMessageId);
     const trailingUserMessages = (conversation.messages || [])
       .slice()
       .reverse()
@@ -4184,36 +4420,49 @@ export function createPhonePanel({
       ? (conversation.messages || []).length
       : trailingUserMessages;
 
-    if (!pendingCount) {
+    if (!isRegeneration && !pendingCount) {
       toast('先发送一条消息，再空输入触发回复');
       return;
     }
 
     const controller = new AbortController();
     const requestScopeKey = scopeKey;
-    const requestContact = contact(conversation.contactId);
+    const requestConversationKey = currentContactId;
+    const requestContact = conversation.type === 'private' ? contact(conversation.contactId) : null;
+    const regenerationTarget = isRegeneration
+      ? getMessageById(scopeKey, requestConversationKey, regenerateMessageId)
+      : null;
+
     generationController = controller;
-    generationConversationKey = currentContactId;
+    generationConversationKey = requestConversationKey;
     clearGenerationPreview();
-    beginGenerationTask(requestScopeKey, generationConversationKey, controller, 'manual');
+    beginGenerationTask(requestScopeKey, requestConversationKey, controller, isRegeneration ? 'regenerate' : 'manual');
     setGenerationBusy(true);
-    toast('正在生成回复…');
+    toast(isRegeneration ? '正在重答…' : '正在生成回复…');
 
     try {
       const commonGenerationOptions = {
         scopeKey,
-        conversationKey: currentContactId,
+        conversationKey: requestConversationKey,
         signal: controller.signal,
         onDelta: (_chunk, fullText, activeContact) => {
           if (controller.signal.aborted) return;
           if (getScopeKey?.() !== requestScopeKey) return;
-          if (currentContactId !== generationConversationKey) return;
+          if (currentContactId !== requestConversationKey) return;
           updateGenerationPreview(activeContact || requestContact, fullText);
         },
       };
+
       const result = conversation.type === 'group'
-        ? await generateGroupReply(commonGenerationOptions)
-        : await generatePrivateReply(commonGenerationOptions);
+        ? await generateGroupReply({
+            ...commonGenerationOptions,
+            targetMemberId: targetGroupMemberId,
+            excludeMessageId: regenerateMessageId,
+          })
+        : await generatePrivateReply({
+            ...commonGenerationOptions,
+            regenerateFromMessageId: regenerateMessageId,
+          });
 
       if (controller.signal.aborted) return;
 
@@ -4229,90 +4478,149 @@ export function createPhonePanel({
             messages: privateFourthWall ? fourthWallParsed.messages : parseGeneratedMessages(result.text),
             thinking: privateFourthWall ? fourthWallParsed.thinking : '',
           }];
+
       if (!replyBatches?.length || !replyBatches.some(batch => batch.messages?.length)) {
         throw new Error('模型没有返回可用消息');
       }
-      let savedFourthWallMessageCount = 0;
-      try {
-        replyBatches.forEach(batch => {
-          (batch.messages || []).forEach(content => {
-            appendMessage(
-              requestScopeKey,
-              generationConversationKey,
-              'assistant',
-              content,
-              {
-                source: 'generation',
-                generationTurnId,
-                storyTime: messageStoryTimeMeta(conversation),
-                thinking: batch.thinking || '',
-                messageType: privateFourthWall ? 'message' : '',
-                senderId: batch.contact.id,
-                senderSnapshot: {
-                  name: displayName(batch.contact),
-                  avatar: avatarUrl(batch.contact),
-                },
-              }
-            );
-            if (privateFourthWall) savedFourthWallMessageCount += 1;
+
+      const storyTime = messageStoryTimeMeta(conversation);
+      const flatItems = [];
+      replyBatches.forEach(batch => {
+        (batch.messages || []).forEach(content => {
+          flatItems.push({
+            content,
+            contact: batch.contact,
+            thinking: batch.thinking || '',
+            messageType: privateFourthWall ? 'message' : '',
+            senderId: batch.contact?.id || '',
+            senderSnapshot: {
+              name: displayName(batch.contact),
+              avatar: avatarUrl(batch.contact),
+            },
+            generationTurnId,
+            storyTime,
           });
         });
+      });
+
+      // 群聊指定重答：只改被选中的那一个成员气泡，其他成员原回答保持原位、原样。
+      if (conversation.type === 'group' && targetGroupMemberId && regenerateMessageId) {
+        const replacement = flatItems.find(item => String(item.senderId) === String(targetGroupMemberId)) || flatItems[0];
+        if (!replacement) throw new Error('指定成员没有返回可用重答');
+        try {
+          if (!updateMessageContent(requestScopeKey, requestConversationKey, regenerateMessageId, replacement.content)) {
+            throw new Error('原群消息已经不存在');
+          }
+        } catch (saveError) {
+          unsavedGenerationDraft = {
+            scopeKey: requestScopeKey,
+            conversationKey: requestConversationKey,
+            mode: 'replace-message',
+            targetMessageId: regenerateMessageId,
+            items: [replacement],
+            generationTurnId,
+            storyTime,
+          };
+          const errorMessage = `重答已经生成，但保存失败：${saveError?.message || saveError}`;
+          setGenerationError(requestScopeKey, requestConversationKey, errorMessage, 'save');
+          renderGenerationErrorBanner();
+          renderChat();
+          toast('重答已生成，但暂未保存');
+          return;
+        }
+
+        clearGenerationError(requestScopeKey, requestConversationKey);
+        if (getScopeKey?.() === requestScopeKey && currentContactId === requestConversationKey) renderChat();
+        void maybeAutoCompactConversationMemory({ scopeKey: requestScopeKey, conversationKey: requestConversationKey });
+        return;
+      }
+
+      // 普通私聊重答：模型成功返回以后，才删除旧的那一轮，避免请求失败导致原回复先消失。
+      if (conversation.type === 'private' && isRegeneration && regenerationTarget) {
+        const oldTurnId = String(regenerationTarget.generationTurnId || '');
+        const latest = getConversation(requestScopeKey, requestConversationKey);
+        const idsToRemove = (latest?.messages || [])
+          .filter(message => message?.role === 'assistant')
+          .filter(message => oldTurnId
+            ? String(message?.generationTurnId || '') === oldTurnId
+            : String(message?.id || '') === String(regenerateMessageId))
+          .map(message => String(message.id || ''))
+          .filter(Boolean);
+        if (idsToRemove.length) deleteMessages(requestScopeKey, requestConversationKey, idsToRemove);
+      }
+
+      let savedCount = 0;
+      try {
+        for (const entry of flatItems) {
+          appendMessage(
+            requestScopeKey,
+            requestConversationKey,
+            'assistant',
+            entry.content,
+            {
+              source: 'generation',
+              generationTurnId: entry.generationTurnId,
+              storyTime: entry.storyTime,
+              thinking: entry.thinking,
+              messageType: entry.messageType,
+              senderId: entry.senderId,
+              senderSnapshot: entry.senderSnapshot,
+            }
+          );
+          savedCount += 1;
+        }
       } catch (saveError) {
-        if (!privateFourthWall) throw saveError;
-        unsavedFourthWallDraft = {
+        unsavedGenerationDraft = {
           scopeKey: requestScopeKey,
-          conversationKey: generationConversationKey,
-          contact: result.contact,
-          messages: [...(fourthWallParsed?.messages || [])].slice(savedFourthWallMessageCount),
-          thinking: fourthWallParsed?.thinking || '',
+          conversationKey: requestConversationKey,
+          mode: 'append',
+          items: flatItems.slice(savedCount),
           generationTurnId,
-          storyTime: messageStoryTimeMeta(conversation),
+          storyTime,
         };
         const errorMessage = `回复已经生成，但保存失败：${saveError?.message || saveError}`;
-        setGenerationError(requestScopeKey, generationConversationKey, errorMessage, 'save');
+        setGenerationError(requestScopeKey, requestConversationKey, errorMessage, 'save');
         renderGenerationErrorBanner();
         renderChat();
         toast('回复已生成，但暂未保存');
         return;
       }
 
+      clearGenerationError(requestScopeKey, requestConversationKey);
+
       if (
         getScopeKey?.() === requestScopeKey
-        && currentContactId === generationConversationKey
+        && currentContactId === requestConversationKey
       ) {
         renderChat();
       }
 
-      // 若用户在本轮生成期间关闭了手机，生成结果应成为真正的“未读消息”。
-      // 这同时驱动聊天列表与悬浮球红点；仍停留在当前聊天时则不制造自读红点。
       const panelStillVisibleOnThisChat = documentRef.body.contains(panel)
         && panel.classList.contains('open')
         && panel.querySelector('[data-page="chat"]')?.classList.contains('active')
-        && currentContactId === generationConversationKey;
+        && currentContactId === requestConversationKey;
       if (!panelStillVisibleOnThisChat) {
-        const produced = replyBatches.reduce((sum, batch) => sum + (batch.messages || []).length, 0);
-        if (produced) incrementConversationUnread(requestScopeKey, generationConversationKey, produced);
+        const produced = flatItems.length;
+        if (produced) incrementConversationUnread(requestScopeKey, requestConversationKey, produced);
       }
 
-      // 自动记忆是低频、增量的后台式收尾：只有达到阈值才会额外调用一次 API。
-      // 失败不会影响本轮正常回复，也不会推进压缩游标。
       void maybeAutoCompactConversationMemory({
         scopeKey: requestScopeKey,
-        conversationKey: generationConversationKey,
+        conversationKey: requestConversationKey,
       });
     } catch (error) {
       clearGenerationPreview();
       if (error?.name === 'AbortError' || controller.signal.aborted) {
         toast('已停止生成');
       } else {
-        const errorMessage = String(error?.message || '生成失败，可再次空输入重试');
+        const errorMessage = String(error?.message || '生成失败，可长按最后一条用户消息重试');
         console.error('[moli小手机] generation failed:', error);
-        setGenerationError(requestScopeKey, generationConversationKey, errorMessage, 'manual');
+        setGenerationError(requestScopeKey, requestConversationKey, errorMessage, isRegeneration ? 'regenerate' : 'manual');
         renderGenerationErrorBanner();
         toast(errorMessage);
       }
     } finally {
-      endGenerationTask(requestScopeKey, generationConversationKey, controller);
+      endGenerationTask(requestScopeKey, requestConversationKey, controller);
       if (generationController === controller) {
         generationController = null;
         generationConversationKey = null;
@@ -4320,6 +4628,7 @@ export function createPhonePanel({
       }
     }
   }
+
 
   function sendMessage() {
     if (!currentContactId) return;
@@ -4816,7 +5125,7 @@ export function createPhonePanel({
   panel.querySelector('[data-action="fourth-wall-memory-save"]')?.addEventListener('click', saveFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-clear"]')?.addEventListener('click', clearFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-summarize"]')?.addEventListener('click', () => void summarizeFourthWallMemoryNow());
-  panel.querySelector('[data-action="fourth-wall-clear-chat"]')?.addEventListener('click', clearFourthWallChatNow);
+  panel.querySelector('[data-action="fourth-wall-clear-chat"]')?.addEventListener('click', clearCurrentChatNow);
   panel.querySelector('[data-action="dismiss-chat-error"]')?.addEventListener('click', dismissCurrentGenerationError);
   panel.querySelector('[data-action="fourth-wall-prompts-restore"]')?.addEventListener('click', restoreFourthWallPrompts);
   panel.querySelector('[data-action="fourth-wall-session-add"]')?.addEventListener('click', addFourthWallSession);
