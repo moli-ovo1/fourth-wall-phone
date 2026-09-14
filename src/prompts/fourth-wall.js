@@ -72,7 +72,8 @@ const META_PROTOCOL = `
 - 我有没有疑问句结尾显得自己没有观点不像真人-避免  
 </thinking>  
 ### </thinking>结束后输出<msg>...</msg>  
-</meta_protocol>
+</meta_protocol>`;
+
 const COMMENTARY_PROTOCOL = `
 阅读以上内容后，看本次任务具体要求:
 <meta_protocol>
