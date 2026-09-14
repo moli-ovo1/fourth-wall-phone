@@ -76,6 +76,7 @@ import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
+import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, deletePublicMoment, toggleMomentLike, addMomentComment, clearProfileMoments } from '../storage/moments-store.js';
 
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
@@ -105,11 +106,99 @@ export function createPhonePanel({
         </div>
       </header>
       <main class="moli-chat-list"></main>
+      <nav class="moli-phone-tabs" aria-label="小手机主导航">
+        <button class="active" data-action="tab-home"><span>💬</span><small>微信</small></button>
+        <button data-action="tab-contacts"><span>👥</span><small>通讯录</small></button>
+        <button data-action="tab-discover"><span>◉</span><small>发现</small></button>
+        <button data-action="tab-me"><span>👤</span><small>我</small></button>
+      </nav>
       <div class="moli-add-menu" data-add-menu hidden>
         <button data-action="sync-tavern">同步酒馆角色</button>
         <button data-action="add-contact">添加联系人</button>
         <button data-action="create-group">发起群聊</button>
       </div>
+    </section>
+
+
+    <section class="moli-page" data-page="contacts-tab">
+      <header class="moli-nav">
+        <div class="moli-nav-side"></div>
+        <div class="moli-nav-title">通讯录</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-tab-list" data-contacts-tab-list></main>
+      <nav class="moli-phone-tabs" aria-label="小手机主导航">
+        <button data-action="tab-home"><span>💬</span><small>微信</small></button>
+        <button class="active" data-action="tab-contacts"><span>👥</span><small>通讯录</small></button>
+        <button data-action="tab-discover"><span>◉</span><small>发现</small></button>
+        <button data-action="tab-me"><span>👤</span><small>我</small></button>
+      </nav>
+    </section>
+
+    <section class="moli-page" data-page="discover">
+      <header class="moli-nav">
+        <div class="moli-nav-side"></div>
+        <div class="moli-nav-title">发现</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-tab-list">
+        <button class="moli-phone-cell" data-action="open-moments">
+          <span class="moli-phone-cell-icon">◎</span>
+          <span class="moli-phone-cell-label">朋友圈</span>
+          <span class="moli-phone-cell-arrow">›</span>
+        </button>
+      </main>
+      <nav class="moli-phone-tabs" aria-label="小手机主导航">
+        <button data-action="tab-home"><span>💬</span><small>微信</small></button>
+        <button data-action="tab-contacts"><span>👥</span><small>通讯录</small></button>
+        <button class="active" data-action="tab-discover"><span>◉</span><small>发现</small></button>
+        <button data-action="tab-me"><span>👤</span><small>我</small></button>
+      </nav>
+    </section>
+
+    <section class="moli-page" data-page="me-home">
+      <header class="moli-nav">
+        <div class="moli-nav-side"></div>
+        <div class="moli-nav-title">我</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-tab-list">
+        <button class="moli-phone-cell" data-action="settings">
+          <span class="moli-phone-cell-icon">⚙</span>
+          <span class="moli-phone-cell-label">设置</span>
+          <span class="moli-phone-cell-arrow">›</span>
+        </button>
+      </main>
+      <nav class="moli-phone-tabs" aria-label="小手机主导航">
+        <button data-action="tab-home"><span>💬</span><small>微信</small></button>
+        <button data-action="tab-contacts"><span>👥</span><small>通讯录</small></button>
+        <button data-action="tab-discover"><span>◉</span><small>发现</small></button>
+        <button class="active" data-action="tab-me"><span>👤</span><small>我</small></button>
+      </nav>
+    </section>
+
+    <section class="moli-page" data-page="moments">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="moments-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">朋友圈</div>
+        <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="moments-compose" aria-label="发朋友圈">📷</button></div>
+      </header>
+      <div class="moli-moments-connect-row">
+        <span><strong>允许联系人互相互动</strong><small>默认开启。只控制联系人彼此点赞/评论；联系人始终可以对你的朋友圈互动。</small></span>
+        <label class="moli-switch"><input type="checkbox" data-moments-cross-interaction><i></i></label>
+      </div>
+      <main class="moli-moments-feed" data-moments-feed></main>
+    </section>
+
+    <section class="moli-page" data-page="moments-compose">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="moments-compose-cancel" aria-label="取消">‹</button></div>
+        <div class="moli-nav-title">发表文字</div>
+        <div class="moli-nav-side right"><button class="moli-nav-text-btn" data-action="moments-publish">发表</button></div>
+      </header>
+      <main class="moli-moments-compose-page">
+        <textarea data-moments-compose-text maxlength="4000" placeholder="这一刻的想法…"></textarea>
+      </main>
     </section>
 
     <section class="moli-page" data-page="sync-tavern">
@@ -544,6 +633,17 @@ export function createPhonePanel({
       <input type="file" accept="image/*" data-info-avatar-input hidden>
     </section>
 
+    <section class="moli-page" data-page="contact-moments">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="contact-moments-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title" data-contact-moments-title>朋友圈</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <div class="moli-profile-moments-notice" data-contact-moments-notice></div>
+      <main class="moli-moments-feed" data-contact-moments-feed></main>
+      <footer class="moli-sync-footer"><button class="moli-secondary-btn" data-action="contact-moments-clear">清空本页朋友圈</button></footer>
+    </section>
+
     <section class="moli-page" data-page="contact-prompt-settings">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -859,6 +959,13 @@ export function createPhonePanel({
 
   const pages = [...panel.querySelectorAll('.moli-page')];
   const chatList = panel.querySelector('.moli-chat-list');
+  const contactsTabList = panel.querySelector('[data-contacts-tab-list]');
+  const momentsFeed = panel.querySelector('[data-moments-feed]');
+  const momentsCrossInteraction = panel.querySelector('[data-moments-cross-interaction]');
+  const momentsComposeText = panel.querySelector('[data-moments-compose-text]');
+  const contactMomentsFeed = panel.querySelector('[data-contact-moments-feed]');
+  const contactMomentsTitle = panel.querySelector('[data-contact-moments-title]');
+  const contactMomentsNotice = panel.querySelector('[data-contact-moments-notice]');
   const chatBody = panel.querySelector('.moli-chat-body');
   const chatTitle = panel.querySelector('[data-chat-title]');
   const chatError = panel.querySelector('[data-chat-error]');
@@ -2090,6 +2197,7 @@ export function createPhonePanel({
         <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings">
           <span>${isTavern ? '角色资料与提示词' : '人格与提示词'}</span><strong>›</strong>
         </button>`)}
+        ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>`}
         <button type="button" class="moli-info-setting-row" data-action="contact-api-settings">
           <span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong>
         </button>
@@ -2739,6 +2847,113 @@ export function createPhonePanel({
     `;
   }
 
+
+  function userMomentsActor() {
+    return { id: 'user', name: '我', type: 'user', avatar: '' };
+  }
+
+  function formatMomentTime(ts) {
+    const date = new Date(Number(ts || Date.now()));
+    const now = new Date();
+    const diff = Math.max(0, now.getTime() - date.getTime());
+    if (diff < 60 * 1000) return '刚刚';
+    if (diff < 60 * 60 * 1000) return `${Math.floor(diff / (60 * 1000))}分钟前`;
+    if (diff < 24 * 60 * 60 * 1000 && sameCalendarDay(date.getTime(), now.getTime())) return `${Math.floor(diff / (60 * 60 * 1000))}小时前`;
+    return `${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+
+  function renderContactsTab() {
+    if (!contactsTabList) return;
+    const scopeKey = getScopeKey?.();
+    const contacts = getContacts();
+    const conversations = scopeKey ? getScopeConversations(scopeKey) : [];
+    const rows = contacts.map(item => {
+      const conversationsForContact = conversations
+        .filter(conversation => conversation?.type === 'private' && String(conversation.contactId || '') === String(item.id || ''))
+        .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+      const target = conversationsForContact[0];
+      return `<button class="moli-contact-tab-row" data-contact-tab-id="${escapeHtml(item.id)}" data-contact-tab-conversation="${escapeHtml(target?.conversationKey || '')}">
+        ${avatarMarkup(item, 'moli-contact-tab-avatar')}
+        <span>${escapeHtml(displayName(item))}</span>
+      </button>`;
+    });
+    contactsTabList.innerHTML = rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>';
+  }
+
+  function renderMoments() {
+    if (!momentsFeed) return;
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey) {
+      momentsFeed.innerHTML = '<div class="moli-empty">当前存档不可用</div>';
+      return;
+    }
+    const settings = getMomentsSettings(scopeKey);
+    if (momentsCrossInteraction) momentsCrossInteraction.checked = settings.crossContactInteraction !== false;
+    const items = listPublicMoments(scopeKey);
+    if (!items.length) {
+      momentsFeed.innerHTML = '<div class="moli-empty">还没有朋友圈动态。点右上角相机发表第一条。</div>';
+      return;
+    }
+    momentsFeed.innerHTML = items.map(item => {
+      const isUser = String(item?.author?.id || '') === 'user';
+      const authorContact = isUser ? null : contact(item?.author?.id);
+      const avatar = isUser
+        ? currentTavernUserAvatarMarkup('moli-moment-avatar')
+        : (authorContact ? avatarMarkup(authorContact, 'moli-moment-avatar') : `<div class="moli-moment-avatar">${escapeHtml((item?.author?.name || '◉').slice(0,1))}</div>`);
+      const likedByUser = (item.likes || []).some(like => String(like?.id || '') === 'user');
+      const likes = (item.likes || []).length
+        ? `<div class="moli-moment-likes">♥ ${escapeHtml(item.likes.map(like => like.name).join('、'))}</div>` : '';
+      const comments = (item.comments || []).length
+        ? `<div class="moli-moment-comments">${item.comments.map(comment => `<div><strong>${escapeHtml(comment.actor?.name || '未知')}</strong>：${escapeHtml(comment.content || '')}</div>`).join('')}</div>` : '';
+      return `<article class="moli-moment" data-moment-id="${escapeHtml(item.id)}">
+        ${avatar}
+        <div class="moli-moment-main">
+          <div class="moli-moment-author">${escapeHtml(item.author?.name || '未知')}</div>
+          <div class="moli-moment-content">${escapeHtml(item.content || '')}</div>
+          <div class="moli-moment-meta">
+            <span>${escapeHtml(formatMomentTime(item.createdAt))}</span>
+            ${isUser ? `<button data-action="moment-delete" data-moment-id="${escapeHtml(item.id)}">删除</button>` : ''}
+            <button class="moli-moment-action" data-action="moment-like" data-moment-id="${escapeHtml(item.id)}">${likedByUser ? '取消赞' : '赞'}</button>
+            <button class="moli-moment-action" data-action="moment-comment" data-moment-id="${escapeHtml(item.id)}">评论</button>
+          </div>
+          ${(likes || comments) ? `<div class="moli-moment-social">${likes}${comments}</div>` : ''}
+        </div>
+      </article>`;
+    }).join('');
+  }
+
+  function renderContactMoments() {
+    if (!contactMomentsFeed) return;
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    const item = conversation?.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
+    if (!scopeKey || !item) { contactMomentsFeed.innerHTML = '<div class="moli-empty">联系人朋友圈不可用</div>'; return; }
+    if (contactMomentsTitle) contactMomentsTitle.textContent = `${displayName(item)}的朋友圈`;
+    const items = listProfileMoments(scopeKey, item.id);
+    if (contactMomentsNotice) contactMomentsNotice.textContent = items.length >= 5 ? `已有 ${items.length} 条 · 已达到 5 条整理提醒，可继续玩或手动清空` : `角色专属朋友圈 · ${items.length}/5 条整理提醒` ;
+    if (!items.length) { contactMomentsFeed.innerHTML = '<div class="moli-empty">这里还没有角色专属朋友圈。之后可从公共朋友圈把角色自己的动态整理后投入这里。</div>'; return; }
+    contactMomentsFeed.innerHTML = items.map(entry => {
+      const likes = entry.likes?.length ? `<div class="moli-moment-likes">♥ ${escapeHtml(entry.likes.map(x => x.name).join('、'))}</div>` : '';
+      const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => `<div><strong>${escapeHtml(c.actor?.name || '未知')}</strong>：${escapeHtml(c.content || '')}</div>`).join('')}</div>` : '';
+      return `<article class="moli-moment"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(entry.author?.name || displayName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
+    }).join('');
+  }
+
+  function publishMoment() {
+    const scopeKey = getScopeKey?.();
+    const content = String(momentsComposeText?.value || '').trim();
+    if (!scopeKey) return toast('当前朋友圈不可用');
+    if (!content) return toast('写点什么再发表');
+    try {
+      createPublicMoment(scopeKey, { author: userMomentsActor(), content });
+      momentsComposeText.value = '';
+      show('moments');
+      toast('已发表');
+    } catch (error) {
+      toast(error?.message || '发表失败');
+    }
+  }
+
   const show = name => {
     if (addMenu) addMenu.hidden = true;
     hideMessageMenu();
@@ -2750,6 +2965,10 @@ export function createPhonePanel({
     if (name === 'home') {
       renderChatList();
     }
+
+    if (name === 'contacts-tab') renderContactsTab();
+    if (name === 'moments') renderMoments();
+    if (name === 'contact-moments') renderContactMoments();
 
     if (name === 'chat') {
       renderChat();
@@ -5090,15 +5309,81 @@ export function createPhonePanel({
   /*
    * 页面按钮
    */
-  panel.querySelector(
-    '[data-action="settings"]'
-  ).onclick = () =>
-    show('settings');
+  panel.querySelectorAll('[data-action="settings"]').forEach(button => {
+    button.onclick = () => show('settings');
+  });
 
   panel.querySelector(
     '[data-action="update"]'
   ).onclick =
     updateExtension;
+
+  panel.querySelectorAll('[data-action="tab-home"]').forEach(button => button.onclick = () => show('home'));
+  panel.querySelectorAll('[data-action="tab-contacts"]').forEach(button => button.onclick = () => show('contacts-tab'));
+  panel.querySelectorAll('[data-action="tab-discover"]').forEach(button => button.onclick = () => show('discover'));
+  panel.querySelectorAll('[data-action="tab-me"]').forEach(button => button.onclick = () => show('me-home'));
+  panel.querySelector('[data-action="open-moments"]')?.addEventListener('click', () => show('moments'));
+  panel.querySelector('[data-action="moments-back"]')?.addEventListener('click', () => show('discover'));
+  panel.querySelector('[data-action="contact-moments-back"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-moments-clear"]')?.addEventListener('click', () => { const scopeKey=getScopeKey?.(); const conversation=currentConversation(); const item=conversation?.type==='private'?contact(conversation.contactId||currentContactId):null; if(!scopeKey||!item)return; if(!windowRef.confirm?.(`清空 ${displayName(item)} 的角色专属朋友圈？`))return; clearProfileMoments(scopeKey,item.id); renderContactMoments(); toast('角色朋友圈已清空'); });
+  panel.querySelector('[data-action="moments-compose"]')?.addEventListener('click', () => {
+    if (momentsComposeText) momentsComposeText.value = '';
+    show('moments-compose');
+    requestAnimationFrame(() => momentsComposeText?.focus());
+  });
+  panel.querySelector('[data-action="moments-compose-cancel"]')?.addEventListener('click', () => show('moments'));
+  panel.querySelector('[data-action="moments-publish"]')?.addEventListener('click', publishMoment);
+
+  momentsCrossInteraction?.addEventListener('change', () => {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey) return;
+    updateMomentsSettings(scopeKey, { crossContactInteraction: Boolean(momentsCrossInteraction.checked) });
+    toast(momentsCrossInteraction.checked ? '联系人之间可互相互动' : '联系人之间的朋友圈互动已关闭');
+  });
+
+  contactsTabList?.addEventListener('click', event => {
+    const row = event.target.closest?.('[data-contact-tab-id]');
+    if (!row) return;
+    const scopeKey = getScopeKey?.();
+    const contactId = String(row.dataset.contactTabId || '');
+    let conversationKey = String(row.dataset.contactTabConversation || '');
+    if (!scopeKey || !contactId) return;
+    if (!conversationKey) {
+      const conversation = ensureConversation(scopeKey, contactId);
+      conversationKey = String(conversation?.conversationKey || contactId);
+    }
+    currentContactId = conversationKey;
+    markConversationRead(scopeKey, conversationKey);
+    show('chat');
+  });
+
+  momentsFeed?.addEventListener('click', event => {
+    const actionButton = event.target.closest?.('[data-action]');
+    if (!actionButton) return;
+    const scopeKey = getScopeKey?.();
+    const momentId = String(actionButton.dataset.momentId || '');
+    if (!scopeKey || !momentId) return;
+    const action = String(actionButton.dataset.action || '');
+    if (action === 'moment-delete') {
+      if (!(windowRef.confirm?.('删除这条朋友圈？') ?? true)) return;
+      if (deletePublicMoment(scopeKey, momentId, 'user')) {
+        renderMoments();
+        toast('已删除');
+      }
+      return;
+    }
+    if (action === 'moment-like') {
+      toggleMomentLike(scopeKey, { surface: 'public', momentId, actor: userMomentsActor() });
+      renderMoments();
+      return;
+    }
+    if (action === 'moment-comment') {
+      const text = String(windowRef.prompt?.('评论') || '').trim();
+      if (!text) return;
+      addMomentComment(scopeKey, { surface: 'public', momentId, actor: userMomentsActor(), content: text });
+      renderMoments();
+    }
+  });
 
   // 非阻塞后台检查；失败不影响手机初始化。
   checkExtensionUpdateAvailability();
@@ -5436,6 +5721,8 @@ export function createPhonePanel({
       show('fourth-wall-settings');
     } else if (action === 'fourth-wall-prompts') {
       show('fourth-wall-prompts');
+    } else if (action === 'contact-moments') {
+      show('contact-moments');
     } else if (action === 'contact-prompt-settings') {
       show('contact-prompt-settings');
     } else if (action === 'contact-api-settings') {
