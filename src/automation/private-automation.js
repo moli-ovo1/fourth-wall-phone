@@ -10,6 +10,11 @@ const AUTO_CHAT_COOLDOWN_MS = 15 * 60 * 1000;
 const SOCIAL_EVENT_BATCH_MS = 8 * 1000;
 const running = new Set();
 const chance = p => Math.random() * 100 < Math.max(0, Math.min(100, Number(p) || 0));
+const commentaryEvaluationStep = p => {
+  const tendency = Math.max(0, Math.min(100, Number(p) || 0));
+  if (tendency <= 0) return Infinity;
+  return Math.max(1, Math.round(100 / tendency));
+};
 const autoChatEvaluationInterval = p => {
   const tendency = Math.max(0, Math.min(100, Number(p) || 0));
   if (tendency <= 0) return Infinity;
@@ -70,6 +75,8 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         : (conv.automation || {});
       const bodyCount = Math.max(0, Number(body?.count || 0));
       const previousBody = Math.max(0, Number(a.lastBodyAssistantCount || 0));
+      const previousCommentaryEvaluationBody = Math.max(0, Number(a.lastCommentaryEvaluationBodyCount || 0));
+      const canReadBody = isFourthWallContact || conv.bodyContextEnabled !== false;
       if (body.available && bodyCount !== previousBody) updatePrivateAutomationRuntime(scopeKey, key, { lastBodyAssistantCount: bodyCount });
       let mode = '';
       let commentaryEvent = null;
@@ -98,7 +105,8 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         && bodyCount > previousBody
         && eligibleCommentaryContact(contact)
         && a.commentaryEnabled
-        && chance(a.commentaryProbability)
+        && canReadBody
+        && bodyCount - previousCommentaryEvaluationBody >= commentaryEvaluationStep(a.commentaryProbability)
       ) {
         mode = 'commentary';
         commentaryEvent = {
@@ -125,7 +133,9 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           return `- ${label}${event?.content ? `：${event.content}` : ''}${event?.momentId ? `（momentId=${event.momentId}）` : ''}`;
         }).join('\n');
         const instruction = mode === 'commentary'
-          ? '这是正文刚发生后的场外私聊吐槽机会。你就是正文中的你本人，不是分析员。只在你本人此刻真的会想吐槽/联系用户时回复；若不想说，严格只输出 [SKIP]。若回复，像手机私聊一样简短自然。'
+          ? (isFourthWall
+            ? '这是正文刚发生后的场外私聊反应机会。你就是正文中的你本人，不是分析员。只有此刻真的会想联系用户时才回复；若不想说，严格只输出 [SKIP]。若回复，像手机私聊一样简短自然。'
+            : `这是一次“酒馆正文事件 → 这个人物是否会在手机里产生反应”的行为判断机会，不是命令你必须吐槽。刚发生的正文事件：\n${String(commentaryEvent?.targetText || '').trim().slice(0, 1800) || '（正文有新进展）'}\n你可以揶揄、生气、看戏、担心、追问、冷淡、转移话题，或者完全不想说；一切由你的人格、与用户的关系、当前情绪和已有手机连续性决定。若此刻不会主动在手机里联系用户，严格只输出 [SKIP]；若会，直接发真实手机私聊内容，不解释判断过程。`)
           : mode === 'social-event'
             ? `这是一次由朋友圈社交事件形成的主动行为判断机会，不是强制回复。最近发生：\n${socialEventText}\n主动私聊倾向设置为 ${Number(a.autoChatProbability ?? 30)}%。这个百分比只是人物主动程度/频率倾向参考，不是“抽中就必须说话”的骰子。结合你的人格、关系、当前情绪、最近聊天与事件分量，自主决定现在是否真的会私下联系用户。不会就严格只输出 [SKIP]；会就直接发真实手机私聊内容，不解释判断过程。`
             : `这是一次主动私聊机会。主动私聊倾向设置为 ${Number(a.autoChatProbability ?? 30)}%，它是人物主动程度/频率参考，不等于“抽中就必须说话”。根据关系、最近聊天、未完话题、正文事件、时间与距离上次互动的间隔，自主决定现在是否真的会主动联系用户。若不会，严格只输出 [SKIP]；若会，直接像真实手机聊天一样发你想说的话，不要解释判断过程。`;
@@ -155,6 +165,10 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       finally {
         const runtimePatch = { lastAutoChatAt: (mode === 'chat' || mode === 'social-event') ? Date.now() : Number(a.lastAutoChatAt || 0) };
         if (mode === 'social-event') runtimePatch.pendingSocialEvents = [];
+        if (mode === 'commentary' && commentaryEvent?.type === 'ai_message') {
+          runtimePatch.lastCommentaryEvaluationBodyCount = bodyCount;
+          runtimePatch.lastCommentaryEvaluationAt = Date.now();
+        }
         updatePrivateAutomationRuntime(scopeKey, key, runtimePatch);
         endGenerationTask(scopeKey, key); running.delete(key);
       }
