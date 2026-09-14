@@ -797,3 +797,13 @@
   color: #b42318;
   font-weight: 600;
 }
+
+/* moli67: 联系人/群聊资料页统一预留底部安全区，避免最后一项被圆角面板或移动端底部区域裁切。 */
+#moli-phone-panel .moli-chat-info{
+    padding-bottom:calc(28px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom:calc(28px + env(safe-area-inset-bottom, 0px));
+}
+#moli-phone-panel .moli-contact-subpage{
+    padding-bottom:calc(28px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom:calc(28px + env(safe-area-inset-bottom, 0px));
+}

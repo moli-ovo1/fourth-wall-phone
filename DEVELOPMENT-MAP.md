@@ -2107,3 +2107,16 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [x] `needsReview` 时暂停普通 Conversation 自动记忆压缩
 - [x] 手机记忆页显示核对提示；手动保存记忆后恢复自动压缩
 - [ ] 书签 B：普通聊天 Context ring 仍暂缓
+
+## moli67 — Default 围读会 + protected builtin personas + Review conversation tone
+- [x] 新 scope 首次初始化时创建默认群聊「围读会」，默认成员为「小上帝」与「moli」
+- [x] 默认围读会使用 reading 模式、正文上下文开启、自动点评开启，Review 间隔默认 1 个有效正文 AI 回合
+- [x] 内置人格默认集合收敛为「小上帝」「moli」；皮下继续作为独立 Fourth Wall builtin；旧版已存在的其他人格数据不主动销毁
+- [x] 「上帝」默认名迁移为「小上帝」，「人类」默认名迁移为「moli」；仅迁移历代默认名，不覆盖用户自定义改名
+- [x] 小上帝 / moli 使用完整内置人格 Prompt；生成时始终读取扩展内置版本，不被旧资料页缓存 Prompt 覆盖
+- [x] 小上帝 / moli 资料页隐藏核心人格 Prompt 编辑框与恢复按钮，避免普通 UI 暴露/编辑内置人设
+- [x] Review 从“全员分别交点评”改为“围读会被新剧情自然惊动后的一轮群聊反应”
+- [x] Review 允许成员接彼此的话；保留 PRIMARY REVIEW TARGET 锁定与 PRIVATE ZONE 隔离
+- [x] Review 字数改为角色自适应：moli 通常 ≤100 中文字符，小上帝通常 ≤160，必要分析可稍长但保持单气泡聊天感
+- [x] 自动点评说明文案同步改为围读会自然讨论
+- [x] 所有聊天资料页/联系人资料子页统一补足移动端底部 safe-area 滚动空间，修复底部截断
