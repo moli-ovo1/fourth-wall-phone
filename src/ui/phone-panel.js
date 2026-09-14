@@ -834,6 +834,26 @@ export function createPhonePanel({
           <small>默认 100，可设置 10～9999。完整聊天记录不会因此删除；这里只控制每次生成优先读取多少条近期原始消息。</small>
         </label>
 
+        <div class="moli-conversation-section" data-private-bubble-range-section hidden>
+          <div class="moli-conversation-section-title">回复气泡条数</div>
+          <div class="moli-reply-range-inputs">
+            <label>最少 <input type="number" min="1" max="12" step="1" data-private-bubble-min></label>
+            <span>—</span>
+            <label>最多 <input type="number" min="1" max="12" step="1" data-private-bubble-max></label>
+          </div>
+          <small>这是当前这条私聊的回复节奏，不是角色永久人格。上限不是目标；角色应按当下交流自然决定是否拆成多条。</small>
+        </div>
+
+        <div class="moli-conversation-section" data-group-bubble-range-section hidden>
+          <div class="moli-conversation-section-title">本轮群聊总气泡数</div>
+          <div class="moli-reply-range-inputs">
+            <label>最少 <input type="number" min="1" max="12" step="1" data-group-bubble-min></label>
+            <span>—</span>
+            <label>最多 <input type="number" min="1" max="12" step="1" data-group-bubble-max></label>
+          </div>
+          <small>默认 1～8，控制整轮群聊总气泡，不是每个人各自的配额。谁沉默、谁连续说几句、谁来回接话，都由人物性格和当下话题自然决定。</small>
+        </div>
+
         <div class="moli-settings-note">
           保存后只影响当前这个聊天实例。同一个联系人建立的其他聊天不会被一起修改。
         </div>
@@ -1895,6 +1915,29 @@ export function createPhonePanel({
         ? String(Math.max(10, Math.min(9999, Math.round(value))))
         : '100';
     }
+
+    const privateRangeSection = panel.querySelector('[data-private-bubble-range-section]');
+    const groupRangeSection = panel.querySelector('[data-group-bubble-range-section]');
+    if (privateRangeSection) privateRangeSection.hidden = conversation.type !== 'private' || isFourthWallContact(contact(conversation.contactId));
+    if (groupRangeSection) groupRangeSection.hidden = conversation.type !== 'group';
+    if (conversation.type === 'private') {
+      const fallbackContact = contact(conversation.contactId);
+      const source = conversation.replyBubbleRange || fallbackContact?.replyBubbleRange || {};
+      const min = Math.max(1, Math.min(12, Number(source?.min) || 1));
+      const max = Math.max(min, Math.min(12, Number(source?.max) || 3));
+      const minInput = panel.querySelector('[data-private-bubble-min]');
+      const maxInput = panel.querySelector('[data-private-bubble-max]');
+      if (minInput) minInput.value = String(min);
+      if (maxInput) maxInput.value = String(max);
+    } else {
+      const source = conversation.groupReplyBubbleRange || {};
+      const min = Math.max(1, Math.min(12, Number(source?.min) || 1));
+      const max = Math.max(min, Math.min(12, Number(source?.max) || 8));
+      const minInput = panel.querySelector('[data-group-bubble-min]');
+      const maxInput = panel.querySelector('[data-group-bubble-max]');
+      if (minInput) minInput.value = String(min);
+      if (maxInput) maxInput.value = String(max);
+    }
   }
 
   function saveConversationSettings() {
@@ -1919,19 +1962,25 @@ export function createPhonePanel({
     try {
       if (conversation.type === 'group') {
         const groupMode = panel.querySelector('input[name="moli-group-mode"]:checked')?.value || 'reading';
+        const groupBubbleMin = Math.max(1, Math.min(12, Number(panel.querySelector('[data-group-bubble-min]')?.value) || 1));
+        const groupBubbleMax = Math.max(groupBubbleMin, Math.min(12, Number(panel.querySelector('[data-group-bubble-max]')?.value) || 8));
         updateGroupConversation(scopeKey, conversationKey, {
           name: conversationTitleInput?.value || conversation.name || '群聊',
           groupMode,
           timeMode: selectedTimeMode,
           bodyContextEnabled: groupMode === 'reading' && Boolean(conversationBodyContext?.checked),
           recentChatLimit: normalizedLimit,
+          groupReplyBubbleRange: { min: groupBubbleMin, max: groupBubbleMax },
         });
       } else {
+        const privateBubbleMin = Math.max(1, Math.min(12, Number(panel.querySelector('[data-private-bubble-min]')?.value) || 1));
+        const privateBubbleMax = Math.max(privateBubbleMin, Math.min(12, Number(panel.querySelector('[data-private-bubble-max]')?.value) || 3));
         updatePrivateConversationSettings(scopeKey, conversationKey, {
           title: conversationTitleInput?.value || '',
           timeMode: selectedTimeMode,
           bodyContextEnabled: Boolean(conversationBodyContext?.checked),
           recentChatLimit: normalizedLimit,
+          replyBubbleRange: { min: privateBubbleMin, max: privateBubbleMax },
         });
       }
       toast('当前聊天设置已保存');
@@ -2262,13 +2311,10 @@ export function createPhonePanel({
       const sourceMissing = isTavern && item.source?.status === 'missing';
       if (infoEntrySource === 'contacts') {
         const scopeTag = conversation.scopeMode === 'global' ? '全局' : '正文';
-        const bubbleMin = Math.max(1, Math.min(12, Number(item.replyBubbleRange?.min) || 1));
-        const bubbleMax = Math.max(bubbleMin, Math.min(12, Number(item.replyBubbleRange?.max) || 3));
         chatInfo.innerHTML = `
           <div class="moli-contact-profile-head">${avatarMarkup(item, 'moli-info-avatar')}<div><div class="moli-contact-profile-name">${escapeHtml(displayName(item))}<small>${scopeTag}</small></div></div></div>
           <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>朋友资料</span><strong>›</strong></button>
           ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row moli-contact-profile-moments" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>`}
-          <div class="moli-info-form moli-reply-range-card"><strong>回复气泡条数</strong><small>角色每轮可自然发送的气泡数量范围，不要求每次固定条数。</small><div class="moli-reply-range-inputs"><label>最少 <input type="number" min="1" max="12" value="${bubbleMin}" data-reply-bubble-min></label><span>—</span><label>最多 <input type="number" min="1" max="12" value="${bubbleMax}" data-reply-bubble-max></label></div><button type="button" class="moli-info-save-button" data-action="save-reply-bubble-range">保存</button></div>
           <button type="button" class="moli-contact-profile-action" data-action="chat">发送消息</button>
           ${String(item.id||'').startsWith('builtin:') ? '' : `<button type="button" class="moli-contact-profile-action moli-danger-row" data-action="delete-contact">删除联系人</button>`}
         `;
