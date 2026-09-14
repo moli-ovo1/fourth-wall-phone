@@ -829,3 +829,7 @@
 #moli-phone-panel .moli-profile-entry-head input[type="text"]{min-width:0;border:0;border-bottom:1px solid #ddd;padding:6px;font-size:14px}
 #moli-phone-panel .moli-profile-entry-head button{border:0;background:transparent;color:#d33}
 #moli-phone-panel .moli-profile-entry textarea{width:100%;box-sizing:border-box;border:1px solid #e5e5e5;border-radius:8px;padding:9px;resize:vertical}
+
+#moli-phone-panel .moli-profile-entry-trigger{display:grid;grid-template-columns:110px 1fr;gap:8px;margin:0 0 8px 26px}
+#moli-phone-panel .moli-profile-entry-trigger select,#moli-phone-panel .moli-profile-entry-trigger input{min-width:0;border:1px solid #e5e5e5;border-radius:8px;padding:8px;background:#fff;font-size:13px}
+#moli-phone-panel .moli-profile-entry-trigger [hidden]{display:none}
