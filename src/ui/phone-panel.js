@@ -81,7 +81,7 @@ import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
 import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory } from '../storage/moments-store.js';
-import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity } from '../automation/private-automation.js';
+import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
 
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
@@ -6045,7 +6045,9 @@ export function createPhonePanel({
     const momentId = String(button.dataset.momentId || '');
     if (!scopeKey || !item || !momentId) return;
     if (button.dataset.action === 'profile-moment-like') {
-      toggleMomentLike(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor() });
+      const liked = toggleMomentLike(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor() });
+      try { notifyBehaviorContextEvent({ scopeKey, contactId:item.id, momentId, eventType: liked ? 'user-like' : 'user-unlike' }); }
+      catch (error) { console.warn('[moli小手机] record profile moment like fact failed:', error); }
       renderContactMoments();
       return;
     }
@@ -6053,6 +6055,8 @@ export function createPhonePanel({
       const reason = String(windowRef.prompt?.('删除原因（角色会看到）', '') || '').trim();
       if (!(windowRef.confirm?.('删除这条评论？删除后会保留“已删除”和原因。') ?? true)) return;
       deleteMomentComment(scopeKey, { surface:'profile', ownerContactId:item.id, momentId, commentId:String(button.dataset.commentId||''), actorId:'user', reason });
+      try { notifyBehaviorContextEvent({ scopeKey, contactId:item.id, momentId, eventType:'user-delete-comment', content:reason }); }
+      catch (error) { console.warn('[moli小手机] record profile comment deletion fact failed:', error); }
       renderContactMoments(); toast('评论已删除'); return;
     }
     if (button.dataset.action === 'profile-moment-comment') {
@@ -6086,6 +6090,14 @@ export function createPhonePanel({
         const surface=target.dataset.userCommentSurface; const momentId=String(target.dataset.momentId||''); const commentId=String(target.dataset.commentId||'');
         const owner=surface==='profile' ? (currentConversation()?.contactId || currentContactId) : '';
         deleteMomentComment(scopeKey,{surface,ownerContactId:owner,momentId,commentId,actorId:'user',reason});
+        const targetMoment = surface === 'profile'
+          ? listProfileMoments(scopeKey, owner).find(moment => String(moment.id) === momentId)
+          : listPublicMoments(scopeKey).find(moment => String(moment.id) === momentId);
+        const targetContactId = surface === 'profile' ? String(owner || '') : String(targetMoment?.author?.id || '');
+        if (targetContactId && targetContactId !== 'user') {
+          try { notifyBehaviorContextEvent({ scopeKey, contactId:targetContactId, momentId, eventType:'user-delete-comment', content:reason }); }
+          catch (error) { console.warn('[moli小手机] record long-press comment deletion fact failed:', error); }
+        }
         surface==='profile' ? renderContactMoments() : renderMoments(); toast('评论已删除');
       }, 560);
     });
@@ -6105,6 +6117,11 @@ export function createPhonePanel({
       const reason = String(windowRef.prompt?.('删除原因（角色会看到）', '') || '').trim();
       if (!(windowRef.confirm?.('删除这条评论？删除后会保留“已删除”和原因。') ?? true)) return;
       deleteMomentComment(scopeKey, { surface:'public', momentId, commentId:String(actionButton.dataset.commentId||''), actorId:'user', reason });
+      const targetMoment = listPublicMoments(scopeKey).find(moment => String(moment.id) === momentId);
+      if (targetMoment?.author?.id && targetMoment.author.id !== 'user') {
+        try { notifyBehaviorContextEvent({ scopeKey, contactId:targetMoment.author.id, momentId, eventType:'user-delete-comment', content:reason }); }
+        catch (error) { console.warn('[moli小手机] record public comment deletion fact failed:', error); }
+      }
       renderMoments(); toast('评论已删除'); return;
     }
     if (action === 'moment-delete') {
@@ -6116,7 +6133,12 @@ export function createPhonePanel({
       return;
     }
     if (action === 'moment-like') {
-      toggleMomentLike(scopeKey, { surface: 'public', momentId, actor: userMomentsActor() });
+      const liked = toggleMomentLike(scopeKey, { surface: 'public', momentId, actor: userMomentsActor() });
+      const targetMoment = listPublicMoments(scopeKey).find(moment => String(moment.id) === momentId);
+      if (targetMoment?.author?.id && targetMoment.author.id !== 'user') {
+        try { notifyBehaviorContextEvent({ scopeKey, contactId:targetMoment.author.id, momentId, eventType: liked ? 'user-like' : 'user-unlike' }); }
+        catch (error) { console.warn('[moli小手机] record public moment like fact failed:', error); }
+      }
       renderMoments();
       return;
     }
