@@ -64,6 +64,7 @@ import {
   generateGroupReply,
   inspectFourthWallContext,
   summarizeFourthWallMemory,
+  generateContactMoment,
 } from '../generation/generation-service.js';
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
@@ -72,11 +73,11 @@ import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteC
 import { extensionTypes } from '../../../../../extensions.js';
 import { user_avatar } from '../../../../../personas.js';
 import { getThumbnailUrl } from '../../../../../../script.js';
-import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
+import { getTavernWorldBookSnapshot, getTavernWorldBookCatalog } from '../core/tavern-worldbook.js';
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
-import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, deletePublicMoment, toggleMomentLike, addMomentComment, clearProfileMoments } from '../storage/moments-store.js';
+import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, clearProfileMoments } from '../storage/moments-store.js';
 
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
@@ -270,6 +271,17 @@ export function createPhonePanel({
         <label class="moli-form-field">
           <span>人格提示词</span>
           <textarea data-contact-prompt rows="7" placeholder="描述这个人的身份、性格、说话方式等"></textarea>
+        </label>
+
+        <label class="moli-form-field">
+          <span>角色世界书（可选）</span>
+          <select data-contact-worldbook><option value="">不绑定世界书</option></select>
+          <small class="moli-form-help">适合把世界书里的 NPC 建成独立联系人。不会整本无条件注入。</small>
+        </label>
+        <label class="moli-form-field" data-contact-main-entry-field hidden>
+          <span>角色主条目</span>
+          <select data-contact-main-entry><option value="">请选择主条目</option></select>
+          <small class="moli-form-help">主条目固定作为这个 NPC 的身份锚点；同一本世界书的其他条目仍按关键词/触发规则动态注入。</small>
         </label>
       </main>
       <footer class="moli-sync-footer">
@@ -636,7 +648,7 @@ export function createPhonePanel({
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="contact-moments-back" aria-label="返回">‹</button></div>
         <div class="moli-nav-title" data-contact-moments-title>朋友圈</div>
-        <div class="moli-nav-side right"></div>
+        <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="contact-moments-refresh" aria-label="刷新角色朋友圈">↻</button></div>
       </header>
       <div class="moli-profile-moments-notice" data-contact-moments-notice></div>
       <main class="moli-moments-feed" data-contact-moments-feed></main>
@@ -978,6 +990,9 @@ export function createPhonePanel({
   const contactNameInput = panel.querySelector('[data-contact-name]');
   const contactIntroInput = panel.querySelector('[data-contact-intro]');
   const contactPromptInput = panel.querySelector('[data-contact-prompt]');
+  const contactWorldBookSelect = panel.querySelector('[data-contact-worldbook]');
+  const contactMainEntrySelect = panel.querySelector('[data-contact-main-entry]');
+  const contactMainEntryField = panel.querySelector('[data-contact-main-entry-field]');
   const groupNameInput = panel.querySelector('[data-group-name]');
   const groupMemberList = panel.querySelector('.moli-group-member-list');
   const chatInfo = panel.querySelector('.moli-chat-info');
@@ -1080,6 +1095,7 @@ export function createPhonePanel({
 
   let currentContactId = null;
   let syncSnapshot = [];
+  let customWorldBookCatalog = [];
   let pendingContactAvatar = '';
   let groupMemberEditMode = 'add';
   let suppressPanelClicksUntil = 0;
@@ -1196,6 +1212,10 @@ export function createPhonePanel({
     contactNameInput.value = '';
     contactIntroInput.value = '';
     contactPromptInput.value = '';
+    if (contactWorldBookSelect) contactWorldBookSelect.innerHTML = '<option value="">不绑定世界书</option>';
+    if (contactMainEntrySelect) contactMainEntrySelect.innerHTML = '<option value="">请选择主条目</option>';
+    if (contactMainEntryField) contactMainEntryField.hidden = true;
+    customWorldBookCatalog = [];
     contactAvatarInput.value = '';
     contactAvatarPreview.innerHTML = '＋';
   }
@@ -1250,6 +1270,38 @@ export function createPhonePanel({
     }
   }
 
+  async function loadCustomWorldBooks() {
+    if (!contactWorldBookSelect) return;
+    contactWorldBookSelect.innerHTML = '<option value="">正在读取世界书…</option>';
+    if (contactMainEntryField) contactMainEntryField.hidden = true;
+    try {
+      const catalog = await getTavernWorldBookCatalog();
+      customWorldBookCatalog = Array.isArray(catalog?.books) ? catalog.books : [];
+      if (!catalog?.available) {
+        contactWorldBookSelect.innerHTML = '<option value="">当前无法读取世界书</option>';
+        return;
+      }
+      contactWorldBookSelect.innerHTML = '<option value="">不绑定世界书</option>' + customWorldBookCatalog
+        .map(book => `<option value="${escapeHtml(book.name)}">${escapeHtml(book.name)} · ${book.entries.length}条</option>`).join('');
+    } catch (error) {
+      console.error('[moli小手机] custom world book catalog failed:', error);
+      contactWorldBookSelect.innerHTML = '<option value="">世界书读取失败</option>';
+    }
+  }
+
+  function renderCustomWorldBookEntries() {
+    if (!contactWorldBookSelect || !contactMainEntrySelect || !contactMainEntryField) return;
+    const book = customWorldBookCatalog.find(item => item.name === contactWorldBookSelect.value);
+    if (!book) {
+      contactMainEntryField.hidden = true;
+      contactMainEntrySelect.innerHTML = '<option value="">请选择主条目</option>';
+      return;
+    }
+    contactMainEntryField.hidden = false;
+    contactMainEntrySelect.innerHTML = '<option value="">请选择主条目</option>' + (book.entries || [])
+      .map(entry => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.title || `条目 ${entry.uid}`)}</option>`).join('');
+  }
+
   function saveCustomContact() {
     const name = contactNameInput.value.trim();
 
@@ -1265,12 +1317,22 @@ export function createPhonePanel({
       return;
     }
 
+    if (contactWorldBookSelect?.value && !contactMainEntrySelect?.value) {
+      toast('请选择这个 NPC 的角色主条目');
+      contactMainEntrySelect?.focus();
+      return;
+    }
+
     try {
       const newContact = createCustomContact({
         name,
         customAvatar: pendingContactAvatar,
         intro: contactIntroInput.value,
         prompt: contactPromptInput.value,
+        customWorldBook: {
+          bookName: contactWorldBookSelect?.value || '',
+          mainEntryKey: contactMainEntrySelect?.value || '',
+        },
       });
 
       ensureConversation(scopeKey, newContact.id);
@@ -5338,6 +5400,36 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-moments"]')?.addEventListener('click', () => show('moments'));
   panel.querySelector('[data-action="moments-back"]')?.addEventListener('click', () => show('discover'));
   panel.querySelector('[data-action="contact-moments-back"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-moments-refresh"]')?.addEventListener('click', async event => {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    const item = conversation?.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
+    if (!scopeKey || !item) return toast('当前角色朋友圈不可用');
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = '…';
+    try {
+      const result = await generateContactMoment({ scopeKey, contactId: item.id });
+      if (result?.action === 'POST' && result?.content) {
+        createProfileMoment(scopeKey, item.id, {
+          author: { id: item.id, name: displayName(item), type: 'contact' },
+          content: result.content,
+          createdAt: result.createdAt,
+        });
+        renderContactMoments();
+        toast('发现一条近期朋友圈');
+      } else {
+        toast('最近没有新的朋友圈');
+      }
+    } catch (error) {
+      console.error('[moli小手机] refresh contact moments failed:', error);
+      toast(error?.message || '刷新朋友圈失败');
+    } finally {
+      button.disabled = false;
+      button.textContent = '↻';
+    }
+  });
+
   panel.querySelector('[data-action="contact-moments-clear"]')?.addEventListener('click', () => { const scopeKey=getScopeKey?.(); const conversation=currentConversation(); const item=conversation?.type==='private'?contact(conversation.contactId||currentContactId):null; if(!scopeKey||!item)return; if(!windowRef.confirm?.(`清空 ${displayName(item)} 的角色专属朋友圈？`))return; clearProfileMoments(scopeKey,item.id); renderContactMoments(); toast('角色朋友圈已清空'); });
   panel.querySelector('[data-action="moments-compose"]')?.addEventListener('click', () => {
     if (momentsComposeText) momentsComposeText.value = '';
@@ -5786,6 +5878,7 @@ export function createPhonePanel({
     addMenu.hidden = true;
     resetAddContactForm();
     show('add-contact');
+    loadCustomWorldBooks();
   };
 
   panel.querySelector(
@@ -5796,6 +5889,8 @@ export function createPhonePanel({
     const file = contactAvatarInput.files?.[0];
     if (file) handleContactAvatar(file);
   };
+
+  contactWorldBookSelect?.addEventListener('change', renderCustomWorldBookEntries);
 
   panel.querySelector(
     '[data-action="add-contact-back"]'
