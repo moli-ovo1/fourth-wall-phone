@@ -2214,3 +2214,18 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [x] OpenAI-compatible 不做模型名/网关猜测；无明确 capability 证据时维持既有配置语义。
 - [x] 复核 LittleWhiteBox agent-core 最新 token counter；当前 moli Fourth Wall 无 tool/reasoning native replay 缺口，继续使用 SillyTavern `getTokenCountAsync`，不复制整套 agent-core。
 - [x] Prefill 兼容决策进入 requestMeta 供后续诊断，不修改用户保存 Prompt。
+
+## v0.4.20 / moli77 — Moments Phase 1
+- `src/storage/moments-store.js`
+  - 新增朋友圈 v2 存储；严格拆分 `publicFeed` 与 `profileFeeds[contactId]`。
+  - 帖子/评论稳定 ID、`sourceMomentId`、`replyToId`、`seenBy` 为后续刷新、转发、投入、自然联动预留。
+  - `settings.crossContactInteraction` 默认 true，仅控制 User 公共朋友圈中联系人彼此互动。
+- `src/ui/phone-panel.js`
+  - 主层新增微信式 `微信 / 通讯录 / 发现 / 我` 导航。
+  - `发现 → 朋友圈` 为 User 公共朋友圈入口；支持 user 文字发表、删除、点赞、评论。
+  - 私聊“聊天信息”新增角色 `朋友圈` 入口（Fourth Wall 除外），读取独立 profile feed；5 条仅提醒，手动清空。
+  - 本阶段不放假刷新按钮：AI 逐人互动、角色发帖、转发/投入/清理器留到后续节点真正接生成链时再显示/启用。
+- `style.css`
+  - 新增主导航、发现/通讯录、朋友圈 Feed、发表页、角色朋友圈提醒的基础布局。当前只做结构级样式，最终统一美化留到全功能完成后。
+- `SPEC.md`
+  - 正式确立“角色资料卡朋友圈 = 角色世界 / User 朋友圈 = 公共手机社交层”的双层模型和后续 Phase 2–5 路线。

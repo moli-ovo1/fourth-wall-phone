@@ -833,3 +833,44 @@
 #moli-phone-panel .moli-profile-entry-trigger{display:grid;grid-template-columns:110px 1fr;gap:8px;margin:0 0 8px 26px}
 #moli-phone-panel .moli-profile-entry-trigger select,#moli-phone-panel .moli-profile-entry-trigger input{min-width:0;border:1px solid #e5e5e5;border-radius:8px;padding:8px;background:#fff;font-size:13px}
 #moli-phone-panel .moli-profile-entry-trigger [hidden]{display:none}
+
+/* moli77 — 手机主导航 / 朋友圈 Phase 1。先按真实手机信息架构摆位，后续统一视觉美化。 */
+#moli-phone-panel .moli-phone-tabs{height:58px;flex:0 0 58px;display:flex;align-items:stretch;border-top:1px solid #d9d9d9;background:#f7f7f7;padding-bottom:max(0px,env(safe-area-inset-bottom))}
+#moli-phone-panel .moli-phone-tabs button{flex:1;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#777;font-size:18px;line-height:1}
+#moli-phone-panel .moli-phone-tabs button small{font-size:10px;line-height:1.2}
+#moli-phone-panel .moli-phone-tabs button.active{color:#07c160}
+#moli-phone-panel .moli-tab-list{flex:1;overflow:auto;background:#f5f5f5;padding:14px 0}
+#moli-phone-panel .moli-phone-cell{width:100%;height:54px;border:0;border-top:1px solid #eee;border-bottom:1px solid #eee;background:#fff;display:flex;align-items:center;padding:0 15px;text-align:left}
+#moli-phone-panel .moli-phone-cell-icon{width:34px;font-size:22px}
+#moli-phone-panel .moli-phone-cell-label{flex:1;font-size:16px}
+#moli-phone-panel .moli-phone-cell-arrow{color:#aaa;font-size:24px}
+#moli-phone-panel .moli-contact-tab-row{width:100%;border:0;border-bottom:1px solid #eee;background:#fff;display:flex;align-items:center;gap:12px;padding:10px 14px;text-align:left;font-size:16px}
+#moli-phone-panel .moli-contact-tab-avatar{width:42px;height:42px;flex:0 0 42px;border-radius:6px;overflow:hidden;background:#222;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+#moli-phone-panel .moli-contact-tab-avatar img,#moli-phone-panel .moli-moment-avatar img{width:100%;height:100%;object-fit:cover}
+#moli-phone-panel .moli-nav-text-btn{border:0;background:#07c160;color:#fff;border-radius:4px;padding:6px 10px;font-size:13px}
+#moli-phone-panel .moli-moments-connect-row{flex:0 0 auto;background:#fff;border-bottom:1px solid #e5e5e5;padding:10px 14px;display:flex;align-items:center;gap:12px}
+#moli-phone-panel .moli-moments-connect-row>span{flex:1;min-width:0}
+#moli-phone-panel .moli-moments-connect-row strong{display:block;font-size:14px;font-weight:600}
+#moli-phone-panel .moli-moments-connect-row small{display:block;color:#888;font-size:11px;line-height:1.45;margin-top:3px}
+#moli-phone-panel .moli-switch{position:relative;display:inline-flex;width:44px;height:26px;flex:0 0 44px}
+#moli-phone-panel .moli-switch input{position:absolute;opacity:0;pointer-events:none}
+#moli-phone-panel .moli-switch i{position:absolute;inset:0;border-radius:20px;background:#c7c7c7;transition:.15s}
+#moli-phone-panel .moli-switch i:after{content:"";position:absolute;width:22px;height:22px;left:2px;top:2px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.15s}
+#moli-phone-panel .moli-switch input:checked+i{background:#07c160}
+#moli-phone-panel .moli-switch input:checked+i:after{transform:translateX(18px)}
+#moli-phone-panel .moli-moments-feed{flex:1;overflow:auto;background:#fff}
+#moli-phone-panel .moli-moment{display:flex;gap:10px;padding:14px;border-bottom:1px solid #eee}
+#moli-phone-panel .moli-moment-avatar{width:42px;height:42px;flex:0 0 42px;border-radius:5px;overflow:hidden;background:#777;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+#moli-phone-panel .moli-moment-main{flex:1;min-width:0}
+#moli-phone-panel .moli-moment-author{color:#576b95;font-size:15px;font-weight:600;margin-bottom:5px}
+#moli-phone-panel .moli-moment-content{white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.6}
+#moli-phone-panel .moli-moment-meta{display:flex;align-items:center;gap:10px;margin-top:8px;color:#999;font-size:11px}
+#moli-phone-panel .moli-moment-meta button{border:0;background:transparent;color:#576b95;padding:0;font-size:11px}
+#moli-phone-panel .moli-moment-meta .moli-moment-action{margin-left:auto}
+#moli-phone-panel .moli-moment-meta .moli-moment-action+.moli-moment-action{margin-left:0}
+#moli-phone-panel .moli-moment-social{margin-top:8px;background:#f3f3f5;border-radius:3px;padding:6px 8px;font-size:12px;line-height:1.55}
+#moli-phone-panel .moli-moment-likes{color:#576b95;padding-bottom:4px;margin-bottom:4px;border-bottom:1px solid #e3e3e3}
+#moli-phone-panel .moli-moment-comments strong{color:#576b95;font-weight:500}
+#moli-phone-panel .moli-moments-compose-page{flex:1;background:#fff;padding:18px}
+#moli-phone-panel .moli-moments-compose-page textarea{width:100%;height:180px;border:0;resize:none;outline:none;font:inherit;font-size:16px;line-height:1.6;background:transparent}
+#moli-phone-panel .moli-profile-moments-notice{padding:8px 14px;background:#f7f7f7;color:#777;font-size:12px;line-height:1.45;border-bottom:1px solid #e7e7e7}
