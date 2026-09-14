@@ -2742,3 +2742,10 @@ Commentary 使用独立 Fourth Wall Commentary Prompt，只输出一个 `<msg>` 
 - “生成成功但最终保存失败 → 未保存 draft”推广到普通私聊、群聊和皮下的手动生成/重答；支持重新保存/丢弃，部分保存成功时只保留尚未落地部分。
 - 长聊天 UI 使用 20/60 窗口：默认只渲染最近 60 条，向前/向后每次加载 20 条；切页保持滚动锚点，搜索旧消息会先把目标装入窗口。
 - Context ring 继续不推广到普通聊天；皮下设置页的真实 token 统计保留。
+
+
+## 0.4.9 / moli65 — 启动链热修
+- 修复 moli64 引入的致命模块导入错误：`getThumbnailUrl` 错从 `public/scripts/utils.js` 静态导入，导致 `phone-panel.js` 模块实例化失败，整个扩展初始化在创建悬浮按钮前中断。
+- 改为从 SillyTavern 官方 `public/script.js` 导入 `getThumbnailUrl`；`user_avatar` 继续来自 `public/scripts/personas.js`。
+- user 头像仍使用 `getThumbnailUrl('persona', user_avatar)`，不回退到猜 DOM。
+- 启动链保持 `index.js -> initApp() -> ensureBuiltins() -> createFloatingBall()`，Android 400ms 点击保护不变。

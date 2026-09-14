@@ -72,3 +72,7 @@
 - 群聊重答属于 moli 产品语义：不是重做整轮，而是仅重答被用户选中的 member。生成请求只包含该 member 的 PRIVATE ZONE，并从最近群历史排除其旧气泡；其他成员回复不删除、不重生成。
 - user avatar 宿主适配改为直接使用 SillyTavern runtime `user_avatar` 与正文自身 `getThumbnailUrl('persona', user_avatar)`，不再依赖 persona 面板是否打开或 DOM selected 节点是否存在。
 - 历史 UI 采用 LittleWhiteBox 同方向的 window 思路：20 条步进、最多 60 条常驻 DOM，并保留滚动锚点；实现仍沿用 moli 单 Conversation 数据源，不另建 Fourth Wall 专属分页存储。
+
+
+## moli65 热修说明
+moli64 的 user avatar 宿主适配引用源写错：SillyTavern 的 `getThumbnailUrl` 由 `public/script.js` 提供，而不是 `public/scripts/utils.js`。这是浏览器 ESM 的顶层导入错误，会导致 `phone-panel.js` 整个模块无法加载，从而连带阻断悬浮按钮初始化。moli65 只修正该导入路径。

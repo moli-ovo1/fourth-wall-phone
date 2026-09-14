@@ -2086,3 +2086,10 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [x] 搜索旧消息自动切换到包含目标的历史窗口
 - [ ] 书签 B：普通聊天 Context ring 继续暂缓；只有定义真实上下文预算后才考虑
 - [ ] 后续：评估“编辑/重答已经进入长期记忆的旧消息”如何提示或同步修正手机记忆
+
+
+## moli65 — Startup hotfix
+- [x] 定位 moli64 悬浮按钮消失根因：`phone-panel.js` 顶层导入了 `utils.js` 不导出的 `getThumbnailUrl`
+- [x] 改为 SillyTavern 官方来源 `public/script.js`
+- [x] 保留 `user_avatar + getThumbnailUrl('persona', ...)` 头像方案
+- [x] 不改 Prompt、不改悬浮按钮逻辑、不改启动顺序
