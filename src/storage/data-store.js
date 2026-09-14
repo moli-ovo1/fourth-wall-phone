@@ -99,6 +99,10 @@ function normalizeConversationMemory(memoryValue) {
       roleChat: String(memory.longTermByMode?.roleChat || '').trim(),
     },
     lastCondensedMessageId: String(memory.lastCondensedMessageId || ''),
+    lastCondensedMessageIdByMode: {
+      reading: String(memory.lastCondensedMessageIdByMode?.reading || ''),
+      roleChat: String(memory.lastCondensedMessageIdByMode?.roleChat || ''),
+    },
     lastSummarizedAt: Number(memory.lastSummarizedAt || 0),
     lastCondensedAt: Number(memory.lastCondensedAt || 0),
     lastAutoError: String(memory.lastAutoError || ''),
@@ -1137,6 +1141,9 @@ export function appendMessage(
     ts: Date.now(),
   };
 
+  // 群消息保存产生它时的模式，避免之后切换 reading / role-chat 时记忆归属被当前 UI 模式改写。
+  if (conv.type === 'group') message.memoryMode = conv.groupMode === 'role-chat' ? 'role-chat' : 'reading';
+
   if (options?.thinking) {
     message.thinking = String(options.thinking);
   }
@@ -1545,9 +1552,17 @@ export function getConversationMemory(scopeKey, conversationKey) {
       roleChat: String(conversation.memory.longTermByMode?.roleChat || ''),
     },
     lastCondensedMessageId: String(conversation.memory.lastCondensedMessageId || ''),
+    lastCondensedMessageIdByMode: {
+      reading: String(conversation.memory.lastCondensedMessageIdByMode?.reading || ''),
+      roleChat: String(conversation.memory.lastCondensedMessageIdByMode?.roleChat || ''),
+    },
     lastSummarizedAt: Number(conversation.memory.lastSummarizedAt || 0),
     lastCondensedAt: Number(conversation.memory.lastCondensedAt || 0),
     lastAutoError: String(conversation.memory.lastAutoError || ''),
+    needsReview: conversation.memory.needsReview === true,
+    needsReviewAt: Math.max(0, Number(conversation.memory.needsReviewAt || 0)),
+    needsReviewReason: String(conversation.memory.needsReviewReason || ''),
+    needsReviewMessageId: String(conversation.memory.needsReviewMessageId || ''),
   };
 }
 
@@ -1556,6 +1571,7 @@ export function updateConversationMemory(scopeKey, conversationKey, {
   longTermSummary,
   longTermByMode,
   lastCondensedMessageId,
+  lastCondensedMessageIdByMode,
   lastSummarizedAt,
   lastCondensedAt,
   lastAutoError,
@@ -1583,6 +1599,13 @@ export function updateConversationMemory(scopeKey, conversationKey, {
     })).filter(item => item.content);
   }
   if (longTermSummary !== undefined) conversation.memory.longTermSummary = String(longTermSummary || '').trim();
+  if (lastCondensedMessageIdByMode !== undefined) {
+    conversation.memory.lastCondensedMessageIdByMode = {
+      ...(conversation.memory.lastCondensedMessageIdByMode || {}),
+      reading: String(lastCondensedMessageIdByMode?.reading ?? conversation.memory.lastCondensedMessageIdByMode?.reading ?? ''),
+      roleChat: String(lastCondensedMessageIdByMode?.roleChat ?? conversation.memory.lastCondensedMessageIdByMode?.roleChat ?? ''),
+    };
+  }
   if (longTermByMode !== undefined) {
     const source = longTermByMode && typeof longTermByMode === 'object' ? longTermByMode : {};
     conversation.memory.longTermByMode = {
