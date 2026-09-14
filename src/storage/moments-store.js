@@ -79,3 +79,15 @@ export function importPublicMomentToProfile(scopeKey, momentId, ownerContactId, 
   state.profileFeeds[owner] ||= []; state.profileFeeds[owner].unshift(copy); save(scopeKey,state); return copy;
 }
 export function clearProfileMoments(scopeKey, contactId) { const state=getMomentsState(scopeKey); state.profileFeeds[String(contactId)] = []; save(scopeKey,state); }
+
+export function createProfileMoment(scopeKey, ownerContactId, { author, content, createdAt } = {}) {
+  const owner = String(ownerContactId || '').trim();
+  const text = String(content || '').trim();
+  if (!scopeKey || !owner || !text) throw new Error('角色朋友圈内容不能为空');
+  const state = getMomentsState(scopeKey);
+  const item = moment({ ownerContactId: owner, author, content: text, createdAt: Number(createdAt || Date.now()) }, 'profile');
+  state.profileFeeds[owner] ||= [];
+  state.profileFeeds[owner].unshift(item);
+  save(scopeKey, state);
+  return item;
+}
