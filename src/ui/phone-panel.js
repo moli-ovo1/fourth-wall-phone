@@ -12,6 +12,7 @@ import {
   syncTavernContacts,
   createCustomContact,
   updateContact,
+  deleteContact,
   createGroupConversation,
   updateGroupConversation,
   appendMessage,
@@ -78,7 +79,7 @@ import { getTavernWorldBookSnapshot, getTavernWorldBookCatalog } from '../core/t
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
-import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, markMomentSeen, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus } from '../storage/moments-store.js';
+import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus } from '../storage/moments-store.js';
 
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
@@ -1113,6 +1114,7 @@ export function createPhonePanel({
   const fourthWallArchiveStatus = panel.querySelector('[data-fourth-wall-archive-status]');
 
   let currentContactId = null;
+  let infoEntrySource = 'chat';
   let syncSnapshot = [];
   let customWorldBookCatalog = [];
   let pendingContactAvatar = '';
@@ -2258,6 +2260,20 @@ export function createPhonePanel({
       if (!item) { chatInfo.innerHTML = '<div class="moli-placeholder">联系人不存在。</div>'; return; }
       const isTavern = item.kind === 'tavern';
       const sourceMissing = isTavern && item.source?.status === 'missing';
+      if (infoEntrySource === 'contacts') {
+        const scopeTag = conversation.scopeMode === 'global' ? '全局' : '正文';
+        const bubbleMin = Math.max(1, Math.min(12, Number(item.replyBubbleRange?.min) || 1));
+        const bubbleMax = Math.max(bubbleMin, Math.min(12, Number(item.replyBubbleRange?.max) || 3));
+        chatInfo.innerHTML = `
+          <div class="moli-contact-profile-head">${avatarMarkup(item, 'moli-info-avatar')}<div><div class="moli-contact-profile-name">${escapeHtml(displayName(item))}<small>${scopeTag}</small></div></div></div>
+          <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>朋友资料</span><strong>›</strong></button>
+          ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row moli-contact-profile-moments" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>`}
+          <div class="moli-info-form moli-reply-range-card"><strong>回复气泡条数</strong><small>角色每轮可自然发送的气泡数量范围，不要求每次固定条数。</small><div class="moli-reply-range-inputs"><label>最少 <input type="number" min="1" max="12" value="${bubbleMin}" data-reply-bubble-min></label><span>—</span><label>最多 <input type="number" min="1" max="12" value="${bubbleMax}" data-reply-bubble-max></label></div><button type="button" class="moli-info-save-button" data-action="save-reply-bubble-range">保存</button></div>
+          <button type="button" class="moli-contact-profile-action" data-action="chat">发送消息</button>
+          ${String(item.id||'').startsWith('builtin:') ? '' : `<button type="button" class="moli-contact-profile-action moli-danger-row" data-action="delete-contact">删除联系人</button>`}
+        `;
+        return;
+      }
       chatInfo.innerHTML = `
         <div class="moli-info-private-head">
           ${avatarMarkup(item, 'moli-info-avatar')}
@@ -3024,7 +3040,7 @@ export function createPhonePanel({
       const target = conversationsForContact[0];
       return `<button class="moli-contact-tab-row" data-contact-tab-id="${escapeHtml(item.id)}" data-contact-tab-conversation="${escapeHtml(target?.conversationKey || '')}">
         ${avatarMarkup(item, 'moli-contact-tab-avatar')}
-        <span>${escapeHtml(displayName(item))}</span>
+        <span>${escapeHtml(displayName(item))}<small class="moli-contact-scope-tag">${target?.scopeMode === 'global' ? '全局' : '正文'}</small></span>
       </button>`;
     });
     contactsTabList.innerHTML = rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>';
@@ -3054,7 +3070,7 @@ export function createPhonePanel({
       const likes = (item.likes || []).length
         ? `<div class="moli-moment-likes">♥ ${escapeHtml(item.likes.map(like => like.name).join('、'))}</div>` : '';
       const comments = (item.comments || []).length
-        ? `<div class="moli-moment-comments">${item.comments.map(comment => `<div><strong>${escapeHtml(comment.actor?.name || '未知')}</strong>：${escapeHtml(comment.content || '')}</div>`).join('')}</div>` : '';
+        ? `<div class="moli-moment-comments">${item.comments.map(comment => comment.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(comment.actor?.name || '未知')}</strong> 删除了评论${comment.deletionReason ? `：${escapeHtml(comment.deletionReason)}` : ''}</div>` : `<div><strong>${escapeHtml(comment.actor?.name || '未知')}</strong>：${escapeHtml(comment.content || '')}${String(comment.actor?.id||'')==='user' ? `<button class="moli-comment-delete" data-action="moment-comment-delete" data-moment-id="${escapeHtml(item.id)}" data-comment-id="${escapeHtml(comment.id)}">删除</button>` : ''}</div>`).join('')}</div>` : '';
       return `<article class="moli-moment" data-moment-id="${escapeHtml(item.id)}">
         ${avatar}
         <div class="moli-moment-main">
@@ -3091,9 +3107,25 @@ export function createPhonePanel({
     contactMomentsFeed.innerHTML = items.map(entry => {
       const likedByUser = (entry.likes || []).some(x => String(x?.id || '') === 'user');
       const likes = entry.likes?.length ? `<div class="moli-moment-likes">♥ ${escapeHtml(entry.likes.map(x => x.name).join('、'))}</div>` : '';
-      const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => `<div><strong>${escapeHtml(c.actor?.name || '未知')}</strong>：${escapeHtml(c.content || '')}</div>`).join('')}</div>` : '';
+      const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => c.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(c.actor?.name || '未知')}</strong> 删除了评论${c.deletionReason ? `：${escapeHtml(c.deletionReason)}` : ''}</div>` : `<div><strong>${escapeHtml(c.actor?.name || '未知')}</strong>：${escapeHtml(c.content || '')}${String(c.actor?.id||'')==='user' ? `<button class="moli-comment-delete" data-action="profile-comment-delete" data-moment-id="${escapeHtml(entry.id)}" data-comment-id="${escapeHtml(c.id)}">删除</button>` : ''}</div>`).join('')}</div>` : '';
       return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(entry.author?.name || displayName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
     }).join('');
+  }
+
+  async function maybeTriggerMomentFromChat(scopeKey, conversationKey, item) {
+    if (!scopeKey || !conversationKey || !item || String(item.id || '') === 'builtin:meta') return;
+    // 低频门控：避免每轮聊天都为朋友圈追加一次 API。门控通过后仍由角色判断 POST/SKIP。
+    if (Math.random() >= 0.18) return;
+    try {
+      const result = await generateContactMoment({ scopeKey, contactId: item.id });
+      if (result?.action !== 'POST' || !result?.content) return;
+      const actorName = displayName(item);
+      const created = createProfileMoment(scopeKey, item.id, { author:{ id:item.id, name:actorName, type:'contact' }, content:result.content, createdAt:Date.now() });
+      appendMessage(scopeKey, conversationKey, 'system', `${actorName}刚刚发布了一条朋友圈`, { source:'moment-event', messageType:'moment-event', momentEvent:{ contactId:item.id, momentId:created.id } });
+      if (getScopeKey?.() === scopeKey && currentContactId === conversationKey) renderChat();
+    } catch (error) {
+      console.warn('[moli小手机] chat moment trigger skipped:', error);
+    }
   }
 
   function publishMoment() {
@@ -4529,6 +4561,10 @@ export function createPhonePanel({
           if (conversation.timeMode === 'body' && message.storyTime?.label) previousShownStoryTime = message.storyTime;
         }
 
+        if (message.messageType === 'moment-event' && message.momentEvent?.momentId) {
+          return `${timeLabel ? `<div class="moli-chat-time-label">${escapeHtml(timeLabel)}</div>` : ''}<button type="button" class="moli-chat-system-event" data-moment-event-contact="${escapeHtml(message.momentEvent.contactId || '')}" data-moment-event-id="${escapeHtml(message.momentEvent.momentId || '')}">${escapeHtml(message.content || '')}</button>`;
+        }
+
         return `
           ${timeLabel ? `<div class="moli-chat-time-label">${escapeHtml(timeLabel)}</div>` : ''}
           <div class="moli-msg ${
@@ -5144,6 +5180,10 @@ export function createPhonePanel({
 
       clearGenerationError(requestScopeKey, requestConversationKey);
 
+      if (conversation.type === 'private' && !isRegeneration && requestContact && String(requestContact.id || '') !== 'builtin:meta') {
+        void maybeTriggerMomentFromChat(requestScopeKey, requestConversationKey, requestContact);
+      }
+
       if (
         getScopeKey?.() === requestScopeKey
         && currentContactId === requestConversationKey
@@ -5532,6 +5572,10 @@ export function createPhonePanel({
           socialActor = { id: `npc:${item.id}:${String(interaction.actorName).trim()}`, name: String(interaction.actorName).trim(), type: 'npc' };
         }
         if (!socialActor) continue;
+        if (interaction.action === 'DELETE_COMMENT' && interaction.commentId) {
+          try { deleteMomentComment(scopeKey, { surface:'profile', ownerContactId:item.id, momentId:targetId, commentId:interaction.commentId, actorId:socialActor.id, reason:interaction.content || '' }); } catch {}
+          continue;
+        }
         if (interaction.action === 'LIKE' || interaction.action === 'BOTH') {
           const profile = listProfileMoments(scopeKey, item.id).find(moment => String(moment.id) === targetId);
           if (profile && !(profile.likes || []).some(like => String(like.id) === String(socialActor.id))) toggleMomentLike(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId: targetId, actor: socialActor });
@@ -5586,6 +5630,10 @@ export function createPhonePanel({
           const target = byMoment.get(String(reaction.momentId || ''));
           if (!target) continue;
           if (settings.crossContactInteraction === false && String(target?.author?.id || '') !== 'user') continue;
+          if (reaction.action === 'DELETE_COMMENT' && reaction.commentId) {
+            try { deleteMomentComment(scopeKey, { surface:'public', momentId:target.id, commentId:reaction.commentId, actorId:socialActor.id, reason:reaction.content || '' }); changed += 1; } catch {}
+            continue;
+          }
           if (reaction.action === 'LIKE' || reaction.action === 'BOTH') {
             if (!(target.likes || []).some(like => String(like.id) === String(socialActor.id))) {
               toggleMomentLike(scopeKey, { surface: 'public', momentId: target.id, actor: socialActor });
@@ -5628,6 +5676,15 @@ export function createPhonePanel({
     toast(momentsCrossInteraction.checked ? '联系人之间可互相互动' : '联系人之间的朋友圈互动已关闭');
   });
 
+  chatBody?.addEventListener('click', event => {
+    const tag = event.target.closest?.('[data-moment-event-id]');
+    if (!tag) return;
+    const contactId = String(tag.dataset.momentEventContact || '');
+    const scopeKey = getScopeKey?.(); if (!scopeKey || !contactId) return;
+    const conv = getScopeConversations(scopeKey).filter(x=>x?.type==='private' && String(x.contactId||'')===contactId).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || ensureConversation(scopeKey, contactId);
+    currentContactId = String(conv?.conversationKey || contactId); show('contact-moments');
+  });
+
   contactsTabList?.addEventListener('click', event => {
     const row = event.target.closest?.('[data-contact-tab-id]');
     if (!row) return;
@@ -5640,6 +5697,7 @@ export function createPhonePanel({
       conversationKey = String(conversation?.conversationKey || contactId);
     }
     currentContactId = conversationKey;
+    infoEntrySource = 'contacts';
     show('info');
   });
 
@@ -5655,6 +5713,12 @@ export function createPhonePanel({
       toggleMomentLike(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor() });
       renderContactMoments();
       return;
+    }
+    if (button.dataset.action === 'profile-comment-delete') {
+      const reason = String(windowRef.prompt?.('删除原因（角色会看到）', '') || '').trim();
+      if (!(windowRef.confirm?.('删除这条评论？删除后会保留“已删除”和原因。') ?? true)) return;
+      deleteMomentComment(scopeKey, { surface:'profile', ownerContactId:item.id, momentId, commentId:String(button.dataset.commentId||''), actorId:'user', reason });
+      renderContactMoments(); toast('评论已删除'); return;
     }
     if (button.dataset.action === 'profile-moment-comment') {
       const text = String(windowRef.prompt?.('评论') || '').trim();
@@ -5672,6 +5736,12 @@ export function createPhonePanel({
     const momentId = String(actionButton.dataset.momentId || '');
     if (!scopeKey || !momentId) return;
     const action = String(actionButton.dataset.action || '');
+    if (action === 'moment-comment-delete') {
+      const reason = String(windowRef.prompt?.('删除原因（角色会看到）', '') || '').trim();
+      if (!(windowRef.confirm?.('删除这条评论？删除后会保留“已删除”和原因。') ?? true)) return;
+      deleteMomentComment(scopeKey, { surface:'public', momentId, commentId:String(actionButton.dataset.commentId||''), actorId:'user', reason });
+      renderMoments(); toast('评论已删除'); return;
+    }
     if (action === 'moment-delete') {
       if (!(windowRef.confirm?.('删除这条朋友圈？') ?? true)) return;
       if (deletePublicMoment(scopeKey, momentId, 'user')) {
@@ -5966,12 +6036,21 @@ export function createPhonePanel({
 
   panel.querySelector(
     '[data-action="chat-info"]'
-  ).onclick = () =>
-    show('info');
+  ).onclick = () => { infoEntrySource = 'chat'; show('info'); };
 
   chatInfo.addEventListener('click', event => {
     const action = event.target.closest?.('[data-action]')?.dataset?.action;
 
+    if (action === 'save-reply-bubble-range') {
+      const conversation=currentConversation(); const item=conversation?.type==='private'?contact(conversation.contactId||currentContactId):null; if(!item)return;
+      const min=Math.max(1,Math.min(12,Number(chatInfo.querySelector('[data-reply-bubble-min]')?.value)||1)); const max=Math.max(min,Math.min(12,Number(chatInfo.querySelector('[data-reply-bubble-max]')?.value)||3));
+      updateContact(item.id,{replyBubbleRange:{min,max}}); toast(`回复气泡范围已设为 ${min}～${max} 条`); renderChatInfo(); return;
+    }
+    if (action === 'delete-contact') {
+      const conversation=currentConversation(); const item=conversation?.type==='private'?contact(conversation.contactId||currentContactId):null; if(!item)return;
+      if (!(windowRef.confirm?.(`删除「${displayName(item)}」？将同时删除该联系人在所有存档中的场外私聊记录，无法恢复。群聊旧消息会保留。`) ?? false)) return;
+      deleteContact(item.id); currentContactId=null; show('contacts-tab'); toast('联系人已删除'); return;
+    }
     if (action === 'search-messages') {
       openMessageSearch();
       return;
