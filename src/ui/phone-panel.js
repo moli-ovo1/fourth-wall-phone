@@ -101,7 +101,62 @@ export function createPhonePanel({
   const panel = documentRef.createElement('div');
   panel.id = 'moli-phone-panel';
   panel.innerHTML = `
-    <section class="moli-page active" data-page="home">
+    <section class="moli-page active moli-launcher-page" data-page="phone-home">
+      <header class="moli-nav moli-launcher-nav" aria-label="拖动手机窗口">
+        <div class="moli-nav-side"></div>
+        <div class="moli-nav-title"></div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-launcher">
+        <div class="moli-launcher-grid" aria-label="手机主屏幕">
+          <button class="moli-app-icon" data-action="open-wechat" aria-label="打开微信">
+            <span class="moli-app-icon-tile moli-app-wechat"><span class="moli-app-glyph">●●</span></span>
+            <small>微信</small>
+          </button>
+          <button class="moli-app-icon" data-action="open-xiaohongshu" aria-label="打开小红书">
+            <span class="moli-app-icon-tile moli-app-xiaohongshu"><span class="moli-app-glyph">RED</span></span>
+            <small>小红书</small>
+          </button>
+          <button class="moli-app-icon" data-action="open-tianya" aria-label="打开天涯论坛">
+            <span class="moli-app-icon-tile moli-app-tianya"><span class="moli-app-glyph">涯</span></span>
+            <small>天涯论坛</small>
+          </button>
+          <button class="moli-app-icon" data-action="open-weibo" aria-label="打开微博">
+            <span class="moli-app-icon-tile moli-app-weibo"><span class="moli-app-glyph">◎</span></span>
+            <small>微博</small>
+          </button>
+        </div>
+      </main>
+    </section>
+
+    <section class="moli-page" data-page="xiaohongshu-home">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="app-home-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">小红书</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-placeholder moli-app-placeholder">小红书入口已预留</main>
+    </section>
+
+    <section class="moli-page" data-page="tianya-home">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="app-home-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">天涯论坛</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-placeholder moli-app-placeholder">天涯论坛入口已预留</main>
+    </section>
+
+    <section class="moli-page" data-page="weibo-home">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="app-home-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">微博</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-placeholder moli-app-placeholder">微博入口已预留</main>
+    </section>
+
+    <section class="moli-page" data-page="home">
       <header class="moli-nav">
         <div class="moli-nav-side"></div>
         <div class="moli-nav-title">moli小手机</div>
@@ -5851,6 +5906,14 @@ export function createPhonePanel({
   ).onclick =
     updateExtension;
 
+  panel.querySelector('[data-action="open-wechat"]')?.addEventListener('click', () => show('home'));
+  panel.querySelector('[data-action="open-xiaohongshu"]')?.addEventListener('click', () => show('xiaohongshu-home'));
+  panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
+  panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => show('weibo-home'));
+  panel.querySelectorAll('[data-action="app-home-back"]').forEach(button => {
+    button.onclick = () => show('phone-home');
+  });
+
   panel.querySelectorAll('[data-action="tab-home"]').forEach(button => button.onclick = () => show('home'));
   panel.querySelectorAll('[data-action="tab-contacts"]').forEach(button => button.onclick = () => show('contacts-tab'));
   panel.querySelectorAll('[data-action="tab-discover"]').forEach(button => button.onclick = () => show('discover'));
@@ -6774,7 +6837,7 @@ open(handleElement) {
 
   positionNear(handleElement);
   panel.classList.add('open');
-  show('home');
+  show('phone-home');
 },
 
     destroy() {
