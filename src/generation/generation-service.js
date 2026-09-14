@@ -882,18 +882,19 @@ function parsePublicMomentsBatch(rawText = '', validIds = []) {
     return actors.map(item => {
       const actorId = String(item?.actorId || '').trim();
       if (!valid.has(actorId)) return null;
-      const postContent = String(item?.post?.content || '').trim();
-      const post = postContent ? {
-        content: postContent.slice(0, 2000),
-        ageMinutes: Math.max(0, Math.min(2880, Number(item?.post?.ageMinutes) || 0)),
-      } : null;
+      const rawPosts = Array.isArray(item?.posts) ? item.posts : (item?.post ? [item.post] : []);
+      const posts = rawPosts.slice(0, 2).map(post => ({
+        content: String(post?.content || '').trim().slice(0, 2000),
+        ageMinutes: Math.max(0, Math.min(2880, Number(post?.ageMinutes) || 0)),
+      })).filter(post => post.content);
+      const post = posts[0] || null;
       const reactions = Array.isArray(item?.reactions) ? item.reactions.map(reaction => ({
         momentId: String(reaction?.momentId || '').trim(),
         action: ['LIKE', 'COMMENT', 'BOTH', 'DELETE_COMMENT'].includes(String(reaction?.action || '').toUpperCase()) ? String(reaction.action).toUpperCase() : '',
         commentId: String(reaction?.commentId || '').trim(),
         content: String(reaction?.content || '').trim().slice(0, 500),
       })).filter(reaction => reaction.momentId && reaction.action) : [];
-      return { actorId, post, reactions };
+      return { actorId, post, posts, reactions };
     }).filter(Boolean);
   } catch {
     return [];
@@ -1055,11 +1056,8 @@ ageMinutes 范围 0~2880。interactions 可以为空。`;
 export async function generatePublicMomentsRefresh({ scopeKey, crossContactInteraction = true, signal } = {}) {
   if (!scopeKey) throw new Error('当前朋友圈不可用');
   const allContacts = getContacts().map(hydratedContact);
-  const contactIds = [...new Set(getScopeConversations(scopeKey)
-    .filter(conversation => conversation?.type === 'private')
-    .map(conversation => String(conversation?.contactId || ''))
-    .filter(Boolean))];
-  const contacts = contactIds.map(id => allContacts.find(item => String(item.id) === id)).filter(Boolean);
+  // 公共朋友圈属于通讯录世界：不要求先建立私聊。皮下保持 Fourth Wall 独立，不进入普通朋友圈。
+  const contacts = allContacts.filter(item => item && String(item.id || '') !== 'builtin:meta');
   if (!contacts.length) return { actors: [], consideredMomentIds: [], contacts: [] };
 
   const feed = listPublicMoments(scopeKey).slice(0, 10);
@@ -1078,17 +1076,24 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
 
   const system = `你在推进 moli小手机 的 User 公共朋友圈。所有候选联系人都有资格看到朋友圈，但绝不是每个人都必须点赞、评论或发动态。
 - 每个联系人必须保持自己的性格、关系与社交习惯；无动机就什么都不做。
-- 允许角色自己发布一条近期朋友圈，时间可为刚刚、数小时前、今天早些时候或昨天；不要为了刷新强编重大事件。
+- 每个联系人本次最多可发布 2 条近期朋友圈，时间可为刚刚、数小时前、今天早些时候或昨天；第二条必须有自然的时间/情绪延续动机，例如昨天发过但无人回应、今天又产生了新的表达冲动。不要为了凑数强编。
+- 本次刷新所有联系人合计最多生成 10 条新朋友圈；这是本轮生成上限，不自动删除历史朋友圈。
 - 联系人始终可以点赞/评论 user(id=user) 的朋友圈。
 - 联系人也可以删除自己先前写下的评论：reaction.action=DELETE_COMMENT，填写 commentId，并可在 content 中写简短删除原因；删除原因会被其他人看到。只能删除自己的评论。
 - ${crossContactInteraction ? '联系人互相互动已开启：可以对其他联系人发布的朋友圈点赞/评论。' : '联系人互相互动已关闭：严禁对其他联系人发布的朋友圈点赞/评论，只能对 user 的动态互动。'}
 - 不要机械全员轮流，不要用随机替代人物动机。一次刷新可以 0 人行动。
 - 不要把私聊秘密无脑公开到朋友圈。
 - 只输出严格 JSON，不要解释。`;
-  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","post":null或{"content":"朋友圈正文","ageMinutes":0},"reactions":[{"momentId":"目标momentId","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论内容；DELETE_COMMENT 时作为删除原因"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
+  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","posts":[]或最多2个{"content":"朋友圈正文","ageMinutes":0},"reactions":[{"momentId":"目标momentId","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论内容；DELETE_COMMENT 时作为删除原因"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
   const actors = parsePublicMomentsBatch(result?.text || '', contacts.map(item => item.id));
+  let remainingPosts = 10;
+  for (const actor of actors) {
+    actor.posts = (actor.posts || (actor.post ? [actor.post] : [])).slice(0, Math.max(0, remainingPosts));
+    actor.post = actor.posts[0] || null;
+    remainingPosts -= actor.posts.length;
+  }
   return { actors, consideredMomentIds: feed.map(item => item.id), contacts };
 }
