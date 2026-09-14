@@ -261,14 +261,17 @@
 #moli-phone-panel .moli-info-name-row input{min-width:0;border:0;background:transparent;outline:none;text-align:right;font:inherit;font-size:14px}
 #moli-phone-panel .moli-info-name-row button{border:0;border-radius:5px;background:#07c160;color:#fff;padding:6px 10px;font-size:12px}
 #moli-phone-panel .moli-info-coming{padding:18px 16px;color:#999;font-size:12px;line-height:1.6;text-align:center}
-#moli-phone-panel .moli-info-private-head{display:flex;flex-direction:column;align-items:center;gap:5px;padding:22px 16px 20px;background:#fff}
+#moli-phone-panel .moli-info-private-head{display:flex;flex-direction:column;align-items:center;gap:3px;padding:18px 16px 16px;background:#fff}
+#moli-phone-panel .moli-info-avatar-wrap{position:relative;display:inline-flex;margin-bottom:1px}
 #moli-phone-panel .moli-info-avatar{width:68px;height:68px;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#222;color:#fff;font-size:24px;font-weight:700}
 #moli-phone-panel .moli-info-avatar img{width:100%;height:100%;display:block;object-fit:cover}
 #moli-phone-panel .moli-info-private-name{position:relative;font-size:16px;font-weight:600;text-align:center;line-height:1.35}
 
 
 /* 私聊聊天信息 / 联系人资料 */
-#moli-phone-panel .moli-info-avatar-button{border:0;border-radius:6px;background:#f0f0f0;color:#333;padding:7px 12px;font-size:12px;margin-top:2px}
+#moli-phone-panel .moli-info-avatar-edit{position:absolute;right:-7px;bottom:-7px;width:25px;height:25px;border:1px solid rgba(0,0,0,.12);border-radius:50%;background:#f5f5f5;color:#555;display:flex;align-items:center;justify-content:center;padding:5px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+#moli-phone-panel .moli-info-avatar-edit svg{width:100%;height:100%;display:block}
+#moli-phone-panel .moli-info-avatar-edit:active{background:#e8e8e8}
 #moli-phone-panel .moli-info-link-button{border:0;background:transparent;color:#576b95;padding:2px 6px;font-size:12px}
 #moli-phone-panel .moli-info-source{margin-top:10px;background:#fff;border-top:1px solid #e5e5e5;border-bottom:1px solid #e5e5e5}
 #moli-phone-panel .moli-info-source>div{display:flex;justify-content:space-between;gap:16px;padding:11px 14px;border-bottom:1px solid #eee;font-size:13px}
@@ -919,7 +922,7 @@
 
 
 /* moli88: profile information architecture + Moments forward card */
-#moli-phone-panel .moli-profile-inline-edit{width:min(280px,82%);border:0;border-bottom:1px solid transparent;background:transparent;text-align:center;outline:none;padding:3px 6px;font:inherit;font-size:13px;color:#777}
+#moli-phone-panel .moli-profile-inline-edit{width:min(280px,82%);border:0;border-bottom:1px solid transparent;background:transparent;text-align:center;outline:none;padding:1px 6px;font:inherit;font-size:13px;line-height:1.25;color:#777}
 #moli-phone-panel .moli-profile-inline-edit:focus{border-bottom-color:#07c160;color:#222}
 #moli-phone-panel .moli-profile-chat-title{font-size:12px;color:#999}
 #moli-phone-panel .moli-info-inline-title{font-weight:600;font-size:15px;margin-bottom:8px}
