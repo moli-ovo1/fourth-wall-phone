@@ -3224,13 +3224,13 @@ export function createPhonePanel({
             <div class="moli-item-top">
               <div class="moli-name">
                 ${escapeHtml(title)}
-                ${!isGroup && isFourthWallContact(item) ? '<small class="moli-fourth-wall-list-subtitle">入戏…</small>' : ''}
+                ${!isGroup && isFourthWallContact(item) ? '<small class="moli-fourth-wall-list-subtitle" style="display:inline;margin:0 0 0 8px;vertical-align:baseline;">我在这边，你呢？</small>' : ''}
               </div>
               ${conversation.pinned ? '<span class="moli-pin-mark">置顶</span>' : ''}
             </div>
 
             <div class="moli-preview">
-              ${last ? escapeHtml(last.content) : (isFourthWallContact(item) ? '入戏…' : '暂无消息')}
+              ${last ? escapeHtml(last.content) : '暂无消息'}
             </div>
           </div>
         </button>
