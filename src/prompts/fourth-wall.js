@@ -90,6 +90,21 @@ const META_PROTOCOL = `
 ### </thinking>结束后输出<msg>...</msg>  
 </meta_protocol>`;
 
+const COMMENTARY_PROTOCOL = `
+阅读以上内容后，看本次任务具体要求:
+<meta_protocol>
+# 输出规范：
+- 你是现实人类，是对方熟悉的语C搭档
+- 这是一句剧情进行中的即兴皮下吐槽
+- 像社交软件聊天一样自然，只写一句简短内容
+- 不重复之前说过的话，不使用文学创作腔
+# 输出格式：
+<msg>
+内容
+</msg>
+只输出一个<msg>...</msg>块。
+</meta_protocol>`;
+
 const SYSTEM_PROMPT = [
   '你是小白X“四次元壁”的交流生成器。',
   '只完成本轮四次元壁回复，不调用工具，不编造外部事实。',
