@@ -8,7 +8,9 @@ import { createProfileMoment } from '../storage/moments-store.js';
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
 const AUTO_CHAT_COOLDOWN_MS = 15 * 60 * 1000;
-const SOCIAL_EVENT_BATCH_MS = 8 * 1000;
+const SOCIAL_EVENT_BATCH_MS = 2 * 60 * 1000;
+const SOCIAL_FACT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const SOFT_ACTION_WINDOW_MS = 20 * 60 * 1000;
 const running = new Set();
 const chance = p => Math.random() * 100 < Math.max(0, Math.min(100, Number(p) || 0));
 const commentaryEvaluationStep = p => {
@@ -118,12 +120,16 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       let mode = '';
       let commentaryEvent = null;
       let socialEvents = [];
-      const pendingSocialEvents = Array.isArray(a.pendingSocialEvents) ? a.pendingSocialEvents.filter(Boolean) : [];
-      const socialEventReady = pendingSocialEvents.length > 0
-        && now - Number(pendingSocialEvents[0]?.createdAt || 0) >= SOCIAL_EVENT_BATCH_MS;
-      const pendingBatch = pendingSocialEvents.slice(-6);
-      const hasPostOpportunity = pendingBatch.some(event => event?.eventType === 'chat-progress');
-      const hasPrivateOpportunity = eligibleAutoChatContact(contact) && a.autoChatEnabled && Number(a.autoChatProbability ?? 0) > 0;
+      const pendingSocialEvents = (Array.isArray(a.pendingSocialEvents) ? a.pendingSocialEvents : [])
+        .filter(event => event && now - Number(event.createdAt || 0) <= SOCIAL_FACT_MAX_AGE_MS)
+        .slice(-12);
+      const wakeEvents = pendingSocialEvents.filter(event => event?.wakeBehavior === true);
+      const socialEventReady = wakeEvents.length > 0
+        && now - Number(wakeEvents[0]?.createdAt || 0) >= SOCIAL_EVENT_BATCH_MS;
+      const pendingBatch = pendingSocialEvents.slice(-10);
+      const hasPostOpportunity = wakeEvents.some(event => event?.eventType === 'chat-progress' || event?.allowPost === true);
+      const hasPrivateOpportunity = wakeEvents.some(event => event?.allowPrivate === true)
+        && eligibleAutoChatContact(contact) && a.autoChatEnabled && Number(a.autoChatProbability ?? 0) > 0;
       if (
         socialEventReady
         && eligibleAutoChatContact(contact)
@@ -158,27 +164,37 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         && opportunity
         && a.autoChatEnabled
         && now - Number(a.lastAutoChatAt || 0) >= autoChatEvaluationInterval(a.autoChatProbability)
-      ) mode = 'chat';
+      ) {
+        mode = 'chat';
+        socialEvents = pendingSocialEvents;
+      }
       if (!mode) continue;
       running.add(key);
       beginGenerationTask(scopeKey, key, null, mode);
       try {
         const isFourthWall = isFourthWallContact;
         const socialEventText = socialEvents.map(event => {
-          const label = event?.eventType === 'user-comment' ? '用户刚在你的朋友圈下评论了'
-            : event?.eventType === 'user-delete-comment' ? '用户删除了自己在你朋友圈下的评论'
-              : event?.eventType === 'user-like' ? '用户刚给你的朋友圈点了赞'
-                : event?.eventType === 'chat-progress' ? '最近手机聊天产生了新的进展，到了可以考虑是否公开表达/主动联系的时机'
-                  : '朋友圈里发生了一件与你有关的事';
+          const label = event?.eventType === 'user-comment' ? '用户最近在你的朋友圈下评论了'
+            : event?.eventType === 'user-delete-comment' ? '用户最近删除了自己在你朋友圈下的评论'
+              : event?.eventType === 'user-like' ? '用户最近给你的朋友圈点了赞'
+                : event?.eventType === 'user-unlike' ? '用户最近取消了对你朋友圈的赞'
+                  : event?.eventType === 'chat-progress' ? '最近手机聊天产生了新的进展'
+                    : '朋友圈里最近发生了一件与你有关的事';
           return `- ${label}${event?.content ? `：${event.content}` : ''}${event?.momentId ? `（momentId=${event.momentId}）` : ''}`;
         }).join('\n');
-        const allowPost = !isFourthWall && mode !== 'commentary';
+        const recentBehaviorActions = (Array.isArray(a.recentBehaviorActions) ? a.recentBehaviorActions : [])
+          .filter(entry => entry && now - Number(entry.at || 0) <= SOFT_ACTION_WINDOW_MS)
+          .slice(-4);
+        const recentActionText = recentBehaviorActions.length
+          ? recentBehaviorActions.map(entry => `- ${Math.max(0, Math.round((now - Number(entry.at || 0)) / 60000))} 分钟前：${String(entry.action || 'SKIP')}`).join('\n')
+          : '（最近没有刚执行过的主动行为）';
+        const allowPost = !isFourthWall && mode !== 'commentary' && (mode !== 'social-event' || hasPostOpportunity);
         const allowPrivate = mode === 'commentary' || Boolean(a.autoChatEnabled && Number(a.autoChatProbability ?? 0) > 0);
         const instruction = mode === 'commentary'
           ? (isFourthWall
             ? '这是正文刚发生后的场外私聊反应机会。你就是正文中的你本人，不是分析员。只有此刻真的会想联系用户时才回复；若不想说，严格只输出 [SKIP]。若回复，像手机私聊一样简短自然。'
             : `这是一次“酒馆正文事件 → 这个人物是否会在手机里产生反应”的行为判断机会，不是命令你必须吐槽。刚发生的正文事件：\n${String(commentaryEvent?.targetText || '').trim().slice(0, 1800) || '（正文有新进展）'}\n你可以揶揄、生气、看戏、担心、追问、冷淡、转移话题，或者完全不想说；一切由你的人格、与用户的关系、当前情绪和已有手机连续性决定。若此刻不会主动在手机里联系用户，严格只输出 [SKIP]；若会，直接发真实手机私聊内容，不解释判断过程。`)
-          : `这是一次人物主动行为判断机会。它不是“必须行动”的命令，也不是随机抽签。\n最近事件：\n${socialEventText || '（没有单独的新社交事件，这是一次自然主动行为机会）'}\n主动私聊倾向设置为 ${Number(a.autoChatProbability ?? 30)}%，它只表示人物主动联系用户的倾向/评估频率，不代表必须联系。\n结合你的人格、关系、当前情绪、最近聊天、未完话题、朋友圈历史、社交习惯、已经公开表达过什么，以及距离上次互动的间隔，决定此刻最自然的行为。\n允许的动作：${allowPost ? 'POST（发一条自己的朋友圈）' : ''}${allowPost && allowPrivate ? ' / ' : ''}${allowPrivate ? 'PRIVATE_CHAT（主动私聊用户）' : ''}${allowPost && allowPrivate ? ' / POST+PRIVATE_CHAT（两者都做，但必须各自有真实动机）' : ''} / SKIP（什么都不做）。\n不要为了展示功能而行动；不要机械回应每个朋友圈事件；不要把私聊秘密无脑公开。\n只输出严格 JSON，不要解释：{"action":"SKIP|POST|PRIVATE_CHAT|POST+PRIVATE_CHAT","post":"只有 POST 时填写朋友圈正文，否则空字符串","privateMessages":["只有 PRIVATE_CHAT 时填写的真实手机气泡，可 1~3 条"]}`;
+          : `这是一次人物主动行为判断机会。它不是“必须行动”的命令，也不是随机抽签。\n最近事件：\n${socialEventText || '（没有单独的新社交事件，这是一次自然主动行为机会）'}\n主动私聊倾向设置为 ${Number(a.autoChatProbability ?? 30)}%，它只表示人物主动联系用户的倾向/评估频率，不代表必须联系。\n结合你的人格、关系、当前情绪、最近聊天、未完话题、长期未互动、朋友圈历史、社交习惯、已经公开表达过什么，以及距离上次互动的间隔，决定此刻最自然的行为。\n最近已经执行过的主动行为：\n${recentActionText}\n这些只是 soft cooldown：如果刚刚已经 POST/PRIVATE_CHAT，普通小事通常不值得马上重复；但重大关系或剧情变化绝不能被硬性禁止继续行动。\n允许的动作：${allowPost ? 'POST（发一条自己的朋友圈）' : ''}${allowPost && allowPrivate ? ' / ' : ''}${allowPrivate ? 'PRIVATE_CHAT（主动私聊用户）' : ''}${allowPost && allowPrivate ? ' / POST+PRIVATE_CHAT（两者都做，但必须各自有真实动机）' : ''} / SKIP（什么都不做）。\n不要为了展示功能而行动；不要机械回应每个朋友圈事件；不要把私聊秘密无脑公开。\n只输出严格 JSON，不要解释：{"action":"SKIP|POST|PRIVATE_CHAT|POST+PRIVATE_CHAT","post":"只有 POST 时填写朋友圈正文，否则空字符串","privateMessages":["只有 PRIVATE_CHAT 时填写的真实手机气泡，可 1~3 条"]}`;
         const result = await generatePrivateReply({
           scopeKey,
           conversationKey: key,
@@ -233,11 +249,17 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           recordAutomaticUnreadRound(scopeKey, key, privateMessages.length);
         }
 
+        if (mode !== 'commentary' && behaviorAction !== 'SKIP') {
+          const priorActions = Array.isArray(a.recentBehaviorActions) ? a.recentBehaviorActions : [];
+          updatePrivateAutomationRuntime(scopeKey, key, {
+            recentBehaviorActions: [...priorActions, { action: behaviorAction, at: Date.now() }].slice(-8),
+          });
+        }
         window.dispatchEvent(new CustomEvent('moli:conversation-updated', { detail: { scopeKey, conversationKey: key, source: mode, behaviorAction } }));
       } catch (e) { setGenerationError(scopeKey, key, `自动行为失败：${String(e?.message || e || '请求失败')}`, mode); console.error('[moli小手机] private automation failed:', e); }
       finally {
         const runtimePatch = { lastAutoChatAt: (mode === 'chat' || (mode === 'social-event' && a.autoChatEnabled)) ? Date.now() : Number(a.lastAutoChatAt || 0) };
-        if (mode === 'social-event') runtimePatch.pendingSocialEvents = [];
+        if (mode === 'social-event' || (mode === 'chat' && socialEvents.length)) runtimePatch.pendingSocialEvents = [];
         if (mode === 'commentary' && commentaryEvent?.type === 'ai_message') {
           runtimePatch.lastCommentaryEvaluationBodyCount = bodyCount;
           runtimePatch.lastCommentaryEvaluationAt = Date.now();
@@ -253,12 +275,20 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
 
 
 /**
- * Queue a low-cost character behavior opportunity. Multiple nearby events are batched into the
- * existing private Automation loop so one UI action does not automatically equal one API request.
- * `chat-progress` may create a POST opportunity even when proactive private chat is disabled;
- * social interactions keep the existing rule that they only wake private behavior when auto chat is enabled.
+ * Queue a character behavior event. `wakeBehavior` decides whether this event may wake an API
+ * evaluation by itself. Context-only facts are retained and batched into the next real opportunity.
+ * This keeps “the character knows it happened” separate from “call the model immediately”.
  */
-export function notifyBehaviorOpportunity({ scopeKey, contactId, momentId='', eventType='moment-event', content='' } = {}) {
+export function notifyBehaviorOpportunity({
+  scopeKey,
+  contactId,
+  momentId = '',
+  eventType = 'moment-event',
+  content = '',
+  wakeBehavior,
+  allowPost,
+  allowPrivate,
+} = {}) {
   if (!scopeKey || !contactId) return { action: 'SKIP', reason: 'missing-context' };
   const contact = getContacts().find(c => String(c.id) === String(contactId));
   if (!eligibleAutoChatContact(contact)) return { action: 'SKIP', reason: 'ineligible-contact' };
@@ -267,20 +297,39 @@ export function notifyBehaviorOpportunity({ scopeKey, contactId, momentId='', ev
     .sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
   if (!conv) return { action: 'SKIP', reason: 'missing-conversation' };
   const type = String(eventType || 'moment-event');
-  const isChatProgress = type === 'chat-progress';
-  if (!isChatProgress && !conv?.automation?.autoChatEnabled) return { action: 'SKIP', reason: 'automation-disabled' };
+  const defaults = type === 'chat-progress'
+    ? { wake: true, post: true, private: true }
+    : type === 'user-comment'
+      ? { wake: true, post: true, private: true }
+      : { wake: false, post: false, private: false };
+  const shouldWake = typeof wakeBehavior === 'boolean' ? wakeBehavior : defaults.wake;
+  const canPost = typeof allowPost === 'boolean' ? allowPost : defaults.post;
+  const canPrivate = typeof allowPrivate === 'boolean' ? allowPrivate : defaults.private;
+  if (shouldWake && type !== 'chat-progress' && !conv?.automation?.autoChatEnabled) {
+    // Keep the fact even when proactive private behavior is disabled; it may matter to a later natural opportunity.
+    return notifyBehaviorContextEvent({ scopeKey, contactId, momentId, eventType:type, content });
+  }
   const key = String(conv.conversationKey || conv.id || '');
   if (!key) return { action:'SKIP', reason:'missing-conversation' };
-  const previous = Array.isArray(conv.automation?.pendingSocialEvents) ? conv.automation.pendingSocialEvents : [];
+  const now = Date.now();
+  const previous = (Array.isArray(conv.automation?.pendingSocialEvents) ? conv.automation.pendingSocialEvents : [])
+    .filter(event => event && now - Number(event.createdAt || 0) <= SOCIAL_FACT_MAX_AGE_MS);
   const next = [...previous, {
-    id: `behavior:${Date.now()}:${Math.random().toString(36).slice(2,8)}`,
+    id: `behavior:${now}:${Math.random().toString(36).slice(2,8)}`,
     eventType: type,
     momentId: String(momentId || ''),
     content: String(content || '').trim().slice(0, 800),
-    createdAt: Date.now(),
-  }].slice(-8);
+    createdAt: now,
+    wakeBehavior: shouldWake,
+    allowPost: canPost,
+    allowPrivate: canPrivate,
+  }].slice(-12);
   updatePrivateAutomationRuntime(scopeKey, key, { pendingSocialEvents: next });
-  return { action:'QUEUED', count:next.length };
+  return { action: shouldWake ? 'QUEUED' : 'RECORDED', count:next.length };
+}
+
+export function notifyBehaviorContextEvent(args = {}) {
+  return notifyBehaviorOpportunity({ ...args, wakeBehavior:false, allowPost:false, allowPrivate:false });
 }
 
 export function notifyMomentInteractionOpportunity(args = {}) {
