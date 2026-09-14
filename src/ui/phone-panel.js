@@ -65,6 +65,7 @@ import {
   inspectFourthWallContext,
   summarizeFourthWallMemory,
   generateContactMoment,
+  generatePublicMomentsRefresh,
 } from '../generation/generation-service.js';
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
@@ -77,7 +78,7 @@ import { getTavernWorldBookSnapshot, getTavernWorldBookCatalog } from '../core/t
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
-import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, clearProfileMoments } from '../storage/moments-store.js';
+import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, markMomentSeen, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus } from '../storage/moments-store.js';
 
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
@@ -181,7 +182,7 @@ export function createPhonePanel({
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="moments-back" aria-label="返回">‹</button></div>
         <div class="moli-nav-title">朋友圈</div>
-        <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="moments-compose" aria-label="发朋友圈">📷</button></div>
+        <div class="moli-nav-side right moli-moments-nav-actions"><button class="moli-icon-btn" data-action="moments-refresh" aria-label="刷新朋友圈">↻</button><button class="moli-icon-btn" data-action="moments-compose" aria-label="发朋友圈">📷</button></div>
       </header>
       <div class="moli-moments-connect-row">
         <span><strong>允许联系人互相互动</strong><small>默认开启。只控制联系人彼此点赞/评论；联系人始终可以对你的朋友圈互动。</small></span>
@@ -651,6 +652,7 @@ export function createPhonePanel({
         <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="contact-moments-refresh" aria-label="刷新角色朋友圈">↻</button></div>
       </header>
       <div class="moli-profile-moments-notice" data-contact-moments-notice></div>
+      <div class="moli-profile-moments-status" data-contact-moments-status hidden></div>
       <main class="moli-moments-feed" data-contact-moments-feed></main>
       <footer class="moli-sync-footer"><button class="moli-secondary-btn" data-action="contact-moments-clear">清空本页朋友圈</button></footer>
     </section>
@@ -989,6 +991,7 @@ export function createPhonePanel({
   const contactMomentsFeed = panel.querySelector('[data-contact-moments-feed]');
   const contactMomentsTitle = panel.querySelector('[data-contact-moments-title]');
   const contactMomentsNotice = panel.querySelector('[data-contact-moments-notice]');
+  const contactMomentsStatus = panel.querySelector('[data-contact-moments-status]');
   const chatBody = panel.querySelector('.moli-chat-body');
   const chatTitle = panel.querySelector('[data-chat-title]');
   const chatError = panel.querySelector('[data-chat-error]');
@@ -3077,12 +3080,19 @@ export function createPhonePanel({
     if (!scopeKey || !item) { contactMomentsFeed.innerHTML = '<div class="moli-empty">联系人朋友圈不可用</div>'; return; }
     if (contactMomentsTitle) contactMomentsTitle.textContent = `${displayName(item)}的朋友圈`;
     const items = listProfileMoments(scopeKey, item.id);
+    const status = getProfileMomentStatus(scopeKey, item.id);
     if (contactMomentsNotice) contactMomentsNotice.textContent = items.length >= 5 ? `已有 ${items.length} 条 · 已达到 5 条整理提醒，可继续玩或手动清空` : `角色专属朋友圈 · ${items.length}/5 条整理提醒` ;
-    if (!items.length) { contactMomentsFeed.innerHTML = '<div class="moli-empty">这里还没有角色专属朋友圈。之后可从公共朋友圈把角色自己的动态整理后投入这里。</div>'; return; }
+    if (contactMomentsStatus) {
+      const hasStatus = Boolean(status?.message || status?.note);
+      contactMomentsStatus.hidden = !hasStatus;
+      contactMomentsStatus.innerHTML = hasStatus ? `<strong>${escapeHtml(status.message || '')}</strong>${status.note ? `<small>${escapeHtml(status.note)}</small>` : ''}` : '';
+    }
+    if (!items.length) { contactMomentsFeed.innerHTML = '<div class="moli-empty">这里还没有角色专属朋友圈。点右上角刷新，看看他最近有没有发过什么。</div>'; return; }
     contactMomentsFeed.innerHTML = items.map(entry => {
+      const likedByUser = (entry.likes || []).some(x => String(x?.id || '') === 'user');
       const likes = entry.likes?.length ? `<div class="moli-moment-likes">♥ ${escapeHtml(entry.likes.map(x => x.name).join('、'))}</div>` : '';
       const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => `<div><strong>${escapeHtml(c.actor?.name || '未知')}</strong>：${escapeHtml(c.content || '')}</div>`).join('')}</div>` : '';
-      return `<article class="moli-moment"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(entry.author?.name || displayName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
+      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(entry.author?.name || displayName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
     }).join('');
   }
 
@@ -5498,19 +5508,50 @@ export function createPhonePanel({
     button.setAttribute('aria-busy', 'true');
     try {
       const result = await generateContactMoment({ scopeKey, contactId: item.id });
+      let createdMoment = null;
       if (result?.action === 'POST' && result?.content) {
-        createProfileMoment(scopeKey, item.id, {
+        createdMoment = createProfileMoment(scopeKey, item.id, {
           author: { id: item.id, name: actorName, type: 'contact' },
           content: result.content,
           createdAt: result.createdAt,
         });
-        renderContactMoments();
+      }
+      const validNpcKeys = new Set((result?.npcSources || []).map(source => String(source?.key || '')));
+      for (const interaction of result?.interactions || []) {
+        const rawTargetId = String(interaction?.targetMomentId || '');
+        const targetId = rawTargetId === '__NEW__' ? String(createdMoment?.id || '') : rawTargetId;
+        if (!targetId) continue;
+        let socialActor = null;
+        if (interaction.actorType === 'contact' && String(interaction.actorId || '') === String(item.id)) {
+          socialActor = { id: item.id, name: actorName, type: 'contact' };
+        } else if (interaction.actorType === 'writer') {
+          socialActor = { id: 'builtin:writer', name: contact('builtin:writer') ? displayName(contact('builtin:writer')) : '小上帝', type: 'contact' };
+        } else if (interaction.actorType === 'guide') {
+          socialActor = { id: 'builtin:guide', name: contact('builtin:guide') ? displayName(contact('builtin:guide')) : 'moli', type: 'contact' };
+        } else if (interaction.actorType === 'npc' && validNpcKeys.has(String(interaction.npcSourceKey || '')) && interaction.actorName) {
+          socialActor = { id: `npc:${item.id}:${String(interaction.actorName).trim()}`, name: String(interaction.actorName).trim(), type: 'npc' };
+        }
+        if (!socialActor) continue;
+        if (interaction.action === 'LIKE' || interaction.action === 'BOTH') {
+          const profile = listProfileMoments(scopeKey, item.id).find(moment => String(moment.id) === targetId);
+          if (profile && !(profile.likes || []).some(like => String(like.id) === String(socialActor.id))) toggleMomentLike(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId: targetId, actor: socialActor });
+        }
+        if ((interaction.action === 'COMMENT' || interaction.action === 'BOTH') && interaction.content) {
+          addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId: targetId, actor: socialActor, content: interaction.content, replyToId: interaction.replyToId || '' });
+        }
+      }
+      if (result?.action === 'POST') {
+        setProfileMomentStatus(scopeKey, item.id, { message: `发现 ${actorName} 的一条近期朋友圈`, note: '', kind: 'post' });
         toast(`发现 ${actorName} 的一条近期朋友圈`);
       } else {
+        setProfileMomentStatus(scopeKey, item.id, { message: `${actorName} 最近没有新的朋友圈`, note: result?.statusNote || '这会儿没什么想公开发的。', kind: 'skip' });
         toast(`${actorName} 最近没有新的朋友圈`);
       }
+      renderContactMoments();
     } catch (error) {
       console.error('[moli小手机] refresh contact moments failed:', error);
+      setProfileMomentStatus(scopeKey, item.id, { message: `${actorName} 的朋友圈刷新失败`, note: error?.message || '稍后再试。', kind: 'error' });
+      renderContactMoments();
       toast(error?.message ? `${actorName}：${error.message}` : `${actorName} 的朋友圈刷新失败`);
     } finally {
       button.disabled = false;
@@ -5520,6 +5561,58 @@ export function createPhonePanel({
   });
 
   panel.querySelector('[data-action="contact-moments-clear"]')?.addEventListener('click', () => { const scopeKey=getScopeKey?.(); const conversation=currentConversation(); const item=conversation?.type==='private'?contact(conversation.contactId||currentContactId):null; if(!scopeKey||!item)return; if(!windowRef.confirm?.(`清空 ${displayName(item)} 的角色专属朋友圈？`))return; clearProfileMoments(scopeKey,item.id); renderContactMoments(); toast('角色朋友圈已清空'); });
+  panel.querySelector('[data-action="moments-refresh"]')?.addEventListener('click', async event => {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey) return toast('当前朋友圈不可用');
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.classList.add('is-spinning');
+    button.setAttribute('aria-busy', 'true');
+    try {
+      const settings = getMomentsSettings(scopeKey);
+      const result = await generatePublicMomentsRefresh({ scopeKey, crossContactInteraction: settings.crossContactInteraction !== false });
+      const feedBefore = listPublicMoments(scopeKey);
+      const byMoment = new Map(feedBefore.map(moment => [String(moment.id), moment]));
+      let changed = 0;
+      for (const actorResult of result?.actors || []) {
+        const actorContact = contact(actorResult.actorId);
+        if (!actorContact) continue;
+        const socialActor = { id: actorContact.id, name: displayName(actorContact), type: 'contact' };
+        if (actorResult.post?.content) {
+          createPublicMoment(scopeKey, { author: socialActor, content: actorResult.post.content, createdAt: Date.now() - Math.max(0, Number(actorResult.post.ageMinutes) || 0) * 60 * 1000 });
+          changed += 1;
+        }
+        for (const reaction of actorResult.reactions || []) {
+          const target = byMoment.get(String(reaction.momentId || ''));
+          if (!target) continue;
+          if (settings.crossContactInteraction === false && String(target?.author?.id || '') !== 'user') continue;
+          if (reaction.action === 'LIKE' || reaction.action === 'BOTH') {
+            if (!(target.likes || []).some(like => String(like.id) === String(socialActor.id))) {
+              toggleMomentLike(scopeKey, { surface: 'public', momentId: target.id, actor: socialActor });
+              changed += 1;
+            }
+          }
+          if ((reaction.action === 'COMMENT' || reaction.action === 'BOTH') && reaction.content) {
+            addMomentComment(scopeKey, { surface: 'public', momentId: target.id, actor: socialActor, content: reaction.content });
+            changed += 1;
+          }
+        }
+      }
+      for (const consideredContact of result?.contacts || []) {
+        for (const momentId of result?.consideredMomentIds || []) markMomentSeen(scopeKey, { surface: 'public', momentId, actorId: consideredContact.id });
+      }
+      renderMoments();
+      toast(changed ? `朋友圈有 ${changed} 个新动静` : '这一轮大家都没什么公开动静');
+    } catch (error) {
+      console.error('[moli小手机] refresh public moments failed:', error);
+      toast(error?.message || '朋友圈刷新失败');
+    } finally {
+      button.disabled = false;
+      button.classList.remove('is-spinning');
+      button.removeAttribute('aria-busy');
+    }
+  });
+
   panel.querySelector('[data-action="moments-compose"]')?.addEventListener('click', () => {
     if (momentsComposeText) momentsComposeText.value = '';
     show('moments-compose');
@@ -5548,6 +5641,28 @@ export function createPhonePanel({
     }
     currentContactId = conversationKey;
     show('info');
+  });
+
+  contactMomentsFeed?.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-action]');
+    if (!button) return;
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    const item = conversation?.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
+    const momentId = String(button.dataset.momentId || '');
+    if (!scopeKey || !item || !momentId) return;
+    if (button.dataset.action === 'profile-moment-like') {
+      toggleMomentLike(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor() });
+      renderContactMoments();
+      return;
+    }
+    if (button.dataset.action === 'profile-moment-comment') {
+      const text = String(windowRef.prompt?.('评论') || '').trim();
+      if (!text) return;
+      addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: text });
+      renderContactMoments();
+      toast('已评论。点右上角刷新看看有没有回应。');
+    }
   });
 
   momentsFeed?.addEventListener('click', event => {
