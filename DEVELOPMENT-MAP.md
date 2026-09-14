@@ -1,3 +1,14 @@
+# moli74 / v0.4.17
+
+- 完成 8 个默认「线上聊天预设」的第一轮系统审计：保留现有全局预设架构，不新增平行 `global-phone-prompt`。
+- 修正默认 Prompt 中已经过时的“日记”术语，统一为现行“近期记忆”；角色卡来源改成统一“角色卡资料”语义，底层六字段兼容仍保留。
+- `线上即时通讯协议` / `活人聊天行为` 改成私聊与群聊都成立的措辞；私聊 `<message>` 输出协议仍不进入群聊 batch JSON。
+- 群聊生成补齐 Conversation 时间模式注入，reading / role-chat 不再靠 Prompt 自己猜时间来源。
+- 默认 Prompt 迁移只刷新仍与 moli73 旧默认完全一致的系统条目，用户手工编辑过的条目与自定义条目不覆盖。
+- 「皮下设置」隐藏普通用户不需要理解的“禁用 Assistant Prefill”开关；底层兼容字段与旧数据状态继续保留。
+- 正式加入 LittleWhiteBox / biex attribution：`THIRD_PARTY_NOTICES.md`、Apache-2.0 文本、README Credits。
+- 固化 Fourth Wall 路线：不整包复制第二套系统；保留 moli 现有皮下架构，下一步对最新版 LittleWhiteBox Fourth Wall 做逐项差异审计（已移植 / 行为不同 / 新增缺失 / moli 更优）。
+
 # moli70 / v0.4.14
 
 - 自建 custom 角色「角色资料条目」升级为轻量角色世界书：每条可选「常驻」或「关键词触发」。
