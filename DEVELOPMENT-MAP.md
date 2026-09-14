@@ -2391,3 +2391,9 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - `index.js`: 改为零依赖 bootstrap launcher + `import('./src/core/app.js')` 动态加载。即便完整模块图加载失败，悬浮入口仍可见并暴露错误；成功时由正式 `floating-ball.js` 接管。
 - `manifest.json`: 0.4.29。
 - 诊断原则：若 moli86 的 bootstrap 悬浮入口也完全不出现，则问题已不在应用内部模块，而应检查扩展是否实际启用/加载、浏览器缓存或安装目录；若出现红色悬浮入口，则点击/控制台错误可直接定位真实模块故障。
+
+### v0.4.30 / moli87 — browser module parse fix
+- `src/generation/generation-service.js`: 修复 moli84 `getContactMomentsContinuity()` 中 3 处非法 raw-newline 单引号字符串；改为 `'\\n\\n'` 分隔符。
+- 根因：浏览器在导入模块图时解析失败，抛出 `Invalid or unexpected token`，因此正式白色悬浮球无法创建；moli86 红色 bootstrap launcher 仅用于暴露此类启动错误。
+- `index.js` 的 bootstrap 兜底继续保留；正常启动时不会替代正式白色 launcher。
+- 发布检查新增：针对 `.join('` / `.split('` / `.replace('` 后直接出现源码换行的异常模式做扫描，防止同类字符串生成错误再次进入浏览器。
