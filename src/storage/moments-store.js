@@ -89,8 +89,11 @@ export function markMomentSeen(scopeKey, { surface='public', ownerContactId='', 
 export function importPublicMomentToProfile(scopeKey, momentId, ownerContactId, { likes, comments } = {}) {
   const state=getMomentsState(scopeKey); const source=state.publicFeed.find(x=>x.id===String(momentId)); if(!source)throw new Error('朋友圈动态不存在');
   const owner=String(ownerContactId||source.author.id||''); if(!owner)throw new Error('无法确定角色');
+  state.profileFeeds[owner] ||= [];
+  const existing=state.profileFeeds[owner].find(x=>String(x.sourceMomentId||'')===String(source.id));
+  if(existing)return existing;
   const copy=moment({ ...source, id:id('profile-moment'), sourceMomentId:source.id, ownerContactId:owner, likes:Array.isArray(likes)?likes:source.likes, comments:Array.isArray(comments)?comments:source.comments }, 'profile');
-  state.profileFeeds[owner] ||= []; state.profileFeeds[owner].unshift(copy); save(scopeKey,state); return copy;
+  state.profileFeeds[owner].unshift(copy); save(scopeKey,state); return copy;
 }
 export function clearProfileMoments(scopeKey, contactId) { const state=getMomentsState(scopeKey); const owner=String(contactId); state.profileFeeds[owner] = []; delete state.profileStatus[owner]; save(scopeKey,state); }
 
