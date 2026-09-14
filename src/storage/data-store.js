@@ -310,6 +310,26 @@ function saveContacts(list) {
   writeJson(CONTACTS_KEY, list);
 }
 
+export function deleteContact(contactId) {
+  const id = String(contactId || '');
+  if (!id || id.startsWith('builtin:')) throw new Error('内置联系人不能删除');
+  const list = getContacts().filter(item => String(item.id || '') !== id);
+  saveContacts(list);
+  const cleanData = data => {
+    if (!data?.conversations || typeof data.conversations !== 'object') return data;
+    for (const [key, conv] of Object.entries(data.conversations)) {
+      if (conv?.type === 'private' && String(conv.contactId || '') === id) delete data.conversations[key];
+      else if (conv?.type === 'group' && Array.isArray(conv.memberIds)) conv.memberIds = conv.memberIds.filter(x => String(x) !== id);
+    }
+    return data;
+  };
+  for (const storageKey of listKeys(SCOPE_PREFIX)) {
+    const data = readJson(storageKey, null); if (data) writeJson(storageKey, cleanData(data));
+  }
+  const globalData = readJson(GLOBAL_CONVERSATIONS_KEY, null); if (globalData) writeJson(GLOBAL_CONVERSATIONS_KEY, cleanData(globalData));
+  return true;
+}
+
 export function getContacts() {
   const saved = readJson(CONTACTS_KEY, []);
 
@@ -841,7 +861,7 @@ export function createCustomContact({
 }
 
 
-export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, profileEntries, roleSources, worldBookPolicy, customWorldBook, apiOverride, fourthWallGlobalSettings, fourthWallChatSettings, fourthWallActiveConversationKey } = {}) {
+export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, profileEntries, roleSources, worldBookPolicy, customWorldBook, replyBubbleRange, apiOverride, fourthWallGlobalSettings, fourthWallChatSettings, fourthWallActiveConversationKey } = {}) {
   const list = getContacts();
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
@@ -858,6 +878,10 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
   if (customAvatar !== undefined) contact.customAvatar = String(customAvatar || '');
   if (intro !== undefined) contact.intro = String(intro || '').trim();
   if (prompt !== undefined) contact.prompt = String(prompt || '').trim();
+  if (replyBubbleRange !== undefined) {
+    const min=Math.max(1,Math.min(12,Number(replyBubbleRange?.min)||1)); const max=Math.max(min,Math.min(12,Number(replyBubbleRange?.max)||3));
+    contact.replyBubbleRange={min,max};
+  }
   if (customWorldBook !== undefined && contact.kind === 'custom') {
     contact.customWorldBook = customWorldBook && typeof customWorldBook === 'object'
       ? { bookName: String(customWorldBook.bookName || '').trim(), mainEntryKey: String(customWorldBook.mainEntryKey || '') }
@@ -1158,6 +1182,9 @@ export function appendMessage(
 
   if (options?.messageType) {
     message.messageType = String(options.messageType);
+  }
+  if (options?.momentEvent && typeof options.momentEvent === 'object') {
+    message.momentEvent = { contactId: String(options.momentEvent.contactId || ''), momentId: String(options.momentEvent.momentId || '') };
   }
 
   if (options?.senderId) {

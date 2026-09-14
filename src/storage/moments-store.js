@@ -1,7 +1,7 @@
 import { readJson, writeJson } from './storage-adapter.js';
 
 const PREFIX = 'moli-phone:moments:v2:';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 function key(scopeKey) { return PREFIX + encodeURIComponent(String(scopeKey || '')); }
 function id(prefix) { return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`; }
@@ -9,7 +9,7 @@ function actor(value = {}) {
   return { id: String(value?.id || ''), name: String(value?.name || '').trim() || '未知', type: String(value?.type || 'contact') };
 }
 function socialEntry(value = {}) {
-  return { id: String(value?.id || id('social')), actor: actor(value?.actor), content: String(value?.content || '').trim(), createdAt: Number(value?.createdAt || Date.now()), replyToId: String(value?.replyToId || '') };
+  return { id: String(value?.id || id('social')), actor: actor(value?.actor), content: String(value?.content || '').trim(), createdAt: Number(value?.createdAt || Date.now()), replyToId: String(value?.replyToId || ''), deletedAt: Number(value?.deletedAt || 0), deletionReason: String(value?.deletionReason || '').trim() };
 }
 function moment(value = {}, surface = 'public') {
   return {
@@ -75,6 +75,14 @@ export function addMomentComment(scopeKey, { surface='public', ownerContactId=''
   const state=getMomentsState(scopeKey); const item=findMoment(state,surface,ownerContactId,momentId); if(!item)throw new Error('朋友圈动态不存在');
   const text=String(content||'').trim(); const a=actor(who); if(!a.id||!text)throw new Error('评论不能为空'); item.comments.push(socialEntry({actor:a,content:text,replyToId})); item.updatedAt=Date.now(); save(scopeKey,state); return item;
 }
+
+export function deleteMomentComment(scopeKey, { surface='public', ownerContactId='', momentId, commentId, actorId='', reason='' } = {}) {
+  const state=getMomentsState(scopeKey); const item=findMoment(state,surface,ownerContactId,momentId); if(!item)throw new Error('朋友圈动态不存在');
+  const comment=(item.comments||[]).find(x=>x.id===String(commentId)); if(!comment)throw new Error('评论不存在');
+  if(actorId && String(comment.actor?.id||'')!==String(actorId))throw new Error('只能删除自己的评论');
+  comment.deletedAt=Date.now(); comment.deletionReason=String(reason||'').trim(); comment.content=''; item.updatedAt=Date.now(); save(scopeKey,state); return comment;
+}
+
 export function markMomentSeen(scopeKey, { surface='public', ownerContactId='', momentId, actorId } = {}) {
   const state=getMomentsState(scopeKey); const item=findMoment(state,surface,ownerContactId,momentId); if(!item||!actorId)return false; if(!item.seenBy.includes(String(actorId)))item.seenBy.push(String(actorId)); save(scopeKey,state); return true;
 }
