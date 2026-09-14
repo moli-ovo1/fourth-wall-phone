@@ -2768,3 +2768,12 @@ Commentary 使用独立 Fourth Wall Commentary Prompt，只输出一个 `<msg>` 
 - 围读会 Review 的产品语义是“新剧情触发的一轮自然群聊反应”，不是“所有成员分别提交点评报告”。Review 仍保持一次 batch request、每成员最多一个气泡、PRIMARY REVIEW TARGET 精确锁定、PRIVATE ZONE 严格隔离。成员可以接彼此的话、争论、接梗、吐槽或补充；不得为了完成点评任务机械复述/总结正文。
 - Review 表达倾向：moli 更偏普通读者的情绪、直觉、喜恶与关系判断；小上帝更擅长人物逻辑、信息差、伏笔、关系位移与攻略推演，但这不是固定分工。moli 通常不超过 100 中文字符；小上帝通常不超过 160，真正需要分析时允许稍长，但仍保持单个聊天气泡的自然感。
 - 聊天信息页与联系人资料子页必须完整滚动到底，并为移动端 safe-area/面板底部保留空间，不能裁切最后一项。
+
+
+## v0.4.12 / moli68 — 围读会 UI 收口与废弃人格清理
+- 小上帝（`builtin:writer`）与 moli（`builtin:guide`）的聊天信息页不再显示“人格与提示词”入口；完整内置人设继续只由代码内置 Prompt 提供。普通自创联系人/酒馆角色继续保留自己的资料与 Prompt 配置入口。
+- 项目尚未开放注册，本节点直接清理废弃旧内置人格 `builtin:redpen` 及其遗留私聊 Conversation；皮下 `builtin:meta` 作为独立 Fourth Wall 联系人继续保留。
+- 围读会 Review 的产品 UI 从“自动点评”改名为“自动围读”，频率文案改为“围读频率（每 N 个有效正文 AI 回合）”；底层 review 数据/Automation 命名不重构，PRIMARY REVIEW TARGET 与现有批量生成语义不变。
+- 自动围读默认间隔继续为 `1`。
+- 保留 moli67 对联系人/群聊资料页与子页的统一底部 safe-area / scroll-padding 修复。
+- 本节点不新增普通 moli Global Prompt 层；主设置的全局 API / 全局预设仍属于生成配置层，不与 Prompt 内容层混淆。
