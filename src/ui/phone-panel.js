@@ -80,6 +80,7 @@ import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
 import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus } from '../storage/moments-store.js';
+import { notifyMomentInteractionOpportunity } from '../automation/private-automation.js';
 
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
@@ -767,15 +768,23 @@ export function createPhonePanel({
     <section class="moli-page" data-page="contact-memory-settings">
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="contact-memory-back" aria-label="返回">‹</button></div>
-        <div class="moli-nav-title">手机记忆</div>
+        <div class="moli-nav-title">记忆</div>
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-settings-list moli-contact-subpage">
-        <div class="moli-settings-note">这是当前 Conversation 自己的场外聊天记忆，与柏宝书正文长期记忆完全分开。当前原始聊天优先于近期记忆，近期记忆优先于长期总结。</div>
+        <div class="moli-settings-note">这里集中管理当前 Conversation 的手机记忆与正文长期剧情记忆。当前原始聊天优先于近期记忆，近期记忆优先于长期总结。</div>
         <div class="moli-settings-note" data-phone-memory-auto-status>自动压缩尚未运行。累计 100 个完整 AI 交互轮次后生成一段近期记忆。</div>
         <label class="moli-form-field"><span>近期记忆</span><textarea rows="10" data-phone-recent-memory placeholder="每段记忆之间空一行。可直接编辑或删除。"></textarea></label>
         <div class="moli-api-hint">自动压缩按完整 AI 交互轮次计数：同一轮里用户多气泡 + 角色多气泡仍只算 1 轮；只有整轮离开最近聊天窗口后才参与累计。</div>
         <label class="moli-form-field"><span>长期总结</span><textarea rows="10" data-phone-long-memory placeholder="当前手机聊天的长期关系与历史总结。可直接编辑或清空。"></textarea></label>
+        <div class="moli-source-section" data-memory-baibai-section hidden>
+          <div class="moli-source-section-title">正文长期剧情记忆</div>
+          <div class="moli-role-source-row">
+            <div class="moli-role-source-view is-static"><span><strong>柏宝书长期记忆</strong><small data-memory-baibai-status></small></span></div>
+            <label class="moli-role-source-switch" title="柏宝书长期记忆"><input type="checkbox" data-memory-baibai-toggle><span></span></label>
+          </div>
+          <div class="moli-source-section-note">只读取柏宝书公开 API 的长期历史剧情；当前聊天关闭“读取当前正文”时不会注入。</div>
+        </div>
       </main>
       <footer class="moli-sync-footer">
         <button class="moli-secondary-btn" data-action="contact-memory-cancel">取消</button>
@@ -1197,6 +1206,21 @@ export function createPhonePanel({
         item?.source?.originalName ||
         '未命名'
       );
+
+
+  const canonicalContactName = item =>
+    isFourthWallContact(item)
+      ? '皮下'
+      : (item?.source?.originalName || item?.name || item?.displayName || item?.remark || '未命名');
+
+  const momentActorName = actor => {
+    const id = String(actor?.id || '');
+    if (id && id !== 'user') {
+      const linked = contact(id);
+      if (linked) return canonicalContactName(linked);
+    }
+    return String(actor?.name || (id === 'user' ? '我' : '未知'));
+  };
 
   const avatarUrl = item => {
     const builtinAsset = BUILTIN_AVATAR_URLS[String(item?.id || '')];
@@ -1809,6 +1833,14 @@ export function createPhonePanel({
         ? (groupMode === 'role-chat' ? (memory.longTermByMode?.roleChat || '') : (memory.longTermByMode?.reading || memory.longTermSummary || ''))
         : (memory.longTermSummary || '');
     }
+    const memoryBaiBaiSection = panel.querySelector('[data-memory-baibai-section]');
+    const memoryBaiBaiToggle = panel.querySelector('[data-memory-baibai-toggle]');
+    const memoryBaiBaiStatus = panel.querySelector('[data-memory-baibai-status]');
+    const memoryContact = conversation.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
+    if (memoryBaiBaiSection) memoryBaiBaiSection.hidden = memoryContact?.kind !== 'tavern';
+    if (memoryBaiBaiToggle && memoryContact?.kind === 'tavern') memoryBaiBaiToggle.checked = memoryContact?.roleSources?.longTermMemory !== false;
+    if (memoryBaiBaiStatus) memoryBaiBaiStatus.textContent = getBaiBaiMemoryStatus().available ? '已检测到 · 读取正常注入口径历史' : '未检测到 · 自动回退最近正文';
+
     if (phoneMemoryAutoStatus) {
       const autoCount = visibleRecent.filter(item => item?.source === 'auto').length;
       const modeLabel = conversation.type === 'group' ? (groupMode === 'role-chat' ? '角色闲聊记忆 · ' : '围读会记忆 · ') : '';
@@ -1861,7 +1893,12 @@ export function createPhonePanel({
         needsReviewMessageId: '',
       });
     }
-    toast('手机记忆已保存');
+    const memoryContact = conversation.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
+    const memoryBaiBaiToggle = panel.querySelector('[data-memory-baibai-toggle]');
+    if (memoryContact?.kind === 'tavern' && memoryBaiBaiToggle) {
+      updateContact(memoryContact.id, { roleSources: { ...(memoryContact.roleSources || {}), longTermMemory: Boolean(memoryBaiBaiToggle.checked) } });
+    }
+    toast('记忆已保存');
     show('info');
   }
 
@@ -2316,68 +2353,50 @@ export function createPhonePanel({
           <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>朋友资料</span><strong>›</strong></button>
           ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row moli-contact-profile-moments" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>`}
           <button type="button" class="moli-contact-profile-action" data-action="chat">发送消息</button>
-          ${String(item.id||'').startsWith('builtin:') ? '' : `<button type="button" class="moli-contact-profile-action moli-danger-row" data-action="delete-contact">删除联系人</button>`}
         `;
         return;
       }
+      const scopeTag = privateConversationScopeAnnotation(conversation);
+      const quickTimeMode = conversation.timeMode === 'real' ? 'real' : 'body';
+      const quickRecentLimit = Math.max(10, Math.min(9999, Number(conversation.recentChatLimit) || 100));
+      const quickRange = conversation.replyBubbleRange || item.replyBubbleRange || { min: 1, max: 3 };
       chatInfo.innerHTML = `
         <div class="moli-info-private-head">
           ${avatarMarkup(item, 'moli-info-avatar')}
-          <div class="moli-info-private-name">${escapeHtml(displayName(item))}${isFourthWallContact(item) ? '<small class="moli-fourth-wall-subtitle">入戏…</small>' : `<small class="moli-contact-scope-tag">${escapeHtml(privateConversationScopeAnnotation(conversation))}</small>`}</div>
+          <div class="moli-info-private-name">${escapeHtml(displayName(item))}${isFourthWallContact(item) ? '<small class="moli-fourth-wall-subtitle">入戏…</small>' : `<small class="moli-contact-scope-tag">${escapeHtml(scopeTag)}</small>`}</div>
+          ${isFourthWallContact(item) ? '' : (item.kind === 'custom'
+            ? `<input class="moli-profile-inline-edit" type="text" maxlength="80" data-info-contact-name value="${escapeHtml(item.name || '')}" placeholder="点击编辑名称">`
+            : `<input class="moli-profile-inline-edit" type="text" maxlength="80" data-info-contact-remark value="${escapeHtml(item.remark || '')}" placeholder="点击编辑备注名">`)}
+          ${isFourthWallContact(item) ? '' : `<input class="moli-profile-inline-edit moli-profile-chat-title" type="text" maxlength="80" data-info-chat-title value="${escapeHtml(conversation.title || '')}" placeholder="点击编辑聊天名称例如番外/if线">`}
           ${isFourthWallContact(item) ? '' : '<button type="button" class="moli-info-avatar-button" data-action="change-contact-avatar">更换头像</button>'}
           ${item.customAvatar && isTavern ? `<button type="button" class="moli-info-link-button" data-action="restore-source-avatar">恢复跟随角色卡头像</button>` : ''}
         </div>
-        ${isTavern ? `<div class="moli-info-source"><div><span>酒馆原名</span><strong>${escapeHtml(item.source?.originalName || item.name || '未知')}</strong></div><div><span>来源状态</span><strong class="${sourceMissing ? 'is-missing' : ''}">${sourceMissing ? '来源角色不可用' : '已关联'}</strong></div></div>` : ''}
-        <div class="moli-info-form">
-          ${item.kind === 'custom' ? `<label class="moli-form-field"><span>名称</span><input type="text" maxlength="80" data-info-contact-name value="${escapeHtml(item.name || '')}"></label>` : `<label class="moli-form-field"><span>备注名</span><input type="text" maxlength="80" data-info-contact-remark value="${escapeHtml(item.remark || '')}" placeholder="不填写则跟随角色原名"></label>`}
-          <button type="button" class="moli-info-save-button" data-action="save-contact-info">保存基础资料</button>
-        </div>
+        ${isTavern ? `<div class="moli-info-source"><div><span>酒馆原名</span><strong>${escapeHtml(item.source?.originalName || item.name || '未知')}</strong></div>${sourceMissing ? '<div><span>来源状态</span><strong class="is-missing">来源角色不可用</strong></div>' : ''}</div>` : ''}
         ${isFourthWallContact(item) ? `
-        <button type="button" class="moli-info-setting-row" data-action="fourth-wall-settings">
-          <span>皮下设置</span><strong>›</strong>
-        </button>` : (['builtin:writer', 'builtin:guide'].includes(String(item.id || '')) ? '' : `
-        <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings">
-          <span>${isTavern ? '角色资料与提示词' : '人格与提示词'}</span><strong>›</strong>
-        </button>`)}
+        <button type="button" class="moli-info-setting-row" data-action="fourth-wall-settings"><span>皮下设置</span><strong>›</strong></button>` : (['builtin:writer', 'builtin:guide'].includes(String(item.id || '')) ? '' : `
+        <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>${isTavern ? '角色设定' : '人格与提示词'}</span><strong>›</strong></button>`)}
         ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>`}
-        <button type="button" class="moli-info-setting-row" data-action="contact-api-settings">
-          <span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong>
-        </button>
+        <button type="button" class="moli-info-setting-row" data-action="contact-api-settings"><span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong></button>
+        ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row" data-action="contact-memory-settings"><span>记忆</span><strong>›</strong></button>`}
         ${isFourthWallContact(item) ? '' : `
-        <button type="button" class="moli-info-setting-row" data-action="contact-memory-settings">
-          <span>手机记忆</span><strong>›</strong>
-        </button>
-        <button type="button" class="moli-info-setting-row" data-action="conversation-settings">
-          <span>当前聊天设置</span>
-          <strong>›</strong>
-        </button>`}
+        <div class="moli-info-form moli-quick-chat-settings">
+          <div class="moli-info-inline-title">基础聊天设置</div>
+          <label class="moli-switch-row"><span><strong>读取当前正文</strong></span><input type="checkbox" data-info-body-context ${conversation.bodyContextEnabled !== false ? 'checked' : ''}></label>
+          <label class="moli-compact-select-row"><span>时间模式</span><select data-info-time-mode><option value="body" ${quickTimeMode==='body'?'selected':''}>跟随正文时间</option><option value="real" ${quickTimeMode==='real'?'selected':''}>现实世界时间</option></select></label>
+          <label class="moli-compact-number-row"><span>最近聊天读取上限</span><input type="number" min="10" max="9999" value="${quickRecentLimit}" data-info-recent-limit></label>
+          <div class="moli-compact-range-row"><span>回复气泡条数</span><label><input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.min)||1)}" data-info-bubble-min> — <input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.max)||3)}" data-info-bubble-max></label></div>
+          <button type="button" class="moli-info-save-button" data-action="save-quick-chat-settings">保存基础聊天设置</button>
+        </div>`}
         ${(item.kind === 'tavern' || item.kind === 'custom' || isFourthWallContact(item)) ? `
         <div class="moli-info-form" data-private-automation>
-          ${isFourthWallContact(item) ? '' : `
-          <label class="moli-choice-card">
-            <input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}>
-            <span><strong>自动聊天 / 主动私聊</strong><small>角色自主判断是否主动联系；百分比控制主动倾向，不是机械定时器。</small></span>
-          </label>
-          <label class="moli-automation-slider"><span>主动私聊频率</span><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}" aria-label="主动私聊频率"><small class="moli-automation-value" data-auto-chat-value>${Number(conversation.automation?.autoChatProbability ?? 30)}%</small></label>`}
-          <label class="moli-choice-card">
-            <input type="checkbox" data-commentary-enabled ${(isFourthWallContact(item) ? item.fourthWallGlobalSettings?.commentary?.enabled : conversation.automation?.commentaryEnabled) ? 'checked' : ''}>
-            <span><strong>自动吐槽正文</strong><small>${isFourthWallContact(item) ? '复刻四次元壁实时吐槽：正文新回复、编辑自己的台词、编辑 AI 台词都可触发。' : '只针对正文事件吐槽，与主动私聊是两个独立系统。'}</small></span>
-          </label>
-          <label class="moli-automation-slider"><span>正文吐槽频率</span><input type="range" min="${isFourthWallContact(item) ? '1' : '0'}" max="${isFourthWallContact(item) ? '99' : '100'}" step="1" data-commentary-probability value="${Number(isFourthWallContact(item) ? (item.fourthWallGlobalSettings?.commentary?.probability ?? 30) : (conversation.automation?.commentaryProbability ?? 30))}" aria-label="正文吐槽频率"><small class="moli-automation-value" data-commentary-value>${Number(isFourthWallContact(item) ? (item.fourthWallGlobalSettings?.commentary?.probability ?? 30) : (conversation.automation?.commentaryProbability ?? 30))}%</small></label>
+          ${isFourthWallContact(item) ? '' : `<label class="moli-choice-card"><input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}><span><strong>自动聊天 / 主动私聊</strong><small>角色自主判断是否主动联系；百分比控制主动倾向，不是机械定时器。</small></span></label><label class="moli-automation-slider"><span>主动私聊频率</span><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}"><small class="moli-automation-value" data-auto-chat-value>${Number(conversation.automation?.autoChatProbability ?? 30)}%</small></label>`}
+          <label class="moli-choice-card"><input type="checkbox" data-commentary-enabled ${(isFourthWallContact(item) ? item.fourthWallGlobalSettings?.commentary?.enabled : conversation.automation?.commentaryEnabled) ? 'checked' : ''}><span><strong>自动吐槽正文</strong><small>${isFourthWallContact(item) ? '正文变化时可触发皮下吐槽。' : '只针对正文事件吐槽，与主动私聊独立。'}</small></span></label>
+          <label class="moli-automation-slider"><span>正文吐槽频率</span><input type="range" min="${isFourthWallContact(item) ? '1' : '0'}" max="${isFourthWallContact(item) ? '99' : '100'}" step="1" data-commentary-probability value="${Number(isFourthWallContact(item) ? (item.fourthWallGlobalSettings?.commentary?.probability ?? 30) : (conversation.automation?.commentaryProbability ?? 30))}"><small class="moli-automation-value" data-commentary-value>${Number(isFourthWallContact(item) ? (item.fourthWallGlobalSettings?.commentary?.probability ?? 30) : (conversation.automation?.commentaryProbability ?? 30))}%</small></label>
           <button type="button" class="moli-info-save-button" data-action="save-private-automation">保存自动行为</button>
         </div>` : ''}
-        <button type="button" class="moli-info-setting-row" data-action="toggle-pin">
-          <span>置顶聊天</span>
-          <strong>${conversation.pinned ? '已开启' : '未开启'}</strong>
-        </button>
-        <button type="button" class="moli-info-setting-row" data-action="search-messages">
-          <span>查找聊天记录</span>
-          <strong>›</strong>
-        </button>
-        <button type="button" class="moli-info-setting-row moli-danger-row" data-action="clear-chat-history">
-          <span>清空聊天记录</span>
-          <strong>›</strong>
-        </button>
+        <button type="button" class="moli-info-setting-row" data-action="toggle-pin"><span>置顶聊天</span><strong>${conversation.pinned ? '已开启' : '未开启'}</strong></button>
+        <button type="button" class="moli-info-setting-row" data-action="search-messages"><span>查找聊天记录</span><strong>›</strong></button>
+        <button type="button" class="moli-info-setting-row moli-danger-row" data-action="clear-chat-history"><span>清空聊天记录</span><strong>›</strong></button>
         <div class="moli-info-note moli-info-note-slot" data-info-note-slot hidden></div>
       `;
       return;
@@ -2557,19 +2576,7 @@ export function createPhonePanel({
         <button type="button" class="moli-source-placeholder" data-action="contact-worldbook-settings"><span>世界书条目</span><strong>读取 ›</strong></button>
         <div class="moli-source-section-note">这里管理“允许使用哪些条目”的白名单；本轮实际激活仍按 SillyTavern 世界书触发规则决定，不会把全部勾选条目无条件塞入 API。</div>
       </div>
-      <div class="moli-source-section">
-        <div class="moli-source-section-title">长期剧情记忆</div>
-        <div class="moli-role-source-row">
-          <div class="moli-role-source-view is-static">
-            <span><strong>柏宝书长期记忆</strong><small>${getBaiBaiMemoryStatus().available ? '已检测到 · 读取正常注入口径历史' : '未检测到 · 自动回退最近正文'}</small></span>
-          </div>
-          <label class="moli-role-source-switch" title="柏宝书长期记忆">
-            <input type="checkbox" data-role-source-toggle="longTermMemory" ${roleSources.longTermMemory !== false ? 'checked' : ''}>
-            <span></span>
-          </label>
-        </div>
-        <div class="moli-source-section-note">只读取柏宝书公开 API 的长期历史剧情，不读取状态、变量、物品、NPC、计划等数据。当前聊天关闭“读取当前正文”时，本动态剧情来源也不会注入。</div>
-      </div>`;
+      `;
     contactRoleSources.hidden = false;
   }
 
@@ -2716,7 +2723,7 @@ export function createPhonePanel({
 
     const isTavern = item.kind === 'tavern';
     const protectedBuiltinPersona = ['builtin:writer', 'builtin:guide'].includes(String(item.id || ''));
-    if (contactPromptPageTitle) contactPromptPageTitle.textContent = isTavern ? '角色资料与提示词' : '人格与提示词';
+    if (contactPromptPageTitle) contactPromptPageTitle.textContent = isTavern ? '角色设定' : '人格与提示词';
     if (contactRoleSources) {
       contactRoleSources.hidden = true;
       contactRoleSources.innerHTML = '';
@@ -2803,12 +2810,10 @@ export function createPhonePanel({
           ...(item.roleSources || {}),
           cardProfile:
             contactRoleSources?.querySelector('[data-role-source-toggle="cardProfile"]')?.checked !== false,
-          longTermMemory:
-            contactRoleSources?.querySelector('[data-role-source-toggle="longTermMemory"]')?.checked !== false,
         };
       }
       updateContact(item.id, payload);
-      toast(item.kind === 'tavern' ? '角色资料与提示词已保存' : '人格与提示词已保存');
+      toast(item.kind === 'tavern' ? '角色设定已保存' : '人格与提示词已保存');
       show('info');
     } catch (error) {
       toast(error?.message || '保存失败');
@@ -2885,7 +2890,12 @@ export function createPhonePanel({
   function saveCurrentContactInfo() {
     const conversation = currentConversation(); if (!conversation || conversation.type === 'group') return;
     const item = contact(conversation.contactId || currentContactId); if (!item) return;
-    try { updateContact(item.id, { ...(item.kind === 'custom' ? { name: chatInfo.querySelector('[data-info-contact-name]')?.value } : { remark: chatInfo.querySelector('[data-info-contact-remark]')?.value }), intro: chatInfo.querySelector('[data-info-contact-intro]')?.value, prompt: chatInfo.querySelector('[data-info-contact-prompt]')?.value }); toast('联系人资料已保存'); renderChatInfo(); }
+    try {
+      updateContact(item.id, { ...(item.kind === 'custom' ? { name: chatInfo.querySelector('[data-info-contact-name]')?.value } : { remark: chatInfo.querySelector('[data-info-contact-remark]')?.value }), intro: chatInfo.querySelector('[data-info-contact-intro]')?.value, prompt: chatInfo.querySelector('[data-info-contact-prompt]')?.value });
+      const titleInput = chatInfo.querySelector('[data-info-chat-title]');
+      if (titleInput) updatePrivateConversationSettings(getScopeKey?.(), currentContactId, { title: titleInput.value || '' });
+      toast('资料已保存'); renderChatInfo();
+    }
     catch (error) { toast(error?.message || '保存失败'); }
   }
   function restoreCurrentContactAvatar() {
@@ -3124,8 +3134,11 @@ export function createPhonePanel({
         id: String(item.id || ''),
         surface,
         ownerContactId: String(ownerContactId || ''),
-        authorName: String(item?.author?.name || '未知'),
+        authorName: momentActorName(item?.author),
         content: String(item?.content || ''),
+        createdAt: Number(item?.createdAt || 0),
+        likes: (item?.likes || []).map(actor => ({ id:String(actor?.id||''), name:momentActorName(actor) })),
+        comments: (item?.comments || []).map(comment => ({ id:String(comment?.id||''), actorId:String(comment?.actor?.id||''), actorName:momentActorName(comment?.actor), content:String(comment?.content||''), deletedAt:Number(comment?.deletedAt||0), deletionReason:String(comment?.deletionReason||'') })),
       },
       items: [],
     });
@@ -3193,13 +3206,13 @@ export function createPhonePanel({
         : (authorContact ? avatarMarkup(authorContact, 'moli-moment-avatar') : `<div class="moli-moment-avatar">${escapeHtml((item?.author?.name || '◉').slice(0,1))}</div>`);
       const likedByUser = (item.likes || []).some(like => String(like?.id || '') === 'user');
       const likes = (item.likes || []).length
-        ? `<div class="moli-moment-likes">♥ ${escapeHtml(item.likes.map(like => like.name).join('、'))}</div>` : '';
+        ? `<div class="moli-moment-likes">♥ ${escapeHtml(item.likes.map(like => momentActorName(like)).join('、'))}</div>` : '';
       const comments = (item.comments || []).length
-        ? `<div class="moli-moment-comments">${item.comments.map(comment => comment.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(comment.actor?.name || '未知')}</strong> 删除了评论${comment.deletionReason ? `：${escapeHtml(comment.deletionReason)}` : ''}</div>` : `<div><strong>${escapeHtml(comment.actor?.name || '未知')}</strong>：${escapeHtml(comment.content || '')}${String(comment.actor?.id||'')==='user' ? `<button class="moli-comment-delete" data-action="moment-comment-delete" data-moment-id="${escapeHtml(item.id)}" data-comment-id="${escapeHtml(comment.id)}">删除</button>` : ''}</div>`).join('')}</div>` : '';
+        ? `<div class="moli-moment-comments">${item.comments.map(comment => comment.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(momentActorName(comment.actor))}</strong> 删除了评论${comment.deletionReason ? `：${escapeHtml(comment.deletionReason)}` : ''}</div>` : `<div><strong>${escapeHtml(momentActorName(comment.actor))}</strong>：${escapeHtml(comment.content || '')}${String(comment.actor?.id||'')==='user' ? `<span class="moli-user-comment-hold" data-user-comment-surface="public" data-moment-id="${escapeHtml(item.id)}" data-comment-id="${escapeHtml(comment.id)}">长按删除</span>` : ''}</div>`).join('')}</div>` : '';
       return `<article class="moli-moment" data-moment-id="${escapeHtml(item.id)}">
         ${avatar}
         <div class="moli-moment-main">
-          <div class="moli-moment-author">${escapeHtml(item.author?.name || '未知')}</div>
+          <div class="moli-moment-author">${escapeHtml(momentActorName(item.author))}</div>
           <div class="moli-moment-content">${escapeHtml(item.content || '')}</div>
           <div class="moli-moment-meta">
             <span>${escapeHtml(formatMomentTime(item.createdAt))}</span>
@@ -3233,9 +3246,9 @@ export function createPhonePanel({
     if (!items.length) { contactMomentsFeed.innerHTML = '<div class="moli-empty">这里还没有角色专属朋友圈。点右上角刷新，看看他最近有没有发过什么。</div>'; return; }
     contactMomentsFeed.innerHTML = items.map(entry => {
       const likedByUser = (entry.likes || []).some(x => String(x?.id || '') === 'user');
-      const likes = entry.likes?.length ? `<div class="moli-moment-likes">♥ ${escapeHtml(entry.likes.map(x => x.name).join('、'))}</div>` : '';
-      const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => c.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(c.actor?.name || '未知')}</strong> 删除了评论${c.deletionReason ? `：${escapeHtml(c.deletionReason)}` : ''}</div>` : `<div><strong>${escapeHtml(c.actor?.name || '未知')}</strong>：${escapeHtml(c.content || '')}${String(c.actor?.id||'')==='user' ? `<button class="moli-comment-delete" data-action="profile-comment-delete" data-moment-id="${escapeHtml(entry.id)}" data-comment-id="${escapeHtml(c.id)}">删除</button>` : ''}</div>`).join('')}</div>` : '';
-      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(entry.author?.name || displayName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
+      const likes = entry.likes?.length ? `<div class="moli-moment-likes">♥ ${escapeHtml(entry.likes.map(x => momentActorName(x)).join('、'))}</div>` : '';
+      const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => c.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(momentActorName(c.actor))}</strong> 删除了评论${c.deletionReason ? `：${escapeHtml(c.deletionReason)}` : ''}</div>` : `<div><strong>${escapeHtml(momentActorName(c.actor))}</strong>：${escapeHtml(c.content || '')}${String(c.actor?.id||'')==='user' ? `<span class="moli-user-comment-hold" data-user-comment-surface="profile" data-moment-id="${escapeHtml(entry.id)}" data-comment-id="${escapeHtml(c.id)}">长按删除</span>` : ''}</div>`).join('')}</div>` : '';
+      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(momentActorName(entry.author) || canonicalContactName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
     }).join('');
   }
 
@@ -3246,7 +3259,7 @@ export function createPhonePanel({
     try {
       const result = await generateContactMoment({ scopeKey, contactId: item.id });
       if (result?.action !== 'POST' || !result?.content) return;
-      const actorName = displayName(item);
+      const actorName = canonicalContactName(item);
       const created = createProfileMoment(scopeKey, item.id, { author:{ id:item.id, name:actorName, type:'contact' }, content:result.content, createdAt:Date.now() });
       appendMessage(scopeKey, conversationKey, 'system', `${actorName}刚刚发布了一条朋友圈`, { source:'moment-event', messageType:'moment-event', momentEvent:{ contactId:item.id, momentId:created.id } });
       if (getScopeKey?.() === scopeKey && currentContactId === conversationKey) renderChat();
@@ -4134,14 +4147,19 @@ export function createPhonePanel({
       const moment = pendingForward.moment;
       const authorName = String(moment.authorName || '未知');
       const content = String(moment.content || '').trim();
+      const snapshotComments = (moment.comments || []).map(comment => comment.deletedAt
+        ? `${comment.actorName || '未知'} 删除了评论${comment.deletionReason ? `：${comment.deletionReason}` : ''}`
+        : `${comment.actorName || '未知'}：${comment.content || ''}`).join('\n');
+      const snapshotLikes = (moment.likes || []).map(actor => actor.name || '未知').filter(Boolean).join('、');
       appendMessage(
         scopeKey,
         targetConversationKey,
         'user',
-        `转发了 ${authorName} 的朋友圈：\n${content}`,
+        `转发了 ${authorName} 的朋友圈：\n${content}${snapshotLikes ? `\n点赞：${snapshotLikes}` : ''}${snapshotComments ? `\n评论：\n${snapshotComments}` : ''}`,
         {
           source: 'moment-forward',
           messageType: 'moment-forward',
+          momentForward: { ...moment, snapshotAt: Date.now() },
           storyTime: messageStoryTimeMeta(target),
         }
       );
@@ -4638,9 +4656,7 @@ export function createPhonePanel({
 
     const isFourthWall = !isGroup && isFourthWallContact(item);
 
-    chatTitle.textContent = isGenerationActive(scopeKey, currentContactId)
-      ? '对方正在输入中…'
-      : (isGroup ? conversation.name || '未命名群聊' : privateConversationTitle(conversation, item));
+    chatTitle.textContent = isGroup ? conversation.name || '未命名群聊' : privateConversationTitle(conversation, item);
     if (sendButton) {
       const busy = isGenerationActive(scopeKey, currentContactId);
       sendButton.textContent = busy ? '停止' : '发送';
@@ -4723,6 +4739,14 @@ export function createPhonePanel({
                 </details>
               ` : ''}
               <div class="moli-bubble">
+                ${message.messageType === 'moment-forward' && message.momentForward ? `
+                  <button type="button" class="moli-moment-forward-card">
+                    <div class="moli-moment-forward-title">${escapeHtml(message.momentForward.authorName || '未知')}的朋友圈</div>
+                    <div class="moli-moment-forward-content">${escapeHtml(message.momentForward.content || '')}</div>
+                    ${(message.momentForward.comments || []).length ? `<div class="moli-moment-forward-comments">${(message.momentForward.comments || []).slice(0,3).map(c => c.deletedAt ? `${escapeHtml(c.actorName)} 删除了评论${c.deletionReason ? `：${escapeHtml(c.deletionReason)}` : ''}` : `<strong>${escapeHtml(c.actorName)}</strong>：${escapeHtml(c.content)}`).join('<br>')}</div>` : ''}
+                    <div class="moli-moment-forward-footer">朋友圈 · ${(message.momentForward.comments || []).length}条评论</div>
+                  </button>
+                ` : ''}
                 ${message.forward?.mode === 'merged' ? `
                   <button
                     type="button"
@@ -4754,7 +4778,7 @@ export function createPhonePanel({
                     <div>${escapeHtml(message.quote.content || '')}</div>
                   </div>
                 ` : ''}
-                ${message.forward ? '' : escapeHtml(message.content)}
+                ${message.forward || message.messageType === 'moment-forward' ? '' : escapeHtml(message.content)}
               </div>
             </div>
           </div>
@@ -4908,10 +4932,22 @@ export function createPhonePanel({
     handleMessageMenuAction(button.dataset.messageAction);
   });
 
+  chatInfo.addEventListener('change', event => {
+    const target = event.target;
+    if (!target?.matches?.('[data-info-contact-remark],[data-info-contact-name],[data-info-chat-title]')) return;
+    saveCurrentContactInfo();
+  });
+
   panel.addEventListener('click', event => {
     if (messageMenu?.hidden) return;
     if (event.target.closest?.('[data-message-menu]')) return;
     hideMessageMenu();
+  });
+
+  chatInfo.addEventListener('change', event => {
+    const target = event.target;
+    if (!target?.matches?.('[data-info-contact-remark],[data-info-contact-name],[data-info-chat-title]')) return;
+    saveCurrentContactInfo();
   });
 
   panel.addEventListener('click', event => {
@@ -5017,10 +5053,22 @@ export function createPhonePanel({
     if (event.target === forwardSheet) closeForwardPicker();
   });
 
+  chatInfo.addEventListener('change', event => {
+    const target = event.target;
+    if (!target?.matches?.('[data-info-contact-remark],[data-info-contact-name],[data-info-chat-title]')) return;
+    saveCurrentContactInfo();
+  });
+
   panel.addEventListener('click', event => {
     const cancelForward = event.target.closest?.('[data-action="forward-cancel"]');
     if (!cancelForward) return;
     closeForwardPicker();
+  });
+
+  chatInfo.addEventListener('change', event => {
+    const target = event.target;
+    if (!target?.matches?.('[data-info-contact-remark],[data-info-contact-name],[data-info-chat-title]')) return;
+    saveCurrentContactInfo();
   });
 
   panel.addEventListener('click', event => {
@@ -5683,7 +5731,7 @@ export function createPhonePanel({
     const item = conversation?.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
     if (!scopeKey || !item) return toast('当前角色朋友圈不可用');
     const button = event.currentTarget;
-    const actorName = displayName(item);
+    const actorName = canonicalContactName(item);
     button.disabled = true;
     button.classList.add('is-spinning');
     button.setAttribute('aria-busy', 'true');
@@ -5762,9 +5810,10 @@ export function createPhonePanel({
       for (const actorResult of result?.actors || []) {
         const actorContact = contact(actorResult.actorId);
         if (!actorContact) continue;
-        const socialActor = { id: actorContact.id, name: displayName(actorContact), type: 'contact' };
-        if (actorResult.post?.content) {
-          createPublicMoment(scopeKey, { author: socialActor, content: actorResult.post.content, createdAt: Date.now() - Math.max(0, Number(actorResult.post.ageMinutes) || 0) * 60 * 1000 });
+        const socialActor = { id: actorContact.id, name: canonicalContactName(actorContact), type: 'contact' };
+        for (const post of (actorResult.posts || (actorResult.post ? [actorResult.post] : [])).slice(0, 2)) {
+          if (!post?.content) continue;
+          createPublicMoment(scopeKey, { author: socialActor, content: post.content, createdAt: Date.now() - Math.max(0, Number(post.ageMinutes) || 0) * 60 * 1000 });
           changed += 1;
         }
         for (const reaction of actorResult.reactions || []) {
@@ -5865,6 +5914,7 @@ export function createPhonePanel({
       const text = String(windowRef.prompt?.('评论') || '').trim();
       if (!text) return;
       addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: text });
+      notifyMomentInteractionOpportunity({ scopeKey, contactId:item.id, momentId, eventType:'user-comment', content:text });
       renderContactMoments();
       toast('已评论。点右上角刷新看看有没有回应。');
       return;
@@ -5874,6 +5924,30 @@ export function createPhonePanel({
       if (entry) openMomentForward(entry, { surface: 'profile', ownerContactId: item.id });
     }
   });
+
+  let momentCommentHoldTimer = null;
+  const bindCommentLongPress = container => {
+    if (!container) return;
+    const cancel = () => { if (momentCommentHoldTimer) windowRef.clearTimeout(momentCommentHoldTimer); momentCommentHoldTimer = null; };
+    container.addEventListener('pointerdown', event => {
+      const row = event.target?.closest?.('.moli-moment-comments > div');
+      const target = event.target?.closest?.('[data-user-comment-surface]') || row?.querySelector?.('[data-user-comment-surface]'); if (!target) return; cancel();
+      momentCommentHoldTimer = windowRef.setTimeout(() => {
+        momentCommentHoldTimer = null;
+        const scopeKey=getScopeKey?.(); if(!scopeKey)return;
+        const reason=String(windowRef.prompt?.('删除评论原因（可留空）','')||'').trim();
+        if (!(windowRef.confirm?.('删除这条评论？删除后会保留删除痕迹和原因。') ?? true)) return;
+        const surface=target.dataset.userCommentSurface; const momentId=String(target.dataset.momentId||''); const commentId=String(target.dataset.commentId||'');
+        const owner=surface==='profile' ? (currentConversation()?.contactId || currentContactId) : '';
+        deleteMomentComment(scopeKey,{surface,ownerContactId:owner,momentId,commentId,actorId:'user',reason});
+        if(surface==='profile' && owner) notifyMomentInteractionOpportunity({scopeKey,contactId:owner,momentId,eventType:'user-delete-comment',content:reason});
+        surface==='profile' ? renderContactMoments() : renderMoments(); toast('评论已删除');
+      }, 560);
+    });
+    ['pointerup','pointercancel','pointerleave','scroll'].forEach(name=>container.addEventListener(name,cancel,{passive:true}));
+  };
+  bindCommentLongPress(momentsFeed);
+  bindCommentLongPress(contactMomentsFeed);
 
   momentsFeed?.addEventListener('click', event => {
     const actionButton = event.target.closest?.('[data-action]');
@@ -5905,6 +5979,8 @@ export function createPhonePanel({
       const text = String(windowRef.prompt?.('评论') || '').trim();
       if (!text) return;
       addMomentComment(scopeKey, { surface: 'public', momentId, actor: userMomentsActor(), content: text });
+      const targetMoment = listPublicMoments(scopeKey).find(x => String(x.id) === momentId);
+      if (targetMoment?.author?.id && targetMoment.author.id !== 'user') notifyMomentInteractionOpportunity({ scopeKey, contactId: targetMoment.author.id, momentId, eventType:'user-comment', content:text });
       renderMoments();
       return;
     }
@@ -6246,6 +6322,12 @@ export function createPhonePanel({
   ).onclick = () =>
     show('chat');
 
+  chatInfo.addEventListener('change', event => {
+    const target = event.target;
+    if (!target?.matches?.('[data-info-contact-remark],[data-info-contact-name],[data-info-chat-title]')) return;
+    saveCurrentContactInfo();
+  });
+
   panel.addEventListener('click', event => {
     const action = event.target.closest?.('[data-action]')?.dataset.action;
 
@@ -6259,6 +6341,20 @@ export function createPhonePanel({
       infoAvatarInput.click();
     } else if (action === 'restore-source-avatar') {
       restoreCurrentContactAvatar();
+    } else if (action === 'save-quick-chat-settings') {
+      const scopeKey = getScopeKey?.(); const conversation = currentConversation();
+      if (scopeKey && conversation?.type === 'private') {
+        const min = Math.max(1, Math.min(12, Number(chatInfo.querySelector('[data-info-bubble-min]')?.value)||1));
+        const max = Math.max(min, Math.min(12, Number(chatInfo.querySelector('[data-info-bubble-max]')?.value)||3));
+        updatePrivateConversationSettings(scopeKey, currentContactId, {
+          bodyContextEnabled: Boolean(chatInfo.querySelector('[data-info-body-context]')?.checked),
+          timeMode: chatInfo.querySelector('[data-info-time-mode]')?.value === 'real' ? 'real' : 'body',
+          recentChatLimit: Math.max(10, Math.min(9999, Number(chatInfo.querySelector('[data-info-recent-limit]')?.value)||100)),
+          replyBubbleRange: { min, max },
+          title: chatInfo.querySelector('[data-info-chat-title]')?.value || conversation.title || '',
+        });
+        saveCurrentContactInfo();
+      }
     } else if (action === 'save-contact-info') {
       saveCurrentContactInfo();
     } else if (action === 'toggle-pin') {
