@@ -2486,3 +2486,47 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 
 ### 后续主线
 - 在上述事件/语义边界稳定后，继续统一人物行为 Automation：输入包括最近事件、人物性格、当前情绪、社交习惯、朋友圈历史、与 User 的关系；输出允许 SKIP / POST / PRIVATE_CHAT / POST+PRIVATE_CHAT。资料页百分比逐渐作为人物主动倾向/频率控制，而不是机械骰子。
+
+## v0.4.36 / moli93 — 身份与上下文可靠性节点
+
+### 新增 `src/core/tavern-user.js`
+- `getTavernUserContext()`：从当前 SillyTavern 上下文读取 User/Persona 名称与 Persona 描述，提供普通私聊、群聊、Fourth Wall 的统一只读来源。
+- `replaceUserPlaceholder()`：在运行时把内置人格里的 `{{user}}` 替换为当前真实 User 名称；不修改内置人格源文件。
+
+### `src/storage/data-store.js`
+- Contact 新增可选 `userProfile` 字符串；`updateContact()` 支持保存。
+- 这是 Contact 级数据：皮下、Tavern 联系人、自建联系人彼此独立，不是全局一份 User Profile。
+
+### `src/ui/phone-panel.js`
+- 新增 `contact-user-settings` 页面；联系人资料页与聊天资料页均可进入「用户设定」。
+- 普通联系人默认编辑模板为姓名/年龄/性格，不显示额外真实性注释。
+- 皮下页面显示单独说明书，但说明书只属于 UI，不持久化、不注入模型。
+- 朋友圈 User 评论恢复 `Store 写入 -> render -> Automation` 简单路径，移除对即时 DOM patch 的依赖。
+- Tavern 头像渲染时优先根据 `originalAvatar` 调 SillyTavern `getThumbnailUrl()` 重新解析，修整批酒馆头像黑块回归。
+
+### `src/generation/prompt-builder.js`
+- 私聊明确注入当前 User 名称。
+- Contact `userProfile` 作为该角色自己的 User 信息注入。
+- Conversation 允许读取正文时，再附加当前 SillyTavern User Persona 描述。
+- 内置人格 Prompt 运行时解析 `{{user}}`。
+- Fourth Wall 请求传入当前 User 名称、当前 Tavern Persona 描述、皮下独立 User 设定；只标记信息来源，不在后台裁决“真实/扮演”。
+
+### `src/prompts/fourth-wall.js`
+- `buildFourthWallRequest()` 接受 `tavernUserProfile / phoneUserProfile` 数据块；不重写用户已有 Fourth Wall 核心 Prompt，不改变内容开放度。
+
+### `src/generation/generation-service.js`
+- 群聊与围读会使用真实 User 名称；批量成员私有区可分别读取该成员自己的 `userProfile`。
+- 围读会（读取正文）可获得当前 Tavern User Persona 描述；角色闲聊不注入正文 Persona。
+- 最近群聊超长时改用 `clipBatchTail()` 保留尾部最新内容，解决最新朋友圈转发/最新 User 消息被头部截断的问题。
+- 朋友圈 Semantic Payload 保持独立于卡片 UI。
+
+### 待办：动态时区（未实现）
+- 仅在现实时间模式下设计 User/角色双时区；正文时间模式严禁混入。
+- 未来设计必须写清 User 时区、角色时区、旅行/夏令时、感知规则、来源优先级与 Prompt 表达；完成设计前不添加空开关。
+
+### 发布检查
+- 继续保留 moli86/87 bootstrap 故障入口。
+- `node --check` 全 JS。
+- 检查所有仓库内相对 import 目标存在。
+- 扫描 `.join/.split/.replace` 普通引号字符串中的源码真实换行风险。
+- 结构化消息必须验证最新语义保留策略，避免“UI 有卡片但模型上下文尾部被截掉”。
