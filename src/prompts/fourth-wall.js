@@ -173,7 +173,7 @@ function latestPendingUser(messages){
 }
 export function buildFourthWallRequest({
   conversation,recentBody,phoneMemory,historyLimit=60,characterName='Assistant',userName='User',
-  commentary=null,globalSettings={},chatSettings={}
+  tavernUserProfile='',phoneUserProfile='',commentary=null,globalSettings={},chatSettings={}
 }={}){
   const archivedCount=Math.max(0,Math.min(
     Array.isArray(conversation?.messages)?conversation.messages.length:0,
@@ -191,7 +191,7 @@ export function buildFourthWallRequest({
 <chat_history>
 ${formatMainChat(recentBody)}
 </chat_history>
-Developer:以下是你们的皮下过往：
+${String(tavernUserProfile||'').trim()?`<tavern_user_profile>\n${String(tavernUserProfile||'').trim()}\n</tavern_user_profile>\n`:''}${String(phoneUserProfile||'').trim()?`<phone_user_profile>\n${String(phoneUserProfile||'').trim()}\n</phone_user_profile>\n`:''}Developer:以下是你们的皮下过往：
 ${memory.trim()?`<meta_memory>\n${memory.trim()}\n</meta_memory>\n`:''}<meta_history>
 ${history}
 </meta_history>
