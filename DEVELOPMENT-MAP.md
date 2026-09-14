@@ -2468,3 +2468,21 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [ ] 将朋友圈主动发帖与主动私聊并入更统一的人物行为决策，目标输出 `SKIP / POST / PRIVATE_CHAT / POST+PRIVATE_CHAT`。
 - [ ] 输入继续吸收 `seenBy / User 评论 / 删除评论 / 长时间未互动 / 最近聊天 / 正文事件`，但事件来源必须保留语义，不能只做成一个无差别随机池。
 - [ ] 完成朋友圈行为层后暂停功能扩张，进入“moli 小手机内容 → 酒馆正文可选注入系统”的正式设计与实现。
+
+## v0.4.35 / moli92 — 朋友圈转发语义层与即时评论
+
+### `src/ui/phone-panel.js`
+- User 评论提交后不再依赖整页 `renderMoments/renderContactMoments` 才可见；新增当前动态评论区的即时 DOM 插入路径，并保留一次兜底渲染。
+- 皮下资料卡开放现有 `contact-moments` 入口。
+- 朋友圈卡片仍作为 UI Payload 保留，转发后继续自动跳到目标聊天。
+
+### `src/generation/generation-service.js`
+- 新增朋友圈转发 Semantic Payload 格式化：作者、正文、点赞、评论、本人评论识别。
+- 群聊历史与逐人生成统一读取该语义文本，不读取卡片 HTML。
+- `builtin:meta` 允许进入现有角色朋友圈生成链。
+
+### `src/generation/prompt-builder.js`
+- 普通私聊/跨会话历史遇到 `momentForward` 时优先构造纯文本朋友圈语义，不把展示层结构作为模型上下文。
+
+### 后续主线
+- 在上述事件/语义边界稳定后，继续统一人物行为 Automation：输入包括最近事件、人物性格、当前情绪、社交习惯、朋友圈历史、与 User 的关系；输出允许 SKIP / POST / PRIVATE_CHAT / POST+PRIVATE_CHAT。资料页百分比逐渐作为人物主动倾向/频率控制，而不是机械骰子。
