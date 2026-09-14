@@ -18,12 +18,25 @@ export function createFloatingBall({
     handle.appendChild(unreadDot);
     handle.setAttribute('aria-label', 'moli小手机');
     handle.setAttribute('title', 'moli小手机');
+    // Keep the launcher visible even if host stylesheets are delayed or partially overridden.
+    Object.assign(handle.style, {
+        position: 'fixed',
+        zIndex: '2147483600',
+        width: `${HANDLE_SIZE}px`,
+        height: `${HANDLE_SIZE}px`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '50%',
+        cursor: 'grab',
+        touchAction: 'none',
+    });
     documentRef.body.appendChild(handle);
 
-    if (typeof uiState.handleX !== 'number') {
+    if (!Number.isFinite(Number(uiState.handleX))) {
         uiState.handleX = windowRef.innerWidth - HANDLE_SIZE - 12;
     }
-    if (typeof uiState.handleY !== 'number') {
+    if (!Number.isFinite(Number(uiState.handleY))) {
         uiState.handleY = Math.round(windowRef.innerHeight * 0.42);
     }
 
