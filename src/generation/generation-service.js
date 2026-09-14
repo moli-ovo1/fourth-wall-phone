@@ -510,6 +510,9 @@ function batchRoleProfile(contact) {
     add('moli 自定义附加 Prompt', contact.prompt, 3500);
   } else {
     add('角色简介', contact.intro, 2000);
+    if (contact?.kind === 'custom' && Array.isArray(contact.profileEntries)) {
+      for (const entry of contact.profileEntries) if (entry?.enabled !== false) add(`资料条目：${String(entry?.title || '未命名')}`, entry?.content, 3500);
+    }
     const protectedBuiltin = ['builtin:writer', 'builtin:guide'].includes(String(contact?.id || ''));
     add(contact?.kind === 'builtin' ? '内置人格 Prompt' : '人格 Prompt',
       contact?.kind === 'builtin'

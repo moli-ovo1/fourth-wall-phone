@@ -258,6 +258,11 @@ export function buildPrivateGenerationRequest({
 
   systemBlocks.push(...roleFidelityBlocks(contact));
 
+  if (contact.kind === 'custom' && Array.isArray(contact.profileEntries)) {
+    const enabledEntries = contact.profileEntries.filter(entry => entry?.enabled !== false && clean(entry?.content));
+    if (enabledEntries.length) systemBlocks.push(`【角色资料条目】\n${enabledEntries.map(entry => `【${clean(entry.title) || '未命名条目'}】\n${clean(entry.content)}`).join('\n\n')}`);
+  }
+
   if (prompt) {
     systemBlocks.push(
       `${contact.kind === 'tavern' ? '【自定义附加 Prompt】' : contact.kind === 'builtin' ? '【内置人格 Prompt】' : '【用户追加的人格提示词】'}\n${prompt}`
