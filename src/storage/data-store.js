@@ -347,6 +347,9 @@ export function getContacts() {
   const list = [...map.values()];
 
   for (const contact of list) {
+    if (contact?.kind === 'custom') {
+      contact.profileEntries = Array.isArray(contact.profileEntries) ? contact.profileEntries.map((entry, index) => ({ id: String(entry?.id || `entry:${index}`), title: String(entry?.title || `条目 ${index + 1}`), content: String(entry?.content || ''), enabled: entry?.enabled !== false })) : [];
+    }
     if (contact?.kind === 'tavern') {
       contact.roleSources = normalizeTavernRoleSources(contact.roleSources);
     }
@@ -588,6 +591,13 @@ export function ensureBuiltins(scopeKey) {
     }
   }
 
+  for (const conversation of Object.values(data.conversations || {})) {
+    if (conversation?.type === 'group' && String(conversation.name || '') === '围读会') {
+      const ids = new Set(Array.isArray(conversation.memberIds) ? conversation.memberIds.map(String) : []);
+      if (ids.has('builtin:writer') && ids.has('builtin:guide')) conversation.systemDefault = 'reading';
+    }
+  }
+
   // moli67：每个正文 scope 首次初始化时创建一次默认「围读会」。
   // 使用初始化标记而不是“缺失即重建”，尊重用户之后主动删除/改名/改成员。
   if (data.builtinReadingGroupInitialized !== true) {
@@ -603,6 +613,7 @@ export function ensureBuiltins(scopeKey) {
         groupMode: 'reading',
         bodyContextEnabled: true,
         automation: { reviewEnabled: true, reviewInterval: 1 },
+        systemDefault: 'reading',
         messages: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -692,6 +703,19 @@ export function getPrivateConversationsForContact(scopeKey, contactId) {
     .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
 }
 
+
+export function deleteConversationInstance(scopeKey, conversationKey) {
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation) throw new Error('会话不存在');
+  const protectedPrivate = conversation.type === 'private' && ['builtin:meta','builtin:writer','builtin:guide'].includes(String(conversation.contactId || ''));
+  const protectedReading = conversation.type === 'group' && conversation.systemDefault === 'reading';
+  if (protectedPrivate || protectedReading) throw new Error('moli 默认聊天不能删除');
+  delete located.data.conversations[conversationKey];
+  if (located.storage === 'global') saveGlobalConversationStore(located.data);
+  else saveScope(scopeKey, located.data);
+  return true;
+}
 
 export function deletePrivateConversationInstance(scopeKey, conversationKey) {
   const located = locateConversation(scopeKey, conversationKey);
@@ -798,6 +822,7 @@ export function createCustomContact({
     customAvatar: String(customAvatar || ''),
     intro: String(intro || '').trim(),
     prompt: String(prompt || '').trim(),
+    profileEntries: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -809,10 +834,13 @@ export function createCustomContact({
 }
 
 
-export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, roleSources, worldBookPolicy, apiOverride, fourthWallGlobalSettings, fourthWallChatSettings, fourthWallActiveConversationKey } = {}) {
+export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, profileEntries, roleSources, worldBookPolicy, apiOverride, fourthWallGlobalSettings, fourthWallChatSettings, fourthWallActiveConversationKey } = {}) {
   const list = getContacts();
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
+  if (profileEntries !== undefined && contact.kind === 'custom') {
+    contact.profileEntries = Array.isArray(profileEntries) ? profileEntries.map((entry, index) => ({ id: String(entry?.id || `entry:${Date.now()}:${index}`), title: String(entry?.title || `条目 ${index + 1}`).trim() || `条目 ${index + 1}`, content: String(entry?.content || ''), enabled: entry?.enabled !== false })) : [];
+  }
   if (name !== undefined && contact.kind === 'custom') {
     const trimmedName = String(name || '').trim();
     if (!trimmedName) throw new Error('联系人名称不能为空');
