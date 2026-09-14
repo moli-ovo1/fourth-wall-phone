@@ -10,20 +10,14 @@ const BUILTIN_CONTACTS = [
   {
     id: 'builtin:writer',
     kind: 'builtin',
-    name: '上帝',
+    name: '小上帝',
     avatarText: '神'
   },
   {
     id: 'builtin:guide',
     kind: 'builtin',
-    name: '人类',
-    avatarText: '人'
-  },
-  {
-    id: 'builtin:redpen',
-    kind: 'builtin',
-    name: '吃瓜观察员',
-    avatarText: '瓜'
+    name: 'moli',
+    avatarText: 'M'
   },
 ];
 
@@ -235,7 +229,7 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
       : {};
     conversation.automation = {
       reviewEnabled: Boolean(automation.reviewEnabled),
-      reviewInterval: Math.max(1, Math.min(9999, Number.isFinite(Number(automation.reviewInterval)) ? Math.round(Number(automation.reviewInterval)) : 5)),
+      reviewInterval: Math.max(1, Math.min(9999, Number.isFinite(Number(automation.reviewInterval)) ? Math.round(Number(automation.reviewInterval)) : 1)),
       unreadAutoRounds: Math.max(0, Number.isFinite(Number(automation.unreadAutoRounds)) ? Math.round(Number(automation.unreadAutoRounds)) : 0),
       autoSuspended: Boolean(automation.autoSuspended),
       reviewRuntime: {
@@ -334,8 +328,13 @@ export function getContacts() {
     }
 
     const existing = map.get(c.id);
-    // 只迁移旧系统默认名；如果用户已经自行改过，不覆盖用户内容。
-    if (legacyBuiltinNames[c.id] && existing?.name === legacyBuiltinNames[c.id]) {
+    // 只迁移历代系统默认名；如果用户已经自行改过，不覆盖用户内容。
+    const defaultAliases = {
+      'builtin:meta': ['第四面墙'],
+      'builtin:writer': ['编剧', '上帝'],
+      'builtin:guide': ['攻略', '人类'],
+    };
+    if ((defaultAliases[c.id] || []).includes(String(existing?.name || ''))) {
       map.set(c.id, { ...existing, name: c.name, avatarText: c.avatarText });
     }
   }
@@ -548,9 +547,10 @@ export function ensureBuiltins(scopeKey) {
   const data = loadScope(scopeKey);
 
   const globalConversations = loadGlobalConversationStore().conversations || {};
+  const builtinIds = new Set(BUILTIN_CONTACTS.map(item => item.id));
   for (
     const c of getContacts().filter(
-      x => x.kind === 'builtin'
+      x => x.kind === 'builtin' && builtinIds.has(x.id)
     )
   ) {
     const hasGlobalBuiltin = Object.values(globalConversations).some(conversation =>
@@ -565,6 +565,29 @@ export function ensureBuiltins(scopeKey) {
         boundScopeKey: scopeKey,
       });
     }
+  }
+
+  // moli67：每个正文 scope 首次初始化时创建一次默认「围读会」。
+  // 使用初始化标记而不是“缺失即重建”，尊重用户之后主动删除/改名/改成员。
+  if (data.builtinReadingGroupInitialized !== true) {
+    const contacts = getContacts();
+    const memberIds = ['builtin:writer', 'builtin:guide'].filter(id => contacts.some(item => item.id === id));
+    if (memberIds.length) {
+      const groupId = `group:reading:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+      data.conversations[groupId] = applyConversationDefaults({
+        id: groupId,
+        type: 'group',
+        name: '围读会',
+        memberIds,
+        groupMode: 'reading',
+        bodyContextEnabled: true,
+        automation: { reviewEnabled: true, reviewInterval: 1 },
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }, { scopeKey });
+    }
+    data.builtinReadingGroupInitialized = true;
   }
 
   saveScope(scopeKey, data);
