@@ -1044,3 +1044,12 @@
   #moli-phone-panel .moli-launcher-grid{column-gap:10px}
   #moli-phone-panel .moli-app-icon-tile{width:54px;height:54px;border-radius:14px}
 }
+
+/* moli101: custom launcher artwork */
+#moli-phone-panel .moli-app-icon-image{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+  border-radius:inherit;
+}
