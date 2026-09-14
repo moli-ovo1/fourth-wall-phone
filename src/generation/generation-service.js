@@ -22,7 +22,7 @@ import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
-import { listProfileMoments } from '../storage/moments-store.js';
+import { listProfileMoments, listPublicMoments } from '../storage/moments-store.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -788,22 +788,63 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
   return { replies, failures, speakerIds: replies.map(item => item.contact.id), batch: true };
 }
 
-function parseMomentDecision(rawText = '') {
+function parseMomentRefreshDecision(rawText = '') {
   const text = String(rawText || '').trim();
-  if (!text) return { action: 'SKIP' };
+  const fallback = { action: 'SKIP', statusNote: '', interactions: [] };
+  if (!text) return fallback;
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || text;
   const objectText = fenced.match(/\{[\s\S]*\}/)?.[0] || '';
-  if (!objectText) return { action: 'SKIP' };
+  if (!objectText) return fallback;
   try {
     const value = JSON.parse(objectText);
-    const action = String(value?.action || '').toUpperCase();
-    if (action !== 'POST') return { action: 'SKIP' };
+    const action = String(value?.action || '').toUpperCase() === 'POST' ? 'POST' : 'SKIP';
     const content = String(value?.content || '').trim();
-    if (!content) return { action: 'SKIP' };
     const ageMinutes = Math.max(0, Math.min(2880, Number(value?.ageMinutes) || 0));
-    return { action: 'POST', content: content.slice(0, 2000), ageMinutes };
+    const statusNote = String(value?.statusNote || '').trim().slice(0, 160);
+    const interactions = Array.isArray(value?.interactions) ? value.interactions.map(item => ({
+      targetMomentId: String(item?.targetMomentId || '').trim(),
+      actorType: String(item?.actorType || '').trim().toLowerCase(),
+      actorId: String(item?.actorId || '').trim(),
+      actorName: String(item?.actorName || '').trim().slice(0, 60),
+      npcSourceKey: String(item?.npcSourceKey || '').trim(),
+      action: ['LIKE', 'COMMENT', 'BOTH'].includes(String(item?.action || '').toUpperCase()) ? String(item.action).toUpperCase() : '',
+      content: String(item?.content || '').trim().slice(0, 500),
+      replyToId: String(item?.replyToId || '').trim(),
+    })).filter(item => item.targetMomentId && item.action) : [];
+    if (action === 'POST' && content) return { action, content: content.slice(0, 2000), ageMinutes, statusNote, interactions };
+    return { action: 'SKIP', statusNote, interactions };
   } catch {
-    return { action: 'SKIP' };
+    return fallback;
+  }
+}
+
+function parsePublicMomentsBatch(rawText = '', validIds = []) {
+  const text = String(rawText || '').trim();
+  if (!text) return [];
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || text;
+  const objectText = fenced.match(/\{[\s\S]*\}/)?.[0] || '';
+  if (!objectText) return [];
+  try {
+    const value = JSON.parse(objectText);
+    const valid = new Set(validIds.map(String));
+    const actors = Array.isArray(value?.actors) ? value.actors : [];
+    return actors.map(item => {
+      const actorId = String(item?.actorId || '').trim();
+      if (!valid.has(actorId)) return null;
+      const postContent = String(item?.post?.content || '').trim();
+      const post = postContent ? {
+        content: postContent.slice(0, 2000),
+        ageMinutes: Math.max(0, Math.min(2880, Number(item?.post?.ageMinutes) || 0)),
+      } : null;
+      const reactions = Array.isArray(item?.reactions) ? item.reactions.map(reaction => ({
+        momentId: String(reaction?.momentId || '').trim(),
+        action: ['LIKE', 'COMMENT', 'BOTH'].includes(String(reaction?.action || '').toUpperCase()) ? String(reaction.action).toUpperCase() : '',
+        content: String(reaction?.content || '').trim().slice(0, 500),
+      })).filter(reaction => reaction.momentId && reaction.action) : [];
+      return { actorId, post, reactions };
+    }).filter(Boolean);
+  } catch {
+    return [];
   }
 }
 
@@ -878,8 +919,62 @@ export async function generateContactMoment({ scopeKey, contactId, signal } = {}
     worldBook?.text || '',
   ].map(value => String(value || '').trim()).filter(Boolean).join('\n\n');
 
-  const system = `你正在决定一个角色最近是否真的发过朋友圈。你不是被命令必须发帖；没有自然动机时必须 SKIP。\n\n【角色】\n${contact.remark || contact.displayName || contact.name || '联系人'}\n\n${personaParts ? `【身份与世界资料】\n${personaParts}\n\n` : ''}【原则】\n- 朋友圈是这个角色自己的社交表达，不是给用户的聊天回复，也不是剧情摘要。\n- 可以很日常、零碎、含蓄、带角色自己的习惯；不要为了“有内容”强编重大事件。\n- 可以来自最近聊天/群聊/角色世界的余波，但不要无脑公开私聊原文或他人秘密。\n- 时间不必是现在：如果自然，可以是刚刚、数小时前、今天早些时候或昨天。\n- 已有朋友圈不要机械重复。\n- 只输出 JSON，不要解释。`;
-  const user = `当前时间：${new Date().toString()}\n\n【最近手机连续性】\n${recentLines.join('\n\n') || '暂无'}\n\n【手机记忆】\n${phoneMemories.join('\n\n') || '暂无'}\n\n【最近正文（仅当该角色会话允许读取时）】\n${recentBody?.messages?.map(message => `${message?.role === 'user' ? '用户' : (message?.name || '正文角色')}：${String(message?.content || '')}`).join('\n') || '不读取'}\n\n【这个角色已有朋友圈】\n${momentHistory || '暂无'}\n\n请返回以下二选一：\n{"action":"SKIP"}\n或\n{"action":"POST","content":"朋友圈正文","ageMinutes":0}\n其中 ageMinutes 为距现在多少分钟，范围 0~2880。`;
+  const npcSources = (worldBook?.entries || []).map(entry => ({
+    key: String(entry?.key || ''),
+    title: String(entry?.title || ''),
+    content: String(entry?.content || '').slice(0, 1600),
+  })).filter(entry => entry.key && entry.content);
+  const profileSocial = existingMoments.map(item => {
+    const comments = (item.comments || []).map(comment => `${comment.id}|${comment.actor?.name || '未知'}：${comment.content}`).join('；');
+    return `momentId=${item.id}\n${item.author?.name || contactLabel(contact)}：${item.content}${comments ? `\n评论：${comments}` : ''}`;
+  }).join('\n\n');
+
+  const system = `你正在刷新一个角色自己的朋友圈。你不是被命令必须发帖；没有自然动机时必须 SKIP。
+
+【角色】
+${contact.remark || contact.displayName || contact.name || '联系人'}
+
+${personaParts ? `【身份与世界资料】
+${personaParts}
+
+` : ''}【原则】
+- 朋友圈是这个角色自己的社交表达，不是给用户的聊天回复，也不是剧情摘要。
+- 可以很日常、零碎、含蓄、带角色自己的习惯；不要为了“有内容”强编重大事件。
+- 可以来自最近聊天/群聊/角色世界的余波，但不要无脑公开私聊原文或他人秘密。
+- 时间不必是现在：如果自然，可以是刚刚、数小时前、今天早些时候或昨天。
+- 已有朋友圈不要机械重复。
+- 即使 SKIP，也要给一个很短的 statusNote：可以是为什么没发、正在忙什么、当前心情、写了又删、懒得公开，或对 user 的一句很角色化私下反应。它不是朋友圈正文，也不是状态面板。
+- statusNote 不要每次都暧昧，不要为了回执强编重大事件。
+- 你还可以让角色本人、世界书里明确存在的 NPC、小上帝、moli 对已有角色朋友圈产生点赞/评论；不是每个人都必须互动。
+- 世界书 NPC 必须绑定下方提供的 npcSourceKey，禁止凭空造 NPC。
+- 小上帝 actorType=writer, actorId=builtin:writer；moli actorType=guide, actorId=builtin:guide；角色本人 actorType=contact, actorId=${contact.id}；世界书 NPC actorType=npc。
+- 只输出 JSON，不要解释。`;
+  const user = `当前时间：${new Date().toString()}
+
+【最近手机连续性】
+${recentLines.join('\n\n') || '暂无'}
+
+【手机记忆】
+${phoneMemories.join('\n\n') || '暂无'}
+
+【最近正文（仅当该角色会话允许读取时）】
+${recentBody?.messages?.map(message => `${message?.role === 'user' ? '用户' : (message?.name || '正文角色')}：${String(message?.content || '')}`).join('\n') || '不读取'}
+
+【这个角色已有朋友圈】
+${profileSocial || momentHistory || '暂无'}
+
+【可作为朋友圈参与者来源的世界书条目】
+${npcSources.length ? npcSources.map(entry => `npcSourceKey=${entry.key}｜${entry.title}\n${entry.content}`).join('\n\n') : '暂无明确世界书来源'}
+
+【小上帝】
+${getBuiltinPersonaPrompt('builtin:writer')}
+
+【moli】
+${getBuiltinPersonaPrompt('builtin:guide')}
+
+请只返回一个 JSON：
+{"action":"SKIP|POST","content":"POST 时填写朋友圈正文，否则空字符串","ageMinutes":0,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH","content":"评论时填写","replyToId":"可选，回复某条评论 id"}]}。
+ageMinutes 范围 0~2880。interactions 可以为空。`;
 
   let text = '';
   if (config.source === 'tavern') {
@@ -892,11 +987,54 @@ export async function generateContactMoment({ scopeKey, contactId, signal } = {}
     text = String(result?.text || '').trim();
   }
 
-  const decision = parseMomentDecision(text);
-  if (decision.action !== 'POST') return { action: 'SKIP' };
+  const decision = parseMomentRefreshDecision(text);
   return {
-    action: 'POST',
-    content: decision.content,
-    createdAt: Date.now() - decision.ageMinutes * 60 * 1000,
+    ...decision,
+    createdAt: decision.action === 'POST' ? Date.now() - decision.ageMinutes * 60 * 1000 : 0,
+    npcSources,
   };
+}
+
+/**
+ * User public Moments refresh. One batch request lets contacts independently post or react.
+ * It deliberately avoids one API request per contact; zero actions is a valid result.
+ */
+export async function generatePublicMomentsRefresh({ scopeKey, crossContactInteraction = true, signal } = {}) {
+  if (!scopeKey) throw new Error('当前朋友圈不可用');
+  const allContacts = getContacts().map(hydratedContact);
+  const contactIds = [...new Set(getScopeConversations(scopeKey)
+    .filter(conversation => conversation?.type === 'private')
+    .map(conversation => String(conversation?.contactId || ''))
+    .filter(Boolean))];
+  const contacts = contactIds.map(id => allContacts.find(item => String(item.id) === id)).filter(Boolean);
+  if (!contacts.length) return { actors: [], consideredMomentIds: [], contacts: [] };
+
+  const feed = listPublicMoments(scopeKey).slice(0, 10);
+  const feedText = feed.map(item => {
+    const comments = (item.comments || []).map(comment => `${comment.actor?.name || '未知'}：${comment.content}`).join('；');
+    return `momentId=${item.id}｜作者=${item.author?.name || '未知'}(id=${item.author?.id || ''})｜${new Date(Number(item.createdAt || Date.now())).toLocaleString()}\n${item.content}${comments ? `\n评论：${comments}` : ''}`;
+  }).join('\n\n');
+  const scanText = feed.map(item => String(item?.content || '')).join('\n');
+  const actorBlocks = [];
+  for (const item of contacts) {
+    const worldBook = item?.kind === 'custom'
+      ? await getActivatedCustomWorldBook({ contact: item, scanText })
+      : await getActivatedTavernWorldBook({ contact: item, scanText });
+    actorBlocks.push(`===== CONTACT id=${item.id}｜${contactLabel(item)} =====\n【身份】\n${batchRoleProfile(item, scanText)}\n\n【本人的世界书】\n${clipBatchText(worldBook?.text || '', 4500) || '本轮无激活条目'}\n\n【本人的手机连续性】\n${formatPhoneBridge(scopeKey, item)}\n===== END =====`);
+  }
+
+  const system = `你在推进 moli小手机 的 User 公共朋友圈。所有候选联系人都有资格看到朋友圈，但绝不是每个人都必须点赞、评论或发动态。
+- 每个联系人必须保持自己的性格、关系与社交习惯；无动机就什么都不做。
+- 允许角色自己发布一条近期朋友圈，时间可为刚刚、数小时前、今天早些时候或昨天；不要为了刷新强编重大事件。
+- 联系人始终可以点赞/评论 user(id=user) 的朋友圈。
+- ${crossContactInteraction ? '联系人互相互动已开启：可以对其他联系人发布的朋友圈点赞/评论。' : '联系人互相互动已关闭：严禁对其他联系人发布的朋友圈点赞/评论，只能对 user 的动态互动。'}
+- 不要机械全员轮流，不要用随机替代人物动机。一次刷新可以 0 人行动。
+- 不要把私聊秘密无脑公开到朋友圈。
+- 只输出严格 JSON，不要解释。`;
+  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","post":null或{"content":"朋友圈正文","ageMinutes":0},"reactions":[{"momentId":"目标momentId","action":"LIKE|COMMENT|BOTH","content":"评论时填写"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
+  const config = resolveApiRuntimeConfig(getApiSettings());
+  assertApiConfig(config);
+  const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
+  const actors = parsePublicMomentsBatch(result?.text || '', contacts.map(item => item.id));
+  return { actors, consideredMomentIds: feed.map(item => item.id), contacts };
 }
