@@ -68,7 +68,7 @@ import { parseGeneratedMessages, previewGeneratedMessages, parseFourthWallRespon
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
 import { user_avatar } from '../../../../../personas.js';
-import { getThumbnailUrl } from '../../../../../utils.js';
+import { getThumbnailUrl } from '../../../../../../script.js';
 import { getTavernWorldBookSnapshot } from '../core/tavern-worldbook.js';
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
