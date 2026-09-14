@@ -2375,11 +2375,9 @@ export function createPhonePanel({
         </div>
         ${sourceMissing ? '<div class="moli-info-source"><div><span>来源状态</span><strong class="is-missing">来源角色不可用</strong></div></div>' : ''}
         ${isFourthWallContact(item) ? `
-        <button type="button" class="moli-info-setting-row" data-action="fourth-wall-settings"><span>皮下设置</span><strong>›</strong></button>` : (['builtin:writer', 'builtin:guide'].includes(String(item.id || '')) ? '' : `
-        <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>角色设定</span><strong>›</strong></button>`)}
-        ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>`}
-        <button type="button" class="moli-info-setting-row" data-action="contact-api-settings"><span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong></button>
-        ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row" data-action="contact-memory-settings"><span>记忆</span><strong>›</strong></button>`}
+        <button type="button" class="moli-info-setting-row" data-action="fourth-wall-settings"><span>皮下设置</span><strong>›</strong></button>` : `
+        <button type="button" class="moli-info-setting-row moli-contact-profile-moments" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>
+        ${['builtin:writer', 'builtin:guide'].includes(String(item.id || '')) ? '' : `<button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>角色设定</span><strong>›</strong></button>`}`}
         ${isFourthWallContact(item) ? '' : `
         <div class="moli-info-form moli-unified-chat-settings">
           <label class="moli-switch-row moli-setting-line"><span>读取酒馆正文</span><input type="checkbox" data-info-body-context ${conversation.bodyContextEnabled !== false ? 'checked' : ''}></label>
@@ -2391,6 +2389,8 @@ export function createPhonePanel({
           <button type="button" class="moli-info-save-button" data-action="save-all-private-settings">保存设置</button>
         </div>`}
         <button type="button" class="moli-info-setting-row" data-action="toggle-pin"><span>置顶聊天</span><strong>${conversation.pinned ? '已开启' : '未开启'}</strong></button>
+        ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row" data-action="contact-memory-settings"><span>记忆</span><strong>›</strong></button>`}
+        <button type="button" class="moli-info-setting-row" data-action="contact-api-settings"><span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong></button>
         <button type="button" class="moli-info-setting-row" data-action="search-messages"><span>查找聊天记录</span><strong>›</strong></button>
         <button type="button" class="moli-info-setting-row moli-danger-row" data-action="clear-chat-history"><span>清空聊天记录</span><strong>›</strong></button>
         <div class="moli-info-note moli-info-note-slot" data-info-note-slot hidden></div>
