@@ -3303,6 +3303,46 @@ export function createPhonePanel({
     }).join('');
   }
 
+  function appendUserMomentCommentImmediate({ surface = 'public', momentId = '', comment = null } = {}) {
+    const feed = surface === 'profile' ? contactMomentsFeed : momentsFeed;
+    if (!feed || !momentId || !comment) return false;
+
+    const card = [...feed.querySelectorAll(surface === 'profile' ? 'article[data-profile-moment-id]' : 'article[data-moment-id]')]
+      .find(node => String(surface === 'profile' ? node.dataset.profileMomentId : node.dataset.momentId) === String(momentId));
+    if (!card) return false;
+
+    const main = card.querySelector('.moli-moment-main');
+    const meta = card.querySelector('.moli-moment-meta');
+    if (!main || !meta) return false;
+
+    let social = main.querySelector('.moli-moment-social');
+    if (!social) {
+      social = documentRef.createElement('div');
+      social.className = 'moli-moment-social';
+      meta.insertAdjacentElement('afterend', social);
+    }
+
+    let comments = social.querySelector('.moli-moment-comments');
+    if (!comments) {
+      comments = documentRef.createElement('div');
+      comments.className = 'moli-moment-comments';
+      social.appendChild(comments);
+    }
+
+    const row = documentRef.createElement('div');
+    row.className = 'moli-user-comment-hold';
+    row.dataset.userCommentSurface = surface === 'profile' ? 'profile' : 'public';
+    row.dataset.momentId = String(momentId);
+    row.dataset.commentId = String(comment?.id || '');
+
+    const strong = documentRef.createElement('strong');
+    strong.textContent = momentActorName(comment?.actor);
+    row.appendChild(strong);
+    row.appendChild(documentRef.createTextNode(`：${String(comment?.content || '')}`));
+    comments.appendChild(row);
+    return true;
+  }
+
   function renderContactMoments() {
     if (!contactMomentsFeed) return;
     const scopeKey = getScopeKey?.();
@@ -6020,8 +6060,9 @@ export function createPhonePanel({
     if (button.dataset.action === 'profile-moment-comment') {
       const text = String(windowRef.prompt?.('评论') || '').trim();
       if (!text) return;
-      addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: text });
-      renderContactMoments();
+      const updatedMoment = addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: text });
+      const addedComment = updatedMoment?.comments?.[updatedMoment.comments.length - 1] || null;
+      if (!appendUserMomentCommentImmediate({ surface: 'profile', momentId, comment: addedComment })) renderContactMoments();
       try { notifyMomentInteractionOpportunity({ scopeKey, contactId:item.id, momentId, eventType:'user-comment', content:text }); }
       catch (error) { console.warn('[moli小手机] queue profile moment interaction failed:', error); }
       toast('已评论。点右上角刷新看看有没有回应。');
@@ -6085,8 +6126,9 @@ export function createPhonePanel({
     if (action === 'moment-comment') {
       const text = String(windowRef.prompt?.('评论') || '').trim();
       if (!text) return;
-      addMomentComment(scopeKey, { surface: 'public', momentId, actor: userMomentsActor(), content: text });
-      renderMoments();
+      const updatedMoment = addMomentComment(scopeKey, { surface: 'public', momentId, actor: userMomentsActor(), content: text });
+      const addedComment = updatedMoment?.comments?.[updatedMoment.comments.length - 1] || null;
+      if (!appendUserMomentCommentImmediate({ surface: 'public', momentId, comment: addedComment })) renderMoments();
       const targetMoment = listPublicMoments(scopeKey).find(x => String(x.id) === momentId);
       if (targetMoment?.author?.id && targetMoment.author.id !== 'user') {
         try { notifyMomentInteractionOpportunity({ scopeKey, contactId: targetMoment.author.id, momentId, eventType:'user-comment', content:text }); }
