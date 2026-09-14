@@ -932,3 +932,16 @@
 #moli-phone-panel .moli-moment-forward-comments{margin-top:8px;padding-top:7px;border-top:1px solid #e8e8e8;font-size:11px;line-height:1.55;color:#555}
 #moli-phone-panel .moli-moment-forward-comments strong{color:#576b95}
 #moli-phone-panel .moli-moment-forward-footer{margin-top:8px;color:#aaa;font-size:10px}
+
+
+/* moli89: compact first-level private settings */
+#moli-phone-panel .moli-unified-chat-settings{padding:0 16px;margin-top:10px}
+#moli-phone-panel .moli-unified-chat-settings .moli-setting-line{min-height:48px;margin:0;border-bottom:1px solid #eee;padding:0}
+#moli-phone-panel .moli-inline-slider-row{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:54px;border-bottom:1px solid #eee}
+#moli-phone-panel .moli-inline-slider-row>span{display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:14px}
+#moli-phone-panel .moli-inline-slider-row>div{display:flex;align-items:center;gap:8px;min-width:48%;justify-content:flex-end}
+#moli-phone-panel .moli-inline-slider-row input[type="range"]{width:min(150px,28vw);margin:0}
+#moli-phone-panel .moli-inline-slider-row small{min-width:36px;text-align:right;color:#999}
+#moli-phone-panel .moli-user-comment-hold{touch-action:pan-y;-webkit-user-select:none;user-select:none}
+#moli-phone-panel .moli-chat-bubble:has(.moli-moment-forward-card){width:min(78%,360px);max-width:min(78%,360px);padding:5px;background:#95ec69}
+#moli-phone-panel .moli-chat-bubble .moli-moment-forward-card{min-width:230px;box-sizing:border-box}
