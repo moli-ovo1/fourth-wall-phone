@@ -208,27 +208,13 @@ export function createPhonePanel({
         </div>
         <div class="moli-nav-title" data-chat-title></div>
         <div class="moli-nav-side right">
-          <button class="moli-fourth-wall-context-ring" data-action="fourth-wall-context-toggle" aria-label="上下文" title="上下文" hidden><span data-fourth-wall-context-ring-value>0</span></button>
           <button class="moli-icon-btn" data-action="fourth-wall-clear-chat" aria-label="清空皮下聊天" title="清空皮下聊天" hidden>⌫</button>
           <button class="moli-icon-btn" data-action="chat-info" aria-label="聊天信息">…</button>
         </div>
       </header>
       <div class="moli-chat-error" data-chat-error hidden role="alert">
         <span data-chat-error-text></span>
-        <button type="button" data-action="fourth-wall-retry" hidden>重试回复</button>
         <button type="button" data-action="dismiss-chat-error" aria-label="关闭">×</button>
-      </div>
-      <div class="moli-fourth-wall-context-popover" data-fourth-wall-context-popover hidden>
-        <header><strong>上下文</strong><button type="button" data-action="fourth-wall-context-close" aria-label="关闭">×</button></header>
-        <p class="moli-fourth-wall-context-total" data-fourth-wall-context-total>—</p>
-        <dl>
-          <dt>主剧情</dt><dd data-fourth-wall-context-pop-main>—</dd>
-          <dt>皮下记忆</dt><dd data-fourth-wall-context-pop-memory>—</dd>
-          <dt>皮下聊天</dt><dd data-fourth-wall-context-pop-history>—</dd>
-          <dt>提示词与输入</dt><dd data-fourth-wall-context-pop-prompt>—</dd>
-        </dl>
-        <p>128k 时会在下次回复前自动总结。</p>
-        <button type="button" class="moli-primary-btn" data-action="fourth-wall-context-summarize">立即总结</button>
       </div>
       <main class="moli-chat-body"></main>
       <div class="moli-quote-draft" data-quote-draft hidden>
@@ -242,7 +228,6 @@ export function createPhonePanel({
         <button class="moli-primary-btn moli-danger-btn" data-action="multi-delete">删除</button>
       </div>
       <footer class="moli-compose">
-        <button class="moli-fourth-wall-regenerate" data-action="fourth-wall-regenerate" aria-label="重答" title="重答" hidden>↻</button>
         <button class="moli-plus" data-action="more" aria-label="更多">＋</button>
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
         <button class="moli-send" data-action="send">发送</button>
@@ -822,6 +807,8 @@ export function createPhonePanel({
 
     <div class="moli-message-menu" data-message-menu hidden>
       <button data-message-action="edit" hidden>编辑</button>
+      <button data-message-action="regenerate" hidden>重答</button>
+      <button data-message-action="retry" hidden>重试回复</button>
       <button data-message-action="quote">引用</button>
       <button data-message-action="copy">复制</button>
       <button data-message-action="forward">转发</button>
@@ -850,16 +837,6 @@ export function createPhonePanel({
   const chatTitle = panel.querySelector('[data-chat-title]');
   const chatError = panel.querySelector('[data-chat-error]');
   const chatErrorText = panel.querySelector('[data-chat-error-text]');
-  const fourthWallRetryButton = panel.querySelector('[data-action="fourth-wall-retry"]');
-  const fourthWallContextRing = panel.querySelector('[data-action="fourth-wall-context-toggle"]');
-  const fourthWallContextRingValue = panel.querySelector('[data-fourth-wall-context-ring-value]');
-  const fourthWallContextPopover = panel.querySelector('[data-fourth-wall-context-popover]');
-  const fourthWallContextTotal = panel.querySelector('[data-fourth-wall-context-total]');
-  const fourthWallContextPopMain = panel.querySelector('[data-fourth-wall-context-pop-main]');
-  const fourthWallContextPopMemory = panel.querySelector('[data-fourth-wall-context-pop-memory]');
-  const fourthWallContextPopHistory = panel.querySelector('[data-fourth-wall-context-pop-history]');
-  const fourthWallContextPopPrompt = panel.querySelector('[data-fourth-wall-context-pop-prompt]');
-  const fourthWallRegenerateButton = panel.querySelector('[data-action="fourth-wall-regenerate"]');
   const fourthWallClearChatButton = panel.querySelector('[data-action="fourth-wall-clear-chat"]');
   const input = panel.querySelector('.moli-input');
   const sendButton = panel.querySelector('[data-action="send"]');
@@ -984,6 +961,9 @@ export function createPhonePanel({
   let generationController = null;
   let generationConversationKey = null;
   let fourthWallSummaryController = null;
+  let editingMessageId = null;
+  let editingMessageDraft = '';
+  let unsavedFourthWallDraft = null;
   let activePromptBlockId = null;
 
   panel.addEventListener(
@@ -1724,31 +1704,6 @@ export function createPhonePanel({
     return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(Math.round(n));
   }
 
-  async function refreshFourthWallChatContextStats() {
-    const scopeKey = getScopeKey?.();
-    const conversation = currentContactId ? getConversation(scopeKey, currentContactId) : null;
-    if (!scopeKey || !conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') return;
-    try {
-      const stats = await inspectFourthWallContext({ scopeKey, conversationKey: currentContactId });
-      if (!stats) return;
-      const ratio = Math.min(1, Math.max(0, Number(stats.usedTokens || 0) / Math.max(1, Number(stats.limit || 158000))));
-      if (fourthWallContextRingValue) fourthWallContextRingValue.textContent = String(Math.round(ratio * 100));
-      if (fourthWallContextRing) {
-        fourthWallContextRing.classList.toggle('is-warning', Number(stats.usedTokens || 0) >= Number(stats.trigger || 128000));
-        fourthWallContextRing.style.setProperty('--moli-context-angle', `${ratio * 360}deg`);
-      }
-      if (fourthWallContextTotal) fourthWallContextTotal.textContent = `约 ${formatTokenNumber(stats.usedTokens)} / 158k`;
-      if (fourthWallContextPopMain) fourthWallContextPopMain.textContent = formatTokenNumber(stats.mainTokens);
-      if (fourthWallContextPopMemory) fourthWallContextPopMemory.textContent = formatTokenNumber(stats.memoryTokens);
-      if (fourthWallContextPopHistory) fourthWallContextPopHistory.textContent = formatTokenNumber(stats.historyTokens);
-      if (fourthWallContextPopPrompt) fourthWallContextPopPrompt.textContent = formatTokenNumber(stats.promptTokens);
-      const summarizeButton = panel.querySelector('[data-action="fourth-wall-context-summarize"]');
-      if (summarizeButton) summarizeButton.disabled = !stats.canSummarize || isGenerationActive(scopeKey, currentContactId);
-    } catch (error) {
-      console.warn('[moli小手机] refresh fourth wall chat context failed:', error);
-      if (fourthWallContextRingValue) fourthWallContextRingValue.textContent = '!';
-    }
-  }
 
   async function refreshFourthWallContextStats() {
     const scopeKey = getScopeKey?.();
@@ -1826,7 +1781,6 @@ export function createPhonePanel({
       if (fourthWallMemoryText) fourthWallMemoryText.value = String(state?.memory || '');
       toast('皮下记忆整理完成');
       await refreshFourthWallContextStats();
-      await refreshFourthWallChatContextStats();
     } catch (error) {
       if (error?.name === 'AbortError' || controller.signal.aborted) {
         toast('已取消整理');
@@ -1835,7 +1789,6 @@ export function createPhonePanel({
         toast(error?.message || '皮下记忆整理失败');
       }
       await refreshFourthWallContextStats();
-      await refreshFourthWallChatContextStats();
     } finally {
       if (fourthWallSummaryController === controller) fourthWallSummaryController = null;
       if (settingsButton) settingsButton.textContent = '立即总结';
@@ -1887,7 +1840,6 @@ export function createPhonePanel({
     const clearMemory = windowRef.confirm?.('是否同时清空皮下长期记忆？\n确定＝聊天和记忆一起清空；取消＝只清聊天。') ?? false;
     clearFourthWallSession(scopeKey, currentContactId, { clearMemory });
     renderChat();
-    void refreshFourthWallChatContextStats();
     toast(clearMemory ? '皮下聊天与记忆已清空' : '皮下聊天已清空，长期记忆已保留');
   }
 
@@ -3249,8 +3201,38 @@ export function createPhonePanel({
     activeMessageId = messageId;
     const scopeKey = getScopeKey?.();
     const conversation = scopeKey && currentContactId ? getConversation(scopeKey, currentContactId) : null;
+    const isFourthWall = conversation?.type === 'private' && String(conversation.contactId || '') === 'builtin:meta';
+    const messages = conversation?.messages || [];
+    const messageIndex = messages.findIndex(item => String(item?.id || '') === String(messageId || ''));
+    let lastUserIndex = -1;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index]?.role === 'user') { lastUserIndex = index; break; }
+    }
+    let latestNormalAssistantIndex = -1;
+    for (let index = messages.length - 1; index > lastUserIndex; index -= 1) {
+      if (messages[index]?.role === 'assistant' && String(messages[index]?.messageType || '') !== 'commentary') {
+        latestNormalAssistantIndex = index;
+        break;
+      }
+    }
+    const error = scopeKey && currentContactId ? getGenerationError(scopeKey, currentContactId) : null;
+    const selected = messageIndex >= 0 ? messages[messageIndex] : null;
     const editButton = messageMenu.querySelector('[data-message-action="edit"]');
-    if (editButton) editButton.hidden = !(conversation?.type === 'private' && String(conversation.contactId || '') === 'builtin:meta');
+    const regenerateButton = messageMenu.querySelector('[data-message-action="regenerate"]');
+    const retryButton = messageMenu.querySelector('[data-message-action="retry"]');
+    if (editButton) editButton.hidden = !isFourthWall;
+    if (regenerateButton) regenerateButton.hidden = !(
+      isFourthWall
+      && selected?.role === 'assistant'
+      && messageIndex === latestNormalAssistantIndex
+    );
+    if (retryButton) retryButton.hidden = !(
+      isFourthWall
+      && Boolean(error?.message)
+      && selected?.role === 'user'
+      && messageIndex === lastUserIndex
+      && latestNormalAssistantIndex < 0
+    );
     messageMenu.hidden = false;
 
     const panelRect = panel.getBoundingClientRect();
@@ -3483,20 +3465,19 @@ export function createPhonePanel({
         const ok = windowRef.confirm?.('这条消息已经归档，修改原文不会改写记忆；需要同步更正时请编辑皮下记忆。继续修改？') ?? true;
         if (!ok) return;
       }
-      const next = windowRef.prompt?.('编辑消息', String(message.content || ''));
-      if (next === null || next === undefined) return;
-      const normalized = String(next).trim();
-      if (!normalized) {
-        toast('消息不能为空');
-        return;
-      }
-      try {
-        updateMessageContent(scopeKey, currentContactId, messageId, normalized);
-        renderChat();
-        toast('已修改');
-      } catch (error) {
-        toast(error?.message || '修改失败');
-      }
+      beginInlineMessageEdit(messageId);
+      return;
+    }
+
+    if (action === 'regenerate') {
+      hideMessageMenu();
+      regenerateFourthWallReply();
+      return;
+    }
+
+    if (action === 'retry') {
+      hideMessageMenu();
+      retryFourthWallReply();
       return;
     }
 
@@ -3606,6 +3587,109 @@ export function createPhonePanel({
     return true;
   }
 
+  function currentTavernUserAvatarMarkup(className = 'moli-mini-avatar') {
+    const image =
+      documentRef.querySelector('#user_avatar_block .avatar-container.selected img')
+      || documentRef.querySelector('#user_avatar_block .selected img')
+      || documentRef.querySelector('#user_avatar_block img[data-selected="true"]');
+    const src = String(image?.currentSrc || image?.src || '').trim();
+    if (!src) return `<div class="${escapeHtml(className)}">我</div>`;
+    return `<img class="${escapeHtml(className)}" src="${escapeHtml(src)}" alt="">`;
+  }
+
+  function renderInlineEditBubble() {
+    if (!editingMessageId || !chatBody) return;
+    const row = [...chatBody.querySelectorAll('[data-message-id]')]
+      .find(node => String(node.dataset.messageId || '') === String(editingMessageId));
+    const bubble = row?.querySelector?.('.moli-bubble');
+    if (!bubble) return;
+    bubble.innerHTML = `
+      <textarea class="moli-inline-message-edit" data-inline-message-edit rows="3">${escapeHtml(editingMessageDraft)}</textarea>
+      <div class="moli-inline-message-edit-actions">
+        <button type="button" data-action="inline-edit-save">保存</button>
+        <button type="button" data-action="inline-edit-cancel">取消</button>
+      </div>
+    `;
+    const textarea = bubble.querySelector('[data-inline-message-edit]');
+    textarea?.focus();
+    textarea?.setSelectionRange?.(textarea.value.length, textarea.value.length);
+  }
+
+  function renderUnsavedFourthWallDraft() {
+    if (!unsavedFourthWallDraft || !chatBody) return;
+    if (
+      String(unsavedFourthWallDraft.scopeKey || '') !== String(getScopeKey?.() || '')
+      || String(unsavedFourthWallDraft.conversationKey || '') !== String(currentContactId || '')
+    ) return;
+    const item = contact('builtin:meta');
+    const row = documentRef.createElement('div');
+    row.className = 'moli-msg assistant moli-fourth-wall-unsaved';
+    row.dataset.unsavedFourthWall = 'true';
+    row.innerHTML = `
+      ${avatarMarkup(item, 'moli-mini-avatar')}
+      <div class="moli-msg-content">
+        ${unsavedFourthWallDraft.thinking ? `
+          <details class="moli-fourth-wall-thinking">
+            <summary>思考过程</summary>
+            <div>${escapeHtml(unsavedFourthWallDraft.thinking)}</div>
+          </details>` : ''}
+        <div class="moli-bubble">
+          ${unsavedFourthWallDraft.messages.map(content => `<div>${escapeHtml(content)}</div>`).join('')}
+          <small class="moli-unsaved-label">未保存</small>
+          <div class="moli-unsaved-actions">
+            <button type="button" data-action="unsaved-save-retry">重新保存</button>
+            <button type="button" data-action="unsaved-discard">丢弃</button>
+          </div>
+        </div>
+      </div>
+    `;
+    chatBody.appendChild(row);
+  }
+
+  function retrySaveUnsavedFourthWallDraft() {
+    const draft = unsavedFourthWallDraft;
+    if (!draft) return;
+    try {
+      draft.messages.forEach(content => {
+        appendMessage(
+          draft.scopeKey,
+          draft.conversationKey,
+          'assistant',
+          content,
+          {
+            source: 'generation',
+            generationTurnId: draft.generationTurnId,
+            storyTime: draft.storyTime || null,
+            thinking: draft.thinking || '',
+            messageType: 'message',
+            senderId: draft.contact?.id || 'builtin:meta',
+            senderSnapshot: {
+              name: displayName(draft.contact || contact('builtin:meta')),
+              avatar: avatarUrl(draft.contact || contact('builtin:meta')),
+            },
+          }
+        );
+      });
+      unsavedFourthWallDraft = null;
+      clearGenerationError(draft.scopeKey, draft.conversationKey);
+      renderChat();
+      toast('未保存回复已恢复');
+    } catch (error) {
+      setGenerationError(draft.scopeKey, draft.conversationKey, `回复仍未能保存：${error?.message || error}`, 'save');
+      renderGenerationErrorBanner();
+      toast('仍未保存，请稍后重试');
+    }
+  }
+
+  function beginInlineMessageEdit(messageId) {
+    const scopeKey = getScopeKey?.();
+    const message = scopeKey ? getMessageById(scopeKey, currentContactId, messageId) : null;
+    if (!message) return;
+    editingMessageId = String(messageId);
+    editingMessageDraft = String(message.content || '');
+    renderChat();
+  }
+
   function renderChat() {
     renderGenerationErrorBanner();
     if (!currentContactId) {
@@ -3634,11 +3718,7 @@ export function createPhonePanel({
     }
 
     const isFourthWall = !isGroup && isFourthWallContact(item);
-    if (fourthWallContextRing) fourthWallContextRing.hidden = !isFourthWall;
-    if (fourthWallRegenerateButton) fourthWallRegenerateButton.hidden = !isFourthWall;
     if (fourthWallClearChatButton) fourthWallClearChatButton.hidden = !isFourthWall;
-    if (!isFourthWall && fourthWallContextPopover) fourthWallContextPopover.hidden = true;
-    if (isFourthWall) void refreshFourthWallChatContextStats();
 
     chatTitle.textContent = isGenerationActive(scopeKey, currentContactId)
       ? '对方正在输入中…'
@@ -3671,7 +3751,7 @@ export function createPhonePanel({
         }
 
         const avatar = isUser
-          ? '<div class="moli-mini-avatar">我</div>'
+          ? currentTavernUserAvatarMarkup('moli-mini-avatar')
           : isGroup
             ? (sender
                 ? avatarMarkup(sender, 'moli-mini-avatar moli-group-member-jump')
@@ -3745,9 +3825,52 @@ export function createPhonePanel({
       })
       .join('');
 
+    renderInlineEditBubble();
+    renderUnsavedFourthWallDraft();
+
     chatBody.scrollTop =
       chatBody.scrollHeight;
   }
+
+  chatBody.addEventListener('input', event => {
+    const textarea = event.target.closest?.('[data-inline-message-edit]');
+    if (!textarea) return;
+    editingMessageDraft = textarea.value;
+  });
+
+  chatBody.addEventListener('click', event => {
+    const action = event.target.closest?.('[data-action]')?.dataset?.action;
+    if (action === 'unsaved-save-retry') {
+      retrySaveUnsavedFourthWallDraft();
+      return;
+    }
+    if (action === 'unsaved-discard') {
+      unsavedFourthWallDraft = null;
+      renderChat();
+      return;
+    }
+    if (action === 'inline-edit-cancel') {
+      editingMessageId = null;
+      editingMessageDraft = '';
+      renderChat();
+      return;
+    }
+    if (action === 'inline-edit-save') {
+      const scopeKey = getScopeKey?.();
+      const content = String(editingMessageDraft || '').trim();
+      if (!content) { toast('消息不能为空'); return; }
+      try {
+        updateMessageContent(scopeKey, currentContactId, editingMessageId, content);
+        editingMessageId = null;
+        editingMessageDraft = '';
+        renderChat();
+        toast('已修改');
+      } catch (error) {
+        toast(error?.message || '修改失败');
+      }
+      return;
+    }
+  });
 
   chatBody.addEventListener('click', event => {
     if (multiSelectMode) return;
@@ -4020,11 +4143,8 @@ export function createPhonePanel({
     if (!chatError) return;
     const scopeKey = getScopeKey?.();
     const error = scopeKey && currentContactId ? getGenerationError(scopeKey, currentContactId) : null;
-    const conversation = scopeKey && currentContactId ? getConversation(scopeKey, currentContactId) : null;
-    const isFourthWall = conversation?.type === 'private' && String(conversation.contactId || '') === 'builtin:meta';
     if (chatErrorText) chatErrorText.textContent = error?.message || '';
     else chatError.textContent = error?.message || '';
-    if (fourthWallRetryButton) fourthWallRetryButton.hidden = !(error?.message && isFourthWall);
     chatError.hidden = !error?.message;
   }
 
@@ -4112,28 +4232,49 @@ export function createPhonePanel({
       if (!replyBatches?.length || !replyBatches.some(batch => batch.messages?.length)) {
         throw new Error('模型没有返回可用消息');
       }
-      replyBatches.forEach(batch => {
-        (batch.messages || []).forEach(content => {
-          appendMessage(
-            requestScopeKey,
-            generationConversationKey,
-            'assistant',
-            content,
-            {
-              source: 'generation',
-              generationTurnId,
-              storyTime: messageStoryTimeMeta(conversation),
-              thinking: batch.thinking || '',
-              messageType: privateFourthWall ? 'message' : '',
-              senderId: batch.contact.id,
-              senderSnapshot: {
-                name: displayName(batch.contact),
-                avatar: avatarUrl(batch.contact),
-              },
-            }
-          );
+      let savedFourthWallMessageCount = 0;
+      try {
+        replyBatches.forEach(batch => {
+          (batch.messages || []).forEach(content => {
+            appendMessage(
+              requestScopeKey,
+              generationConversationKey,
+              'assistant',
+              content,
+              {
+                source: 'generation',
+                generationTurnId,
+                storyTime: messageStoryTimeMeta(conversation),
+                thinking: batch.thinking || '',
+                messageType: privateFourthWall ? 'message' : '',
+                senderId: batch.contact.id,
+                senderSnapshot: {
+                  name: displayName(batch.contact),
+                  avatar: avatarUrl(batch.contact),
+                },
+              }
+            );
+            if (privateFourthWall) savedFourthWallMessageCount += 1;
+          });
         });
-      });
+      } catch (saveError) {
+        if (!privateFourthWall) throw saveError;
+        unsavedFourthWallDraft = {
+          scopeKey: requestScopeKey,
+          conversationKey: generationConversationKey,
+          contact: result.contact,
+          messages: [...(fourthWallParsed?.messages || [])].slice(savedFourthWallMessageCount),
+          thinking: fourthWallParsed?.thinking || '',
+          generationTurnId,
+          storyTime: messageStoryTimeMeta(conversation),
+        };
+        const errorMessage = `回复已经生成，但保存失败：${saveError?.message || saveError}`;
+        setGenerationError(requestScopeKey, generationConversationKey, errorMessage, 'save');
+        renderGenerationErrorBanner();
+        renderChat();
+        toast('回复已生成，但暂未保存');
+        return;
+      }
 
       if (
         getScopeKey?.() === requestScopeKey
@@ -4675,17 +4816,6 @@ export function createPhonePanel({
   panel.querySelector('[data-action="fourth-wall-memory-save"]')?.addEventListener('click', saveFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-clear"]')?.addEventListener('click', clearFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-summarize"]')?.addEventListener('click', () => void summarizeFourthWallMemoryNow());
-  panel.querySelector('[data-action="fourth-wall-context-toggle"]')?.addEventListener('click', () => {
-    if (!fourthWallContextPopover) return;
-    fourthWallContextPopover.hidden = !fourthWallContextPopover.hidden;
-    if (!fourthWallContextPopover.hidden) void refreshFourthWallChatContextStats();
-  });
-  panel.querySelector('[data-action="fourth-wall-context-close"]')?.addEventListener('click', () => {
-    if (fourthWallContextPopover) fourthWallContextPopover.hidden = true;
-  });
-  panel.querySelector('[data-action="fourth-wall-context-summarize"]')?.addEventListener('click', () => void summarizeFourthWallMemoryNow());
-  panel.querySelector('[data-action="fourth-wall-regenerate"]')?.addEventListener('click', regenerateFourthWallReply);
-  panel.querySelector('[data-action="fourth-wall-retry"]')?.addEventListener('click', retryFourthWallReply);
   panel.querySelector('[data-action="fourth-wall-clear-chat"]')?.addEventListener('click', clearFourthWallChatNow);
   panel.querySelector('[data-action="dismiss-chat-error"]')?.addEventListener('click', dismissCurrentGenerationError);
   panel.querySelector('[data-action="fourth-wall-prompts-restore"]')?.addEventListener('click', restoreFourthWallPrompts);
