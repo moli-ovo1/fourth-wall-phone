@@ -99,6 +99,7 @@ export async function generatePrivateReply({
   onDelta,
   automationInstruction = '',
   fourthWallCommentary = null,
+  regenerateFromMessageId = '',
 } = {}) {
   if (!scopeKey || !conversationKey) {
     throw new Error('当前会话不可用');
@@ -107,6 +108,23 @@ export async function generatePrivateReply({
   const conversation = getConversation(scopeKey, conversationKey);
   if (!conversation || conversation.type !== 'private') {
     throw new Error('当前版本先接通私聊生成，群聊生成将在轻编排层接入');
+  }
+
+  let requestConversation = conversation;
+  if (regenerateFromMessageId) {
+    const targetIndex = (conversation.messages || []).findIndex(
+      message => String(message?.id || '') === String(regenerateFromMessageId)
+    );
+    if (targetIndex < 0 || conversation.messages?.[targetIndex]?.role !== 'assistant') {
+      throw new Error('找不到要重答的 AI 消息');
+    }
+    let userIndex = targetIndex - 1;
+    while (userIndex >= 0 && conversation.messages[userIndex]?.role !== 'user') userIndex -= 1;
+    if (userIndex < 0) throw new Error('这条回复前没有可重答的用户消息');
+    requestConversation = {
+      ...conversation,
+      messages: conversation.messages.slice(0, userIndex + 1).map(message => ({ ...message })),
+    };
   }
 
   const storedContact = findContact(conversation.contactId);
@@ -153,7 +171,7 @@ export async function generatePrivateReply({
         ? null
         : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 }));
 
-  const worldBookScanParts = (conversation.messages || [])
+  const worldBookScanParts = (requestConversation.messages || [])
     .slice(-Math.max(1, Number(conversation.recentChatLimit) || 100))
     .map(message => String(message?.content || ''))
     .filter(Boolean);
@@ -179,7 +197,9 @@ export async function generatePrivateReply({
   ) ? getBaiBaiLongTermMemory() : null;
 
   const buildRequest = () => {
-    const currentConversation = getConversation(scopeKey, conversationKey) || conversation;
+    const currentConversation = regenerateFromMessageId
+      ? requestConversation
+      : (getConversation(scopeKey, conversationKey) || conversation);
     return buildPrivateGenerationRequest({
       contact,
       conversation: currentConversation,
@@ -568,12 +588,20 @@ function parseBatchGroupOutput(text, members, { review = false, forcedIds = [] }
   return replies;
 }
 
-async function buildBatchGroupRequest({ scopeKey, conversation, members, reviewTarget = null } = {}) {
+async function buildBatchGroupRequest({
+  scopeKey,
+  conversation,
+  members,
+  reviewTarget = null,
+  excludeMessageId = '',
+  targetedRegeneration = false,
+} = {}) {
   const review = Boolean(reviewTarget?.content);
   const groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
   if (review && groupMode === 'role-chat') throw new Error('角色闲聊模式不运行正文自动点评');
   const readingMode = groupMode === 'reading';
-  const messages = Array.isArray(conversation.messages) ? conversation.messages : [];
+  const messages = (Array.isArray(conversation.messages) ? conversation.messages : [])
+    .filter(message => !excludeMessageId || String(message?.id || '') !== String(excludeMessageId));
   const membersById = new Map(members.map(item => [String(item.id), item]));
   const groupHistory = messages.slice(-Math.min(40, Math.max(8, Number(conversation.recentChatLimit) || 40)))
     .map(message => {
@@ -632,27 +660,38 @@ async function buildBatchGroupRequest({ scopeKey, conversation, members, reviewT
     ? `\n【PRIMARY REVIEW TARGET｜本轮唯一点评对象】\n签名：${String(reviewTarget.signature || '')}\n${String(reviewTarget.content || '')}\n【边界】所有成员都必须点评这一份触发正文；群历史、群记忆和辅助正文只能帮助理解，绝不能成为点评对象。\n`
     : '';
 
-  const system = `你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择与发言生成，禁止再请求第二个编排器。\n\n【群模式】${modeText}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${review ? '【自动点评】本轮所有列出的成员每人且只能输出 1 条消息、对应前端 1 个气泡；禁止同一 speakerId 重复出现，禁止把同一成员拆成多条；每条最多100个中文字符；不要 SKIP。' : '【普通群聊】根据相关度和插话价值选择 1～3 人；被 @ 的成员必须参与；不要机械全员轮流。每个 speakerId 每轮只能出现一次、每人只输出1个气泡，每个最多80个中文字符。无话可说的成员不要输出。'}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。speakerId 必须逐字使用下方提供的 id。${reviewBlock}`;
+  const system = `你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择与发言生成，禁止再请求第二个编排器。\n\n【群模式】${modeText}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${review
+    ? '【自动点评】本轮所有列出的成员每人且只能输出 1 条消息、对应前端 1 个气泡；禁止同一 speakerId 重复出现，禁止把同一成员拆成多条；每条最多100个中文字符；不要 SKIP。'
+    : targetedRegeneration
+      ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
+      : '【普通群聊】根据相关度和插话价值选择 1～3 人；被 @ 的成员必须参与；不要机械全员轮流。每个 speakerId 每轮只能出现一次、每人只输出1个气泡，每个最多80个中文字符。无话可说的成员不要输出。'}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。speakerId 必须逐字使用下方提供的 id。${reviewBlock}`;
 
   const shared = `【群聊】${String(conversation.name || '群聊')}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchText(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || '暂无可确认正文上下文'}` : ''}\n\n${memberBlocks.join('\n\n')}`;
   return { system, messages: [{ role: 'user', content: shared }] };
 }
 
-export async function generateGroupReply({ scopeKey, conversationKey, signal, onDelta } = {}) {
+export async function generateGroupReply({ scopeKey, conversationKey, signal, onDelta, targetMemberId = '', excludeMessageId = '' } = {}) {
   if (!scopeKey || !conversationKey) throw new Error('当前群聊不可用');
   const conversation = getConversation(scopeKey, conversationKey);
   if (!conversation || conversation.type !== 'group') throw new Error('群聊不存在');
   const allContacts = getContacts();
-  const members = (conversation.memberIds || []).map(id => allContacts.find(item => String(item.id) === String(id))).filter(Boolean).map(hydratedContact);
-  if (!members.length) throw new Error('群聊没有可用成员');
+  let members = (conversation.memberIds || []).map(id => allContacts.find(item => String(item.id) === String(id))).filter(Boolean).map(hydratedContact);
+  if (targetMemberId) members = members.filter(member => String(member.id) === String(targetMemberId));
+  if (!members.length) throw new Error(targetMemberId ? '要重答的群成员已不存在' : '群聊没有可用成员');
   const messages = Array.isArray(conversation.messages) ? conversation.messages : [];
   let trailingUsers = 0;
   for (let i = messages.length - 1; i >= 0 && messages[i]?.role === 'user'; i -= 1) trailingUsers += 1;
-  if (!trailingUsers) throw new Error('先发送一条消息，再空输入触发群聊回复');
-  const forcedIds = mentionedMemberIds(messages, members);
+  if (!targetMemberId && !trailingUsers) throw new Error('先发送一条消息，再空输入触发群聊回复');
+  const forcedIds = targetMemberId ? [String(targetMemberId)] : mentionedMemberIds(messages, members);
 
-  // moli55：普通群聊不再“编排器1次 + 每位成员N次”。选人与发言合并成一次主 API 请求。
-  const request = await buildBatchGroupRequest({ scopeKey, conversation, members });
+  // moli55：普通群聊不再“编排器1次 + 每位成员N次”。指定重答时只请求该成员。
+  const request = await buildBatchGroupRequest({
+    scopeKey,
+    conversation,
+    members,
+    excludeMessageId,
+    targetedRegeneration: Boolean(targetMemberId),
+  });
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, request, { signal });
