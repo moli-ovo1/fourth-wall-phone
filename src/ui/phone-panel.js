@@ -81,7 +81,7 @@ import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
 import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory } from '../storage/moments-store.js';
-import { notifyMomentInteractionOpportunity } from '../automation/private-automation.js';
+import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity } from '../automation/private-automation.js';
 
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
@@ -3379,16 +3379,14 @@ export function createPhonePanel({
     const now = Date.now();
     if (assistantTurns - gate.turns < 3 && now - gate.at < 30 * 60 * 1000) return;
     momentChatOpportunity.set(gateKey, { turns: assistantTurns, at: now });
-    try {
-      const result = await generateContactMoment({ scopeKey, contactId: item.id });
-      if (result?.action !== 'POST' || !result?.content) return;
-      const actorName = canonicalContactName(item);
-      const created = createProfileMoment(scopeKey, item.id, { author:{ id:item.id, name:actorName, type:'contact' }, content:result.content, createdAt:Date.now() });
-      appendMessage(scopeKey, conversationKey, 'system', `${actorName}刚刚发布了一条朋友圈`, { source:'moment-event', messageType:'moment-event', momentEvent:{ contactId:item.id, momentId:created.id } });
-      if (getScopeKey?.() === scopeKey && currentContactId === conversationKey) renderChat();
-    } catch (error) {
-      console.warn('[moli小手机] chat moment trigger skipped:', error);
-    }
+    // moli98：这里不再单独调用“朋友圈 POST/SKIP”模型。只把“聊天产生了新进展”排入人物行为队列，
+    // 由 Private Automation 在同一次人物判断中选择 SKIP / POST / PRIVATE_CHAT / POST+PRIVATE_CHAT。
+    notifyBehaviorOpportunity({
+      scopeKey,
+      contactId: item.id,
+      eventType: 'chat-progress',
+      content: '最近一次手机聊天已经产生新的进展，可以考虑是否需要公开表达、主动私聊，或什么都不做。',
+    });
   }
 
   function publishMoment() {
