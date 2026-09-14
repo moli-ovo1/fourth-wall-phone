@@ -108,6 +108,10 @@ function normalizeConversationMemory(memoryValue) {
     lastSummarizedAt: Number(memory.lastSummarizedAt || 0),
     lastCondensedAt: Number(memory.lastCondensedAt || 0),
     lastAutoError: String(memory.lastAutoError || ''),
+    needsReview: memory.needsReview === true,
+    needsReviewAt: Math.max(0, Number(memory.needsReviewAt || 0)),
+    needsReviewReason: String(memory.needsReviewReason || ''),
+    needsReviewMessageId: String(memory.needsReviewMessageId || ''),
   };
 }
 
@@ -1475,7 +1479,19 @@ export function getConversationMemory(scopeKey, conversationKey) {
   };
 }
 
-export function updateConversationMemory(scopeKey, conversationKey, { recent, longTermSummary, longTermByMode, lastCondensedMessageId, lastSummarizedAt, lastCondensedAt, lastAutoError } = {}) {
+export function updateConversationMemory(scopeKey, conversationKey, {
+  recent,
+  longTermSummary,
+  longTermByMode,
+  lastCondensedMessageId,
+  lastSummarizedAt,
+  lastCondensedAt,
+  lastAutoError,
+  needsReview,
+  needsReviewAt,
+  needsReviewReason,
+  needsReviewMessageId,
+} = {}) {
   const located = locateConversation(scopeKey, conversationKey);
   const conversation = located?.conversation;
   if (!conversation || !['private', 'group'].includes(conversation.type)) throw new Error('会话不存在');
@@ -1506,10 +1522,42 @@ export function updateConversationMemory(scopeKey, conversationKey, { recent, lo
   if (lastSummarizedAt !== undefined) conversation.memory.lastSummarizedAt = Math.max(0, Number(lastSummarizedAt) || 0);
   if (lastCondensedAt !== undefined) conversation.memory.lastCondensedAt = Math.max(0, Number(lastCondensedAt) || 0);
   if (lastAutoError !== undefined) conversation.memory.lastAutoError = String(lastAutoError || '');
+  if (needsReview !== undefined) conversation.memory.needsReview = needsReview === true;
+  if (needsReviewAt !== undefined) conversation.memory.needsReviewAt = Math.max(0, Number(needsReviewAt) || 0);
+  if (needsReviewReason !== undefined) conversation.memory.needsReviewReason = String(needsReviewReason || '');
+  if (needsReviewMessageId !== undefined) conversation.memory.needsReviewMessageId = String(needsReviewMessageId || '');
 
   conversation.updatedAt = Date.now();
   saveLocatedConversation(scopeKey, located);
   return getConversationMemory(scopeKey, conversationKey);
+}
+
+
+export function markConversationMemoryNeedsReview(scopeKey, conversationKey, {
+  reason = '聊天历史已修改，已有手机记忆可能需要核对',
+  messageId = '',
+} = {}) {
+  const conversation = getConversation(scopeKey, conversationKey);
+  if (!conversation || !['private', 'group'].includes(conversation.type)) return false;
+  updateConversationMemory(scopeKey, conversationKey, {
+    needsReview: true,
+    needsReviewAt: Date.now(),
+    needsReviewReason: reason,
+    needsReviewMessageId: messageId,
+  });
+  return true;
+}
+
+export function clearConversationMemoryNeedsReview(scopeKey, conversationKey) {
+  const conversation = getConversation(scopeKey, conversationKey);
+  if (!conversation || !['private', 'group'].includes(conversation.type)) return false;
+  updateConversationMemory(scopeKey, conversationKey, {
+    needsReview: false,
+    needsReviewAt: 0,
+    needsReviewReason: '',
+    needsReviewMessageId: '',
+  });
+  return true;
 }
 
 export function replaceRecentConversationMemories(scopeKey, conversationKey, contents = []) {
