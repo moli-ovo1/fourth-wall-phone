@@ -1,7 +1,7 @@
 import { readJson, writeJson } from './storage-adapter.js';
 
 const PREFIX = 'moli-phone:moments:v2:';
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 function key(scopeKey) { return PREFIX + encodeURIComponent(String(scopeKey || '')); }
 function id(prefix) { return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`; }
@@ -37,6 +37,7 @@ function normalize(value) {
     settings: { crossContactInteraction: source?.settings?.crossContactInteraction !== false },
     publicFeed: Array.isArray(source.publicFeed) ? source.publicFeed.map(x => moment(x, 'public')).filter(x => x.content) : [],
     profileFeeds: profiles,
+    profileMemory: source.profileMemory && typeof source.profileMemory === 'object' ? Object.fromEntries(Object.entries(source.profileMemory).map(([contactId, value]) => [String(contactId), { summary: String(value?.summary || '').trim(), updatedAt: Number(value?.updatedAt || 0) }])) : {},
     profileStatus: source.profileStatus && typeof source.profileStatus === 'object' ? Object.fromEntries(Object.entries(source.profileStatus).map(([contactId, value]) => [String(contactId), {
       message: String(value?.message || ''),
       note: String(value?.note || ''),
@@ -126,4 +127,20 @@ export function setProfileMomentStatus(scopeKey, contactId, value = {}) {
   };
   save(scopeKey, state);
   return { ...state.profileStatus[owner] };
+}
+
+
+export function getProfileMomentMemory(scopeKey, contactId) {
+  const state = getMomentsState(scopeKey);
+  return state.profileMemory?.[String(contactId || '')] || { summary: '', updatedAt: 0 };
+}
+
+export function setProfileMomentMemory(scopeKey, contactId, summary = '') {
+  const owner = String(contactId || '');
+  if (!scopeKey || !owner) return null;
+  const state = getMomentsState(scopeKey);
+  state.profileMemory ||= {};
+  state.profileMemory[owner] = { summary: String(summary || '').trim(), updatedAt: Date.now() };
+  save(scopeKey, state);
+  return { ...state.profileMemory[owner] };
 }

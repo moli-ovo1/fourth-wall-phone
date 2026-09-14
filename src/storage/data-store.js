@@ -1199,6 +1199,25 @@ export function appendMessage(
   if (options?.momentEvent && typeof options.momentEvent === 'object') {
     message.momentEvent = { contactId: String(options.momentEvent.contactId || ''), momentId: String(options.momentEvent.momentId || '') };
   }
+  if (options?.momentForward && typeof options.momentForward === 'object') {
+    const mf = options.momentForward;
+    message.momentForward = {
+      id: String(mf.id || ''),
+      sourceMomentId: String(mf.sourceMomentId || ''),
+      surface: String(mf.surface || 'public'),
+      ownerContactId: String(mf.ownerContactId || ''),
+      authorId: String(mf.authorId || mf.author?.id || ''),
+      authorName: String(mf.authorName || mf.author?.name || '未知'),
+      content: String(mf.content || ''),
+      createdAt: Number(mf.createdAt || 0),
+      snapshotAt: Number(mf.snapshotAt || Date.now()),
+      likes: (Array.isArray(mf.likes) ? mf.likes : []).map(x => ({ id: String(x?.id || ''), name: String(x?.name || ''), type: String(x?.type || 'contact') })),
+      comments: (Array.isArray(mf.comments) ? mf.comments : []).map(x => ({
+        id: String(x?.id || ''), actorId: String(x?.actorId || x?.actor?.id || ''), actorName: String(x?.actorName || x?.actor?.name || '未知'),
+        content: String(x?.content || ''), deletedAt: Number(x?.deletedAt || 0), deletionReason: String(x?.deletionReason || ''), replyToId: String(x?.replyToId || ''),
+      })),
+    };
+  }
 
   if (options?.senderId) {
     message.senderId = String(options.senderId);
