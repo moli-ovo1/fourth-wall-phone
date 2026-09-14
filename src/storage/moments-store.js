@@ -1,7 +1,7 @@
 import { readJson, writeJson } from './storage-adapter.js';
 
 const PREFIX = 'moli-phone:moments:v2:';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 function key(scopeKey) { return PREFIX + encodeURIComponent(String(scopeKey || '')); }
 function id(prefix) { return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`; }
@@ -37,6 +37,12 @@ function normalize(value) {
     settings: { crossContactInteraction: source?.settings?.crossContactInteraction !== false },
     publicFeed: Array.isArray(source.publicFeed) ? source.publicFeed.map(x => moment(x, 'public')).filter(x => x.content) : [],
     profileFeeds: profiles,
+    profileStatus: source.profileStatus && typeof source.profileStatus === 'object' ? Object.fromEntries(Object.entries(source.profileStatus).map(([contactId, value]) => [String(contactId), {
+      message: String(value?.message || ''),
+      note: String(value?.note || ''),
+      kind: String(value?.kind || ''),
+      updatedAt: Number(value?.updatedAt || 0),
+    }])) : {},
   };
 }
 function save(scopeKey, state) { writeJson(key(scopeKey), state); return state; }
@@ -49,9 +55,9 @@ export function updateMomentsSettings(scopeKey, patch = {}) {
 }
 export function listPublicMoments(scopeKey) { return getMomentsState(scopeKey).publicFeed.slice().sort((a,b)=>b.createdAt-a.createdAt); }
 export function listProfileMoments(scopeKey, contactId) { return (getMomentsState(scopeKey).profileFeeds[String(contactId)] || []).slice().sort((a,b)=>b.createdAt-a.createdAt); }
-export function createPublicMoment(scopeKey, { author, content } = {}) {
+export function createPublicMoment(scopeKey, { author, content, createdAt } = {}) {
   const text = String(content || '').trim(); if (!scopeKey || !text) throw new Error('朋友圈内容不能为空');
-  const state = getMomentsState(scopeKey); const item = moment({ author, content:text }, 'public'); state.publicFeed.unshift(item); save(scopeKey,state); return item;
+  const state = getMomentsState(scopeKey); const item = moment({ author, content:text, createdAt: Number(createdAt || Date.now()) }, 'public'); state.publicFeed.unshift(item); save(scopeKey,state); return item;
 }
 export function deletePublicMoment(scopeKey, momentId, authorId = '') {
   const state=getMomentsState(scopeKey); const i=state.publicFeed.findIndex(x=>x.id===String(momentId)); if(i<0)return false;
@@ -78,7 +84,7 @@ export function importPublicMomentToProfile(scopeKey, momentId, ownerContactId, 
   const copy=moment({ ...source, id:id('profile-moment'), sourceMomentId:source.id, ownerContactId:owner, likes:Array.isArray(likes)?likes:source.likes, comments:Array.isArray(comments)?comments:source.comments }, 'profile');
   state.profileFeeds[owner] ||= []; state.profileFeeds[owner].unshift(copy); save(scopeKey,state); return copy;
 }
-export function clearProfileMoments(scopeKey, contactId) { const state=getMomentsState(scopeKey); state.profileFeeds[String(contactId)] = []; save(scopeKey,state); }
+export function clearProfileMoments(scopeKey, contactId) { const state=getMomentsState(scopeKey); const owner=String(contactId); state.profileFeeds[owner] = []; delete state.profileStatus[owner]; save(scopeKey,state); }
 
 export function createProfileMoment(scopeKey, ownerContactId, { author, content, createdAt } = {}) {
   const owner = String(ownerContactId || '').trim();
@@ -90,4 +96,23 @@ export function createProfileMoment(scopeKey, ownerContactId, { author, content,
   state.profileFeeds[owner].unshift(item);
   save(scopeKey, state);
   return item;
+}
+
+export function getProfileMomentStatus(scopeKey, contactId) {
+  const state = getMomentsState(scopeKey);
+  return state.profileStatus[String(contactId || '')] || { message: '', note: '', kind: '', updatedAt: 0 };
+}
+
+export function setProfileMomentStatus(scopeKey, contactId, value = {}) {
+  const owner = String(contactId || '');
+  if (!scopeKey || !owner) return null;
+  const state = getMomentsState(scopeKey);
+  state.profileStatus[owner] = {
+    message: String(value?.message || ''),
+    note: String(value?.note || ''),
+    kind: String(value?.kind || ''),
+    updatedAt: Number(value?.updatedAt || Date.now()),
+  };
+  save(scopeKey, state);
+  return { ...state.profileStatus[owner] };
 }
