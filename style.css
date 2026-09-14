@@ -948,3 +948,99 @@
 #moli-phone-panel .moli-user-comment-hold{touch-action:pan-y;-webkit-user-select:none;user-select:none}
 #moli-phone-panel .moli-chat-bubble:has(.moli-moment-forward-card){width:min(78%,360px);max-width:min(78%,360px);padding:5px;background:#95ec69}
 #moli-phone-panel .moli-chat-bubble .moli-moment-forward-card{min-width:230px;box-sizing:border-box}
+
+/* moli phone launcher */
+#moli-phone-panel .moli-launcher-page{
+    background:
+      radial-gradient(circle at 18% 14%,rgba(255,255,255,.92),rgba(255,255,255,0) 30%),
+      linear-gradient(155deg,#e9eef6 0%,#dfe7f1 45%,#eef2f7 100%);
+}
+
+#moli-phone-panel .moli-launcher-nav{
+    background:transparent;
+    border-bottom:0;
+}
+
+#moli-phone-panel .moli-launcher{
+    flex:1;
+    overflow:auto;
+    padding:18px 24px 28px;
+}
+
+#moli-phone-panel .moli-launcher-grid{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:26px 14px;
+    align-items:start;
+}
+
+#moli-phone-panel .moli-app-icon{
+    appearance:none;
+    border:0;
+    background:transparent;
+    padding:0;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:7px;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+}
+
+#moli-phone-panel .moli-app-icon:active .moli-app-icon-tile{
+    transform:scale(.92);
+}
+
+#moli-phone-panel .moli-app-icon small{
+    display:block;
+    width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    color:#20242a;
+    font-size:12px;
+    line-height:1.25;
+    text-align:center;
+    text-shadow:0 1px 2px rgba(255,255,255,.7);
+}
+
+#moli-phone-panel .moli-app-icon-tile{
+    width:58px;
+    height:58px;
+    border-radius:15px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 5px 14px rgba(0,0,0,.14),inset 0 1px 0 rgba(255,255,255,.32);
+    transition:transform .12s ease;
+    color:#fff;
+}
+
+#moli-phone-panel .moli-app-glyph{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+    font-weight:700;
+    letter-spacing:-1px;
+    line-height:1;
+}
+
+#moli-phone-panel .moli-app-wechat{background:linear-gradient(145deg,#38d567,#17b944)}
+#moli-phone-panel .moli-app-wechat .moli-app-glyph{font-size:12px;letter-spacing:-2px}
+#moli-phone-panel .moli-app-xiaohongshu{background:linear-gradient(145deg,#ff4a52,#e91d2a)}
+#moli-phone-panel .moli-app-xiaohongshu .moli-app-glyph{font-size:13px;letter-spacing:.3px}
+#moli-phone-panel .moli-app-tianya{background:linear-gradient(145deg,#3f85ef,#2467c7)}
+#moli-phone-panel .moli-app-weibo{background:linear-gradient(145deg,#ffbf3f,#f36a23)}
+
+#moli-phone-panel .moli-app-placeholder{
+    background:#fff;
+    color:#9a9a9a;
+}
+
+@media (max-width:360px){
+  #moli-phone-panel .moli-launcher{padding-left:18px;padding-right:18px}
+  #moli-phone-panel .moli-launcher-grid{column-gap:10px}
+  #moli-phone-panel .moli-app-icon-tile{width:54px;height:54px;border-radius:14px}
+}
