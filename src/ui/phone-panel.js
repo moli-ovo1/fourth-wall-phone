@@ -2153,10 +2153,10 @@ export function createPhonePanel({
           <input type="checkbox" data-review-enabled ${conversation.automation?.reviewEnabled ? 'checked' : ''} ${conversation.groupMode === 'role-chat' ? 'disabled' : ''}>
           <span><strong>自动点评</strong><small>${conversation.groupMode === 'role-chat' ? '角色闲聊模式不读取正文，因此暂停自动点评。切回围读会后恢复。' : '围读会按正文回合触发；群聊不提供自动吐槽。'}</small></span>
         </label>
-        <label class="moli-form-field"><span>每 N 个有效正文 AI 回合点评</span><input type="number" min="1" max="9999" step="1" data-review-interval value="${Number(conversation.automation?.reviewInterval ?? 5)}"></label>
+        <label class="moli-form-field"><span>每 N 个有效正文 AI 回合点评</span><input type="number" min="1" max="9999" step="1" data-review-interval value="${Number(conversation.automation?.reviewInterval ?? 1)}"></label>
         <button type="button" class="moli-info-save-button" data-action="save-group-review">保存自动点评</button>
       </div>
-      <div class="moli-info-coming">自动点评已接入正文回合监测：达到设定的 N 个有效 AI 正文回合后，群内成员会依次进行一轮点评。</div>
+      <div class="moli-info-coming">自动点评已接入正文回合监测：达到设定回合后，围读会会围绕最新正文自然展开一轮讨论。</div>
     `;
   }
 
@@ -2202,7 +2202,7 @@ export function createPhonePanel({
     const scopeKey = getScopeKey?.();
     const conversation = currentConversation();
     if (!scopeKey || !conversation || conversation.type !== 'group') return;
-    const reviewInterval = Number(chatInfo.querySelector('[data-review-interval]')?.value ?? 5);
+    const reviewInterval = Number(chatInfo.querySelector('[data-review-interval]')?.value ?? 1);
     if (!Number.isFinite(reviewInterval)) {
       toast('点评间隔必须是数字');
       return;
@@ -2371,13 +2371,14 @@ export function createPhonePanel({
     }
 
     const isTavern = item.kind === 'tavern';
+    const protectedBuiltinPersona = ['builtin:writer', 'builtin:guide'].includes(String(item.id || ''));
     if (contactPromptPageTitle) contactPromptPageTitle.textContent = isTavern ? '角色资料与提示词' : '人格与提示词';
     if (contactRoleSources) {
       contactRoleSources.hidden = true;
       contactRoleSources.innerHTML = '';
     }
     if (contactIntroField) contactIntroField.hidden = false;
-    if (restoreBuiltinPromptButton) restoreBuiltinPromptButton.hidden = item.kind !== 'builtin';
+    if (restoreBuiltinPromptButton) restoreBuiltinPromptButton.hidden = item.kind !== 'builtin' || protectedBuiltinPersona;
 
     if (isTavern) {
       renderTavernRoleSources(item);
@@ -2394,7 +2395,8 @@ export function createPhonePanel({
       if (contactProfilePrompt) contactProfilePrompt.placeholder = '身份、性格、说话方式、关系习惯等';
       if (contactPromptHint) contactPromptHint.textContent = '自定义联系人没有酒馆角色卡，因此人格 Prompt 是主要人格来源。';
     }
-    if (contactPromptField) contactPromptField.hidden = false;
+    if (contactPromptField) contactPromptField.hidden = protectedBuiltinPersona;
+    if (protectedBuiltinPersona && contactPromptHint) contactPromptHint.textContent = '这是 moli小手机 的内置人格。人格设定由扩展内部维护，资料页不展示或编辑其核心 Prompt。';
   }
 
   function openContactSourceDetail(key) {
