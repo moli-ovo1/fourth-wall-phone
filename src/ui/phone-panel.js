@@ -2050,10 +2050,10 @@ export function createPhonePanel({
         ${isFourthWallContact(item) ? `
         <button type="button" class="moli-info-setting-row" data-action="fourth-wall-settings">
           <span>皮下设置</span><strong>›</strong>
-        </button>` : `
+        </button>` : (['builtin:writer', 'builtin:guide'].includes(String(item.id || '')) ? '' : `
         <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings">
           <span>${isTavern ? '角色资料与提示词' : '人格与提示词'}</span><strong>›</strong>
-        </button>`}
+        </button>`)}
         <button type="button" class="moli-info-setting-row" data-action="contact-api-settings">
           <span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong>
         </button>
@@ -2151,12 +2151,12 @@ export function createPhonePanel({
       <div class="moli-info-form" data-group-review-settings>
         <label class="moli-choice-card">
           <input type="checkbox" data-review-enabled ${conversation.automation?.reviewEnabled ? 'checked' : ''} ${conversation.groupMode === 'role-chat' ? 'disabled' : ''}>
-          <span><strong>自动点评</strong><small>${conversation.groupMode === 'role-chat' ? '角色闲聊模式不读取正文，因此暂停自动点评。切回围读会后恢复。' : '围读会按正文回合触发；群聊不提供自动吐槽。'}</small></span>
+          <span><strong>自动围读</strong><small>${conversation.groupMode === 'role-chat' ? '角色闲聊模式不读取正文，因此暂停自动围读。切回围读会后恢复。' : '围读会按正文回合触发；群聊不提供自动吐槽。'}</small></span>
         </label>
-        <label class="moli-form-field"><span>每 N 个有效正文 AI 回合点评</span><input type="number" min="1" max="9999" step="1" data-review-interval value="${Number(conversation.automation?.reviewInterval ?? 1)}"></label>
-        <button type="button" class="moli-info-save-button" data-action="save-group-review">保存自动点评</button>
+        <label class="moli-form-field"><span>围读频率（每 N 个有效正文 AI 回合）</span><input type="number" min="1" max="9999" step="1" data-review-interval value="${Number(conversation.automation?.reviewInterval ?? 1)}"></label>
+        <button type="button" class="moli-info-save-button" data-action="save-group-review">保存自动围读</button>
       </div>
-      <div class="moli-info-coming">自动点评已接入正文回合监测：达到设定回合后，围读会会围绕最新正文自然展开一轮讨论。</div>
+      <div class="moli-info-coming">自动围读已接入正文回合监测：达到设定回合后，围读会会围绕最新正文自然展开一轮讨论。</div>
     `;
   }
 
@@ -2212,11 +2212,11 @@ export function createPhonePanel({
         reviewEnabled: Boolean(chatInfo.querySelector('[data-review-enabled]')?.checked),
         reviewInterval,
       });
-      toast('自动点评设置已保存');
+      toast('自动围读设置已保存');
       renderChatInfo();
     } catch (error) {
       console.error('[moli小手机] save group review failed:', error);
-      toast(error?.message || '保存自动点评失败');
+      toast(error?.message || '保存自动围读失败');
     }
   }
 
