@@ -675,6 +675,18 @@ export function createPhonePanel({
           <textarea rows="12" data-contact-profile-prompt></textarea>
         </label>
         <div class="moli-settings-note" data-contact-prompt-hint></div>
+        <section class="moli-profile-entry-section" data-custom-profile-worldbook hidden>
+          <div class="moli-conversation-section-title">角色世界书</div>
+          <div class="moli-settings-note">可随时改绑任意 SillyTavern 世界书中的 NPC 条目。主条目固定作为身份锚点；同书其他条目仍按触发规则动态进入，不会整本硬注入。</div>
+          <label class="moli-form-field">
+            <span>世界书</span>
+            <select data-profile-worldbook><option value="">不绑定世界书</option></select>
+          </label>
+          <label class="moli-form-field" data-profile-main-entry-field hidden>
+            <span>角色主条目</span>
+            <select data-profile-main-entry><option value="">请选择主条目</option></select>
+          </label>
+        </section>
         <section class="moli-profile-entry-section" data-custom-profile-entries hidden>
           <div class="moli-conversation-section-title">角色资料条目</div>
           <div class="moli-settings-note">可像角色专属小型世界书一样保存多条人设资料。只有启用的条目会进入该角色的手机生成。</div>
@@ -1063,6 +1075,10 @@ export function createPhonePanel({
   const contactPromptField = panel.querySelector('[data-contact-prompt-field]');
   const contactPromptLabel = panel.querySelector('[data-contact-prompt-label]');
   const contactPromptHint = panel.querySelector('[data-contact-prompt-hint]');
+  const customProfileWorldBook = panel.querySelector('[data-custom-profile-worldbook]');
+  const profileWorldBookSelect = panel.querySelector('[data-profile-worldbook]');
+  const profileMainEntryField = panel.querySelector('[data-profile-main-entry-field]');
+  const profileMainEntrySelect = panel.querySelector('[data-profile-main-entry]');
   const customProfileEntries = panel.querySelector('[data-custom-profile-entries]');
   const customProfileEntryList = panel.querySelector('[data-custom-profile-entry-list]');
   const restoreBuiltinPromptButton = panel.querySelector('[data-action="restore-builtin-prompt"]');
@@ -2563,6 +2579,64 @@ export function createPhonePanel({
     show('contact-prompt-settings');
   }
 
+  function fillProfileMainEntryOptions(bookName, selectedKey = '') {
+    if (!profileMainEntrySelect || !profileMainEntryField) return;
+    const book = customWorldBookCatalog.find(entry => entry.name === bookName);
+    if (!book) {
+      profileMainEntryField.hidden = true;
+      profileMainEntrySelect.innerHTML = '<option value="">请选择主条目</option>';
+      return;
+    }
+    profileMainEntryField.hidden = false;
+    profileMainEntrySelect.innerHTML = '<option value="">请选择主条目</option>' + (book.entries || [])
+      .map(entry => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.title || `条目 ${entry.uid}`)}</option>`).join('');
+    if (selectedKey && (book.entries || []).some(entry => String(entry.key) === String(selectedKey))) {
+      profileMainEntrySelect.value = selectedKey;
+    }
+  }
+
+  async function renderCustomContactWorldBook(item) {
+    if (!customProfileWorldBook || !profileWorldBookSelect || !profileMainEntrySelect || !profileMainEntryField) return;
+    const isCustom = item?.kind === 'custom';
+    customProfileWorldBook.hidden = !isCustom;
+    if (!isCustom) return;
+
+    const savedBook = String(item?.customWorldBook?.bookName || '').trim();
+    const savedEntry = String(item?.customWorldBook?.mainEntryKey || '');
+    profileWorldBookSelect.disabled = true;
+    profileWorldBookSelect.innerHTML = '<option value="">正在读取世界书…</option>';
+    profileMainEntryField.hidden = true;
+    try {
+      const catalog = await getTavernWorldBookCatalog();
+      customWorldBookCatalog = Array.isArray(catalog?.books) ? catalog.books : [];
+      if (!catalog?.available) {
+        profileWorldBookSelect.innerHTML = savedBook
+          ? `<option value="${escapeHtml(savedBook)}">${escapeHtml(savedBook)}（当前不可读取）</option>`
+          : '<option value="">当前无法读取世界书</option>';
+        return;
+      }
+      const hasSavedBook = savedBook && customWorldBookCatalog.some(book => book.name === savedBook);
+      profileWorldBookSelect.innerHTML = '<option value="">不绑定世界书</option>'
+        + (!hasSavedBook && savedBook ? `<option value="${escapeHtml(savedBook)}">${escapeHtml(savedBook)}（当前未找到）</option>` : '')
+        + customWorldBookCatalog.map(book => `<option value="${escapeHtml(book.name)}">${escapeHtml(book.name)} · ${book.entries.length}条</option>`).join('');
+      profileWorldBookSelect.value = savedBook;
+      fillProfileMainEntryOptions(savedBook, savedEntry);
+      if (!hasSavedBook && savedBook) {
+        profileMainEntryField.hidden = false;
+        profileMainEntrySelect.innerHTML = savedEntry
+          ? `<option value="${escapeHtml(savedEntry)}">已保存主条目（当前不可读取）</option>`
+          : '<option value="">主条目当前不可读取</option>';
+      }
+    } catch (error) {
+      console.error('[moli小手机] contact profile world book failed:', error);
+      profileWorldBookSelect.innerHTML = savedBook
+        ? `<option value="${escapeHtml(savedBook)}">${escapeHtml(savedBook)}（读取失败）</option>`
+        : '<option value="">世界书读取失败</option>';
+    } finally {
+      profileWorldBookSelect.disabled = false;
+    }
+  }
+
   function renderContactPromptSettings() {
     const item = currentPrivateContact();
     if (!item) return;
@@ -2584,6 +2658,8 @@ export function createPhonePanel({
     }
     if (contactIntroField) contactIntroField.hidden = false;
     if (restoreBuiltinPromptButton) restoreBuiltinPromptButton.hidden = item.kind !== 'builtin' || protectedBuiltinPersona;
+    if (customProfileWorldBook) customProfileWorldBook.hidden = item.kind !== 'custom';
+    if (item.kind === 'custom') renderCustomContactWorldBook(item);
     if (customProfileEntries) customProfileEntries.hidden = item.kind !== 'custom';
     if (customProfileEntryList) {
       const entries = Array.isArray(item.profileEntries) ? item.profileEntries : [];
@@ -2646,7 +2722,17 @@ export function createPhonePanel({
       };
       if (item.kind !== 'tavern') {
         payload.intro = contactProfileIntro?.value || '';
-        if (item.kind === 'custom') payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false, activationMode: row.querySelector('[data-profile-entry-mode]')?.value === 'keywords' ? 'keywords' : 'always', keywords: row.querySelector('[data-profile-entry-keywords]')?.value || '' }));
+        if (item.kind === 'custom') {
+          const bookName = String(profileWorldBookSelect?.value || '').trim();
+          const mainEntryKey = String(profileMainEntrySelect?.value || '');
+          if (bookName && !mainEntryKey) {
+            toast('请选择这个 NPC 的角色主条目');
+            profileMainEntrySelect?.focus();
+            return;
+          }
+          payload.customWorldBook = { bookName, mainEntryKey };
+          payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false, activationMode: row.querySelector('[data-profile-entry-mode]')?.value === 'keywords' ? 'keywords' : 'always', keywords: row.querySelector('[data-profile-entry-keywords]')?.value || '' }));
+        }
       } else {
         payload.roleSources = {
           ...(item.roleSources || {}),
@@ -5406,27 +5492,30 @@ export function createPhonePanel({
     const item = conversation?.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
     if (!scopeKey || !item) return toast('当前角色朋友圈不可用');
     const button = event.currentTarget;
+    const actorName = displayName(item);
     button.disabled = true;
-    button.textContent = '…';
+    button.classList.add('is-spinning');
+    button.setAttribute('aria-busy', 'true');
     try {
       const result = await generateContactMoment({ scopeKey, contactId: item.id });
       if (result?.action === 'POST' && result?.content) {
         createProfileMoment(scopeKey, item.id, {
-          author: { id: item.id, name: displayName(item), type: 'contact' },
+          author: { id: item.id, name: actorName, type: 'contact' },
           content: result.content,
           createdAt: result.createdAt,
         });
         renderContactMoments();
-        toast('发现一条近期朋友圈');
+        toast(`发现 ${actorName} 的一条近期朋友圈`);
       } else {
-        toast('最近没有新的朋友圈');
+        toast(`${actorName} 最近没有新的朋友圈`);
       }
     } catch (error) {
       console.error('[moli小手机] refresh contact moments failed:', error);
-      toast(error?.message || '刷新朋友圈失败');
+      toast(error?.message ? `${actorName}：${error.message}` : `${actorName} 的朋友圈刷新失败`);
     } finally {
       button.disabled = false;
-      button.textContent = '↻';
+      button.classList.remove('is-spinning');
+      button.removeAttribute('aria-busy');
     }
   });
 
@@ -5891,6 +5980,7 @@ export function createPhonePanel({
   };
 
   contactWorldBookSelect?.addEventListener('change', renderCustomWorldBookEntries);
+  profileWorldBookSelect?.addEventListener('change', () => fillProfileMainEntryOptions(profileWorldBookSelect.value, ''));
 
   panel.querySelector(
     '[data-action="add-contact-back"]'
