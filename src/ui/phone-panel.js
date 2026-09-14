@@ -2765,22 +2765,13 @@ export function createPhonePanel({
     if (!item) return;
     if (contactUserOwner) contactUserOwner.textContent = `当前联系人：${displayName(item)}`;
     if (contactUserProfile) {
-      contactUserProfile.value = String(item.userProfile || '').trim() || '姓名：
-年龄：
-性格：';
+      contactUserProfile.value = String(item.userProfile || '').trim() || '姓名：\n年龄：\n性格：';
     }
     if (contactUserGuide) {
       const isMeta = String(item.id || '') === 'builtin:meta';
       contactUserGuide.hidden = !isMeta;
       contactUserGuide.textContent = isMeta
-        ? '说明书：
-皮下也可以看到你当前酒馆里的 User 人设。
-
-这里可以填写小手机里的你。
-如果你没有另外填写，皮下就按照现有内容认识你；
-如果你填写了新的设定（天龙人、坏U、与 User 人设截然不同的等等，可以收获不一样的效果），或者干脆写现实中的你（网恋感 up up），他也会同时看到这份信息。
-
-具体写什么，由你自己决定。'
+        ? '说明书：\n皮下也可以看到你当前酒馆里的 User 人设。\n\n这里可以填写小手机里的你。\n如果你没有另外填写，皮下就按照现有内容认识你；\n如果你填写了新的设定（天龙人、坏U、与 User 人设截然不同的等等，可以收获不一样的效果），或者干脆写现实中的你（网恋感 up up），他也会同时看到这份信息。\n\n具体写什么，由你自己决定。'
         : '';
     }
   }
