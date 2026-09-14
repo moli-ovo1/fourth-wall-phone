@@ -16,6 +16,7 @@ import {
 } from '../core/tavern-context.js';
 import { buildPrivateGenerationRequest } from './prompt-builder.js';
 import { prepareFourthWallContext, getFourthWallContextStats } from './fourth-wall-context-service.js';
+import { resolveFourthWallPrefillCompatibility } from './fourth-wall-prefill.js';
 import { getActivatedTavernWorldBook } from '../core/tavern-worldbook.js';
 import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
@@ -151,6 +152,15 @@ export async function generatePrivateReply({
   const config = resolveApiRuntimeConfig(rawConfig);
   assertApiConfig(config);
 
+  const fourthWallChatSettings = isFourthWall
+    ? (contact.fourthWallChatSettingsInitialized
+        ? contact.fourthWallChatSettings
+        : (conversation.fourthWall || contact.fourthWallChatSettings || {}))
+    : null;
+  const fourthWallPrefillCompatibility = isFourthWall
+    ? resolveFourthWallPrefillCompatibility(config, fourthWallChatSettings)
+    : null;
+
   // 同一联系人可以拥有彼此独立的多个私聊现实。
   // 在用户显式开放跨会话记忆之前，不默认把“同一联系人”的其他私聊注入当前生成，
   // 避免现实陪伴 / 正文沉浸等不同 Conversation 相互污染。
@@ -214,6 +224,7 @@ export async function generatePrivateReply({
       historyLimit: currentConversation.recentChatLimit || 100,
       fourthWallCharacterName: currentTavernCharacter?.name || '',
       fourthWallCommentary,
+      fourthWallDisableAssistantPrefill: fourthWallPrefillCompatibility?.disableAssistantPrefill,
     });
   };
 
@@ -255,7 +266,12 @@ export async function generatePrivateReply({
   return {
     ...result,
     contact,
-    requestMeta: request.meta,
+    requestMeta: {
+      ...(request.meta || {}),
+      ...(fourthWallPrefillCompatibility
+        ? { fourthWallPrefillCompatibility }
+        : {}),
+    },
   };
 }
 
@@ -281,6 +297,7 @@ function fourthWallRuntime(scopeKey, conversationKey) {
   const chatSettings = contact.fourthWallChatSettingsInitialized
     ? contact.fourthWallChatSettings
     : (conversation.fourthWall || contact.fourthWallChatSettings);
+  const prefillCompatibility = resolveFourthWallPrefillCompatibility(config, chatSettings || {});
   const recentBody = getRecentTavernBody({
     messageLimit: Math.max(1, Math.min(9999, Number(chatSettings?.maxChatLayers) || 20)),
     charLimit: 1000000,
@@ -300,6 +317,7 @@ function fourthWallRuntime(scopeKey, conversationKey) {
       fourthWallCharacterName: currentTavernCharacter?.name || '',
       fourthWallCommentary: null,
       fourthWallAllowNoPendingUser: true,
+      fourthWallDisableAssistantPrefill: prefillCompatibility.disableAssistantPrefill,
     });
   };
   return { conversation, contact, config, buildRequest };

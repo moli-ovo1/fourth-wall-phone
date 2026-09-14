@@ -189,6 +189,7 @@ export function buildPrivateGenerationRequest({
   fourthWallCharacterName = '',
   fourthWallCommentary = null,
   fourthWallAllowNoPendingUser = false,
+  fourthWallDisableAssistantPrefill = null,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
     throw new Error('当前只支持私聊生成');
@@ -223,9 +224,14 @@ export function buildPrivateGenerationRequest({
           ? contact.fourthWallGlobalSettings.promptTemplates
           : (conversation.fourthWall?.promptTemplates || {}),
       },
-      chatSettings: contact.fourthWallChatSettingsInitialized
-        ? contact.fourthWallChatSettings
-        : (conversation.fourthWall || contact.fourthWallChatSettings || {}),
+      chatSettings: (() => {
+        const base = contact.fourthWallChatSettingsInitialized
+          ? contact.fourthWallChatSettings
+          : (conversation.fourthWall || contact.fourthWallChatSettings || {});
+        return typeof fourthWallDisableAssistantPrefill === 'boolean'
+          ? { ...base, disableAssistantPrefill: fourthWallDisableAssistantPrefill }
+          : base;
+      })(),
     });
   }
 
