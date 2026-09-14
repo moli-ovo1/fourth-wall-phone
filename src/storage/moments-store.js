@@ -22,7 +22,7 @@ function moment(value = {}, surface = 'public') {
     createdAt: Number(value?.createdAt || Date.now()),
     updatedAt: Number(value?.updatedAt || value?.createdAt || Date.now()),
     likes: Array.isArray(value?.likes) ? value.likes.map(actor).filter(x => x.id) : [],
-    comments: Array.isArray(value?.comments) ? value.comments.map(socialEntry).filter(x => x.actor.id && x.content) : [],
+    comments: Array.isArray(value?.comments) ? value.comments.map(socialEntry).filter(x => x.actor.id && (x.content || x.deletedAt)) : [],
     seenBy: Array.isArray(value?.seenBy) ? [...new Set(value.seenBy.map(String).filter(Boolean))] : [],
   };
 }
