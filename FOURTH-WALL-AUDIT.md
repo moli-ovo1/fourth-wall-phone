@@ -81,3 +81,42 @@ moli64 的 user avatar 宿主适配引用源写错：SillyTavern 的 `getThumbna
 ## moli66 补充
 - 皮下本身已有 archivedCount 与“归档后修改不会自动改写 memory”的显式提醒；moli66 新增的 `needsReview` 主要服务普通私聊/群聊 Conversation Memory，避免历史改写后继续在旧自动摘要上滚雪球。
 - 皮下设置页仅修布局滚动，不改 Fourth Wall Prompt、Context/Memory 算法或 Session 作用域。
+
+## moli75 — 2026-09-14 上游 main 全量差异复核
+
+本轮重新以 LittleWhiteBox `main` 的 `4db9202080cab1c3116de9a027d8c8bb5e048787` 为审计锚点，而不是沿用旧审计印象。上游近期 `68860afa` 又集中补过消息控制、上下文预算与 Fourth Wall UI/内容处理，因此后续继续以具体 commit SHA 记录审计基线。
+
+### A. 已移植且当前无需重复实现
+
+- Session：moli 用多个 `builtin:meta` Private Conversation 作为 Session 容器；历史/记忆隔离、共享 Prompt/聊天设置、active session 吐槽归属均已具备。
+- 请求结构：Top User → Confirm → chat/meta/protocol → Bottom assistant prefill；禁用 prefill 时 Bottom 合并进最后 user。
+- Assistant Prefill 默认值：上游 `createDefaultFourthWallChatState()` 明确为 `disableAssistantPrefill: false`，即默认使用 Prefill。moli 当前新数据默认值一致；moli74 只是把技术开关从普通 UI 隐藏，并未改变默认行为。
+- `chat_history / meta_memory / meta_history` 分层、真实时间/间隔标签、上下文清洗、thinking + msg 投影、Commentary 独立协议均已具备。
+- Fourth Wall 专用 rolling memory、`archivedCount`、128k 自动整理 / 158k 硬上限 / 10k summary output、安全归档边界、失败不推进、无效压缩回滚均已具备。
+- 消息编辑/删除、重答、失败重试、停止生成、清空历史、可选清空 memory、unsaved generated draft、20/60 历史窗口均已有等价 moli 实现。
+- 用户头像/角色头像、流式生成、上下文分项统计、手动总结与取消均已有宿主适配。
+
+### B. 已移植但产品实现不同，继续保留 moli 方案
+
+- 上游 Session 是 Fourth Wall 内部对象；moli 用 Conversation 承载。当前隔离语义成立，不为源码形状一致而重构。
+- 上游 Context ring 放聊天页顶部；moli 将完整统计放皮下设置页。手机小屏避免重复入口，继续保留。
+- 上游设置页仍直接显示“禁用 Assistant Prefill”；moli74 将其隐藏。技术能力仍保留，普通用户无需理解 provider 兼容细节。
+- 上游消息内容增加独立 Markdown/content renderer；moli 继续使用小手机统一气泡渲染。除非出现明确的 Fourth Wall 内容丢失问题，不引入第二套消息 renderer。
+- 上游图片/语音能力继续不移植，这是既定产品范围，不算缺失。
+
+### C. 本轮发现并安全补齐的上游差异
+
+- 上游默认 Meta Protocol 已从“第一次线上皮下私聊”改为“沿着已有的相处经历自然聊下去”。moli 默认模板同步，避免长期 Session 被 Prompt 每轮重置成第一次聊天。
+- 上游默认 Meta Protocol 的 thinking 输出块使用正确 `</thinking>` 闭合；moli 旧默认中残留了第二个 `<thinking>` 开标签，本轮修正默认模板。
+- 上游“读己”已明确从 `meta_memory + meta_history` 回到皮下自己的身份/性格/说话习惯，并把主剧情定位为共同创作背景；moli 默认模板同步这一安全语义，减少把正文角色经历误当成皮下现实身份的风险。
+- 上述只修改代码中的“恢复默认模板”基线；不自动覆盖用户已经保存的 Fourth Wall Prompt 资产。
+
+### D. 暂不搬入 / 继续观察
+
+- provider 级自动 Prefill fallback：上游当前仍保留人工 `disableAssistantPrefill` 开关，且默认 false；没有发现上游已经实现“请求失败后自动切换并重试”的统一机制。因此 moli 暂不自造 provider 猜测表。若以后实现，应基于明确的 provider capability/error，而不是模型名称猜测。
+- 上游最新 agent-core 的 tokenizer fallback / reasoning replay 属于共享 provider runtime 能力；moli 使用 SillyTavern `getTokenCountAsync` 的宿主适配，不直接复制整套 agent-core。只有出现实际 token 计量错误再单独移植对应修复。
+- 上游新增 Fourth Wall Markdown/content renderer 主要解决富文本/消息展示；当前 moli 皮下以社交软件短文本为主，没有证据证明需要引入。
+
+### 结论
+
+当前 moli「皮下」已经覆盖 LittleWhiteBox Fourth Wall 的核心聊天、Session、Prompt、Commentary、记忆、Context budget、历史控制和失败恢复能力。下一阶段不应“再搬一遍 Fourth Wall”，而应转为针对真实缺口的选择性同步。当前最值得继续观察的是 provider/Prefill 兼容与上游 agent-core token 计量变化；UI/Markdown/图片/语音不作为近期目标。

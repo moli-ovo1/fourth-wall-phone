@@ -2916,3 +2916,15 @@ moli 现有「皮下」继续保留自己的：
 4. moli 已有更适合小手机生态的方案，不为“对齐”而倒退替换。
 
 本轮只固化授权与路线，不声称已完成最新版 Fourth Wall 全量差异审计。
+
+## v0.4.18 / moli75 — Fourth Wall 上游差异审计后的固定规则
+
+LittleWhiteBox Fourth Wall 的当前审计锚点记录为 main commit `4db9202080cab1c3116de9a027d8c8bb5e048787`（2026-09-14 审计时）。`FOURTH-WALL-AUDIT.md` 是后续选择性同步的正式差异清单。
+
+- 上游当前默认 `disableAssistantPrefill: false`，即默认使用 Assistant Prefill。moli 保持相同默认；普通 UI 隐藏该技术开关不等于禁用 Prefill。
+- 不依据模型名称猜测是否支持 Prefill，也不在没有明确 provider capability/error 证据时自动切换请求语义。
+- 皮下是长期 Session，默认 Meta Protocol 不得再把每轮描述成“第一次线上聊天”；应沿已有 `meta_memory + meta_history` 的关系连续性继续。
+- `chat_history` 是共同创作的主剧情背景，不得仅凭正文角色行为推导成皮下搭档的现实身份/生活履历；皮下自身连续性优先来自 `meta_memory + meta_history`。
+- Fourth Wall 默认输出协议中的 `<thinking>` 必须正确闭合后再进入 `<msg>`，保证 parser/stream projection 边界稳定。
+- 更新上游默认 Prompt 时不得自动覆盖用户已保存的 Prompt 模板；用户本地 Prompt 继续视为配置资产。
+- 上游 Markdown/content renderer、图片、语音、完整 agent-core 不因“上游存在”而自动搬入；只有出现 moli 的真实产品缺口才选择性移植。

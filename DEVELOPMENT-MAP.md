@@ -1,3 +1,12 @@
+# moli75 / v0.4.18
+
+- 完成 LittleWhiteBox Fourth Wall 最新 main（审计锚点 `4db9202080cab1c3116de9a027d8c8bb5e048787`）逐项差异审计。
+- 确认上游默认仍使用 Assistant Prefill（`disableAssistantPrefill: false`）；moli 保持相同默认，仅隐藏普通 UI 技术开关。
+- 默认 Meta Protocol 改为持续关系语义，不再每轮声称“第一次线上皮下聊天”。
+- 修正默认 `<thinking>` 闭合标签，并让“读己”优先从皮下记忆/聊天恢复自身连续性，主剧情只作为共同创作背景。
+- 用户已经保存的 Fourth Wall Prompt 不自动覆盖；本轮只更新代码默认/恢复默认基线。
+- 上游 Markdown renderer、图片/语音、完整 agent-core 暂不搬入；后续只按真实缺口选择性同步。
+
 # moli74 / v0.4.17
 
 - 完成 8 个默认「线上聊天预设」的第一轮系统审计：保留现有全局预设架构，不新增平行 `global-phone-prompt`。
@@ -2184,3 +2193,13 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [x] 修复围读会 Review 解析层仍统一硬截断 100 字的旧限制：moli / 小上帝 / 其他成员使用与现有围读 Prompt 相匹配的差异化硬上限，避免小上帝分析气泡被无声截断。
 - [x] 不新增平行 `global-phone-prompt.js`：现有「线上聊天预设」已经是普通 moli 的全局 Prompt 内容层，本节点先把其私聊/群聊注入链修正完整。
 
+
+## moli75 — LittleWhiteBox Fourth Wall 最新差异审计
+- [x] 以 LittleWhiteBox main `4db9202080cab1c3116de9a027d8c8bb5e048787` 重新建立审计锚点。
+- [x] 确认上游 Assistant Prefill 默认仍为启用（`disableAssistantPrefill: false`）；moli74 隐藏 UI 不改变默认行为。
+- [x] 按“已对齐 / 行为不同 / 上游新增缺失 / moli 更适合”四类更新 `FOURTH-WALL-AUDIT.md`。
+- [x] 默认 Meta Protocol 从“第一次皮下聊天”同步为持续关系语义，避免 Session 每轮被 Prompt 重置。
+- [x] 修正默认 Meta Protocol 的 `</thinking>` 闭合标签。
+- [x] 默认“读己”改为从皮下记忆/聊天恢复自身身份，把主剧情明确当作共同创作背景。
+- [x] 不覆盖用户已保存的 Fourth Wall Prompt；本轮只更新代码默认/恢复默认基线。
+- [x] 不复制上游第二套 Fourth Wall、Markdown renderer、图片/语音或 agent-core；继续按真实缺口选择性同步。
