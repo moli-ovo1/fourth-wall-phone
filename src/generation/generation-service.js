@@ -22,7 +22,7 @@ import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
-import { listProfileMoments, listPublicMoments } from '../storage/moments-store.js';
+import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory } from '../storage/moments-store.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -51,11 +51,13 @@ function getContactMomentsContinuity(scopeKey, contactId) {
   if (!scopeKey || !id || id === 'builtin:meta') return '';
 
   const ownProfile = listProfileMoments(scopeKey, id).slice(0, 8);
+  const archivedProfile = getProfileMomentMemory(scopeKey, id);
   const seenPublic = listPublicMoments(scopeKey)
     .filter(item => (item?.seenBy || []).map(String).includes(id))
     .slice(0, 10);
 
   const blocks = [];
+  if (archivedProfile?.summary) blocks.push(`【这个角色已整理的朋友圈长期记忆】\n${archivedProfile.summary}`);
   if (ownProfile.length) {
     blocks.push(`【这个角色自己的朋友圈】
 ${ownProfile.map(formatMomentContinuityItem).join('\n\n')}`);
@@ -905,6 +907,40 @@ function parsePublicMomentsBatch(rawText = '', validIds = []) {
  * Explicit profile-moments refresh. This is intentionally user-triggered: it does not run after every chat turn.
  * A refresh asks whether this contact has a believable recent post; SKIP is a first-class result.
  */
+
+export async function summarizeProfileMomentsMemory({ scopeKey, contactId, signal } = {}) {
+  const id = String(contactId || '');
+  if (!scopeKey || !id) throw new Error('当前角色朋友圈不可用');
+  const contact = hydratedContact(findContact(id));
+  assertContactReady(contact);
+  const items = listProfileMoments(scopeKey, id);
+  if (!items.length) return { summary: getProfileMomentMemory(scopeKey, id)?.summary || '', changed: false };
+  let rawConfig = getApiSettings();
+  if (contact?.apiOverride?.enabled === true) {
+    const preset = getApiPreset(contact.apiOverride.presetId);
+    if (preset?.config) rawConfig = preset.config;
+    else if (contact.apiOverride.config) rawConfig = contact.apiOverride.config;
+  }
+  const config = resolveApiRuntimeConfig(rawConfig); assertApiConfig(config);
+  const existing = getProfileMomentMemory(scopeKey, id)?.summary || '';
+  const source = items.slice().reverse().map(formatMomentContinuityItem).join('\n\n');
+  const system = `你在整理一个角色手机里的朋友圈长期记忆。只保留真正值得延续的关系变化、重要互动、反复出现的态度、未解决的矛盾/亲近、对 user 或熟人的明确印象。不要把每条动态逐条复述，不要凭空补剧情，不要强行赋予每件小事意义。已有长期记忆应作为底稿保留仍然有效的信息，并合并本批朋友圈的新变化。返回一段精炼中文记忆正文，不要标题、JSON或解释。`;
+  const user = `角色：${contact.source?.originalName || contact.name || id}\n\n【已有朋友圈长期记忆】\n${existing || '暂无'}\n\n【本批准备清理的朋友圈】\n${source}`;
+  let text='';
+  if (config.source === 'tavern') {
+    if (signal?.aborted) throw new DOMException('Aborted','AbortError');
+    const generateRaw=getTavernContext?.()?.generateRaw;
+    if (typeof generateRaw !== 'function') throw new Error('当前 SillyTavern 未提供 generateRaw 接口');
+    text=String(await generateRaw({ prompt:`User: ${user}`, systemPrompt:system }) || '').trim();
+  } else {
+    const result=await generateProviderText(config,{system,messages:[{role:'user',content:user}]},{signal,timeoutMs:120000});
+    text=String(result?.text||'').trim();
+  }
+  if (!text) throw new Error('朋友圈记忆整理返回为空');
+  setProfileMomentMemory(scopeKey,id,text);
+  return { summary:text, changed:true };
+}
+
 export async function generateContactMoment({ scopeKey, contactId, signal } = {}) {
   if (!scopeKey || !contactId) throw new Error('当前角色朋友圈不可用');
   const storedContact = findContact(contactId);
