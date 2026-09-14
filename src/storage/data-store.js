@@ -1188,6 +1188,66 @@ export function getMessageById(scopeKey, conversationKey, messageId) {
   return conversation.messages.find(message => message.id === messageId) || null;
 }
 
+
+export function updateMessageContent(scopeKey, conversationKey, messageId, content) {
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation || !Array.isArray(conversation.messages)) return false;
+  const message = conversation.messages.find(item => String(item?.id || '') === String(messageId || ''));
+  if (!message) return false;
+  const normalized = String(content || '').trim();
+  if (!normalized) throw new Error('消息不能为空');
+  message.content = normalized;
+  message.updatedAt = Date.now();
+  conversation.updatedAt = Date.now();
+  saveLocatedConversation(scopeKey, located);
+  return true;
+}
+
+export function prepareFourthWallRegeneration(scopeKey, conversationKey) {
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') {
+    throw new Error('当前不是皮下会话');
+  }
+  applyConversationDefaults(conversation, { scopeKey });
+  let userIndex = -1;
+  for (let index = conversation.messages.length - 1; index >= 0; index -= 1) {
+    if (conversation.messages[index]?.role === 'user') {
+      userIndex = index;
+      break;
+    }
+  }
+  if (userIndex < 0) throw new Error('没有可重答的用户消息');
+  const userInput = String(conversation.messages[userIndex]?.content || '').trim();
+  conversation.messages = conversation.messages.slice(0, userIndex + 1);
+  if (conversation.fourthWallSession) {
+    conversation.fourthWallSession.archivedCount = Math.min(
+      Number(conversation.fourthWallSession.archivedCount || 0),
+      userIndex
+    );
+  }
+  conversation.updatedAt = Date.now();
+  saveLocatedConversation(scopeKey, located);
+  return { userInput, userMessageId: String(conversation.messages[userIndex]?.id || '') };
+}
+
+export function clearFourthWallSession(scopeKey, conversationKey, { clearMemory = false } = {}) {
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') {
+    throw new Error('当前不是皮下会话');
+  }
+  applyConversationDefaults(conversation, { scopeKey });
+  conversation.messages = [];
+  conversation.unreadCount = 0;
+  conversation.fourthWallSession.archivedCount = 0;
+  if (clearMemory) conversation.fourthWallSession.memory = '';
+  conversation.updatedAt = Date.now();
+  saveLocatedConversation(scopeKey, located);
+  return true;
+}
+
 export function deleteMessage(scopeKey, conversationKey, messageId) {
   const located = locateConversation(scopeKey, conversationKey);
   const conversation = located?.conversation;
