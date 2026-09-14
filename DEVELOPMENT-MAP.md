@@ -2539,3 +2539,8 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - `src/ui/phone-panel.js`: 恢复 moli92 曾验证过的 User 评论即时 DOM 落点。评论仍先写入 Moments Store，再把刚写入的真实 comment（含稳定 commentId）立即插入当前动态评论区；只有找不到当前卡片时才回退整页 render。
 - 同时覆盖 User 公共朋友圈与角色资料卡朋友圈，避免“评论已保存但必须点右上角刷新、额外调用一次 API 后才看见”的回归。
 - Automation / 角色是否回应的逻辑保持不变：即时显示只处理 User 自己刚提交的评论，不伪造 AI 回应，也不额外触发 API。
+
+
+## v0.4.39 / moli96 — 朋友圈评论本地重绘修复
+- 仅修复 User 评论即时显示：公共朋友圈与角色资料卡朋友圈在 `addMomentComment` 成功后直接完整重绘当前 feed，不再依赖单条 DOM append patch。
+- 评论持久化、长按删除、删除原因、角色回应/Automation 逻辑均保持原样；本地显示不调用额外 API。
