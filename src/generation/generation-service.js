@@ -807,7 +807,8 @@ function parseMomentRefreshDecision(rawText = '') {
       actorId: String(item?.actorId || '').trim(),
       actorName: String(item?.actorName || '').trim().slice(0, 60),
       npcSourceKey: String(item?.npcSourceKey || '').trim(),
-      action: ['LIKE', 'COMMENT', 'BOTH'].includes(String(item?.action || '').toUpperCase()) ? String(item.action).toUpperCase() : '',
+      action: ['LIKE', 'COMMENT', 'BOTH', 'DELETE_COMMENT'].includes(String(item?.action || '').toUpperCase()) ? String(item.action).toUpperCase() : '',
+      commentId: String(item?.commentId || '').trim(),
       content: String(item?.content || '').trim().slice(0, 500),
       replyToId: String(item?.replyToId || '').trim(),
     })).filter(item => item.targetMomentId && item.action) : [];
@@ -838,7 +839,8 @@ function parsePublicMomentsBatch(rawText = '', validIds = []) {
       } : null;
       const reactions = Array.isArray(item?.reactions) ? item.reactions.map(reaction => ({
         momentId: String(reaction?.momentId || '').trim(),
-        action: ['LIKE', 'COMMENT', 'BOTH'].includes(String(reaction?.action || '').toUpperCase()) ? String(reaction.action).toUpperCase() : '',
+        action: ['LIKE', 'COMMENT', 'BOTH', 'DELETE_COMMENT'].includes(String(reaction?.action || '').toUpperCase()) ? String(reaction.action).toUpperCase() : '',
+        commentId: String(reaction?.commentId || '').trim(),
         content: String(reaction?.content || '').trim().slice(0, 500),
       })).filter(reaction => reaction.momentId && reaction.action) : [];
       return { actorId, post, reactions };
@@ -925,7 +927,7 @@ export async function generateContactMoment({ scopeKey, contactId, signal } = {}
     content: String(entry?.content || '').slice(0, 1600),
   })).filter(entry => entry.key && entry.content);
   const profileSocial = existingMoments.map(item => {
-    const comments = (item.comments || []).map(comment => `${comment.id}|${comment.actor?.name || '未知'}：${comment.content}`).join('；');
+    const comments = (item.comments || []).map(comment => comment.deletedAt ? `${comment.id}|${comment.actor?.name || '未知'} 删除了评论${comment.deletionReason ? `：${comment.deletionReason}` : ''}` : `${comment.id}|${comment.actor?.name || '未知'}：${comment.content}`).join('；');
     return `momentId=${item.id}\n${item.author?.name || contactLabel(contact)}：${item.content}${comments ? `\n评论：${comments}` : ''}`;
   }).join('\n\n');
 
@@ -946,6 +948,7 @@ ${personaParts}
 - 即使 SKIP，也要给一个很短的 statusNote：可以是为什么没发、正在忙什么、当前心情、写了又删、懒得公开，或对 user 的一句很角色化私下反应。它不是朋友圈正文，也不是状态面板。
 - statusNote 不要每次都暧昧，不要为了回执强编重大事件。
 - 你还可以让角色本人、世界书里明确存在的 NPC、小上帝、moli 对已有角色朋友圈产生点赞/评论；不是每个人都必须互动。
+- 任何参与者都可以删除自己先前的评论，action=DELETE_COMMENT，并填写 commentId 与简短 deletionReason；删除原因会被其他人看到。只能删除自己写的评论。
 - 世界书 NPC 必须绑定下方提供的 npcSourceKey，禁止凭空造 NPC。
 - 小上帝 actorType=writer, actorId=builtin:writer；moli actorType=guide, actorId=builtin:guide；角色本人 actorType=contact, actorId=${contact.id}；世界书 NPC actorType=npc。
 - 只输出 JSON，不要解释。`;
@@ -973,7 +976,7 @@ ${getBuiltinPersonaPrompt('builtin:writer')}
 ${getBuiltinPersonaPrompt('builtin:guide')}
 
 请只返回一个 JSON：
-{"action":"SKIP|POST","content":"POST 时填写朋友圈正文，否则空字符串","ageMinutes":0,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH","content":"评论时填写","replyToId":"可选，回复某条评论 id"}]}。
+{"action":"SKIP|POST","content":"POST 时填写朋友圈正文，否则空字符串","ageMinutes":0,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论时填写；DELETE_COMMENT 时作为 deletionReason","replyToId":"可选，回复某条评论 id"}]}。
 ageMinutes 范围 0~2880。interactions 可以为空。`;
 
   let text = '';
@@ -1011,7 +1014,7 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
 
   const feed = listPublicMoments(scopeKey).slice(0, 10);
   const feedText = feed.map(item => {
-    const comments = (item.comments || []).map(comment => `${comment.actor?.name || '未知'}：${comment.content}`).join('；');
+    const comments = (item.comments || []).map(comment => comment.deletedAt ? `${comment.actor?.name || '未知'} 删除了评论${comment.deletionReason ? `：${comment.deletionReason}` : ''}` : `${comment.actor?.name || '未知'}：${comment.content}`).join('；');
     return `momentId=${item.id}｜作者=${item.author?.name || '未知'}(id=${item.author?.id || ''})｜${new Date(Number(item.createdAt || Date.now())).toLocaleString()}\n${item.content}${comments ? `\n评论：${comments}` : ''}`;
   }).join('\n\n');
   const scanText = feed.map(item => String(item?.content || '')).join('\n');
@@ -1027,11 +1030,12 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
 - 每个联系人必须保持自己的性格、关系与社交习惯；无动机就什么都不做。
 - 允许角色自己发布一条近期朋友圈，时间可为刚刚、数小时前、今天早些时候或昨天；不要为了刷新强编重大事件。
 - 联系人始终可以点赞/评论 user(id=user) 的朋友圈。
+- 联系人也可以删除自己先前写下的评论：reaction.action=DELETE_COMMENT，填写 commentId，并可在 content 中写简短删除原因；删除原因会被其他人看到。只能删除自己的评论。
 - ${crossContactInteraction ? '联系人互相互动已开启：可以对其他联系人发布的朋友圈点赞/评论。' : '联系人互相互动已关闭：严禁对其他联系人发布的朋友圈点赞/评论，只能对 user 的动态互动。'}
 - 不要机械全员轮流，不要用随机替代人物动机。一次刷新可以 0 人行动。
 - 不要把私聊秘密无脑公开到朋友圈。
 - 只输出严格 JSON，不要解释。`;
-  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","post":null或{"content":"朋友圈正文","ageMinutes":0},"reactions":[{"momentId":"目标momentId","action":"LIKE|COMMENT|BOTH","content":"评论时填写"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
+  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","post":null或{"content":"朋友圈正文","ageMinutes":0},"reactions":[{"momentId":"目标momentId","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论内容；DELETE_COMMENT 时作为删除原因"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
