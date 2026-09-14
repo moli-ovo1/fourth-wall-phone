@@ -2749,3 +2749,12 @@ Commentary 使用独立 Fourth Wall Commentary Prompt，只输出一个 `<msg>` 
 - 改为从 SillyTavern 官方 `public/script.js` 导入 `getThumbnailUrl`；`user_avatar` 继续来自 `public/scripts/personas.js`。
 - user 头像仍使用 `getThumbnailUrl('persona', user_avatar)`，不回退到猜 DOM。
 - 启动链保持 `index.js -> initApp() -> ensureBuiltins() -> createFloatingBall()`，Android 400ms 点击保护不变。
+
+
+## 0.4.10 / moli66 — UI 小修 + 记忆一致性保护
+- user 气泡头像改为与 chat 头像完全相同的“固定尺寸 wrapper + img object-fit: cover”结构，避免 persona 缩略图作为 `<img class=moli-mini-avatar>` 时被强制拉伸。
+- 清空聊天只保留“聊天信息”页入口；聊天页右上角重复的清空按钮删除。
+- 清空聊天流程明确分两步：先确认清空聊天，再选择“保留现有记忆”或“聊天和记忆全部清除”。皮下使用 Fourth Wall memory，普通私聊/群聊使用各自 Conversation Memory。
+- 皮下设置页加强 flex/scroll 约束，底部保存区始终保留，主内容可独立滚动，修复手机窄屏底部截断。
+- 聊天信息页底部说明文字删除，但保留隐藏 `data-info-note-slot` 注释槽，后续可重新挂说明。
+- 下一阶段同时完成“历史改写 → 记忆一致性保护”：编辑、删除、重答若触及已经进入自动手机记忆的旧消息，会把该 Conversation 标记为 `needsReview`，暂停继续自动压缩，并在手机记忆页提示核对；用户保存手机记忆后解除暂停。

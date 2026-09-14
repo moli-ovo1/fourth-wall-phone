@@ -716,11 +716,6 @@
 }
 
 
-
-#moli-phone-panel [data-action="fourth-wall-clear-chat"][hidden] {
-  display: none !important;
-}
-
 #moli-phone-panel .moli-bubble.is-inline-editing {
   min-width: 72px;
   outline: 1px solid rgba(0, 0, 0, .18);
@@ -774,4 +769,31 @@
 
 #moli-phone-panel .moli-generation-unsaved .moli-bubble {
   outline: 1px dashed currentColor;
+}
+
+
+/* moli66: Fourth Wall settings must always leave room for its fixed footer. */
+#moli-phone-panel [data-page="fourth-wall-settings"] > .moli-settings-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 28px;
+}
+
+#moli-phone-panel [data-page="fourth-wall-settings"] > .moli-sync-footer {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 2;
+}
+
+/* Reserved empty note slot: hidden now, reusable later without rebuilding the info page. */
+#moli-phone-panel .moli-info-note-slot[hidden] {
+  display: none !important;
+}
+
+#moli-phone-panel [data-phone-memory-auto-status].is-warning {
+  color: #b42318;
+  font-weight: 600;
 }

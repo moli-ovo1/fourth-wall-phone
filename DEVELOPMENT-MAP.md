@@ -2093,3 +2093,17 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [x] 改为 SillyTavern 官方来源 `public/script.js`
 - [x] 保留 `user_avatar + getThumbnailUrl('persona', ...)` 头像方案
 - [x] 不改 Prompt、不改悬浮按钮逻辑、不改启动顺序
+
+
+## moli66 — Small fixes + memory consistency guard
+- [x] user 头像改用与 chat 头像相同 wrapper/crop 结构，修复拉伸
+- [x] 删除聊天页右上角重复清空入口，只保留聊天信息页
+- [x] 清空聊天提供“保留记忆 / 全部清除”二阶段选择
+- [x] 修复皮下设置页底部截断
+- [x] 删除聊天信息页底部旧说明，保留隐藏注释槽
+- [x] 编辑已压缩旧消息 → 手机记忆标记需核对
+- [x] 删除已压缩旧消息 → 手机记忆标记需核对
+- [x] 重答已压缩旧消息 → 手机记忆标记需核对
+- [x] `needsReview` 时暂停普通 Conversation 自动记忆压缩
+- [x] 手机记忆页显示核对提示；手动保存记忆后恢复自动压缩
+- [ ] 书签 B：普通聊天 Context ring 仍暂缓

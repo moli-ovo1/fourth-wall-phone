@@ -76,3 +76,8 @@
 
 ## moli65 热修说明
 moli64 的 user avatar 宿主适配引用源写错：SillyTavern 的 `getThumbnailUrl` 由 `public/script.js` 提供，而不是 `public/scripts/utils.js`。这是浏览器 ESM 的顶层导入错误，会导致 `phone-panel.js` 整个模块无法加载，从而连带阻断悬浮按钮初始化。moli65 只修正该导入路径。
+
+
+## moli66 补充
+- 皮下本身已有 archivedCount 与“归档后修改不会自动改写 memory”的显式提醒；moli66 新增的 `needsReview` 主要服务普通私聊/群聊 Conversation Memory，避免历史改写后继续在旧自动摘要上滚雪球。
+- 皮下设置页仅修布局滚动，不改 Fourth Wall Prompt、Context/Memory 算法或 Session 作用域。
