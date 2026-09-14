@@ -185,6 +185,7 @@ export function buildPrivateGenerationRequest({
   longTermMemoryText = '',
   longTermMemoryCoverage = null,
   phoneMemory = null,
+  momentsContext = '',
   historyLimit = 60,
   fourthWallCharacterName = '',
   fourthWallCommentary = null,
@@ -306,6 +307,13 @@ export function buildPrivateGenerationRequest({
     systemBlocks.push(
       '【当前手机 Conversation 的场外记忆】\n这是当前这一个手机聊天实例自身积累的关系与聊天记忆，不是正文世界记忆。优先级低于当前原始聊天和当前正文；若有冲突，以更近期、更直接的信息为准。\n\n'
       + parts.join('\n\n')
+    );
+  }
+
+  if (clean(momentsContext)) {
+    systemBlocks.push(
+      '【朋友圈连续性】\n以下内容是这个角色自己的朋友圈，以及他已经实际看过的公共朋友圈。\n看过不等于点赞或评论；没有留下公开互动，也不代表没有记住。可以在后续聊天里自然受这些内容影响、偶尔提起或绕开，但不要每轮强行复述朋友圈，也不要捏造未记录的点赞、评论或发帖。\n\n'
+      + clip(momentsContext, 18000)
     );
   }
 

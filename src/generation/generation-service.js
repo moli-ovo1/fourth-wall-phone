@@ -28,6 +28,51 @@ function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
 }
 
+function formatMomentContinuityItem(item) {
+  const likes = (item?.likes || []).map(like => String(like?.name || '')).filter(Boolean);
+  const comments = (item?.comments || []).map(comment => {
+    const who = String(comment?.actor?.name || '未知');
+    if (comment?.deletedAt) return `${who} 删除了评论${comment?.deletionReason ? `（原因：${comment.deletionReason}）` : ''}`;
+    const content = String(comment?.content || '').trim();
+    return content ? `${who}：${content}` : '';
+  }).filter(Boolean);
+  const social = [
+    likes.length ? `点赞：${likes.join('、')}` : '',
+    comments.length ? `评论：${comments.join('｜')}` : '',
+  ].filter(Boolean).join('；');
+  const createdAt = Number(item?.createdAt || 0);
+  const when = createdAt ? new Date(createdAt).toLocaleString() : '';
+  return `${when ? `[${when}] ` : ''}${item?.author?.name || '未知'}：${String(item?.content || '').trim()}${social ? `
+${social}` : ''}`.trim();
+}
+
+function getContactMomentsContinuity(scopeKey, contactId) {
+  const id = String(contactId || '');
+  if (!scopeKey || !id || id === 'builtin:meta') return '';
+
+  const ownProfile = listProfileMoments(scopeKey, id).slice(0, 8);
+  const seenPublic = listPublicMoments(scopeKey)
+    .filter(item => (item?.seenBy || []).map(String).includes(id))
+    .slice(0, 10);
+
+  const blocks = [];
+  if (ownProfile.length) {
+    blocks.push(`【这个角色自己的朋友圈】
+${ownProfile.map(formatMomentContinuityItem).join('
+
+')}`);
+  }
+  if (seenPublic.length) {
+    blocks.push(`【这个角色已经看过的公共朋友圈】
+${seenPublic.map(formatMomentContinuityItem).join('
+
+')}`);
+  }
+  return blocks.join('
+
+');
+}
+
 function assertApiConfig(config) {
   if (config?.source === 'tavern') return;
   if (!String(config?.model || '').trim()) {
@@ -221,6 +266,7 @@ export async function generatePrivateReply({
       longTermMemoryText: baiBaiMemory?.text || '',
       longTermMemoryCoverage: baiBaiMemory?.coverage || null,
       phoneMemory: getConversationMemory(scopeKey, conversationKey),
+      momentsContext: getContactMomentsContinuity(scopeKey, contact.id),
       historyLimit: currentConversation.recentChatLimit || 100,
       fourthWallCharacterName: currentTavernCharacter?.name || '',
       fourthWallCommentary,
