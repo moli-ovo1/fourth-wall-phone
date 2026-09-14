@@ -17,11 +17,12 @@ import {
 import { buildPrivateGenerationRequest } from './prompt-builder.js';
 import { prepareFourthWallContext, getFourthWallContextStats } from './fourth-wall-context-service.js';
 import { resolveFourthWallPrefillCompatibility } from './fourth-wall-prefill.js';
-import { getActivatedTavernWorldBook } from '../core/tavern-worldbook.js';
+import { getActivatedTavernWorldBook, getActivatedCustomWorldBook } from '../core/tavern-worldbook.js';
 import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
+import { listProfileMoments } from '../storage/moments-store.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -192,10 +193,9 @@ export async function generatePrivateReply({
   }
   const activatedWorldBook = isFourthWall
     ? null
-    : await getActivatedTavernWorldBook({
-        contact,
-        scanText: worldBookScanParts.join('\n'),
-      });
+    : (contact?.kind === 'custom'
+        ? await getActivatedCustomWorldBook({ contact, scanText: worldBookScanParts.join('\n') })
+        : await getActivatedTavernWorldBook({ contact, scanText: worldBookScanParts.join('\n') }));
 
   // 柏宝书是正文世界的长期历史来源。Contact 决定是否允许，
   // Conversation 的正文读取开关决定本次聊天是否接入动态剧情上下文。
@@ -474,7 +474,9 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
   const scanParts = workingMessages.map(message => String(message?.content || '')).filter(Boolean);
   if (reviewTarget?.content) scanParts.push(String(reviewTarget.content));
   if (recentBody?.messages?.length) scanParts.push(...recentBody.messages.map(message => String(message?.content || '')).filter(Boolean));
-  const activatedWorldBook = await getActivatedTavernWorldBook({ contact, scanText: scanParts.join('\n') });
+  const activatedWorldBook = contact?.kind === 'custom'
+    ? await getActivatedCustomWorldBook({ contact, scanText: scanParts.join('\n') })
+    : await getActivatedTavernWorldBook({ contact, scanText: scanParts.join('\n') });
   const baiBaiMemory = (
     readingMode
     && syntheticConversation.bodyContextEnabled !== false
@@ -672,7 +674,9 @@ async function buildBatchGroupRequest({
   const memberBlocks = [];
   for (const member of members) {
     assertContactReady(member);
-    const worldBook = await getActivatedTavernWorldBook({ contact: member, scanText });
+    const worldBook = member?.kind === 'custom'
+      ? await getActivatedCustomWorldBook({ contact: member, scanText })
+      : await getActivatedTavernWorldBook({ contact: member, scanText });
     memberBlocks.push(
       `===== MEMBER PRIVATE ZONE: ${contactLabel(member)} | id=${member.id} =====\n`
       + `【身份资料】\n${batchRoleProfile(member, scanText)}\n\n`
@@ -782,4 +786,117 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
   const failures = missing.length ? [{ name: missing.join('、'), error: '模型未按批量格式返回这些成员的点评' }] : [];
   onDelta?.('', '', replies[0]?.contact || null);
   return { replies, failures, speakerIds: replies.map(item => item.contact.id), batch: true };
+}
+
+function parseMomentDecision(rawText = '') {
+  const text = String(rawText || '').trim();
+  if (!text) return { action: 'SKIP' };
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || text;
+  const objectText = fenced.match(/\{[\s\S]*\}/)?.[0] || '';
+  if (!objectText) return { action: 'SKIP' };
+  try {
+    const value = JSON.parse(objectText);
+    const action = String(value?.action || '').toUpperCase();
+    if (action !== 'POST') return { action: 'SKIP' };
+    const content = String(value?.content || '').trim();
+    if (!content) return { action: 'SKIP' };
+    const ageMinutes = Math.max(0, Math.min(2880, Number(value?.ageMinutes) || 0));
+    return { action: 'POST', content: content.slice(0, 2000), ageMinutes };
+  } catch {
+    return { action: 'SKIP' };
+  }
+}
+
+/**
+ * Explicit profile-moments refresh. This is intentionally user-triggered: it does not run after every chat turn.
+ * A refresh asks whether this contact has a believable recent post; SKIP is a first-class result.
+ */
+export async function generateContactMoment({ scopeKey, contactId, signal } = {}) {
+  if (!scopeKey || !contactId) throw new Error('当前角色朋友圈不可用');
+  const storedContact = findContact(contactId);
+  const contact = hydratedContact(storedContact);
+  assertContactReady(contact);
+  if (String(contact?.id || '') === 'builtin:meta') throw new Error('皮下不使用普通角色朋友圈');
+
+  let rawConfig = getApiSettings();
+  if (contact?.apiOverride?.enabled === true) {
+    const preset = getApiPreset(contact.apiOverride.presetId);
+    if (preset?.config) rawConfig = preset.config;
+    else if (contact.apiOverride.config) rawConfig = contact.apiOverride.config;
+    else throw new Error('联系人选择的 API 配置已不存在，请重新选择');
+  }
+  const config = resolveApiRuntimeConfig(rawConfig);
+  assertApiConfig(config);
+
+  const conversations = getScopeConversations(scopeKey)
+    .filter(conversation =>
+      (conversation?.type === 'private' && String(conversation.contactId || '') === String(contact.id))
+      || (conversation?.type === 'group' && (conversation.memberIds || []).map(String).includes(String(contact.id)))
+    )
+    .sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
+
+  const recentLines = [];
+  for (const conversation of conversations.slice(0, 5)) {
+    const label = conversation.type === 'group' ? `群聊「${conversation.name || '未命名群聊'}」` : '与用户私聊';
+    const lines = (conversation.messages || []).slice(-16).map(message => {
+      const who = message.role === 'user'
+        ? '用户'
+        : (message?.senderSnapshot?.name || (conversation.type === 'private' ? (contact.remark || contact.displayName || contact.name) : '群成员'));
+      return `${who}：${String(message?.content || '').trim()}`;
+    }).filter(line => !line.endsWith('：'));
+    if (lines.length) recentLines.push(`【${label}】\n${lines.join('\n')}`);
+  }
+
+  const phoneMemories = conversations.slice(0, 3).map(conversation => {
+    const key = String(conversation.conversationKey || conversation.contactId || '');
+    const memory = key ? getConversationMemory(scopeKey, key) : null;
+    const parts = [String(memory?.longTermSummary || '').trim(), ...(Array.isArray(memory?.recent) ? memory.recent.slice(-3).map(item => String(item?.content || '').trim()) : [])].filter(Boolean);
+    return parts.length ? parts.join('\n') : '';
+  }).filter(Boolean);
+
+  const bodyAllowed = conversations.some(conversation => conversation?.scopeMode !== 'global' && conversation?.bodyContextEnabled !== false);
+  const recentBody = bodyAllowed ? getRecentTavernBody({ messageLimit: 12, charLimit: 12000 }) : null;
+  const scanText = [recentLines.join('\n\n'), phoneMemories.join('\n\n'), ...(recentBody?.messages || []).map(message => String(message?.content || ''))].filter(Boolean).join('\n');
+  const worldBook = contact?.kind === 'custom'
+    ? await getActivatedCustomWorldBook({ contact, scanText })
+    : await getActivatedTavernWorldBook({ contact, scanText });
+
+  const existingMoments = listProfileMoments(scopeKey, contact.id).slice(0, 8);
+  const momentHistory = existingMoments.map(item => {
+    const when = new Date(Number(item.createdAt || Date.now())).toLocaleString();
+    return `${when}：${String(item.content || '').trim()}`;
+  }).join('\n');
+
+  const personaParts = [
+    contact.kind === 'builtin' ? getBuiltinPersonaPrompt(contact.id) : '',
+    contact.intro,
+    contact.prompt,
+    contact.kind === 'tavern' ? Object.values(contact?.source?.roleFidelity || {}).filter(Boolean).join('\n\n') : '',
+    contact.kind === 'custom' && Array.isArray(contact.profileEntries)
+      ? getActivatedProfileEntries(contact.profileEntries, scanText).map(entry => `【${entry.title}】\n${entry.content}`).join('\n\n')
+      : '',
+    worldBook?.text || '',
+  ].map(value => String(value || '').trim()).filter(Boolean).join('\n\n');
+
+  const system = `你正在决定一个角色最近是否真的发过朋友圈。你不是被命令必须发帖；没有自然动机时必须 SKIP。\n\n【角色】\n${contact.remark || contact.displayName || contact.name || '联系人'}\n\n${personaParts ? `【身份与世界资料】\n${personaParts}\n\n` : ''}【原则】\n- 朋友圈是这个角色自己的社交表达，不是给用户的聊天回复，也不是剧情摘要。\n- 可以很日常、零碎、含蓄、带角色自己的习惯；不要为了“有内容”强编重大事件。\n- 可以来自最近聊天/群聊/角色世界的余波，但不要无脑公开私聊原文或他人秘密。\n- 时间不必是现在：如果自然，可以是刚刚、数小时前、今天早些时候或昨天。\n- 已有朋友圈不要机械重复。\n- 只输出 JSON，不要解释。`;
+  const user = `当前时间：${new Date().toString()}\n\n【最近手机连续性】\n${recentLines.join('\n\n') || '暂无'}\n\n【手机记忆】\n${phoneMemories.join('\n\n') || '暂无'}\n\n【最近正文（仅当该角色会话允许读取时）】\n${recentBody?.messages?.map(message => `${message?.role === 'user' ? '用户' : (message?.name || '正文角色')}：${String(message?.content || '')}`).join('\n') || '不读取'}\n\n【这个角色已有朋友圈】\n${momentHistory || '暂无'}\n\n请返回以下二选一：\n{"action":"SKIP"}\n或\n{"action":"POST","content":"朋友圈正文","ageMinutes":0}\n其中 ageMinutes 为距现在多少分钟，范围 0~2880。`;
+
+  let text = '';
+  if (config.source === 'tavern') {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const generateRaw = getTavernContext?.()?.generateRaw;
+    if (typeof generateRaw !== 'function') throw new Error('当前 SillyTavern 未提供 generateRaw 接口');
+    text = String(await generateRaw({ prompt: `User: ${user}`, systemPrompt: system }) || '').trim();
+  } else {
+    const result = await generateProviderText(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
+    text = String(result?.text || '').trim();
+  }
+
+  const decision = parseMomentDecision(text);
+  if (decision.action !== 'POST') return { action: 'SKIP' };
+  return {
+    action: 'POST',
+    content: decision.content,
+    createdAt: Date.now() - decision.ageMinutes * 60 * 1000,
+  };
 }
