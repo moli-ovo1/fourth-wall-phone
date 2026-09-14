@@ -314,6 +314,11 @@ export function getContacts() {
       : []
   );
 
+  // moli68：项目尚未公开注册，直接清理已经废弃的旧内置人格。
+  // 皮下（builtin:meta）是独立 Fourth Wall 联系人，不属于废弃人格。
+  const deprecatedBuiltinIds = new Set(['builtin:redpen']);
+  for (const id of deprecatedBuiltinIds) map.delete(id);
+
   const legacyBuiltinNames = {
     'builtin:meta': '第四面墙',
     'builtin:writer': '编剧',
@@ -546,7 +551,23 @@ function saveLocatedConversation(scopeKey, located) {
 export function ensureBuiltins(scopeKey) {
   const data = loadScope(scopeKey);
 
-  const globalConversations = loadGlobalConversationStore().conversations || {};
+  const deprecatedBuiltinIds = new Set(['builtin:redpen']);
+  for (const [conversationKey, conversation] of Object.entries(data.conversations || {})) {
+    if (conversation?.type === 'private' && deprecatedBuiltinIds.has(String(conversation?.contactId || ''))) {
+      delete data.conversations[conversationKey];
+    }
+  }
+
+  const globalStore = loadGlobalConversationStore();
+  const globalConversations = globalStore.conversations || {};
+  let globalChanged = false;
+  for (const [conversationKey, conversation] of Object.entries(globalConversations)) {
+    if (conversation?.type === 'private' && deprecatedBuiltinIds.has(String(conversation?.contactId || ''))) {
+      delete globalConversations[conversationKey];
+      globalChanged = true;
+    }
+  }
+  if (globalChanged) saveGlobalConversationStore(globalStore);
   const builtinIds = new Set(BUILTIN_CONTACTS.map(item => item.id));
   for (
     const c of getContacts().filter(
