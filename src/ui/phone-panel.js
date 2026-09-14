@@ -83,6 +83,13 @@ import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
 import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory } from '../storage/moments-store.js';
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
 
+const APP_ICON_URLS = Object.freeze({
+  wechat: new URL('../../assets/apps/wechat.jpg', import.meta.url).href,
+  xiaohongshu: new URL('../../assets/apps/xiaohongshu.jpg', import.meta.url).href,
+  tianya: new URL('../../assets/apps/tianya.jpg', import.meta.url).href,
+  weibo: new URL('../../assets/apps/weibo.jpg', import.meta.url).href,
+});
+
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
   'builtin:writer': new URL('../../assets/avatars/little-god.png', import.meta.url).href,
@@ -110,19 +117,19 @@ export function createPhonePanel({
       <main class="moli-launcher">
         <div class="moli-launcher-grid" aria-label="手机主屏幕">
           <button class="moli-app-icon" data-action="open-wechat" aria-label="打开微信">
-            <span class="moli-app-icon-tile moli-app-wechat"><span class="moli-app-glyph">●●</span></span>
+            <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.wechat}" alt="" /></span>
             <small>微信</small>
           </button>
           <button class="moli-app-icon" data-action="open-xiaohongshu" aria-label="打开小红书">
-            <span class="moli-app-icon-tile moli-app-xiaohongshu"><span class="moli-app-glyph">RED</span></span>
+            <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.xiaohongshu}" alt="" /></span>
             <small>小红书</small>
           </button>
           <button class="moli-app-icon" data-action="open-tianya" aria-label="打开天涯论坛">
-            <span class="moli-app-icon-tile moli-app-tianya"><span class="moli-app-glyph">涯</span></span>
+            <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.tianya}" alt="" /></span>
             <small>天涯论坛</small>
           </button>
           <button class="moli-app-icon" data-action="open-weibo" aria-label="打开微博">
-            <span class="moli-app-icon-tile moli-app-weibo"><span class="moli-app-glyph">◎</span></span>
+            <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.weibo}" alt="" /></span>
             <small>微博</small>
           </button>
         </div>
@@ -158,7 +165,7 @@ export function createPhonePanel({
 
     <section class="moli-page" data-page="home">
       <header class="moli-nav">
-        <div class="moli-nav-side"></div>
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="phone-home" aria-label="返回手机主屏幕">‹</button></div>
         <div class="moli-nav-title">moli小手机</div>
         <div class="moli-nav-side right">
           <button class="moli-icon-btn" data-action="add" aria-label="添加">＋</button>
@@ -5907,6 +5914,7 @@ export function createPhonePanel({
     updateExtension;
 
   panel.querySelector('[data-action="open-wechat"]')?.addEventListener('click', () => show('home'));
+  panel.querySelector('[data-action="phone-home"]')?.addEventListener('click', () => show('phone-home'));
   panel.querySelector('[data-action="open-xiaohongshu"]')?.addEventListener('click', () => show('xiaohongshu-home'));
   panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => show('weibo-home'));
@@ -6837,7 +6845,7 @@ open(handleElement) {
 
   positionNear(handleElement);
   panel.classList.add('open');
-  show('phone-home');
+  show('home');
 },
 
     destroy() {
