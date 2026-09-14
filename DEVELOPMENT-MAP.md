@@ -2284,3 +2284,27 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [x] 角色朋友圈刷新结果提示明确包含联系人名称，避免多角色场景下无法判断谁产生了动态。
 - [ ] 后续聊天触发朋友圈的系统事件继续按既定契约实现：`xxx刚刚发布了一条朋友圈`，并绑定 `contactId + momentId` 后支持点击直达。
 - [ ] 下一主节点仍为朋友圈行为层：角色 profile feed 的 NPC / 小上帝 / moli 互动，以及 User 公共朋友圈的联系人刷新与彼此互动；不得因为本次 UI 修正误标为已经完成。
+
+## moli81 / v0.4.24 — 朋友圈 Phase 2
+
+### 本节点已接通
+- `src/generation/generation-service.js`
+  - `generateContactMoment()`：从单纯 `POST/SKIP` 扩展为同一次请求返回 `statusNote + interactions`；角色资料卡朋友圈可由角色本人、已激活世界书 NPC、小上帝、moli 自主点赞/评论；支持 `__NEW__` 指向本轮新动态。
+  - `generatePublicMomentsRefresh()`：User 公共朋友圈一次批量请求完成聊天列表私聊联系人的自主发帖与 `LIKE/COMMENT/BOTH/SKIP` 行为判断，避免逐联系人 API fan-out。
+- `src/storage/moments-store.js`
+  - schema v3；保留公共/资料卡 feed 结构，新增 profile refresh 状态回执持久化。
+  - `createPublicMoment()` 支持真实 `createdAt`，供近期历史动态使用。
+  - 新增 `getProfileMomentStatus()/setProfileMomentStatus()`。
+- `src/ui/phone-panel.js`
+  - User 公共朋友圈右上角新增刷新按钮及 spinning/busy 状态；执行批量角色发帖/互动并写入 `seenBy`。
+  - 角色资料卡朋友圈允许 user 直接点赞、评论；再次刷新可推进真实互动。
+  - `SKIP` 时在“某角色最近没有新的朋友圈”下方显示同次请求生成的短状态切片。
+  - profile feed 互动校验世界书 NPC 来源；公共互相关闭时，代码层强制过滤联系人→联系人的互动。
+- `style.css`
+  - 公共/角色朋友圈刷新统一旋转反馈；增加 SKIP 状态回执样式。
+
+### 下一阶段仍是 Phase 3，不要回头把旧 UI TODO 当施工单
+- 聊天行为层低频决定是否触发角色发朋友圈；成功后创建真实 moment，并在聊天插入 `xxx刚刚发布了一条朋友圈` 系统事件。
+- 系统事件绑定 `contactId + momentId`，点击可直达对应资料卡朋友圈动态。
+- 使用 `seenBy` / 真实点赞评论作为朋友圈→聊天自然联动依据；不允许虚构不存在的互动。
+- 继续避免“每轮聊天额外跑一次完整朋友圈模型”的成本回归，优先与 Automation/轻量行为编排合并。

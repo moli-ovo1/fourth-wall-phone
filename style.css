@@ -102,7 +102,8 @@
     cursor:pointer;
 }
 
-#moli-phone-panel [data-action="contact-moments-refresh"].is-spinning{
+#moli-phone-panel [data-action="contact-moments-refresh"].is-spinning,
+#moli-phone-panel [data-action="moments-refresh"].is-spinning{
   animation: moli-moment-refresh-spin .8s linear infinite;
   transform-origin: 50% 50%;
 }
@@ -892,3 +893,8 @@
 #moli-phone-panel .moli-form-field select{width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:7px;background:#fafafa;padding:10px 11px;outline:none;font:inherit;font-size:14px;line-height:1.5}
 #moli-phone-panel .moli-form-field select:focus{border-color:#aaa;background:#fff}
 #moli-phone-panel .moli-form-help{display:block;margin-top:6px;color:#999;font-size:12px;line-height:1.45}
+
+#moli-phone-panel .moli-profile-moments-status{padding:9px 14px;background:#fff;color:#555;border-bottom:1px solid #ededed;line-height:1.45}
+#moli-phone-panel .moli-profile-moments-status strong{display:block;font-size:12px;font-weight:600;color:#666}
+#moli-phone-panel .moli-profile-moments-status small{display:block;margin-top:3px;font-size:12px;color:#888;white-space:pre-wrap}
+#moli-phone-panel .moli-moments-nav-actions{gap:2px}
