@@ -929,7 +929,6 @@
 #moli-phone-panel .moli-compact-select-row,#moli-phone-panel .moli-compact-number-row,#moli-phone-panel .moli-compact-range-row{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #eee}
 #moli-phone-panel .moli-compact-select-row select,#moli-phone-panel .moli-compact-number-row input,#moli-phone-panel .moli-compact-range-row input{border:0;background:#f5f5f5;border-radius:6px;padding:6px 8px;max-width:120px}
 #moli-phone-panel .moli-compact-range-row input{width:48px;text-align:center}
-#moli-phone-panel .moli-user-comment-hold{display:none}
 #moli-phone-panel .moli-moment-forward-card{display:block;width:100%;text-align:left;border:0;border-radius:6px;background:#f7f7f7;padding:10px;color:#222}
 #moli-phone-panel .moli-moment-forward-title{font-size:13px;font-weight:650;color:#576b95;margin-bottom:6px}
 #moli-phone-panel .moli-moment-forward-content{font-size:13px;line-height:1.55;white-space:pre-wrap}

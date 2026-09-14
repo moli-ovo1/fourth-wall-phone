@@ -2544,3 +2544,8 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 ## v0.4.39 / moli96 — 朋友圈评论本地重绘修复
 - 仅修复 User 评论即时显示：公共朋友圈与角色资料卡朋友圈在 `addMomentComment` 成功后直接完整重绘当前 feed，不再依赖单条 DOM append patch。
 - 评论持久化、长按删除、删除原因、角色回应/Automation 逻辑均保持原样；本地显示不调用额外 API。
+
+
+### moli97 / v0.4.40 — 朋友圈 User 评论可见性
+- `style.css`: 删除 `.moli-user-comment-hold{display:none}`。该 class 仅用于标识 User 自己的评论并支持长按删除，不再控制可见性。
+- `src/ui/phone-panel.js`: 沿用 moli96 的 `addMomentComment -> render` 简单发送链，不做额外功能改动。

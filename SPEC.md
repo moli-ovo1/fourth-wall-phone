@@ -3633,3 +3633,11 @@ Automation 最终应能在一次行为判断中表达类似：
 ## v0.4.39 / moli96 — 朋友圈评论本地重绘修复
 - 仅修复 User 评论即时显示：公共朋友圈与角色资料卡朋友圈在 `addMomentComment` 成功后直接完整重绘当前 feed，不再依赖单条 DOM append patch。
 - 评论持久化、长按删除、删除原因、角色回应/Automation 逻辑均保持原样；本地显示不调用额外 API。
+
+
+## v0.4.40 / moli97 — 朋友圈 User 评论可见性修复
+
+- 修复 User 评论已经成功写入朋友圈 Store、刷新后仍不可见的问题。
+- 根因不是评论保存/刷新逻辑，而是长按删除功能复用的 `.moli-user-comment-hold` class 被旧 CSS 误设为 `display:none`，导致所有 User 自己的评论在 DOM 中存在但被强制隐藏。
+- 保留该 class 作为“User 自己的评论，可长按删除”的事件标记，只移除隐藏样式；长按删除、删除原因、朋友圈刷新和 Automation 行为均不改。
+- 以后不得把行为标记 class 同时当作隐藏 class 使用，除非产品明确要求隐藏。
