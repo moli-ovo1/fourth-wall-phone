@@ -132,3 +132,33 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
   timer = window.setInterval(() => void tick(), POLL_MS); void tick();
   return { destroy(){ destroyed=true; if(timer) window.clearInterval(timer); timer=null; }, tick };
 }
+
+
+/**
+ * A user interaction on a contact's Moments creates an opportunity, not a forced reply.
+ * It reuses the contact's existing private Automation switch and generation context.
+ */
+export async function notifyMomentInteractionOpportunity({ scopeKey, contactId, momentId='', eventType='user-comment', content='' } = {}) {
+  if (!scopeKey || !contactId) return { action: 'SKIP', reason: 'missing-context' };
+  const contact = getContacts().find(c => String(c.id) === String(contactId));
+  if (!eligibleAutoChatContact(contact)) return { action: 'SKIP', reason: 'ineligible-contact' };
+  const conv = getScopeConversations(scopeKey)
+    .filter(x => x?.type === 'private' && String(x.contactId) === String(contactId))
+    .sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
+  if (!conv?.automation?.autoChatEnabled) return { action: 'SKIP', reason: 'automation-disabled' };
+  const key=String(conv.conversationKey||conv.id||''); if(!key || running.has(key)) return { action:'SKIP', reason:'busy' };
+  running.add(key); beginGenerationTask(scopeKey,key,null,'moment-interaction');
+  try {
+    const eventLabel = eventType === 'user-delete-comment' ? '用户刚删除了自己在你朋友圈下的评论' : '用户刚在你的朋友圈下评论了';
+    const instruction = `这是一次由朋友圈事件产生的主动行为机会，不是强制回复。${eventLabel}${content ? `：${content}` : ''}。结合你的人格、你与用户的关系、当前情绪、最近聊天和这件事的分量，自主决定：如果你不会因此主动私聊，严格只输出 [SKIP]；如果你确实会私下找用户，直接发真实手机私聊内容。不要为了完成任务而联系用户。momentId=${momentId}`;
+    const result=await generatePrivateReply({scopeKey,conversationKey:key,automationInstruction:instruction});
+    if (String(result.text||'').trim()==='[SKIP]' || /\[SKIP\]/i.test(String(result.text||''))) return {action:'SKIP'};
+    const messages=parseGeneratedMessages(result.text).slice(0,3); if(!messages.length)return {action:'SKIP'};
+    const turnId=`auto:moment:${Date.now()}:${Math.random().toString(36).slice(2,8)}`;
+    messages.forEach(text=>appendMessage(scopeKey,key,'assistant',text,{source:'moment-interaction',generationTurnId:turnId,messageType:'message',senderId:contact.id,senderSnapshot:{name:contact.remark||contact.name||'联系人',avatar:contact.customAvatar||contact.source?.originalAvatarUrl||''}}));
+    recordAutomaticUnreadRound(scopeKey,key,messages.length);
+    window.dispatchEvent(new CustomEvent('moli:conversation-updated',{detail:{scopeKey,conversationKey:key,source:'moment-interaction'}}));
+    return {action:'PRIVATE_CHAT',messages};
+  } catch(e) { setGenerationError(scopeKey,key,`朋友圈联动失败：${String(e?.message||e||'请求失败')}`,'moment-interaction'); console.error('[moli小手机] moment interaction automation failed:',e); return {action:'ERROR'}; }
+  finally { endGenerationTask(scopeKey,key); running.delete(key); }
+}
