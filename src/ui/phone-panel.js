@@ -2415,7 +2415,7 @@ export function createPhonePanel({
     if (customProfileEntries) customProfileEntries.hidden = item.kind !== 'custom';
     if (customProfileEntryList) {
       const entries = Array.isArray(item.profileEntries) ? item.profileEntries : [];
-      customProfileEntryList.innerHTML = entries.map((entry, index) => `<div class="moli-profile-entry" data-profile-entry="${index}"><div class="moli-profile-entry-head"><input type="checkbox" data-profile-entry-enabled ${entry.enabled !== false ? 'checked' : ''}><input type="text" data-profile-entry-title value="${escapeHtml(entry.title || `条目 ${index + 1}`)}" placeholder="条目名称"><button type="button" data-profile-entry-delete="${index}">删除</button></div><textarea rows="6" data-profile-entry-content placeholder="填写这条人物设定、关系、习惯或其他资料">${escapeHtml(entry.content || '')}</textarea></div>`).join('');
+      customProfileEntryList.innerHTML = entries.map((entry, index) => `<div class="moli-profile-entry" data-profile-entry="${index}"><div class="moli-profile-entry-head"><input type="checkbox" data-profile-entry-enabled ${entry.enabled !== false ? 'checked' : ''}><input type="text" data-profile-entry-title value="${escapeHtml(entry.title || `条目 ${index + 1}`)}" placeholder="条目名称"><button type="button" data-profile-entry-delete="${index}">删除</button></div><div class="moli-profile-entry-trigger"><select data-profile-entry-mode><option value="always" ${entry.activationMode !== 'keywords' ? 'selected' : ''}>常驻</option><option value="keywords" ${entry.activationMode === 'keywords' ? 'selected' : ''}>关键词触发</option></select><input type="text" data-profile-entry-keywords value="${escapeHtml(entry.keywords || '')}" placeholder="关键词，用逗号分隔；任一命中即激活" ${entry.activationMode === 'keywords' ? '' : 'hidden'}></div><textarea rows="6" data-profile-entry-content placeholder="填写这条人物设定、关系、习惯或其他资料">${escapeHtml(entry.content || '')}</textarea></div>`).join('');
     }
 
     if (isTavern) {
@@ -2474,7 +2474,7 @@ export function createPhonePanel({
       };
       if (item.kind !== 'tavern') {
         payload.intro = contactProfileIntro?.value || '';
-        if (item.kind === 'custom') payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false }));
+        if (item.kind === 'custom') payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false, activationMode: row.querySelector('[data-profile-entry-mode]')?.value === 'keywords' ? 'keywords' : 'always', keywords: row.querySelector('[data-profile-entry-keywords]')?.value || '' }));
       } else {
         payload.roleSources = {
           ...(item.roleSources || {}),
@@ -5313,9 +5313,10 @@ export function createPhonePanel({
   panel.querySelector('[data-action="custom-profile-entry-add"]')?.addEventListener('click', () => {
     if (!customProfileEntryList) return;
     const index = customProfileEntryList.querySelectorAll('[data-profile-entry]').length;
-    customProfileEntryList.insertAdjacentHTML('beforeend', `<div class="moli-profile-entry" data-profile-entry="${index}"><div class="moli-profile-entry-head"><input type="checkbox" data-profile-entry-enabled checked><input type="text" data-profile-entry-title value="条目 ${index + 1}" placeholder="条目名称"><button type="button" data-profile-entry-delete="${index}">删除</button></div><textarea rows="6" data-profile-entry-content placeholder="填写这条人物设定、关系、习惯或其他资料"></textarea></div>`);
+    customProfileEntryList.insertAdjacentHTML('beforeend', `<div class="moli-profile-entry" data-profile-entry="${index}"><div class="moli-profile-entry-head"><input type="checkbox" data-profile-entry-enabled checked><input type="text" data-profile-entry-title value="条目 ${index + 1}" placeholder="条目名称"><button type="button" data-profile-entry-delete="${index}">删除</button></div><div class="moli-profile-entry-trigger"><select data-profile-entry-mode><option value="always" selected>常驻</option><option value="keywords">关键词触发</option></select><input type="text" data-profile-entry-keywords placeholder="关键词，用逗号分隔；任一命中即激活" hidden></div><textarea rows="6" data-profile-entry-content placeholder="填写这条人物设定、关系、习惯或其他资料"></textarea></div>`);
   });
   customProfileEntryList?.addEventListener('click', event => { const button = event.target?.closest?.('[data-profile-entry-delete]'); if (button) button.closest('[data-profile-entry]')?.remove(); });
+  customProfileEntryList?.addEventListener('change', event => { const mode = event.target?.closest?.('[data-profile-entry-mode]'); if (!mode) return; const row = mode.closest('[data-profile-entry]'); const keywords = row?.querySelector('[data-profile-entry-keywords]'); if (keywords) keywords.hidden = mode.value !== 'keywords'; });
 
   panel.querySelector('[data-action="fourth-wall-memory-save"]')?.addEventListener('click', saveFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-clear"]')?.addEventListener('click', clearFourthWallMemory);
