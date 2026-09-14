@@ -120,3 +120,24 @@ moli64 的 user avatar 宿主适配引用源写错：SillyTavern 的 `getThumbna
 ### 结论
 
 当前 moli「皮下」已经覆盖 LittleWhiteBox Fourth Wall 的核心聊天、Session、Prompt、Commentary、记忆、Context budget、历史控制和失败恢复能力。下一阶段不应“再搬一遍 Fourth Wall”，而应转为针对真实缺口的选择性同步。当前最值得继续观察的是 provider/Prefill 兼容与上游 agent-core token 计量变化；UI/Markdown/图片/语音不作为近期目标。
+
+## moli76 — 2026-09-14 Prefill Provider 兼容与 token counter 复核
+
+### Provider Prefill
+
+上游审计锚点仍为 LittleWhiteBox main `4db9202080cab1c3116de9a027d8c8bb5e048787`。LittleWhiteBox Fourth Wall 默认仍保存 `disableAssistantPrefill: false`，但 2026 年当前 Provider 能力已经不能简单理解成“所有模型都支持最后 assistant prefill”。
+
+本轮按公开 Provider 契约只处理有明确证据的差异：
+
+- Anthropic 官方现行文档明确：Claude 4.6 及之后、Claude Mythos Preview 不再支持最后 assistant turn 的 prefilled response，并会返回 400；moli 原生 Claude 路径因此自动把 Bottom 合并回 user turn。
+- Gemini `generateContent` 的多轮请求要求 user/model 轮次交替，历史之后的最新请求由 user 提供；moli 原生 Gemini 路径不再把 Bottom 作为最后 model turn 发送。
+- OpenAI-compatible 是异构网关集合，当前没有统一 capability contract；继续拒绝“看模型名猜兼容”的泛化逻辑。
+- SillyTavern 当前 API 由酒馆自身生成兼容层处理，moli 不反推其底层 Provider。
+
+该兼容层只决定 Bottom 指令位于 assistant prefill 还是最后 user turn；不会更改用户保存的 Top User / Confirm / Meta Protocol / Bottom 文本。
+
+### Token counter
+
+LittleWhiteBox 当前 `agent-core/runtime/context-tokens.js` 主要解决共享 Agent 的 provider-native reasoning replay、tool payload、native replay 与 tokenizer fallback。moli Fourth Wall 当前请求没有这些结构化 payload，继续直接调用 SillyTavern `getTokenCountAsync` 更贴合现有宿主。
+
+结论：本轮不搬 agent-core token counter。等 moli 真正引入 provider reasoning/tool/native payload 后再复核；当前只保证 token 统计发生在 Provider-aware Prefill 决策之后，统计实际发送形态。

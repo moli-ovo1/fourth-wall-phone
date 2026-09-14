@@ -2203,3 +2203,14 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [x] 默认“读己”改为从皮下记忆/聊天恢复自身身份，把主剧情明确当作共同创作背景。
 - [x] 不覆盖用户已保存的 Fourth Wall Prompt；本轮只更新代码默认/恢复默认基线。
 - [x] 不复制上游第二套 Fourth Wall、Markdown renderer、图片/语音或 agent-core；继续按真实缺口选择性同步。
+
+## moli76 — Prompt 保真边界 + Fourth Wall Prefill Provider 兼容
+- [x] 将 Prompt / 人设“保真编辑边界”写入 SPEC：工程优化可以做；不得仅因协作者自身限制把用户原文暗中改成更健康、更安全、更克制或更清水的版本。
+- [x] 若内容限制与真实工程 bug 同时存在，拆开处理：只修可证明的工程问题，其余原文保持不动并明确告知用户。
+- [x] Fourth Wall 新增 Provider-aware Prefill 解析层，不重新暴露普通 UI 技术开关。
+- [x] 保留旧数据显式 `disableAssistantPrefill=true`；SillyTavern 当前 API 保持酒馆兼容路径。
+- [x] 原生 Gemini 自动把 Bottom 留在 user turn，避免以最后 model turn 伪装 Prefill。
+- [x] 原生 Anthropic Claude 4.6+ / Mythos Preview 自动禁用最后 assistant Prefill，避免官方已明确的 400 不兼容。
+- [x] OpenAI-compatible 不做模型名/网关猜测；无明确 capability 证据时维持既有配置语义。
+- [x] 复核 LittleWhiteBox agent-core 最新 token counter；当前 moli Fourth Wall 无 tool/reasoning native replay 缺口，继续使用 SillyTavern `getTokenCountAsync`，不复制整套 agent-core。
+- [x] Prefill 兼容决策进入 requestMeta 供后续诊断，不修改用户保存 Prompt。

@@ -2928,3 +2928,40 @@ LittleWhiteBox Fourth Wall 的当前审计锚点记录为 main commit `4db920208
 - Fourth Wall 默认输出协议中的 `<thinking>` 必须正确闭合后再进入 `<msg>`，保证 parser/stream projection 边界稳定。
 - 更新上游默认 Prompt 时不得自动覆盖用户已保存的 Prompt 模板；用户本地 Prompt 继续视为配置资产。
 - 上游 Markdown/content renderer、图片、语音、完整 agent-core 不因“上游存在”而自动搬入；只有出现 moli 的真实产品缺口才选择性移植。
+
+## v0.4.19 / moli76 — Prompt 保真编辑边界 + Fourth Wall Prefill Provider 兼容
+
+### 1. Prompt / 人设内容的保真编辑边界
+
+对用户已经写定的人设、Prompt、世界观、文风与角色关系内容，后续开发与打磨必须区分“工程问题”和“价值取向问题”。
+
+- **可以优化**：语法/标签错误、重复与冲突、上下文串线、连续性错误、解析不稳定、无效指令、UI/存储/请求链问题，以及在不改变原意和开放程度前提下的表达与结构优化。
+- **不得以“更健康 / 更安全 / 更克制 / 更清水”等理由擅自改写**：如果文件本身在产品逻辑与工程上没有问题，只是协作者自身的规则或能力限制不允许协助某段内容，则保持原文件不动，并明确告诉用户该处无法协助，而不是以“优化”“自然化”“去 OOC”等名义暗中删减、弱化或替换原意。
+- 若同一段同时存在独立的工程 bug 与不能协助的内容，必须拆开处理：只修能够明确证明的工程问题，其余原文保持不动，并向用户说明边界。
+- 不得把用户已有 Prompt 的开放程度、欲望表达、人物缺点、关系张力或其他创作选择本身视为待修复 bug。
+- 默认 Prompt 更新仍不得覆盖用户已保存的本地 Prompt 资产；除非用户明确要求迁移/覆盖。
+
+这条规则属于 moli 的编辑与协作边界，适用于 Fourth Wall、普通线上聊天预设、内置人格、角色资料、世界书相关 Prompt 以及后续新增的文本资产。
+
+### 2. Fourth Wall Assistant Prefill 改为 Provider-aware 兼容
+
+Assistant Prefill 继续是底层请求兼容机制，不重新暴露到普通设置 UI。
+
+本轮新增运行时兼容判断：
+
+- 用户旧数据若已经显式 `disableAssistantPrefill: true`，继续尊重，不自动重新开启。
+- SillyTavern 当前 API (`source=tavern`) 继续维持现有路径，由酒馆的 `generateRaw` 兼容层处理，不猜测底层 Provider。
+- 原生 Gemini `generateContent` 路径不再发送“最后一条 model/assistant 作为待续写 Prefill”；Bottom 指令并入最后 user turn，保持 Gemini 多轮请求“最新请求来自 user”的结构。
+- 原生 Anthropic Claude：Claude 4.6 及之后的模型、以及 `claude-mythos-preview` 自动禁用最后 assistant Prefill，因为 Anthropic 已明确这些模型不再支持该模式并会返回 400；早于 4.6 的 Claude 仍保留原行为。
+- OpenAI-compatible 保持保守：同一兼容协议可能代理 OpenAI、OpenRouter、DeepSeek、第三方网关等不同实现；没有明确 capability 证据时，不按模型名或网关猜测并自动改写 Prefill 语义。
+- 自动兼容只改变 Bottom 指令进入 request 的位置，不修改用户保存的 Prompt 文本，不改变 Meta Protocol 内容。
+
+### 3. Token 计数复核结论
+
+LittleWhiteBox 最新 agent-core 的 token 计数器包含 provider reasoning replay、tool payload、native message replay 与 tokenizer 失败估算等通用 Agent 能力。moli Fourth Wall 当前请求不携带该套 tool/reasoning provider payload，且已经直接调用 SillyTavern 的 `getTokenCountAsync` 统计实际构建后的 Fourth Wall 文本请求。
+
+因此本轮不搬入整套 agent-core tokenizer：
+
+- 继续使用 SillyTavern 当前 tokenizer 作为 128k 自动整理 / 158k 硬上限的计数来源；
+- Provider-aware Prefill 解析发生在构建 Fourth Wall 请求之前，因此 token 统计会统计实际将发送的兼容请求，而不是另一种未发送的 Prefill 形态；
+- 若未来 moli 引入原生 reasoning replay、tool calls、图片或 provider-native message payload，再重新评估结构化 token counter；目前不为“上游有”而增加第二套估算器。
