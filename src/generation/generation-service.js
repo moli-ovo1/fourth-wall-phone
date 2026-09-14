@@ -510,9 +510,12 @@ function batchRoleProfile(contact) {
     add('moli 自定义附加 Prompt', contact.prompt, 3500);
   } else {
     add('角色简介', contact.intro, 2000);
+    const protectedBuiltin = ['builtin:writer', 'builtin:guide'].includes(String(contact?.id || ''));
     add(contact?.kind === 'builtin' ? '内置人格 Prompt' : '人格 Prompt',
-      contact?.kind === 'builtin' ? (Object.prototype.hasOwnProperty.call(contact, 'prompt') ? contact.prompt : getBuiltinPersonaPrompt(contact.id)) : contact.prompt,
-      5000);
+      contact?.kind === 'builtin'
+        ? (protectedBuiltin ? getBuiltinPersonaPrompt(contact.id) : (Object.prototype.hasOwnProperty.call(contact, 'prompt') ? contact.prompt : getBuiltinPersonaPrompt(contact.id)))
+        : contact.prompt,
+      protectedBuiltin ? 12000 : 5000);
   }
   return blocks.join('\n\n') || '无额外人格资料。';
 }
@@ -657,11 +660,11 @@ async function buildBatchGroupRequest({
     ? '围读会：所有成员共同看到下方这一份当前正文上下文；不要再为任何成员加载另一套个人正文历史或柏宝书。'
     : '角色闲聊：禁止使用当前正文、柏宝书或成员个人正文历史；只依据群聊天、群手机记忆、成员身份资料/世界书和该成员自己的手机连续性。';
   const reviewBlock = review
-    ? `\n【PRIMARY REVIEW TARGET｜本轮唯一点评对象】\n签名：${String(reviewTarget.signature || '')}\n${String(reviewTarget.content || '')}\n【边界】所有成员都必须点评这一份触发正文；群历史、群记忆和辅助正文只能帮助理解，绝不能成为点评对象。\n`
+    ? `\n【PRIMARY REVIEW TARGET｜本轮唯一点评对象】\n签名：${String(reviewTarget.signature || '')}\n${String(reviewTarget.content || '')}\n【边界】这份正文快照是本轮围读会反应的唯一主要对象；群历史、群记忆和辅助正文只能帮助理解，绝不能取代它成为新的点评对象。成员可以回应另一个成员刚刚说的话，但最终仍应自然围绕这份触发正文。\n`
     : '';
 
   const system = `你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择与发言生成，禁止再请求第二个编排器。\n\n【群模式】${modeText}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${review
-    ? '【自动点评】本轮所有列出的成员每人且只能输出 1 条消息、对应前端 1 个气泡；禁止同一 speakerId 重复出现，禁止把同一成员拆成多条；每条最多100个中文字符；不要 SKIP。'
+    ? '【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮群聊反应。默认让本轮列出的成员都出现，每人且只能输出 1 条消息、对应前端 1 个气泡；禁止同一 speakerId 重复出现，禁止把同一成员拆成多条；不要 SKIP。成员不必各自从头分析正文，后发成员可以直接接前一个成员的话、争论、接梗、吐槽或补充。不要为了证明完成了点评任务而复述正文、总结情节或强行寻找分析点，先像真实群成员一样产生反应，只有真正发现值得分析的内容时才分析。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工：小上帝也可以只看热闹或嗑疯，moli 也可以突然发现很聪明的细节。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长，但仍应是一条自然聊天气泡，不写成小作文。'
     : targetedRegeneration
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
       : '【普通群聊】根据相关度和插话价值选择 1～3 人；被 @ 的成员必须参与；不要机械全员轮流。每个 speakerId 每轮只能出现一次、每人只输出1个气泡，每个最多80个中文字符。无话可说的成员不要输出。'}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。speakerId 必须逐字使用下方提供的 id。${reviewBlock}`;
