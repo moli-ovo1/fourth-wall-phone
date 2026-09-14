@@ -28,6 +28,7 @@ const GLOBAL_CONVERSATIONS_KEY = 'moli-phone:global-conversations:v1';
 const SCOPE_SCHEMA_VERSION = 1;
 
 const DEFAULT_TAVERN_ROLE_SOURCES = Object.freeze({
+  cardProfile: true,
   description: true,
   personality: true,
   scenario: true,

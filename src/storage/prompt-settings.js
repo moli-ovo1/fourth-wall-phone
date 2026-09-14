@@ -685,10 +685,11 @@ export function restoreDefaultPromptSettings() {
   return value;
 }
 
-export function buildOnlinePresetPrompt(settings = getPromptSettings()) {
+export function buildOnlinePresetPrompt(settings = getPromptSettings(), { excludeIds = [] } = {}) {
   if (settings?.enabled === false) return '';
+  const excluded = new Set((Array.isArray(excludeIds) ? excludeIds : []).map(String));
   return (settings?.blocks || [])
-    .filter(item => item?.enabled !== false && String(item?.content || '').trim())
+    .filter(item => item?.enabled !== false && !excluded.has(String(item?.id || '')) && String(item?.content || '').trim())
     .map(item => String(item.content).trim())
     .join('\n\n');
 }
