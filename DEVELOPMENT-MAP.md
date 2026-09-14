@@ -2308,3 +2308,24 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - 系统事件绑定 `contactId + momentId`，点击可直达对应资料卡朋友圈动态。
 - 使用 `seenBy` / 真实点赞评论作为朋友圈→聊天自然联动依据；不允许虚构不存在的互动。
 - 继续避免“每轮聊天额外跑一次完整朋友圈模型”的成本回归，优先与 Automation/轻量行为编排合并。
+
+## moli82 / v0.4.25
+- `src/ui/phone-panel.js`
+  - 通讯录入口使用轻量微信式联系人资料页；聊天右上角仍进入完整设置。
+  - 通讯录姓名旁显示正文/全局小字。
+  - 联系人级回复气泡范围 UI。
+  - user 朋友圈评论删除原因与删除痕迹 UI。
+  - 角色朋友圈评论允许角色侧 DELETE_COMMENT。
+  - 普通私聊低频触发角色朋友圈；创建真实动态后插入可点击系统事件标签。
+- `src/storage/data-store.js`
+  - 联系人 `replyBubbleRange`。
+  - `deleteContact()`：删除普通联系人及其所有存档私聊，群聊旧消息保留并移出成员。
+  - 消息支持 `momentEvent { contactId, momentId }`。
+- `src/storage/moments-store.js`
+  - Moments schema v4；评论增加 `deletedAt / deletionReason`。
+  - `deleteMomentComment()` 只允许指定 actor 删除自己的评论，并保留删除事件。
+- `src/generation/prompt-builder.js`
+  - 普通私聊注入联系人级气泡数量范围，不把范围写成固定条数。
+- `src/generation/generation-service.js`
+  - profile/public Moments 均能读取评论删除痕迹；角色可返回 DELETE_COMMENT + 原因。
+- 下一步：继续 Phase 3 的朋友圈事件深度联动（看过但不公开互动→后续私聊、公共动态转发/投入角色朋友圈），并开始设计朋友圈记忆整理；在进入更大数据迁移或用户本地已有新修改前主动索取最新完整仓库。

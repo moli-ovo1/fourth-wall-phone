@@ -898,3 +898,20 @@
 #moli-phone-panel .moli-profile-moments-status strong{display:block;font-size:12px;font-weight:600;color:#666}
 #moli-phone-panel .moli-profile-moments-status small{display:block;margin-top:3px;font-size:12px;color:#888;white-space:pre-wrap}
 #moli-phone-panel .moli-moments-nav-actions{gap:2px}
+
+/* moli82: WeChat-like contact profile + Moments social controls */
+.moli-contact-tab-row > span { display:flex; align-items:baseline; gap:8px; min-width:0; }
+.moli-contact-scope-tag { font-size:12px; font-weight:400; color:#9a9a9a; white-space:nowrap; }
+.moli-contact-profile-head { display:flex; align-items:center; gap:18px; padding:28px 22px 30px; background:#fff; }
+.moli-contact-profile-name { font-size:24px; font-weight:650; line-height:1.25; }
+.moli-contact-profile-name small { margin-left:8px; font-size:12px; font-weight:400; color:#999; }
+.moli-contact-profile-action { width:100%; border:0; border-top:1px solid #eee; background:#fff; min-height:58px; font-size:17px; color:#526b91; }
+.moli-contact-profile-action.moli-danger-row { color:#d64b4b; margin-top:10px; }
+.moli-reply-range-card { margin-top:10px; }
+.moli-reply-range-card > small { display:block; color:#999; margin:6px 0 12px; }
+.moli-reply-range-inputs { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.moli-reply-range-inputs label { display:flex; align-items:center; gap:6px; color:#666; }
+.moli-reply-range-inputs input { width:64px; padding:7px 8px; border:1px solid #ddd; border-radius:8px; background:#fff; }
+.moli-comment-delete { margin-left:8px; border:0; background:transparent; color:#7d8ca5; font-size:12px; padding:0; }
+.moli-comment-deleted { color:#999; font-style:italic; }
+.moli-chat-system-event { display:block; margin:8px auto; border:0; border-radius:4px; background:rgba(0,0,0,.05); color:#999; font-size:12px; padding:5px 10px; max-width:82%; text-align:center; }
