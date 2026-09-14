@@ -915,3 +915,20 @@
 .moli-comment-delete { margin-left:8px; border:0; background:transparent; color:#7d8ca5; font-size:12px; padding:0; }
 .moli-comment-deleted { color:#999; font-style:italic; }
 .moli-chat-system-event { display:block; margin:8px auto; border:0; border-radius:4px; background:rgba(0,0,0,.05); color:#999; font-size:12px; padding:5px 10px; max-width:82%; text-align:center; }
+
+
+/* moli88: profile information architecture + Moments forward card */
+#moli-phone-panel .moli-profile-inline-edit{width:min(280px,82%);border:0;border-bottom:1px solid transparent;background:transparent;text-align:center;outline:none;padding:3px 6px;font:inherit;font-size:13px;color:#777}
+#moli-phone-panel .moli-profile-inline-edit:focus{border-bottom-color:#07c160;color:#222}
+#moli-phone-panel .moli-profile-chat-title{font-size:12px;color:#999}
+#moli-phone-panel .moli-info-inline-title{font-weight:600;font-size:15px;margin-bottom:8px}
+#moli-phone-panel .moli-compact-select-row,#moli-phone-panel .moli-compact-number-row,#moli-phone-panel .moli-compact-range-row{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #eee}
+#moli-phone-panel .moli-compact-select-row select,#moli-phone-panel .moli-compact-number-row input,#moli-phone-panel .moli-compact-range-row input{border:0;background:#f5f5f5;border-radius:6px;padding:6px 8px;max-width:120px}
+#moli-phone-panel .moli-compact-range-row input{width:48px;text-align:center}
+#moli-phone-panel .moli-user-comment-hold{display:none}
+#moli-phone-panel .moli-moment-forward-card{display:block;width:100%;text-align:left;border:0;border-radius:6px;background:#f7f7f7;padding:10px;color:#222}
+#moli-phone-panel .moli-moment-forward-title{font-size:13px;font-weight:650;color:#576b95;margin-bottom:6px}
+#moli-phone-panel .moli-moment-forward-content{font-size:13px;line-height:1.55;white-space:pre-wrap}
+#moli-phone-panel .moli-moment-forward-comments{margin-top:8px;padding-top:7px;border-top:1px solid #e8e8e8;font-size:11px;line-height:1.55;color:#555}
+#moli-phone-panel .moli-moment-forward-comments strong{color:#576b95}
+#moli-phone-panel .moli-moment-forward-footer{margin-top:8px;color:#aaa;font-size:10px}
