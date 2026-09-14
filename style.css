@@ -721,16 +721,12 @@
   display: none !important;
 }
 
-#moli-phone-panel .moli-inline-message-edit {
-  width: min(280px, 100%);
-  min-height: 72px;
-  resize: vertical;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  line-height: 1.5;
+#moli-phone-panel .moli-bubble.is-inline-editing {
+  min-width: 72px;
+  outline: 1px solid rgba(0, 0, 0, .18);
+  caret-color: currentColor;
+  cursor: text;
+  white-space: pre-wrap;
 }
 
 #moli-phone-panel .moli-inline-message-edit-actions,
@@ -748,7 +744,7 @@
   padding: 6px 10px;
 }
 
-#moli-phone-panel .moli-fourth-wall-unsaved .moli-bubble {
+#moli-phone-panel .moli-generation-unsaved .moli-bubble {
   outline: 1px dashed currentColor;
 }
 
@@ -757,4 +753,25 @@
   margin-top: 6px;
   opacity: .65;
   font-size: 11px;
+}
+
+
+#moli-phone-panel .moli-history-window-btn {
+  align-self: center;
+  margin: 8px auto;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, .10);
+  color: inherit;
+  font-size: 12px;
+  opacity: .78;
+}
+
+#moli-phone-panel .moli-generation-unsaved {
+  opacity: .94;
+}
+
+#moli-phone-panel .moli-generation-unsaved .moli-bubble {
+  outline: 1px dashed currentColor;
 }

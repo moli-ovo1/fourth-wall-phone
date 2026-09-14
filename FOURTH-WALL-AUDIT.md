@@ -65,3 +65,10 @@
 - Message edit 已从浏览器 prompt 升级为气泡内 textarea，交互语义进一步接近上游 `FourthWallMessage.vue`。
 - User avatar 通过 SillyTavern 当前 persona DOM 的 `.avatar-container.selected img` 实时读取；这与 SillyTavern 使用 `user_avatar` 标记当前 selected persona 的 UI 状态一致。
 - Unsaved draft：moli 本地 append 若抛出错误，已生成回复保存在 UI 临时态中，不再直接丢失；用户可重新保存或丢弃。该状态不冒充已持久化消息。
+
+
+## moli64 审计补充
+- Fourth Wall 的消息编辑、重答、失败重试、清空、unsaved draft 已成为 moli 统一聊天能力；皮下保留其额外 archivedCount / memory 语义。
+- 群聊重答属于 moli 产品语义：不是重做整轮，而是仅重答被用户选中的 member。生成请求只包含该 member 的 PRIVATE ZONE，并从最近群历史排除其旧气泡；其他成员回复不删除、不重生成。
+- user avatar 宿主适配改为直接使用 SillyTavern runtime `user_avatar` 与正文自身 `getThumbnailUrl('persona', user_avatar)`，不再依赖 persona 面板是否打开或 DOM selected 节点是否存在。
+- 历史 UI 采用 LittleWhiteBox 同方向的 window 思路：20 条步进、最多 60 条常驻 DOM，并保留滚动锚点；实现仍沿用 moli 单 Conversation 数据源，不另建 Fourth Wall 专属分页存储。
