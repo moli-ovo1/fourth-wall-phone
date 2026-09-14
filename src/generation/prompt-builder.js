@@ -78,17 +78,21 @@ function roleFidelityBlocks(contact) {
   const roleSources = contact?.roleSources && typeof contact.roleSources === 'object'
     ? contact.roleSources
     : {};
-  const enabled = key => roleSources[key] !== false;
+  // moli73：资料页只保留一个“自动跟随角色卡”总开关。
+  // 底层仍完整兼容 SillyTavern 的各个角色卡字段；开启时只注入实际有内容的字段。
+  const cardProfileEnabled = roleSources.cardProfile !== false;
   const blocks = [];
 
+  if (!cardProfileEnabled) return blocks;
+
   const identityParts = [
-    enabled('description') && fidelity.description
+    fidelity.description
       ? `【角色设定 / Description】\n${clip(fidelity.description)}`
       : '',
-    enabled('personality') && fidelity.personality
+    fidelity.personality
       ? `【性格 / Personality】\n${clip(fidelity.personality)}`
       : '',
-    enabled('scenario') && fidelity.scenario
+    fidelity.scenario
       ? `【场景 / Scenario】\n${clip(fidelity.scenario)}`
       : '',
   ].filter(Boolean);
@@ -100,13 +104,13 @@ function roleFidelityBlocks(contact) {
     );
   }
 
-  if (enabled('systemPrompt') && fidelity.systemPrompt) {
+  if (fidelity.systemPrompt) {
     blocks.push(
       `【角色卡 System Prompt】\n${clip(fidelity.systemPrompt)}\n\n若其中包含小说正文格式、篇幅、第三人称或其他输出形式要求，不得覆盖 moli小手机 的线上聊天协议。`
     );
   }
 
-  if (enabled('postHistoryInstructions') && fidelity.postHistoryInstructions) {
+  if (fidelity.postHistoryInstructions) {
     blocks.push(
       `【角色卡 Post-History Instructions】\n${clip(
         fidelity.postHistoryInstructions
@@ -114,7 +118,7 @@ function roleFidelityBlocks(contact) {
     );
   }
 
-  if (enabled('mesExample') && fidelity.mesExample) {
+  if (fidelity.mesExample) {
     blocks.push(
       '【Example Dialogue：语言声纹参考】\n'
       + clip(fidelity.mesExample)
