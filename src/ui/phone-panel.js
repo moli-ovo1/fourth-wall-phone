@@ -747,11 +747,6 @@ export function createPhonePanel({
           <input type="checkbox" data-fourth-wall-stream>
         </label>
 
-        <label class="moli-switch-row">
-          <span><strong>禁用 Assistant Prefill</strong><small>开启后把 Bottom Prompt 放进 User 消息，不使用 Assistant 预填充。</small></span>
-          <input type="checkbox" data-fourth-wall-disable-prefill>
-        </label>
-
         <section class="moli-fourth-wall-memory-section">
           <div class="moli-conversation-section-title">皮下记忆与上下文</div>
           <div class="moli-fourth-wall-context-stats">
@@ -1951,11 +1946,18 @@ export function createPhonePanel({
     if (!item) return;
     const layers = Number(fourthWallMaxLayers?.value || 20);
     if (!Number.isFinite(layers)) { toast('普通聊天层数必须是数字'); return; }
+    const currentSettings = item.fourthWallChatSettingsInitialized
+      ? (item.fourthWallChatSettings || {})
+      : (fourthWallConversation()?.fourthWall || item.fourthWallChatSettings || {});
     updateContact('builtin:meta', {
       fourthWallChatSettings: {
         maxChatLayers: Math.max(1, Math.min(9999, Math.round(layers))),
         stream: Boolean(fourthWallStream?.checked),
-        disableAssistantPrefill: Boolean(fourthWallDisablePrefill?.checked),
+        // moli74：Assistant Prefill 作为内部兼容能力保留，不再要求普通用户理解技术开关。
+        // 若旧数据曾显式禁用 Prefill，保存其他皮下设置时继续保留该兼容状态。
+        disableAssistantPrefill: fourthWallDisablePrefill
+          ? Boolean(fourthWallDisablePrefill.checked)
+          : currentSettings.disableAssistantPrefill === true,
       },
     });
     toast('皮下设置已保存'); show('info');
