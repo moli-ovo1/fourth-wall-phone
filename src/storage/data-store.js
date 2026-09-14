@@ -869,7 +869,7 @@ export function createCustomContact({
 }
 
 
-export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, profileEntries, roleSources, worldBookPolicy, customWorldBook, replyBubbleRange, apiOverride, fourthWallGlobalSettings, fourthWallChatSettings, fourthWallActiveConversationKey } = {}) {
+export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, userProfile, profileEntries, roleSources, worldBookPolicy, customWorldBook, replyBubbleRange, apiOverride, fourthWallGlobalSettings, fourthWallChatSettings, fourthWallActiveConversationKey } = {}) {
   const list = getContacts();
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
@@ -886,6 +886,7 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
   if (customAvatar !== undefined) contact.customAvatar = String(customAvatar || '');
   if (intro !== undefined) contact.intro = String(intro || '').trim();
   if (prompt !== undefined) contact.prompt = String(prompt || '').trim();
+  if (userProfile !== undefined) contact.userProfile = String(userProfile || '').trim();
   if (replyBubbleRange !== undefined) {
     const min=Math.max(1,Math.min(12,Number(replyBubbleRange?.min)||1)); const max=Math.max(min,Math.min(12,Number(replyBubbleRange?.max)||3));
     contact.replyBubbleRange={min,max};
