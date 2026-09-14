@@ -318,7 +318,7 @@ export function createPhonePanel({
           <span><strong>启用线上聊天预设</strong><small>关闭后生成时不注入下面的全局线上规则</small></span>
           <input type="checkbox" data-prompt-master>
         </label>
-        <div class="moli-settings-note">每个条目都保留完整 Prompt，可独立开关和编辑。角色卡、Example Dialogue、正文等动态资料不写死在这里，而由上下文层实时提供。</div>
+        <div class="moli-settings-note">这些是普通 moli 私聊与群聊共用的线上行为规则。私聊完整使用启用条目；群聊同样使用行为条目，但“输出协议”由群聊自己的 JSON / 单气泡协议接管以避免格式冲突。皮下使用独立 Fourth Wall Protocol，不注入这里。角色卡、世界书、正文等动态资料仍由上下文层实时提供。</div>
         <div class="moli-prompt-block-list" data-prompt-block-list></div>
         <button type="button" class="moli-secondary-btn" data-action="prompt-add-custom">＋ 添加自定义条目</button>
         <button type="button" class="moli-secondary-btn moli-prompt-restore" data-action="prompt-restore">恢复默认预设</button>
@@ -2265,9 +2265,9 @@ export function createPhonePanel({
     ['description', '角色设定', 'Description'],
     ['personality', '性格', 'Personality'],
     ['scenario', '场景', 'Scenario'],
-    ['mesExample', 'Example Dialogue', 'Example Dialogue'],
-    ['systemPrompt', 'System Prompt', 'System Prompt'],
-    ['postHistoryInstructions', 'Post-History Instructions', 'Post-History Instructions'],
+    ['mesExample', '示例对话', 'Example Dialogue'],
+    ['systemPrompt', '系统提示词', 'System Prompt'],
+    ['postHistoryInstructions', '历史后指令', 'Post-History Instructions'],
   ];
 
   function tavernRoleSourceValue(item, key) {
@@ -2280,26 +2280,25 @@ export function createPhonePanel({
       ? item.roleSources
       : {};
     const sourceMissing = item?.source?.status === 'missing';
+    const providedCount = TAVERN_ROLE_SOURCE_ITEMS.filter(([key]) => Boolean(tavernRoleSourceValue(item, key))).length;
+    const cardProfileEnabled = roleSources.cardProfile !== false;
+    const cardStatus = providedCount
+      ? `${sourceMissing ? '使用最近同步快照' : '自动跟随当前角色卡'} · 已检测到 ${providedCount} 项资料`
+      : '当前角色卡没有可读取的人设资料';
 
     contactRoleSources.innerHTML = `
       <div class="moli-source-section">
         <div class="moli-source-section-title">角色卡资料</div>
-        <div class="moli-source-section-note">关闭只代表本轮生成不注入；不会删除已同步的角色卡快照。</div>
-        ${TAVERN_ROLE_SOURCE_ITEMS.map(([key, label]) => {
-          const hasValue = Boolean(tavernRoleSourceValue(item, key));
-          const enabled = roleSources[key] !== false;
-          return `
-            <div class="moli-role-source-row ${hasValue ? '' : 'is-empty'}">
-              <button type="button" class="moli-role-source-view" data-role-source-view="${escapeHtml(key)}">
-                <span><strong>${escapeHtml(label)}</strong><small>${hasValue ? (sourceMissing ? '最近同步快照' : '自动跟随角色卡') : '角色卡未提供'}</small></span>
-                <b>›</b>
-              </button>
-              <label class="moli-role-source-switch" title="${escapeHtml(label)}">
-                <input type="checkbox" data-role-source-toggle="${escapeHtml(key)}" ${enabled ? 'checked' : ''}>
-                <span></span>
-              </label>
-            </div>`;
-        }).join('')}
+        <div class="moli-role-source-row">
+          <div class="moli-role-source-view is-static">
+            <span><strong>自动跟随角色卡</strong><small>${escapeHtml(cardStatus)}</small></span>
+          </div>
+          <label class="moli-role-source-switch" title="自动跟随角色卡">
+            <input type="checkbox" data-role-source-toggle="cardProfile" ${cardProfileEnabled ? 'checked' : ''}>
+            <span></span>
+          </label>
+        </div>
+        <div class="moli-source-section-note">开启后自动读取角色卡中实际填写的人设资料，包括角色描述、性格、场景、示例对话以及角色卡自带提示词；空字段会自动跳过。关闭只影响本轮生成，不会删除已同步快照。</div>
       </div>
       <div class="moli-source-section">
         <div class="moli-source-section-title">世界书</div>
@@ -2321,6 +2320,7 @@ export function createPhonePanel({
       </div>`;
     contactRoleSources.hidden = false;
   }
+
 
   let currentWorldBookSnapshot = null;
 
@@ -2479,12 +2479,8 @@ export function createPhonePanel({
       } else {
         payload.roleSources = {
           ...(item.roleSources || {}),
-          ...Object.fromEntries(
-            TAVERN_ROLE_SOURCE_ITEMS.map(([key]) => [
-              key,
-              contactRoleSources?.querySelector(`[data-role-source-toggle="${key}"]`)?.checked !== false,
-            ])
-          ),
+          cardProfile:
+            contactRoleSources?.querySelector('[data-role-source-toggle="cardProfile"]')?.checked !== false,
           longTermMemory:
             contactRoleSources?.querySelector('[data-role-source-toggle="longTermMemory"]')?.checked !== false,
         };
