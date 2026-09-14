@@ -2364,13 +2364,15 @@ export function createPhonePanel({
       const canonicalName = item.kind === 'tavern' ? (item.source?.originalName || item.name || '未知') : (item.name || '联系人');
       chatInfo.innerHTML = `
         <div class="moli-info-private-head">
-          ${avatarMarkup(item, 'moli-info-avatar')}
+          <div class="moli-info-avatar-wrap">
+            ${avatarMarkup(item, 'moli-info-avatar')}
+            ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-avatar-edit" data-action="change-contact-avatar" aria-label="更换头像" title="更换头像"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" fill="currentColor"/><path d="M6.5 16l4-4 2.7 2.7 2-2 2.3 3.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`}
+          </div>
           <div class="moli-info-private-name">${escapeHtml(canonicalName)}${isFourthWallContact(item) ? '<small class="moli-fourth-wall-subtitle">入戏…</small>' : `<small class="moli-contact-scope-tag">${escapeHtml(scopeTag)}</small>`}</div>
           ${isFourthWallContact(item) ? '' : (item.kind === 'custom'
             ? `<input class="moli-profile-inline-edit" type="text" maxlength="80" data-info-contact-name value="${escapeHtml(item.name || '')}" placeholder="点击编辑名称">`
             : `<input class="moli-profile-inline-edit" type="text" maxlength="80" data-info-contact-remark value="${escapeHtml(item.remark || '')}" placeholder="点击编辑备注名">`)}
           ${isFourthWallContact(item) ? '' : `<input class="moli-profile-inline-edit moli-profile-chat-title" type="text" maxlength="80" data-info-chat-title value="${escapeHtml(conversation.title || '')}" placeholder="点击编辑聊天名称例如番外/if线">`}
-          ${isFourthWallContact(item) ? '' : '<button type="button" class="moli-info-avatar-button" data-action="change-contact-avatar">更换头像</button>'}
           ${item.customAvatar && isTavern ? `<button type="button" class="moli-info-link-button" data-action="restore-source-avatar">恢复跟随角色卡头像</button>` : ''}
         </div>
         ${sourceMissing ? '<div class="moli-info-source"><div><span>来源状态</span><strong class="is-missing">来源角色不可用</strong></div></div>' : ''}
@@ -5959,8 +5961,10 @@ export function createPhonePanel({
       const text = String(windowRef.prompt?.('评论') || '').trim();
       if (!text) return;
       addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: text });
-      notifyMomentInteractionOpportunity({ scopeKey, contactId:item.id, momentId, eventType:'user-comment', content:text });
       renderContactMoments();
+      requestAnimationFrame(() => renderContactMoments());
+      try { notifyMomentInteractionOpportunity({ scopeKey, contactId:item.id, momentId, eventType:'user-comment', content:text }); }
+      catch (error) { console.warn('[moli小手机] queue profile moment interaction failed:', error); }
       toast('已评论。点右上角刷新看看有没有回应。');
       return;
     }
@@ -6023,9 +6027,13 @@ export function createPhonePanel({
       const text = String(windowRef.prompt?.('评论') || '').trim();
       if (!text) return;
       addMomentComment(scopeKey, { surface: 'public', momentId, actor: userMomentsActor(), content: text });
-      const targetMoment = listPublicMoments(scopeKey).find(x => String(x.id) === momentId);
-      if (targetMoment?.author?.id && targetMoment.author.id !== 'user') notifyMomentInteractionOpportunity({ scopeKey, contactId: targetMoment.author.id, momentId, eventType:'user-comment', content:text });
       renderMoments();
+      requestAnimationFrame(() => renderMoments());
+      const targetMoment = listPublicMoments(scopeKey).find(x => String(x.id) === momentId);
+      if (targetMoment?.author?.id && targetMoment.author.id !== 'user') {
+        try { notifyMomentInteractionOpportunity({ scopeKey, contactId: targetMoment.author.id, momentId, eventType:'user-comment', content:text }); }
+        catch (error) { console.warn('[moli小手机] queue public moment interaction failed:', error); }
+      }
       return;
     }
     if (action === 'moment-forward') {
