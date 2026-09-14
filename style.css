@@ -807,3 +807,25 @@
     padding-bottom:calc(28px + env(safe-area-inset-bottom, 0px));
     scroll-padding-bottom:calc(28px + env(safe-area-inset-bottom, 0px));
 }
+
+/* moli69: chat-list long press + protected delete confirmation */
+#moli-phone-panel .moli-chat-list-menu{position:absolute;z-index:72;width:172px;padding:6px;border:1px solid rgba(0,0,0,.12);border-radius:10px;background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.22)}
+#moli-phone-panel .moli-chat-list-menu[hidden]{display:none}
+#moli-phone-panel .moli-chat-list-menu button{width:100%;border:0;border-radius:7px;background:#fff;padding:11px 12px;text-align:left;font-size:14px}
+#moli-phone-panel .moli-chat-list-menu button:active{background:#f2f2f2}
+#moli-phone-panel .moli-chat-list-menu button.danger{color:#d33}
+#moli-phone-panel .moli-chat-item{touch-action:pan-y;-webkit-user-select:none;user-select:none}
+#moli-phone-panel .moli-delete-conversation-sheet{position:absolute;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;padding:22px;background:rgba(0,0,0,.38)}
+#moli-phone-panel .moli-delete-conversation-sheet[hidden]{display:none}
+#moli-phone-panel .moli-delete-conversation-card{width:min(330px,100%);padding:20px;border-radius:16px;background:#fff;box-shadow:0 16px 44px rgba(0,0,0,.28);display:flex;flex-direction:column;gap:12px}
+#moli-phone-panel .moli-delete-conversation-card strong{font-size:18px}
+#moli-phone-panel .moli-delete-conversation-card p{margin:0;color:#555;font-size:13px;line-height:1.6}
+#moli-phone-panel .moli-delete-conversation-card small{color:#999;text-align:center}
+#moli-phone-panel .moli-danger-confirm{border:0;border-radius:10px;background:#e84b4b;color:#fff;padding:12px;font-size:15px;font-weight:600}
+#moli-phone-panel .moli-profile-entry-section{display:flex;flex-direction:column;gap:10px}
+#moli-phone-panel .moli-profile-entry-section[hidden]{display:none}
+#moli-phone-panel .moli-profile-entry{padding:10px;border:1px solid #e6e6e6;border-radius:12px;background:#fff;margin-bottom:10px}
+#moli-phone-panel .moli-profile-entry-head{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;margin-bottom:8px}
+#moli-phone-panel .moli-profile-entry-head input[type="text"]{min-width:0;border:0;border-bottom:1px solid #ddd;padding:6px;font-size:14px}
+#moli-phone-panel .moli-profile-entry-head button{border:0;background:transparent;color:#d33}
+#moli-phone-panel .moli-profile-entry textarea{width:100%;box-sizing:border-box;border:1px solid #e5e5e5;border-radius:8px;padding:9px;resize:vertical}
