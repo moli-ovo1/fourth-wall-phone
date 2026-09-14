@@ -57,3 +57,11 @@
 - **宿主 UI 适配**：小白X消息编辑为气泡内 textarea；moli62 暂使用已有长按菜单 + `window.prompt`，数据语义一致但交互外观未完全复制。
 - **仍有差异**：小白X对“生成完成但持久化失败”会保留 unsaved draft 并在错误气泡展示；moli 当前存储为同步本地写入，尚未建立等价的 unsaved-draft 状态。
 - **仍有差异**：小白X聊天 UI 使用 20/60 条历史分页窗口并保持滚动锚点；moli 当前直接渲染当前 Conversation 全部消息。
+
+
+## moli63 审计补充
+- 聊天页 Context ring 删除：功能并未删除；相同统计保留在皮下设置页，避免手机小屏重复入口。
+- Regenerate / Retry 仍是两个独立动作，只是迁入不同消息的长按菜单：最新 AI→重答；失败后的最新 user→重试。
+- Message edit 已从浏览器 prompt 升级为气泡内 textarea，交互语义进一步接近上游 `FourthWallMessage.vue`。
+- User avatar 通过 SillyTavern 当前 persona DOM 的 `.avatar-container.selected img` 实时读取；这与 SillyTavern 使用 `user_avatar` 标记当前 selected persona 的 UI 状态一致。
+- Unsaved draft：moli 本地 append 若抛出错误，已生成回复保存在 UI 临时态中，不再直接丢失；用户可重新保存或丢弃。该状态不冒充已持久化消息。

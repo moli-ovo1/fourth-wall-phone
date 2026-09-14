@@ -700,91 +700,6 @@
 }
 
 
-#moli-phone-panel .moli-fourth-wall-context-ring {
-  --moli-context-angle: 0deg;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  position: relative;
-  background: conic-gradient(currentColor var(--moli-context-angle), rgba(127, 127, 127, .18) 0);
-  display: grid;
-  place-items: center;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-#moli-phone-panel .moli-fourth-wall-context-ring::before {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: inherit;
-  background: var(--SmartThemeBlurTintColor, var(--moli-surface, #fff));
-}
-
-#moli-phone-panel .moli-fourth-wall-context-ring > span {
-  position: relative;
-  z-index: 1;
-}
-
-#moli-phone-panel .moli-fourth-wall-context-ring.is-warning {
-  font-weight: 900;
-}
-
-#moli-phone-panel .moli-fourth-wall-context-popover {
-  position: absolute;
-  top: 48px;
-  right: 8px;
-  width: min(260px, calc(100% - 16px));
-  z-index: 30;
-  padding: 12px;
-  border: 1px solid var(--moli-border, rgba(0, 0, 0, .12));
-  border-radius: 14px;
-  background: var(--SmartThemeBlurTintColor, var(--moli-surface, #fff));
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
-}
-
-#moli-phone-panel .moli-fourth-wall-context-popover header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-#moli-phone-panel .moli-fourth-wall-context-popover header button {
-  border: 0;
-  background: transparent;
-  font-size: 18px;
-}
-
-#moli-phone-panel .moli-fourth-wall-context-popover dl {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px 12px;
-  margin: 10px 0;
-}
-
-#moli-phone-panel .moli-fourth-wall-context-popover dt,
-#moli-phone-panel .moli-fourth-wall-context-popover dd {
-  margin: 0;
-  font-size: 12px;
-}
-
-#moli-phone-panel .moli-fourth-wall-context-total {
-  font-weight: 700;
-  margin: 8px 0;
-}
-
-#moli-phone-panel .moli-fourth-wall-regenerate {
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  font-size: 20px;
-  flex: 0 0 auto;
-}
-
 #moli-phone-panel .moli-chat-error {
   display: flex;
   align-items: center;
@@ -801,10 +716,45 @@
 }
 
 
-#moli-phone-panel .moli-fourth-wall-context-ring[hidden],
-#moli-phone-panel .moli-fourth-wall-context-popover[hidden],
-#moli-phone-panel .moli-fourth-wall-regenerate[hidden],
-#moli-phone-panel [data-action="fourth-wall-clear-chat"][hidden],
-#moli-phone-panel [data-action="fourth-wall-retry"][hidden] {
+
+#moli-phone-panel [data-action="fourth-wall-clear-chat"][hidden] {
   display: none !important;
+}
+
+#moli-phone-panel .moli-inline-message-edit {
+  width: min(280px, 100%);
+  min-height: 72px;
+  resize: vertical;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+}
+
+#moli-phone-panel .moli-inline-message-edit-actions,
+#moli-phone-panel .moli-unsaved-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+#moli-phone-panel .moli-inline-message-edit-actions button,
+#moli-phone-panel .moli-unsaved-actions button {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+#moli-phone-panel .moli-fourth-wall-unsaved .moli-bubble {
+  outline: 1px dashed currentColor;
+}
+
+#moli-phone-panel .moli-unsaved-label {
+  display: block;
+  margin-top: 6px;
+  opacity: .65;
+  font-size: 11px;
 }

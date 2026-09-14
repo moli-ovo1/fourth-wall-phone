@@ -2717,3 +2717,15 @@ Commentary 使用独立 Fourth Wall Commentary Prompt，只输出一个 `<msg>` 
 - 手动总结支持取消：Context popover/设置页按钮在总结中再次点击可 Abort。
 - 皮下聊天页新增清空入口：可选择仅清聊天（保留 memory）或聊天与 memory 一起清空。
 - 图片/语音仍不移植；Session→Private Conversation 仍沿用已批准宿主适配。
+
+
+## 0.4.7 / moli63 — 皮下气泡交互与保存失败恢复
+- 皮下聊天页移除重复的 Context ring / popover；上下文统计继续保留在“皮下设置”页。
+- “重答”与“重试回复”改为上下文长按菜单动作：
+  - 最新正常 AI 回复气泡显示“重答”；
+  - 生成失败且最后 user 尚未得到正常 AI 回复时，最新 user 气泡显示“重试回复”。
+- “编辑”从长按菜单进入后，当前气泡原地切换为 textarea，支持保存 / 取消；不再弹浏览器 prompt。
+- user 气泡头像实时跟随 SillyTavern 当前选中 persona 的正文 user 头像；无法取得时回退“我”。
+- 皮下生成完成但最终 append/persist 失败时，保留“未保存” draft 气泡，展示 thinking + 回复正文，并提供“重新保存 / 丢弃”。
+- 若多段 `<msg>` 中前几段已经成功保存、后续保存失败，未保存 draft 只保留尚未落地部分，避免重复。
+- 清空当前聊天记录功能继续保留在皮下；是否推广到其他聊天类型作为后续书签。
