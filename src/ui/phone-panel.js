@@ -660,6 +660,25 @@ export function createPhonePanel({
       <footer class="moli-sync-footer"><button class="moli-secondary-btn" data-action="contact-moments-clear">清空本页朋友圈</button></footer>
     </section>
 
+    <section class="moli-page" data-page="contact-user-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="contact-user-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">用户设定</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-settings-list moli-contact-subpage">
+        <div class="moli-settings-note" data-contact-user-owner></div>
+        <label class="moli-form-field">
+          <textarea rows="10" data-contact-user-profile></textarea>
+        </label>
+        <div class="moli-settings-note" data-contact-user-guide hidden></div>
+      </main>
+      <footer class="moli-sync-footer">
+        <button class="moli-secondary-btn" data-action="contact-user-cancel">取消</button>
+        <button class="moli-primary-btn" data-action="contact-user-save">保存</button>
+      </footer>
+    </section>
+
     <section class="moli-page" data-page="contact-prompt-settings">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -1095,6 +1114,9 @@ export function createPhonePanel({
   const promptEditorNameWrap = panel.querySelector('[data-prompt-editor-name-wrap]');
   const promptEditorName = panel.querySelector('[data-prompt-editor-name]');
   const promptEditorDelete = panel.querySelector('[data-action="prompt-editor-delete"]');
+  const contactUserOwner = panel.querySelector('[data-contact-user-owner]');
+  const contactUserProfile = panel.querySelector('[data-contact-user-profile]');
+  const contactUserGuide = panel.querySelector('[data-contact-user-guide]');
   const contactPromptOwner = panel.querySelector('[data-contact-prompt-owner]');
   const contactPromptPageTitle = panel.querySelector('[data-contact-prompt-page-title]');
   const contactRoleSources = panel.querySelector('[data-contact-role-sources]');
@@ -1226,7 +1248,15 @@ export function createPhonePanel({
   const avatarUrl = item => {
     const builtinAsset = BUILTIN_AVATAR_URLS[String(item?.id || '')];
     if (builtinAsset) return builtinAsset;
-    return item?.customAvatar || item?.source?.originalAvatarUrl || '';
+    if (item?.customAvatar) return item.customAvatar;
+    const rawAvatar = String(item?.source?.originalAvatar || '').trim();
+    if (rawAvatar) {
+      try {
+        const fresh = String(getThumbnailUrl('avatar', rawAvatar) || '').trim();
+        if (fresh) return fresh;
+      } catch {}
+    }
+    return item?.source?.originalAvatarUrl || '';
   };
 
   const avatarMarkup = (item, className = 'moli-avatar') => {
@@ -2351,6 +2381,7 @@ export function createPhonePanel({
         const scopeTag = privateConversationScopeAnnotation(conversation);
         chatInfo.innerHTML = `
           <div class="moli-contact-profile-head">${avatarMarkup(item, 'moli-info-avatar')}<div><div class="moli-contact-profile-name">${escapeHtml(displayName(item))}<small>${escapeHtml(scopeTag)}</small></div></div></div>
+          <button type="button" class="moli-info-setting-row" data-action="contact-user-settings"><span>用户设定</span><strong>›</strong></button>
           <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>朋友资料</span><strong>›</strong></button>
           <button type="button" class="moli-info-setting-row moli-contact-profile-moments" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>
           <button type="button" class="moli-contact-profile-action" data-action="chat">发送消息</button>
@@ -2377,6 +2408,7 @@ export function createPhonePanel({
         </div>
         ${sourceMissing ? '<div class="moli-info-source"><div><span>来源状态</span><strong class="is-missing">来源角色不可用</strong></div></div>' : ''}
         <button type="button" class="moli-info-setting-row moli-contact-profile-moments" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>
+        <button type="button" class="moli-info-setting-row" data-action="contact-user-settings"><span>用户设定</span><strong>›</strong></button>
         ${isFourthWallContact(item) ? `
         <button type="button" class="moli-info-setting-row" data-action="fourth-wall-settings"><span>皮下设置</span><strong>›</strong></button>` : `
         ${['builtin:writer', 'builtin:guide'].includes(String(item.id || '')) ? '' : `<button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>角色设定</span><strong>›</strong></button>`}`}
@@ -2726,6 +2758,39 @@ export function createPhonePanel({
     } finally {
       profileWorldBookSelect.disabled = false;
     }
+  }
+
+  function renderContactUserSettings() {
+    const item = currentPrivateContact();
+    if (!item) return;
+    if (contactUserOwner) contactUserOwner.textContent = `当前联系人：${displayName(item)}`;
+    if (contactUserProfile) {
+      contactUserProfile.value = String(item.userProfile || '').trim() || '姓名：
+年龄：
+性格：';
+    }
+    if (contactUserGuide) {
+      const isMeta = String(item.id || '') === 'builtin:meta';
+      contactUserGuide.hidden = !isMeta;
+      contactUserGuide.textContent = isMeta
+        ? '说明书：
+皮下也可以看到你当前酒馆里的 User 人设。
+
+这里可以填写小手机里的你。
+如果你没有另外填写，皮下就按照现有内容认识你；
+如果你填写了新的设定（天龙人、坏U、与 User 人设截然不同的等等，可以收获不一样的效果），或者干脆写现实中的你（网恋感 up up），他也会同时看到这份信息。
+
+具体写什么，由你自己决定。'
+        : '';
+    }
+  }
+
+  function saveContactUserSettings() {
+    const item = currentPrivateContact();
+    if (!item) return;
+    updateContact(item.id, { userProfile: contactUserProfile?.value || '' });
+    toast('用户设定已保存');
+    show('info');
   }
 
   function renderContactPromptSettings() {
@@ -3247,37 +3312,6 @@ export function createPhonePanel({
     }).join('');
   }
 
-  function appendUserMomentCommentImmediately(feed, surface, momentId, updatedMoment) {
-    if (!feed || !updatedMoment) return false;
-    const latest = [...(updatedMoment.comments || [])].reverse().find(comment => String(comment?.actor?.id || '') === 'user' && !comment?.deletedAt);
-    if (!latest?.id || [...feed.querySelectorAll('[data-comment-id]')].some(node => String(node.dataset.commentId || '') === String(latest.id))) return true;
-    const article = [...feed.querySelectorAll(surface === 'profile' ? '[data-profile-moment-id]' : '[data-moment-id]')]
-      .find(node => String(surface === 'profile' ? node.dataset.profileMomentId : node.dataset.momentId) === String(momentId));
-    if (!article) return false;
-    let social = article.querySelector('.moli-moment-social');
-    if (!social) {
-      social = documentRef.createElement('div');
-      social.className = 'moli-moment-social';
-      article.querySelector('.moli-moment-main')?.appendChild(social);
-    }
-    let comments = social.querySelector('.moli-moment-comments');
-    if (!comments) {
-      comments = documentRef.createElement('div');
-      comments.className = 'moli-moment-comments';
-      social.appendChild(comments);
-    }
-    const row = documentRef.createElement('div');
-    row.className = 'moli-user-comment-hold';
-    row.dataset.userCommentSurface = surface;
-    row.dataset.momentId = String(momentId);
-    row.dataset.commentId = String(latest.id);
-    const strong = documentRef.createElement('strong');
-    strong.textContent = momentActorName(latest.actor);
-    row.append(strong, documentRef.createTextNode(`：${String(latest.content || '')}`));
-    comments.appendChild(row);
-    return true;
-  }
-
   function renderContactMoments() {
     if (!contactMomentsFeed) return;
     const scopeKey = getScopeKey?.();
@@ -3385,6 +3419,10 @@ export function createPhonePanel({
     }
     if (name === 'contact-memory-settings') {
       renderPhoneMemorySettings();
+    }
+
+    if (name === 'contact-user-settings') {
+      renderContactUserSettings();
     }
 
     if (name === 'contact-prompt-settings') {
@@ -5991,9 +6029,8 @@ export function createPhonePanel({
     if (button.dataset.action === 'profile-moment-comment') {
       const text = String(windowRef.prompt?.('评论') || '').trim();
       if (!text) return;
-      const updatedMoment = addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: text });
-      appendUserMomentCommentImmediately(contactMomentsFeed, 'profile', momentId, updatedMoment);
-      requestAnimationFrame(() => { const latestId = String((updatedMoment.comments || [])[updatedMoment.comments.length - 1]?.id || ''); if (![...(contactMomentsFeed?.querySelectorAll('[data-comment-id]') || [])].some(node => String(node.dataset.commentId || '') === latestId)) renderContactMoments(); });
+      addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: text });
+      renderContactMoments();
       try { notifyMomentInteractionOpportunity({ scopeKey, contactId:item.id, momentId, eventType:'user-comment', content:text }); }
       catch (error) { console.warn('[moli小手机] queue profile moment interaction failed:', error); }
       toast('已评论。点右上角刷新看看有没有回应。');
@@ -6057,9 +6094,8 @@ export function createPhonePanel({
     if (action === 'moment-comment') {
       const text = String(windowRef.prompt?.('评论') || '').trim();
       if (!text) return;
-      const updatedMoment = addMomentComment(scopeKey, { surface: 'public', momentId, actor: userMomentsActor(), content: text });
-      appendUserMomentCommentImmediately(momentsFeed, 'public', momentId, updatedMoment);
-      requestAnimationFrame(() => { const latestId = String((updatedMoment.comments || [])[updatedMoment.comments.length - 1]?.id || ''); if (![...(momentsFeed?.querySelectorAll('[data-comment-id]') || [])].some(node => String(node.dataset.commentId || '') === latestId)) renderMoments(); });
+      addMomentComment(scopeKey, { surface: 'public', momentId, actor: userMomentsActor(), content: text });
+      renderMoments();
       const targetMoment = listPublicMoments(scopeKey).find(x => String(x.id) === momentId);
       if (targetMoment?.author?.id && targetMoment.author.id !== 'user') {
         try { notifyMomentInteractionOpportunity({ scopeKey, contactId: targetMoment.author.id, momentId, eventType:'user-comment', content:text }); }
@@ -6325,6 +6361,9 @@ export function createPhonePanel({
   panel.querySelector('[data-action="contact-prompt-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-prompt-save"]')?.addEventListener('click', saveContactPromptSettings);
   restoreBuiltinPromptButton?.addEventListener('click', restoreBuiltinPrompt);
+  panel.querySelector('[data-action="contact-user-back"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-user-cancel"]')?.addEventListener('click', () => show('info'));
+  panel.querySelector('[data-action="contact-user-save"]')?.addEventListener('click', saveContactUserSettings);
   panel.querySelector('[data-action="contact-source-detail-back"]')?.addEventListener('click', () => show('contact-prompt-settings'));
   panel.querySelector('[data-action="contact-worldbook-back"]')?.addEventListener('click', () => show('contact-prompt-settings'));
   panel.querySelector('[data-action="contact-worldbook-cancel"]')?.addEventListener('click', () => show('contact-prompt-settings'));
@@ -6455,6 +6494,8 @@ export function createPhonePanel({
       show('fourth-wall-prompts');
     } else if (action === 'contact-moments') {
       show('contact-moments');
+    } else if (action === 'contact-user-settings') {
+      show('contact-user-settings');
     } else if (action === 'contact-prompt-settings') {
       show('contact-prompt-settings');
     } else if (action === 'contact-api-settings') {
