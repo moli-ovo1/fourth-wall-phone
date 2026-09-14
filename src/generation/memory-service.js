@@ -134,21 +134,33 @@ function completeInteractionTurns(conversation) {
 
   return turns;
 }
+function turnMode(turn) {
+  const tagged = (turn?.messages || []).find(item => ['reading', 'role-chat'].includes(String(item?.memoryMode || '')));
+  return String(tagged?.memoryMode || '');
+}
+
 function eligibleTurns(conversation, memory) {
   const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
   const keep = Math.max(10, Number(conversation?.recentChatLimit) || 100);
   const cutoff = Math.max(0, messages.length - keep);
   if (cutoff <= 0) return [];
 
-  const cursor = memory?.lastCondensedMessageId
-    ? messages.findIndex(item => String(item?.id || '') === String(memory.lastCondensedMessageId))
-    : -1;
+  const mode = conversation?.type === 'group' ? String(conversation.groupMode || 'reading') : '';
+  const modeKey = mode === 'role-chat' ? 'roleChat' : 'reading';
+  const cursorId = conversation?.type === 'group'
+    ? String(memory?.lastCondensedMessageIdByMode?.[modeKey] || '')
+    : String(memory?.lastCondensedMessageId || '');
+  const cursor = cursorId ? messages.findIndex(item => String(item?.id || '') === cursorId) : -1;
 
   return completeInteractionTurns(conversation).filter(turn => {
-    // 整轮必须完全离开最近聊天窗口；不能从一轮中间切开。
     if (turn.endIndex >= cutoff) return false;
-    // 已压缩游标之后的完整轮次才有资格再次处理。
     if (cursor >= 0 && turn.endIndex <= cursor) return false;
+    // 新消息保存产生它时的群模式；旧消息没有 memoryMode 时仅兼容 reading，避免 role-chat 偷吸旧正文围读历史。
+    if (conversation?.type === 'group') {
+      const storedMode = turnMode(turn);
+      if (mode === 'role-chat') return storedMode === 'role-chat';
+      return !storedMode || storedMode === 'reading';
+    }
     return true;
   });
 }
@@ -170,6 +182,10 @@ async function condenseRecent(scopeKey, conversationKey, conversation, memory, c
     transcript(batch),
   );
   if (!text) throw new Error('近期记忆压缩返回空内容');
+  const sourceText = transcript(batch);
+  if (sourceText.length >= 800 && text.length >= Math.floor(sourceText.length * 0.9)) {
+    throw new Error('近期记忆没有有效缩小，拒绝推进压缩游标');
+  }
   const now = Date.now();
   const nextRecent = [...(memory.recent || []), {
     id: `auto:${now}:${Math.random().toString(36).slice(2, 7)}`,
@@ -181,12 +197,22 @@ async function condenseRecent(scopeKey, conversationKey, conversation, memory, c
     messageStartId: String(batch[0]?.id || ''),
     messageEndId: String(batch.at(-1)?.id || ''),
   }];
-  const next = updateConversationMemory(scopeKey, conversationKey, {
+  const cursorId = String(batch.at(-1)?.id || '');
+  const patch = {
     recent: nextRecent,
-    lastCondensedMessageId: String(batch.at(-1)?.id || ''),
     lastCondensedAt: now,
     lastAutoError: '',
-  });
+  };
+  if (conversation?.type === 'group') {
+    const modeKey = String(conversation.groupMode || 'reading') === 'role-chat' ? 'roleChat' : 'reading';
+    patch.lastCondensedMessageIdByMode = {
+      ...(memory.lastCondensedMessageIdByMode || {}),
+      [modeKey]: cursorId,
+    };
+  } else {
+    patch.lastCondensedMessageId = cursorId;
+  }
+  const next = updateConversationMemory(scopeKey, conversationKey, patch);
   return { changed: true, memory: next };
 }
 
@@ -195,10 +221,14 @@ async function promoteLongTerm(scopeKey, conversationKey, conversation, memory, 
   const autoEntries = (memory?.recent || []).filter(item => item?.source === 'auto' && (!mode || !item?.sourceMode || item.sourceMode === mode));
   if (autoEntries.length < LONG_TERM_AUTO_THRESHOLD) return { changed: false, memory };
   const take = autoEntries.slice(0, LONG_TERM_AUTO_TAKE);
+  const key = mode === 'role-chat' ? 'roleChat' : 'reading';
+  const existing = conversation?.type === 'group'
+    ? String(memory.longTermByMode?.[key] || (key === 'reading' ? memory.longTermSummary || '' : '')).trim()
+    : String(memory.longTermSummary || '').trim();
   const text = await generateMemoryText(
     config,
-    '你是长期关系记忆整理器。把给出的多段近期记忆压缩成一段稳定、可长期保留的事实记录。保留关系变化、重要承诺、长期偏好和持续事项；去掉重复和短期闲聊。不得编造。不要标题，不要解释。',
-    take.map(item => item.content).join('\n\n'),
+    '你是长期关系记忆维护器。请把“已有长期记忆”和“新增近期记忆”合并成一份更新后的长期记忆。重点保留稳定事实、关系演变、重要共同经历、长期态度与偏好、内部梗、承诺和仍未解决的事项；允许新证据修正旧判断，删除已失效、重复或只有短期价值的内容。不要写聊天流水账，不得编造。输出完整的更新后记忆，不要标题，不要解释。',
+    `已有长期记忆：\n${existing || '（暂无）'}\n\n新增近期记忆：\n${take.map(item => item.content).join('\n\n')}`,
   );
   if (!text) throw new Error('长期总结压缩返回空内容');
   const takeIds = new Set(take.map(item => item.id));
@@ -206,22 +236,19 @@ async function promoteLongTerm(scopeKey, conversationKey, conversation, memory, 
   const now = Date.now();
   let patch;
   if (conversation?.type === 'group') {
-    const key = mode === 'role-chat' ? 'roleChat' : 'reading';
-    const existing = String(memory.longTermByMode?.[key] || (key === 'reading' ? memory.longTermSummary || '' : '')).trim();
     patch = {
       recent: retained,
       longTermByMode: {
         ...(memory.longTermByMode || {}),
-        [key]: [existing, text].filter(Boolean).join('\n\n'),
+        [key]: text,
       },
       lastSummarizedAt: now,
       lastAutoError: '',
     };
   } else {
-    const existing = String(memory.longTermSummary || '').trim();
     patch = {
       recent: retained,
-      longTermSummary: [existing, text].filter(Boolean).join('\n\n'),
+      longTermSummary: text,
       lastSummarizedAt: now,
       lastAutoError: '',
     };
