@@ -2576,3 +2576,67 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - [ ] 设计跨事件冷却/去重：短时间多个事件聚合、刚 POST 后抑制重复 POST、刚主动私聊后抑制机械追聊，但不能把人物真实连续行动硬禁掉。
 - [ ] 明确行为结果的可观察性与测试矩阵：只 POST、只私聊、两者都做、SKIP、主动私聊关闭但仍可 POST、评论事件批处理、正文吐槽保持独立。
 - [ ] 再决定是否把“已看但未互动”的 `seenBy` 变成主动机会；当前只保留为连续性事实，不能擅自变成每次看见就触发 API。
+
+
+## v0.4.42 / moli99 — 人物行为 Automation 第二阶段收尾
+
+### 目标
+把 moli98 已接通的统一动作决策补上事件治理层，完成“事件事实 -> 聚合 -> 一次人物判断 -> 执行动作 -> 记录最近动作”的闭环；本节点之后停止继续扩张基础朋友圈行为。
+
+### 输入与事件策略
+- `chat-progress`：wake event；允许 POST，并在主动私聊开启时允许 PRIVATE_CHAT/BOTH。
+- `user-comment`：wake event；相邻评论短批处理，不允许一条评论烧一次 API。
+- `user-like / user-unlike`：context-only；只记录连续性，不单独唤醒模型。
+- `user-delete-comment`：context-only；保留删除原因，不单独唤醒模型。
+- `seenBy`：保持已有连续性事实，不新增 Automation 唤醒。
+- 普通时间机会：沿用既有倾向/评估频率；Prompt 明确考虑未完话题、长期未互动、最近社交事实。
+
+### 决策逻辑
+1. `notifyBehaviorOpportunity()` 为事件写入 `wakeBehavior / allowPost / allowPrivate` 语义。
+2. context-only 事件通过 `notifyBehaviorContextEvent()` 进入同一有限队列，但自身不能令 social-event ready。
+3. wake event 到达约 2 分钟批处理窗口后，最近一批事件只调用一次人物决策。
+4. 没有 wake event 时，点赞/删评不会单独调用 API；后续普通时间机会可携带仍在时效范围内的事实一起判断。
+5. 最近执行过的主动动作记录到 `recentBehaviorActions`，在约 20 分钟 soft window 内作为 Prompt 决策成本呈现；不做硬禁止。
+6. 决策结果仍为 `SKIP / POST / PRIVATE_CHAT / POST+PRIVATE_CHAT`，沿用 moli98 的写入链。
+
+### 输出
+- POST -> 角色资料朋友圈 + 对应私聊 `moment-event`。
+- PRIVATE_CHAT -> 既有私聊消息、未读、Generation Runtime。
+- BOTH -> 同一模型判断同时执行两条输出链。
+- SKIP -> 不产生伪动作。
+
+### 代码变更
+- `src/automation/private-automation.js`
+  - 2 分钟社交批处理、24 小时社交事实时效、20 分钟 soft action window。
+  - 区分 wake event 与 context-only fact。
+  - 新增 `notifyBehaviorContextEvent()`。
+  - 时间型机会可消费近期 context-only facts。
+  - Prompt 加入未完话题/长期未互动和最近主动动作 soft cooldown 说明。
+- `src/ui/phone-panel.js`
+  - 点赞/取消赞、删评只写 context-only 行为事实。
+  - User 评论继续作为 wake event；公共/资料卡朋友圈都沿用同一语义。
+- `src/storage/data-store.js`
+  - `applyConversationDefaults()` 保留 `pendingSocialEvents / recentBehaviorActions / lastCommentaryEvaluation*`，修复 runtime 在默认值归一化路径被丢弃的风险。
+- `manifest.json`
+  - 版本更新为 `0.4.42`。
+
+### 明确边界 / 反例
+- 不把点赞、取消赞、删除评论改成“点击即 API”。
+- 不把 cooldown 写成固定分钟数的硬封禁。
+- 不把正文吐槽升级为朋友圈 POST。
+- 不把 Fourth Wall Commentary、群 Review、公共朋友圈手动刷新揉进统一池。
+- 不恢复百分比硬骰子、固定 18% 聊天->朋友圈随机门控。
+- 不借“优化”改变角色卡、User Prompt、人物设定语义。
+
+### 验收矩阵
+- 连续评论 -> 单批次一次判断。
+- 点赞 only -> 0 次立即行为 API。
+- 删除评论 only -> 0 次立即行为 API。
+- 评论 + 点赞 + 删除 + 评论 -> 一次完整事件批交给人物理解。
+- chat-progress + 主动私聊关 -> POST/SKIP only。
+- chat-progress + 主动私聊开 -> 四动作均可。
+- 刚 POST 后普通小事件 -> Prompt 能看到最近 POST，但系统不硬禁下一次行动。
+- Commentary / Review -> 行为边界保持原样。
+
+### 下一节点：Phone Context Injection
+从 moli100 起进入手机 -> 正文注入框架。第一步只搭来源/语义 payload/注入计划通道，不先做大而全 UI。后续逐步接私聊最近 N 条、近期/长期 Memory、朋友圈、群聊与群 Memory，再做临时注入 vs 持久绑定、预览和 Token Budget。
