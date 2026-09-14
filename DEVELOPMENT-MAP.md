@@ -2147,3 +2147,16 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - 默认围读间隔为 1；moli67 已完成的围读会自然反应 Prompt 保持不变。
 - 资料页底部安全区修复继续作为回归项。
 - 暂不建立新的 global-phone-prompt 层；待共同规则内容明确后再决定。
+
+
+## moli72 — 普通 Conversation Memory 可靠性与群模式连续性
+- [x] 普通私聊 / 群聊继续使用 recent + long-term 的 moli 记忆哲学，不切换为 Fourth Wall rolling memory。
+- [x] 修复 `getConversationMemory()` 未返回 `needsReview*` 的状态读取缺口，历史改写后的自动压缩暂停与 UI 警告重新真正贯通。
+- [x] 群消息落盘时记录产生它的 `memoryMode`；reading / role-chat 使用独立压缩游标，避免切换群模式后互相吞掉尚未压缩的历史。
+- [x] 旧群消息没有模式标签时只兼容归入 reading，不允许角色闲聊吸收旧围读历史。
+- [x] 自动围读（source=review）与手动/普通群生成一样进入群历史并参与同一条 Conversation Memory 压缩链。
+- [x] 近期压缩继续按完整 generation turn 取安全边界；压缩结果为空或没有有效缩小时不提交、不推进游标。
+- [x] 长期记忆由“不断追加摘要”改为“已有长期记忆 + 新近期记忆 → 合并更新后的长期状态”，重点保留关系演变、共同经历、长期态度、内部梗、承诺与未解决事项，减少流水账和无限膨胀。
+- [x] 长期合并成功后才移除对应 recent 自动记忆；生成失败时旧长期记忆与 recent 均保持原样。
+- [x] 群记忆页明确显示当前正在查看“围读会记忆”或“角色闲聊记忆”，自动记忆段数只统计当前模式。
+- [x] Fourth Wall / 皮下记忆架构保持完全独立，本轮不改其 158k/128k、archivedCount、rolling replacement 等语义。
