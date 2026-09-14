@@ -196,6 +196,11 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     } else {
       conversation.recentChatLimit = Math.max(10, Math.min(9999, Number(conversation.recentChatLimit)));
     }
+    if (conversation.replyBubbleRange && typeof conversation.replyBubbleRange === 'object') {
+      const privateBubbleMin = Math.max(1, Math.min(12, Number(conversation.replyBubbleRange?.min) || 1));
+      const privateBubbleMax = Math.max(privateBubbleMin, Math.min(12, Number(conversation.replyBubbleRange?.max) || 3));
+      conversation.replyBubbleRange = { min: privateBubbleMin, max: privateBubbleMax };
+    }
     conversation.memory = normalizeConversationMemory(conversation.memory);
     if (String(conversation.contactId || '') === 'builtin:meta') {
       conversation.fourthWall = normalizeFourthWallSettings(conversation.fourthWall);
@@ -224,6 +229,9 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     if (conversation.groupMode === 'role-chat') conversation.bodyContextEnabled = false;
     if (!Number.isFinite(Number(conversation.recentChatLimit))) conversation.recentChatLimit = 100;
     else conversation.recentChatLimit = Math.max(10, Math.min(9999, Number(conversation.recentChatLimit)));
+    const groupBubbleMin = Math.max(1, Math.min(12, Number(conversation.groupReplyBubbleRange?.min) || 1));
+    const groupBubbleMax = Math.max(groupBubbleMin, Math.min(12, Number(conversation.groupReplyBubbleRange?.max) || 8));
+    conversation.groupReplyBubbleRange = { min: groupBubbleMin, max: groupBubbleMax };
     conversation.memory = normalizeConversationMemory(conversation.memory);
 
     const automation = conversation.automation && typeof conversation.automation === 'object'
@@ -1039,7 +1047,7 @@ export function createGroupConversation(
 export function updateGroupConversation(
   scopeKey,
   groupId,
-  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval, groupMode, timeMode, bodyContextEnabled, recentChatLimit } = {}
+  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval, groupMode, timeMode, bodyContextEnabled, recentChatLimit, groupReplyBubbleRange } = {}
 ) {
   const data = ensureBuiltins(scopeKey);
   const conversation = data.conversations[groupId];
@@ -1097,6 +1105,11 @@ export function updateGroupConversation(
     const value = Number(recentChatLimit);
     if (!Number.isFinite(value)) throw new Error('最近聊天条数必须是数字');
     conversation.recentChatLimit = Math.max(10, Math.min(9999, Math.round(value)));
+  }
+  if (groupReplyBubbleRange !== undefined) {
+    const min = Math.max(1, Math.min(12, Number(groupReplyBubbleRange?.min) || 1));
+    const max = Math.max(min, Math.min(12, Number(groupReplyBubbleRange?.max) || 8));
+    conversation.groupReplyBubbleRange = { min, max };
   }
   if (reviewEnabled !== undefined) {
     conversation.automation.reviewEnabled = Boolean(reviewEnabled);
@@ -1447,6 +1460,7 @@ export function updatePrivateConversationSettings(
     timeMode,
     bodyContextEnabled,
     recentChatLimit,
+    replyBubbleRange,
     autoChatEnabled,
     autoChatProbability,
     commentaryEnabled,
@@ -1509,6 +1523,11 @@ export function updatePrivateConversationSettings(
     const value = Number(recentChatLimit);
     if (!Number.isFinite(value)) throw new Error('最近聊天条数必须是数字');
     conversation.recentChatLimit = Math.max(10, Math.min(9999, Math.round(value)));
+  }
+  if (replyBubbleRange !== undefined) {
+    const min = Math.max(1, Math.min(12, Number(replyBubbleRange?.min) || 1));
+    const max = Math.max(min, Math.min(12, Number(replyBubbleRange?.max) || 3));
+    conversation.replyBubbleRange = { min, max };
   }
 
   if (autoChatEnabled !== undefined) {
