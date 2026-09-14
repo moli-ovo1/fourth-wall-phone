@@ -571,7 +571,7 @@ function formatPhoneBridge(scopeKey, contact) {
   return chunks.join('\n\n') || '暂无可用手机私聊连续性。';
 }
 
-function parseBatchGroupOutput(text, members, { review = false, forcedIds = [] } = {}) {
+function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], bubbleRange = null, targetedRegeneration = false } = {}) {
   const raw = String(text || '').trim();
   let parsed = null;
   const candidates = [];
@@ -595,12 +595,14 @@ function parseBatchGroupOutput(text, members, { review = false, forcedIds = [] }
   const byName = new Map(members.map(member => [contactLabel(member), member]));
   const seen = new Set();
   const replies = [];
-  const maxReplies = review ? new Set(members.map(member => String(member.id))).size : 3;
+  const rangeMin = Math.max(1, Math.min(12, Number(bubbleRange?.min) || 1));
+  const rangeMax = Math.max(rangeMin, Math.min(12, Number(bubbleRange?.max) || 8));
+  const maxReplies = targetedRegeneration ? 1 : rangeMax;
   for (const item of items) {
     const id = String(item?.speakerId ?? item?.id ?? '').trim();
     const name = String(item?.speaker ?? item?.name ?? '').trim();
     const member = byId.get(id) || byName.get(name);
-    if (!member || seen.has(String(member.id))) continue;
+    if (!member) continue;
     let content = String(item?.content ?? item?.message ?? item?.text ?? '').trim();
     if (!content || /^SKIP$/i.test(content)) continue;
     const reviewHardLimit = String(member.id || '') === 'builtin:writer'
@@ -608,7 +610,7 @@ function parseBatchGroupOutput(text, members, { review = false, forcedIds = [] }
       : String(member.id || '') === 'builtin:guide'
         ? 120
         : 180;
-    content = content.slice(0, review ? reviewHardLimit : 80);
+    content = content.slice(0, review ? reviewHardLimit : 100);
     seen.add(String(member.id));
     replies.push({ contact: member, messages: [content], text: content });
     if (replies.length >= maxReplies) break;
@@ -632,6 +634,8 @@ async function buildBatchGroupRequest({
   targetedRegeneration = false,
 } = {}) {
   const review = Boolean(reviewTarget?.content);
+  const groupBubbleMin = Math.max(1, Math.min(12, Number(conversation.groupReplyBubbleRange?.min) || 1));
+  const groupBubbleMax = Math.max(groupBubbleMin, Math.min(12, Number(conversation.groupReplyBubbleRange?.max) || 8));
   const groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
   if (review && groupMode === 'role-chat') throw new Error('角色闲聊模式不运行正文自动点评');
   const readingMode = groupMode === 'reading';
@@ -719,16 +723,16 @@ async function buildBatchGroupRequest({
     ? `【moli小手机：线上聊天预设｜群聊内容规则】
 ${onlinePreset}
 
-【群聊协议优先级】以上预设只约束每个气泡“怎么说”；成员选择、每人一气泡与最终 JSON 输出格式以本群聊批量协议为准。
+【群聊协议优先级】以上预设只约束每个气泡“怎么说”；本轮总气泡范围、发言成员分配与最终 JSON 输出格式以本群聊批量协议为准。
 
 `
     : '';
 
-  const system = `你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择与发言生成，禁止再请求第二个编排器。\n\n${onlinePresetBlock}【群模式】${modeText}\n${groupTimeBlock}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${review
-    ? '【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮群聊反应。默认让本轮列出的成员都出现，每人且只能输出 1 条消息、对应前端 1 个气泡；禁止同一 speakerId 重复出现，禁止把同一成员拆成多条；不要 SKIP。成员不必各自从头分析正文，后发成员可以直接接前一个成员的话、争论、接梗、吐槽或补充。不要为了证明完成了点评任务而复述正文、总结情节或强行寻找分析点，先像真实群成员一样产生反应，只有真正发现值得分析的内容时才分析。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工：小上帝也可以只看热闹或嗑疯，moli 也可以突然发现很聪明的细节。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长，但仍应是一条自然聊天气泡，不写成小作文。'
+  const system = `你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择、气泡分配与发言生成，禁止再请求第二个编排器。\n\n${onlinePresetBlock}【群模式】${modeText}\n${groupTimeBlock}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${review
+    ? `【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮真实群聊。整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标，不要为了填满而硬说。所有群成员都只是可发言者，没有谁被强制必须出现；沉默型角色可以完全不说，爱插科打诨或此刻有话的人可以连续出现多次。同一 speakerId 可以在这一轮重复出现，允许真实的来回接话，例如 A→B→A→moli。气泡数量和分配应由人物性格、当前情绪、关系、话题价值和前一个气泡共同决定，而不是平均分配。成员不必各自从头分析正文，后发成员可以接前一个成员的话、争论、接梗、吐槽、补充或沉默。不要为了证明完成点评任务而复述正文、总结情节或强行寻找分析点。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长。`
     : targetedRegeneration
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
-      : '【普通群聊】根据相关度和插话价值选择 1～3 人；被 @ 的成员必须参与；不要机械全员轮流。每个 speakerId 每轮只能出现一次、每人只输出1个气泡，每个最多80个中文字符。无话可说的成员不要输出。'}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。speakerId 必须逐字使用下方提供的 id。${reviewBlock}`;
+      : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
   const shared = `【群聊】${String(conversation.name || '群聊')}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchText(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || '暂无可确认正文上下文'}` : ''}\n\n${memberBlocks.join('\n\n')}`;
   return { system, messages: [{ role: 'user', content: shared }] };
@@ -759,7 +763,12 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, request, { signal });
-  const replies = parseBatchGroupOutput(result.text, members, { review: false, forcedIds });
+  const replies = parseBatchGroupOutput(result.text, members, {
+    review: false,
+    forcedIds,
+    bubbleRange: conversation.groupReplyBubbleRange,
+    targetedRegeneration: Boolean(targetMemberId),
+  });
   if (!replies.length) throw new Error('本轮群聊批量生成没有返回可用消息');
   onDelta?.('', '', replies[0]?.contact || null);
   return { replies, speakerIds: replies.map(item => item.contact.id), batch: true };
@@ -774,16 +783,17 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
   const members = (conversation.memberIds || []).map(id => allContacts.find(item => String(item.id) === String(id))).filter(Boolean).map(hydratedContact);
   if (!members.length) throw new Error('群聊没有可用成员');
 
-  // moli55：自动点评全员也只调用一次主 API，再按 speakerId 拆成独立气泡。
+  // moli83：自动围读仍只调用一次主 API；群级总气泡范围控制整轮长度，成员可沉默，也可重复 speakerId 来回接话。
   const request = await buildBatchGroupRequest({ scopeKey, conversation, members, reviewTarget });
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, request, { signal });
-  const replies = parseBatchGroupOutput(result.text, members, { review: true });
-  if (!replies.length) throw new Error('自动点评批量生成没有返回可用消息');
-  const returned = new Set(replies.map(item => String(item.contact.id)));
-  const missing = members.filter(member => !returned.has(String(member.id))).map(contactLabel);
-  const failures = missing.length ? [{ name: missing.join('、'), error: '模型未按批量格式返回这些成员的点评' }] : [];
+  const replies = parseBatchGroupOutput(result.text, members, {
+    review: true,
+    bubbleRange: conversation.groupReplyBubbleRange,
+  });
+  if (!replies.length) throw new Error('自动围读批量生成没有返回可用消息');
+  const failures = [];
   onDelta?.('', '', replies[0]?.contact || null);
   return { replies, failures, speakerIds: replies.map(item => item.contact.id), batch: true };
 }

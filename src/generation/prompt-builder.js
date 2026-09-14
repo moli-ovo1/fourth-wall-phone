@@ -263,9 +263,10 @@ export function buildPrivateGenerationRequest({
     systemBlocks.push(`【moli小手机：线上聊天预设】\n${onlinePreset}`);
   }
 
-  const bubbleMin = Math.max(1, Math.min(12, Number(contact?.replyBubbleRange?.min) || 1));
-  const bubbleMax = Math.max(bubbleMin, Math.min(12, Number(contact?.replyBubbleRange?.max) || 3));
-  systemBlocks.push(`【本联系人气泡数量偏好】\n本次自然发送 ${bubbleMin}～${bubbleMax} 个聊天气泡。不要为了凑数量把一句话机械拆开；也不要固定每轮同样条数。在范围内按当前交流节奏自然决定。`);
+  const bubbleSource = conversation?.replyBubbleRange || contact?.replyBubbleRange || {};
+  const bubbleMin = Math.max(1, Math.min(12, Number(bubbleSource?.min) || 1));
+  const bubbleMax = Math.max(bubbleMin, Math.min(12, Number(bubbleSource?.max) || 3));
+  systemBlocks.push(`【当前聊天气泡数量偏好】\n本次自然发送 ${bubbleMin}～${bubbleMax} 个聊天气泡。不要为了凑数量把一句话机械拆开；也不要固定每轮同样条数。在范围内按当前交流节奏自然决定。这个范围属于当前聊天实例，不是角色永久人格。`);
 
   if (intro && contact.kind !== 'tavern') {
     systemBlocks.push(`【角色简介】\n${intro}`);
