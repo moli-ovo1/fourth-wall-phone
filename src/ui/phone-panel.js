@@ -1645,6 +1645,10 @@ export function createPhonePanel({
           id, app:'wechat', section:conversationType, owner:title, kind:'chat',
           label: `${sender}：${content.replace(/\s+/g,' ').slice(0,72)}${content.length>72?'…':''}`,
           group: `微信 · ${conversationType === 'group' ? '群聊' : '私聊'} · ${title}`,
+          conversationKey: String(conversation.key || conversation.id || conversation.contactId || ''),
+          messageIndex: messages.length - 1 - index,
+          header: () => injectionConversationHeader(conversation),
+          body: () => `${sender}：${content}`,
           build: () => `${injectionConversationHeader(conversation)}\n${sender}：${content}`,
         });
       });
@@ -1693,9 +1697,36 @@ export function createPhonePanel({
 
   function rebuildInjectionDraft() {
     const selected = new Set(selectedInjectionSourceIds());
-    const catalog = injectionSourceCatalog();
-    const parts = catalog.filter(source => selected.has(source.id)).map(source => source.build()).filter(Boolean);
-    if (injectionEditor) injectionEditor.value = parts.join('\n\n---\n\n');
+    const picked = injectionSourceCatalog().filter(source => selected.has(source.id));
+    const blocks = [];
+    const grouped = new Map();
+    picked.forEach(source => {
+      const key = source.group || source.id;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(source);
+    });
+    grouped.forEach(items => {
+      const first = items[0];
+      if (first.kind === 'chat' && first.header && first.body) {
+        blocks.push([first.header(), ...items.map(item => item.body())].join('\n'));
+        return;
+      }
+      if (first.kind === 'moment') {
+        const built = items.map(item => item.build()).filter(Boolean);
+        if (built.length) {
+          const lines = built[0].split('\n');
+          const prefix = lines.slice(0, lines[1]?.startsWith('知识归属：') ? 2 : 1);
+          const bodies = built.map((text, index) => {
+            const parts = text.split('\n');
+            return parts.slice(index === 0 ? prefix.length : (parts[1]?.startsWith('知识归属：') ? 2 : 1)).join('\n');
+          }).filter(Boolean);
+          blocks.push([...prefix, ...bodies].join('\n'));
+        }
+        return;
+      }
+      blocks.push(items.map(item => item.build()).filter(Boolean).join('\n'));
+    });
+    if (injectionEditor) injectionEditor.value = blocks.filter(Boolean).join('\n\n---\n\n');
     updateInjectionBasket();
   }
 
@@ -1728,11 +1759,16 @@ export function createPhonePanel({
         if (!items.length) return '';
         const owners = new Map();
         items.forEach(source => { if(!owners.has(source.owner)) owners.set(source.owner, []); owners.get(source.owner).push(source); });
-        const ownerHtml = [...owners.entries()].map(([owner, ownerItems]) => `
+        const ownerHtml = [...owners.entries()].map(([owner, ownerItems]) => {
+          const conversationKey = ownerItems.find(item => item.kind === 'chat')?.conversationKey || '';
+          const recentButton = section !== 'moments' && conversationKey
+            ? `<button type="button" class="moli-injection-recent-btn" data-action="injection-recent-rounds" data-conversation-key="${escapeHtml(conversationKey)}">最近 n 轮</button>` : '';
+          return `
           <details class="moli-injection-source-owner">
-            <summary>${escapeHtml(owner)} <small>${ownerItems.length} 项</small></summary>
+            <summary><span>${escapeHtml(owner)} <small>${ownerItems.length} 项</small></span>${recentButton}</summary>
             <div class="moli-injection-source-items">${ownerItems.map(source=>`<label class="moli-injection-source-row"><input type="checkbox" data-injection-source value="${escapeHtml(source.id)}"><span><strong>${escapeHtml(source.label)}</strong><small>${source.kind==='chat'?'原始消息':source.kind==='memory'?'手机记忆':'具体动态'}</small></span></label>`).join('')}</div>
-          </details>`).join('');
+          </details>`;
+        }).join('');
         return `<details class="moli-injection-source-section"><summary>${sectionLabel[section]} <small>${items.length} 项</small></summary>${ownerHtml}</details>`;
       }).join('');
       injectionSources.innerHTML = catalog.length ? `<details class="moli-injection-source-app"><summary>微信 <small>${catalog.length} 项</small></summary>${sectionHtml}</details>` : '<div class="moli-empty">手机里还没有可选素材。你仍可以直接在下方编辑框输入内容。</div>';
@@ -7057,6 +7093,24 @@ export function createPhonePanel({
   panel.querySelector('[data-action="injection-back"]')?.addEventListener('click', () => show('phone-home'));
   injectionSources?.addEventListener('change', event => {
     if (event.target?.matches?.('[data-injection-source]')) { rebuildInjectionDraft(); saveCurrentInjectionWorkspace(); applyInjectionSelectedOnly(); }
+  });
+  injectionSources?.addEventListener('click', event => {
+    const button = event.target?.closest?.('[data-action="injection-recent-rounds"]');
+    if (!button) return;
+    event.preventDefault(); event.stopPropagation();
+    const key = String(button.dataset.conversationKey || '');
+    const raw = windowRef.prompt?.('选择最近多少轮对话？（1–30）', '5');
+    if (raw === null || raw === undefined) return;
+    const rounds = Math.max(1, Math.min(30, Number.parseInt(raw, 10) || 5));
+    const chatItems = injectionSourceCatalog().filter(item => item.kind === 'chat' && item.conversationKey === key);
+    let userTurns = 0; const wanted = new Set();
+    for (let i = chatItems.length - 1; i >= 0; i--) {
+      const item = chatItems[i]; wanted.add(item.id);
+      if (String(item.body?.() || '').startsWith('User（')) { userTurns += 1; if (userTurns >= rounds) break; }
+    }
+    injectionSources.querySelectorAll('input[data-injection-source]').forEach(input => { if (wanted.has(input.value)) input.checked = true; });
+    button.textContent = `最近 ${rounds} 轮`;
+    rebuildInjectionDraft(); saveCurrentInjectionWorkspace();
   });
   injectionHistory?.addEventListener('click',event=>{const button=event.target?.closest?.('[data-action="injection-history-copy"]');if(!button)return;const item=listInjectionHistory(getScopeKey?.()).find(x=>x.id===button.dataset.historyId);if(!item)return;if(injectionEditor)injectionEditor.value=item.text;syncInjectionSize();saveCurrentInjectionWorkspace();toast('已复制成新的跨墙草稿');});
   injectionEditor?.addEventListener('input', () => { syncInjectionSize(); saveCurrentInjectionWorkspace(); });
