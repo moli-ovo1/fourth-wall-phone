@@ -1137,7 +1137,11 @@
 #moli-phone-panel .moli-moment-avatar-jump{align-self:flex-start;flex:0 0 auto;border:0;background:transparent;padding:0;margin:0;cursor:pointer}
 #moli-phone-panel .moli-moment-avatar-jump .moli-moment-avatar{margin:0}
 
-/* moli104 hotfix · launcher titles use stable text labels */
+/* moli104 · restore user-provided handwritten app title artwork */
+#moli-phone-panel .moli-app-title-art{
+  display:block;width:72px;height:18px;object-fit:contain;overflow:visible;
+}
+#moli-phone-panel .moli-launcher-grid{row-gap:24px}
 #moli-phone-panel .moli-injection-toolbar{display:flex;gap:8px;margin:8px 0 10px}
 #moli-phone-panel .moli-injection-source-group{border-top:1px solid #eee;padding:6px 0}
 #moli-phone-panel .moli-injection-source-group:first-child{border-top:0}
