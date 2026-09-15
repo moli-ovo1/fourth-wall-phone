@@ -1,7 +1,7 @@
 import { readJson, writeJson } from './storage-adapter.js';
 
 const PREFIX = 'moli-phone:moments:v2:';
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 function key(scopeKey) { return PREFIX + encodeURIComponent(String(scopeKey || '')); }
 function id(prefix) { return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`; }
@@ -24,6 +24,8 @@ function moment(value = {}, surface = 'public') {
     likes: Array.isArray(value?.likes) ? value.likes.map(actor).filter(x => x.id) : [],
     comments: Array.isArray(value?.comments) ? value.comments.map(socialEntry).filter(x => x.actor.id && (x.content || x.deletedAt)) : [],
     seenBy: Array.isArray(value?.seenBy) ? [...new Set(value.seenBy.map(String).filter(Boolean))] : [],
+    userReadAt: Number(value?.userReadAt || 0),
+    likeEvents: Array.isArray(value?.likeEvents) ? value.likeEvents.map(entry => ({ actorId:String(entry?.actorId||''), action:String(entry?.action||''), at:Number(entry?.at||0) })).filter(entry => entry.actorId && entry.action && entry.at).slice(-40) : [],
   };
 }
 function normalize(value) {
@@ -34,7 +36,9 @@ function normalize(value) {
   }
   return {
     schemaVersion: SCHEMA_VERSION,
-    settings: { crossContactInteraction: source?.settings?.crossContactInteraction !== false },
+    settings: { crossContactInteraction: source?.settings?.crossContactInteraction !== false, coverImage: String(source?.settings?.coverImage || '') },
+    chatEvents: Array.isArray(source.chatEvents) ? source.chatEvents.map(entry=>({id:String(entry?.id||id('moment-event')),contactId:String(entry?.contactId||''),type:String(entry?.type||''),momentId:String(entry?.momentId||''),content:String(entry?.content||''),createdAt:Number(entry?.createdAt||Date.now()),deliveredAt:Number(entry?.deliveredAt||0)})).filter(entry=>entry.contactId&&entry.type).slice(-300) : [],
+    profileVisits: source?.profileVisits && typeof source.profileVisits === 'object' ? Object.fromEntries(Object.entries(source.profileVisits).map(([contactId, value]) => [String(contactId), { count:Math.max(0,Number(value?.count||0)), firstAt:Number(value?.firstAt||0), lastAt:Number(value?.lastAt||0) }])) : {},
     publicFeed: Array.isArray(source.publicFeed) ? source.publicFeed.map(x => moment(x, 'public')).filter(x => x.content) : [],
     profileFeeds: profiles,
     profileMemory: source.profileMemory && typeof source.profileMemory === 'object' ? Object.fromEntries(Object.entries(source.profileMemory).map(([contactId, value]) => [String(contactId), { summary: String(value?.summary || '').trim(), updatedAt: Number(value?.updatedAt || 0) }])) : {},
@@ -52,6 +56,7 @@ export function getMomentsSettings(scopeKey) { return getMomentsState(scopeKey).
 export function updateMomentsSettings(scopeKey, patch = {}) {
   const state = getMomentsState(scopeKey);
   if (typeof patch.crossContactInteraction === 'boolean') state.settings.crossContactInteraction = patch.crossContactInteraction;
+  if (typeof patch.coverImage === 'string') state.settings.coverImage = patch.coverImage;
   save(scopeKey, state); return { ...state.settings };
 }
 export function listPublicMoments(scopeKey) { return getMomentsState(scopeKey).publicFeed.slice().sort((a,b)=>b.createdAt-a.createdAt); }
@@ -70,7 +75,7 @@ function findMoment(state, surface, ownerContactId, momentId) {
 }
 export function toggleMomentLike(scopeKey, { surface='public', ownerContactId='', momentId, actor: who } = {}) {
   const state=getMomentsState(scopeKey); const item=findMoment(state,surface,ownerContactId,momentId); if(!item)throw new Error('朋友圈动态不存在');
-  const a=actor(who); const i=item.likes.findIndex(x=>x.id===a.id); if(i>=0)item.likes.splice(i,1); else item.likes.push(a); item.updatedAt=Date.now(); save(scopeKey,state); return i<0;
+  const a=actor(who); const i=item.likes.findIndex(x=>x.id===a.id); const liked=i<0; if(i>=0)item.likes.splice(i,1); else item.likes.push(a); item.likeEvents ||= []; item.likeEvents.push({actorId:a.id,action:liked?'LIKE':'UNLIKE',at:Date.now()}); item.likeEvents=item.likeEvents.slice(-40); item.updatedAt=Date.now(); save(scopeKey,state); return liked;
 }
 export function addMomentComment(scopeKey, { surface='public', ownerContactId='', momentId, actor: who, content, replyToId='' } = {}) {
   const state=getMomentsState(scopeKey); const item=findMoment(state,surface,ownerContactId,momentId); if(!item)throw new Error('朋友圈动态不存在');
@@ -87,6 +92,26 @@ export function deleteMomentComment(scopeKey, { surface='public', ownerContactId
 export function markMomentSeen(scopeKey, { surface='public', ownerContactId='', momentId, actorId } = {}) {
   const state=getMomentsState(scopeKey); const item=findMoment(state,surface,ownerContactId,momentId); if(!item||!actorId)return false; if(!item.seenBy.includes(String(actorId)))item.seenBy.push(String(actorId)); save(scopeKey,state); return true;
 }
+
+
+export function recordMomentChatEvent(scopeKey, { contactId, type, momentId='', content='' } = {}) {
+  const cid=String(contactId||''); const kind=String(type||''); if(!scopeKey||!cid||!kind)return null; const state=getMomentsState(scopeKey); state.chatEvents ||= [];
+  const entry={id:id('moment-event'),contactId:cid,type:kind,momentId:String(momentId||''),content:String(content||'').trim(),createdAt:Date.now(),deliveredAt:0}; state.chatEvents.push(entry); state.chatEvents=state.chatEvents.slice(-300); save(scopeKey,state); return entry;
+}
+export function getPendingMomentChatEvents(scopeKey, contactId) { const cid=String(contactId||''); return getMomentsState(scopeKey).chatEvents.filter(entry=>entry.contactId===cid&&!entry.deliveredAt).slice(-12); }
+export function markMomentChatEventsDelivered(scopeKey, contactId, eventIds=[]) { const ids=new Set(eventIds.map(String)); if(!ids.size)return; const state=getMomentsState(scopeKey); const now=Date.now(); for(const entry of state.chatEvents){if(entry.contactId===String(contactId||'')&&ids.has(entry.id)&&!entry.deliveredAt)entry.deliveredAt=now;} save(scopeKey,state); }
+
+export function setMomentUserRead(scopeKey, { surface='public', ownerContactId='', momentId, read=true } = {}) {
+  const state=getMomentsState(scopeKey); const item=findMoment(state,surface,ownerContactId,momentId); if(!item)throw new Error('朋友圈动态不存在');
+  item.userReadAt = read ? (item.userReadAt || Date.now()) : 0; item.updatedAt=Date.now(); save(scopeKey,state); return item.userReadAt;
+}
+export function recordProfileVisit(scopeKey, contactId, at=Date.now()) {
+  const id=String(contactId||''); if(!scopeKey||!id||id==='user') return null;
+  const state=getMomentsState(scopeKey); state.profileVisits ||= {}; const old=state.profileVisits[id] || {count:0,firstAt:0,lastAt:0};
+  state.profileVisits[id]={count:Number(old.count||0)+1,firstAt:Number(old.firstAt||at)||at,lastAt:Number(at||Date.now())}; save(scopeKey,state); return {...state.profileVisits[id]};
+}
+export function getProfileVisits(scopeKey) { return {...(getMomentsState(scopeKey).profileVisits || {})}; }
+
 export function importPublicMomentToProfile(scopeKey, momentId, ownerContactId, { likes, comments } = {}) {
   const state=getMomentsState(scopeKey); const source=state.publicFeed.find(x=>x.id===String(momentId)); if(!source)throw new Error('朋友圈动态不存在');
   const owner=String(ownerContactId||source.author.id||''); if(!owner)throw new Error('无法确定角色');
