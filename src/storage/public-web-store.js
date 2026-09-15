@@ -54,6 +54,7 @@ export function addPublicWebComment(scopeKey, postId, input = {}) {
     author: input.author || { type: 'user', id: 'user', name: 'User' },
     content: String(input.content || '').trim(),
     createdAt: Number(input.createdAt || Date.now()),
+    replyToCommentId: String(input.replyToCommentId || ''),
   };
   if (!comment.content) return null;
   post.comments = [...(post.comments || []), comment];
