@@ -6321,7 +6321,7 @@ export function createPhonePanel({
     const userName=getTavernUserContext()?.name||'User'; const settings=getPublicWebSettings(getScopeKey?.()); const pool=settings.ghostStoriesEnabled?[...tianyaSubtitles,'莲蓬鬼话']:tianyaSubtitles;
     createPublicWebPost(getScopeKey?.(),{section,author:{type:'user',id:'user',name:userName},title,content,extra:{subtitle:section==='tianya'?pool[Math.floor(Math.random()*pool.length)]:'',style:'user'}}); renderPublicWeb();
   });
-  panel.querySelector('[data-public-web-feed]')?.addEventListener('click', event => {
+  panel.querySelector('[data-public-web-feed]')?.addEventListener('click', async event => {
     const open=event.target?.closest?.('[data-action="public-web-open"]'); if(open){openedPublicWebPostId=open.dataset.postId;renderPublicWeb();return;}
     if(event.target?.closest?.('[data-action="public-web-detail-back"]')){openedPublicWebPostId='';renderPublicWeb();return;}
     const favorite=event.target?.closest?.('[data-action="public-web-favorite"]'); if(favorite){togglePublicWebFavorite(getScopeKey?.(),favorite.dataset.postId,'user');renderPublicWeb();return;}
