@@ -98,3 +98,27 @@ export function updatePublicWebSettings(scopeKey, patch = {}) {
   write(scopeKey, state);
   return { ...state.settings };
 }
+
+
+export function addPublicWebPosts(scopeKey, items = []) {
+  const created = [];
+  for (const item of Array.isArray(items) ? items : []) created.push(createPublicWebPost(scopeKey, item));
+  return created;
+}
+
+export function togglePublicWebFavorite(scopeKey, postId, actorId = 'user') {
+  const state = read(scopeKey);
+  const post = (state.posts || []).find(item => item.id === postId);
+  if (!post) return null;
+  const favorites = Array.isArray(post.extra?.favorites) ? [...post.extra.favorites] : [];
+  const index = favorites.indexOf(actorId);
+  if (index >= 0) favorites.splice(index, 1); else favorites.push(actorId);
+  post.extra = { ...(post.extra || {}), favorites };
+  write(scopeKey, state);
+  return { favorited: favorites.includes(actorId) };
+}
+
+export function listPublicWebFavorites(scopeKey, actorId = 'user') {
+  return (read(scopeKey).posts || []).filter(post => (post.extra?.favorites || []).includes(actorId))
+    .sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+}
