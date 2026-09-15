@@ -6,8 +6,8 @@
 
 ## 1. 当前可靠基线
 
-- 仓库版本：`v0.4.42 / moli99`。
-- 当前阶段：微信主体已经形成可持续使用的私聊 / 群聊 / 朋友圈 / Memory / Fourth Wall / Automation 基础；下一大主线进入 **Phone Context Injection（手机 -> 酒馆正文）**。
+- 仓库版本：`v0.4.43 / moli100`。
+- 当前阶段：微信主体已经形成可持续使用的私聊 / 群聊 / 朋友圈 / Memory / Fourth Wall / Automation 基础；Phone Context Injection 第一阶段已落地：手机内容可经可编辑草稿临时注入下一轮正文，或直接写成一条 AI 正文；下一阶段根据实机测试再扩持久绑定/更多内容源。
 - 启动安全线：保留 moli86/87 bootstrap 故障入口；发布前必须执行全 JS `node --check`、相对 import 检查和浏览器真实模块加载检查。
 
 ## 2. 已完成并应视为当前行为的部分
@@ -89,3 +89,14 @@ User 提出：公共朋友圈可呈现角色“看过但没互动”的痕迹，
 ## 6. 下一步
 
 从下一代码节点开始进入 **Phone Context Injection**。第一步只做可扩展的 Context Source / Semantic Payload / Injection Plan 底座，并先接一个最小微信来源验证整条链；不一次性把所有来源和 UI 做完。
+
+
+## 8. moli100 新增：Phone Context Injection 第一阶段
+
+- 小手机聊天页“＋”进入“注入正文”编辑器。
+- 第一批 Context Source：当前私聊/群聊最近内容、近期/长期手机记忆、相关/最近朋友圈具体动态。
+- Source 原始数据不会被编辑器修改；选择来源只生成一份 Injection Draft，User 可直接删改补充。
+- 出口 A“注入下一轮上下文”：不写入 User 输入框、不伪造正文楼层；在 SillyTavern `GENERATION_STARTED` 时通过一次性 IN_CHAT system extension prompt 注入。成功生成后消费；停止/失败保留待重试。
+- 出口 B“直接作为 AI 正文插入”：User 确认后把编辑器当前文本永久写成一条 Assistant 正文，不自动继续生成。
+- 世界边界：私聊默认双方知情；群聊默认群成员知情；朋友圈不默认正文全员知情。注入本身不等于正文现场发生，也不等于所有角色全知。
+- 当前不做：长期绑定、自动选择注入、正文 -> 手机自动同步、小红书/微博/论坛实体功能。未来 App 继续走统一 Context Source 思路。

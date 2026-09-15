@@ -2649,3 +2649,48 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - 当前不实现该 UI，也不把 `seenBy` 升级成 wake event。若未来实现，优先使用 `momentId + viewerContactId` 聚合统计（viewCount / firstViewedAt / lastViewedAt），避免保存每次查看的完整事件和额外 API 消耗。
 - “没互动原因”只允许复用已有行为判断/已有剧情事实，不为一句 UI 文案单独调用模型；“没看原因”不得无依据随机编造。
 - 此设计候选不阻塞下一节点 Phone Context Injection。
+
+
+## v0.4.43 / moli100 — Phone Context Injection 第一阶段：可编辑跨世界桥
+
+### 目标行为
+让 User 在手机端选择已有内容，得到可编辑的注入草稿，并在两个明确出口中选择：A. 只作为酒馆下一轮生成的补充上下文；B. 直接永久写成下一条 AI / Assistant 正文。两者都不得修改手机原始记录。
+
+### 输入 / Context Source
+- 当前私聊最近内容：保留 User/联系人双方原始气泡文本，并标明默认仅双方知情。
+- 当前群聊最近内容：保留成员说话归属，并标明默认群成员知情、群外不自动知情。
+- Conversation 近期手机记忆与长期记忆。
+- 朋友圈：私聊优先列当前联系人资料朋友圈及 User/该联系人的公共动态；群聊列最近公共动态。朋友圈携带作者、点赞、评论、已知 seenBy，并明确不等于正文全员看过。
+- 第一阶段不调用额外 LLM 来“自动总结”草稿，避免为注入本身增加 API 成本；由确定性语义整理 + User 手工编辑完成。
+
+### 决策 / 生命周期
+1. User 在聊天页点“＋”进入注入正文页。
+2. 勾选来源 -> 生成 Injection Draft。
+3. User 可直接编辑；“恢复自动整理内容”只重建副本；“清空”不会删除手机原数据。
+4A. “注入下一轮上下文”把 Final Payload 按当前正文 scope 持久保存为 pending。
+5A. SillyTavern `GENERATION_STARTED` 时才挂入一次性 IN_CHAT system extension prompt；不写 User 输入框/正文楼层。
+6A. `GENERATION_ENDED` 后清除 pending；`GENERATION_STOPPED`/失败只撤掉活动 prompt，pending 保留，避免重试时丢失。
+4B. “直接作为 AI 正文插入”先二次确认，再把 Final Payload 作为一条非 system、非 user 的 Assistant 消息写入当前 SillyTavern chat，触发渲染并保存；插入后停住，不自动继续生成。
+
+### 边界 / 反例
+- 注入手机私聊不意味着正文其他 NPC 自动知道私聊内容。
+- 注入朋友圈不意味着所有正文角色都“看过”。
+- 编辑草稿不回写手机聊天、Memory 或朋友圈。
+- 临时上下文注入不制造正文楼层；AI 正文插入则明确永久改变正文历史。
+- 不做“一键整个手机全灌”；不做长期每轮绑定；不让 Automation 擅自决定跨墙内容。
+- 不把未来小红书/微博/论坛写死成微信逻辑；它们以后作为新的 Context Source 接入。
+
+### 代码变更
+- 新增 `src/storage/injection-store.js`：按正文 scope 保存/清除一次性 pending payload。
+- 新增 `src/core/tavern-injection.js`：SillyTavern generation 生命周期桥 + Assistant 正文写入桥。
+- `src/core/app.js`：注册/销毁 injection bridge。
+- `src/ui/phone-panel.js`：注入来源选择、可编辑预览、字符规模、恢复/清空、两种出口。
+- `style.css`：移动端注入编辑页。
+- `manifest.json`：版本更新为 0.4.43。
+
+### 验收
+- 临时注入：确认后 User 输入框和聊天历史不增加内容；下一轮模型能读到 payload；成功后 pending 消失。
+- 停止/失败：payload 不被误消费，可再次生成。
+- 编辑器：删改只影响 Final Payload，原手机内容保持原样。
+- AI 正文：确认后出现一条真实 Assistant 楼层，保存后刷新仍存在，并且不会自动生成下一轮。
+- 切换正文：pending 以 scope 隔离，不得串到另一个正文。

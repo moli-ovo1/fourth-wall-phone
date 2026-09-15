@@ -1053,3 +1053,63 @@
   object-fit:cover;
   border-radius:inherit;
 }
+
+/* moli100 · Phone Context Injection composer */
+.moli-injection-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 12px 92px;
+}
+.moli-injection-source-card,
+.moli-injection-editor-card {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(0,0,0,.08);
+}
+.moli-injection-source-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 2px;
+  border-bottom: 1px solid rgba(0,0,0,.07);
+}
+.moli-injection-source-row:last-child { border-bottom: 0; }
+.moli-injection-source-row input { margin-top: 3px; flex: 0 0 auto; }
+.moli-injection-source-row span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.moli-injection-source-row strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.moli-injection-source-row small { font-size: 11px; opacity: .58; }
+.moli-injection-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.moli-injection-editor-head small { opacity: .58; }
+.moli-injection-editor-card textarea {
+  width: 100%;
+  min-height: 230px;
+  resize: vertical;
+  box-sizing: border-box;
+  border: 1px solid rgba(0,0,0,.14);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,.9);
+  color: inherit;
+  font: inherit;
+  line-height: 1.55;
+}
+.moli-injection-editor-tools { display: flex; gap: 8px; margin-top: 8px; }
+.moli-injection-editor-tools > button { flex: 1; min-width: 0; }
+.moli-injection-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(247,247,247,.96);
+  border-top: 1px solid rgba(0,0,0,.08);
+  backdrop-filter: blur(12px);
+  z-index: 4;
+}
+.moli-injection-footer button { min-width: 0; white-space: normal; line-height: 1.25; }
