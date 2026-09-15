@@ -24,6 +24,7 @@ import { getTavernUserContext, replaceUserPlaceholder } from '../core/tavern-use
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, markMomentChatEventsDelivered } from '../storage/moments-store.js';
+import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -1206,7 +1207,21 @@ function parsePublicWebBatch(text) {
     title: String(item?.title || '').trim().slice(0,120),
     content: String(item?.content || '').trim().slice(0,6000),
     tags: Array.isArray(item?.tags) ? item.tags.map(x=>String(x).slice(0,30)).slice(0,8) : [],
-    comments: Array.isArray(item?.comments) ? item.comments.slice(0,8).map((c,i)=>({id:`seed_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now()})).filter(c=>c.content) : [],
+    comments: (() => {
+      const rawComments = Array.isArray(item?.comments) ? item.comments.slice(0,8) : [];
+      const ids = rawComments.map((_,i)=>`seed_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`);
+      return rawComments.map((c,i)=>{
+        const replyRaw = c?.replyTo ?? c?.replyToCommentId ?? '';
+        let replyToCommentId = '';
+        const n = Number(replyRaw);
+        if (Number.isInteger(n) && n >= 1 && n <= ids.length) replyToCommentId = ids[n-1];
+        else if (String(replyRaw).trim()) {
+          const target = rawComments.findIndex((x,j)=>j<i && String(x?.author||'').trim()===String(replyRaw).trim());
+          if (target >= 0) replyToCommentId = ids[target];
+        }
+        return {id:ids[i],author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now(),replyToCommentId};
+      }).filter(c=>c.content);
+    })(),
     extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), imageText:String(item?.imageText || ''), answer:String(item?.answer || '') }
   })).filter(item => item.title && (item.section !== 'xiaohongshu' || (item.extra?.imagePrompt && item.extra?.imageText)));
 }
@@ -1217,7 +1232,28 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
   assertApiConfig(config);
   const userName = getTavernUserContext().name || 'User';
   const recent = getRecentTavernBody({ messageLimit: 14, charLimit: 12000 });
-  const context = recent?.messages?.map(m=>`${m?.role==='user'?userName:(m?.name||'角色')}：${String(m?.content||'')}`).join('\n') || '当前没有打开正文。不要读取、猜测或讨论程序代码、插件、API、Prompt、SillyTavern、模型、世界书、角色卡、调试信息；只生成自然的普通社区内容。';
+  let context = recent?.messages?.map(m=>`${m?.role==='user'?userName:(m?.name||'角色')}：${String(m?.content||'')}`).join('\n') || '';
+  if (!context.trim()) {
+    const selectedId = getSelectedWorldContactId();
+    const baseContact = getContacts().find(item => String(item.id || '') === selectedId) || null;
+    const contact = baseContact ? hydratedContact(baseContact) : null;
+    if (contact) {
+      const scanText = [contact.name, contact.intro, contact.prompt, ...(contact.kind==='tavern'?Object.values(contact?.source?.roleFidelity||{}):[])].filter(Boolean).join('\n');
+      const worldBook = contact.kind === 'custom'
+        ? await getActivatedCustomWorldBook({ contact, scanText })
+        : await getActivatedTavernWorldBook({ contact, scanText });
+      const profile = contact.kind === 'custom' && Array.isArray(contact.profileEntries)
+        ? getActivatedProfileEntries(contact.profileEntries, scanText).map(entry=>`【${entry.title}】\n${entry.content}`).join('\n\n')
+        : '';
+      context = [
+        `【当前角色世界：${contact.name || contact?.source?.originalName || '未命名角色'}】`,
+        contact.intro, contact.prompt,
+        contact.kind==='tavern' ? Object.values(contact?.source?.roleFidelity||{}).filter(Boolean).join('\n\n') : '',
+        profile, worldBook?.text || ''
+      ].map(v=>String(v||'').trim()).filter(Boolean).join('\n\n');
+    }
+  }
+  if (!context.trim()) context = '当前没有打开正文，也没有选择“当前角色世界”。不要读取、猜测或讨论程序代码、插件、API、Prompt、SillyTavern、模型、世界书、角色卡、调试信息；只生成自然的普通社区内容。';
   const ghostRule = ghostStoriesEnabled ? '允许在内容自然适合时选择“莲蓬鬼话”。' : '“莲蓬鬼话”关闭：不得生成莲蓬鬼话分类，也不得用其他分类绕过限制生成灵异鬼话主题。';
   const tianyaSystem = `# 天涯社区 · 杂谈板块生成器\n\n你正在模拟一个真实存在于当前故事世界中的中文老式公共论坛。这里不是剧情旁白、角色聊天室、作者讨论区或为 User 服务的信息面板。你的任务不是写“像论坛的文案”，而是截取这个世界此刻真实天涯论坛中的一页。\n\n【世界来源】\n论坛与当前故事共享同一个现实世界。内容应以 {{char}}、{{user}}、正文世界、正文剧情、当前时间地点与社会环境为现实基础进行发散。不要机械复述正文，也不要让每个帖子都直接谈论 {{char}} 或 {{user}}。正文里的一件事可以向外扩散成当地人的吐槽、求助、社会讨论、旧事回忆、行业讨论，也允许同时存在与当前剧情无关的普通帖子。\n\n【天涯社区气质】\n这是传统中文 BBS，不是微博、小红书、知乎或现代短视频评论区。网友身份感强，昵称比头像重要；标题承担吸引和筛选作用；既有长文也有一句话水帖；有求助、树洞、记录、连载、讨论、争论、围观、爆料、转载、考据。楼主可能更新；网友会催更、马克、插眼、占楼、歪楼。回复质量和长度高度不均，有善意、刻薄、怀疑、抬杠、冷嘲，也可能认真长评；不要求正确、不要求共识、不要求都喜欢楼主。语言可有早期中文论坛感，但不同网友必须有不同口吻。\n\n【帖子形式】\n主动变化帖型，不要连续套同一模板。可以是：求助帖、情感/树洞帖、经历帖、直播/连载帖、讨论帖、社会观察帖、本地帖、职业帖、八卦帖、爆料帖、怀旧帖、历史/煮酒式长帖、娱乐帖、闲聊/水帖、调查/投票式帖子，以及世界中自然出现的其他形式。${ghostRule}\n\n【标题】\n标题首先像真人会在论坛取的标题，其次才考虑文学性。允许朴素、啰嗦、口语、悬念、求助、818、记录、讨论。不要整页使用现代内容营销式“震惊/必看/大盘点/你绝对想不到”。\n\n【正文】\n长度自然变化：几十字、几百字、少数长帖都可以。楼主写作能力不同：有人条理清楚，有人啰嗦，有人分段混乱，有人错别字或标点习惯明显。不要统一润色成同一种写作腔。\n\n【回复生态】\n回复是线性楼层。可以认真回答、追问、质疑、支持、反对、阴阳怪气、争吵、补充个人经历、纠正事实、求后续、马克、插眼、占楼、跑题、回复另一楼、引用某句话、给专业解释或只留一句话。不同网友有不同知识、立场和表达习惯。\n\n【页面多样性】\n一次刷新是一页论坛，不是专题策划。帖子之间必须有明显差异。部分可受剧情影响，部分来自世界社会背景，部分只是普通人的日常。禁止因为运行环境出现 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、生成器、调试信息，就默认这些属于故事世界；除非正文明确证明它们存在，否则一律不可见。\n\n【常驻规则】\n帖子是否常驻由界面中的红色笑脸决定，不由你决定。你只负责生成本次新帖子。\n\n只输出严格 JSON，不要解释。`;
   const xiaohongshuSystem = `# 小红书社区模拟器
