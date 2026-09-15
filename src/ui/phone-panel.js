@@ -82,6 +82,8 @@ import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
 import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory } from '../storage/moments-store.js';
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
+import { getPendingInjection, setPendingInjection, clearPendingInjection } from '../storage/injection-store.js';
+import { insertAssistantBody } from '../core/tavern-injection.js';
 
 const APP_ICON_URLS = Object.freeze({
   wechat: new URL('../../assets/apps/wechat.jpg', import.meta.url).href,
@@ -407,6 +409,34 @@ export function createPhonePanel({
         <button class="moli-plus" data-action="more" aria-label="更多">＋</button>
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
         <button class="moli-send" data-action="send">发送</button>
+      </footer>
+    </section>
+
+    <section class="moli-page" data-page="injection-composer">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="injection-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">注入正文</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-injection-page">
+        <div class="moli-settings-note">选择手机内容后会生成一份本次跨世界草稿。你可以直接删、改、补充；编辑只影响这次注入，不会修改手机原始记录。</div>
+        <section class="moli-injection-source-card">
+          <div class="moli-conversation-section-title">选择内容源</div>
+          <div data-injection-sources></div>
+        </section>
+        <section class="moli-injection-editor-card">
+          <div class="moli-injection-editor-head"><strong>注入预览</strong><small data-injection-size>0 字符</small></div>
+          <textarea rows="16" data-injection-editor placeholder="选择上方内容源，或直接在这里输入希望跨过世界边界的内容。"></textarea>
+          <div class="moli-injection-editor-tools">
+            <button type="button" class="moli-secondary-btn" data-action="injection-rebuild">恢复自动整理内容</button>
+            <button type="button" class="moli-secondary-btn" data-action="injection-clear">清空</button>
+          </div>
+        </section>
+        <div class="moli-settings-note" data-injection-pending-status></div>
+      </main>
+      <footer class="moli-injection-footer">
+        <button type="button" class="moli-secondary-btn" data-action="injection-arm">注入下一轮上下文</button>
+        <button type="button" class="moli-primary-btn" data-action="injection-insert-ai">直接作为 AI 正文插入</button>
       </footer>
     </section>
 
@@ -1108,6 +1138,10 @@ export function createPhonePanel({
   const chatTitle = panel.querySelector('[data-chat-title]');
   const chatError = panel.querySelector('[data-chat-error]');
   const chatErrorText = panel.querySelector('[data-chat-error-text]');
+  const injectionSources = panel.querySelector('[data-injection-sources]');
+  const injectionEditor = panel.querySelector('[data-injection-editor]');
+  const injectionSize = panel.querySelector('[data-injection-size]');
+  const injectionPendingStatus = panel.querySelector('[data-injection-pending-status]');
   const input = panel.querySelector('.moli-input');
   const sendButton = panel.querySelector('[data-action="send"]');
   const addMenu = panel.querySelector('[data-add-menu]');
@@ -1510,6 +1544,135 @@ export function createPhonePanel({
     return getConversation(scopeKey, currentContactId);
   }
 
+
+  function injectionMomentText(item) {
+    const authorName = momentActorName(item?.author);
+    const likes = (item?.likes || []).map(entry => momentActorName(entry)).filter(Boolean);
+    const comments = (item?.comments || []).map(entry => {
+      const who = momentActorName(entry?.actor);
+      if (entry?.deletedAt) return `${who} 删除了评论${entry?.deletionReason ? `：${entry.deletionReason}` : ''}`;
+      return `${who}：${String(entry?.content || '').trim()}`;
+    }).filter(Boolean);
+    const seen = (item?.seenBy || []).map(id => {
+      const linked = contact(id);
+      return linked ? canonicalContactName(linked) : '';
+    }).filter(Boolean);
+    return [
+      `${authorName} 发布朋友圈：${String(item?.content || '').trim()}`,
+      likes.length ? `点赞：${likes.join('、')}` : '',
+      comments.length ? `评论：\n${comments.join('\n')}` : '',
+      seen.length ? `已知看过：${seen.join('、')}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  function injectionSourceCatalog() {
+    const scopeKey = getScopeKey?.();
+    const conversation = currentConversation();
+    if (!scopeKey || !conversation) return [];
+    const sources = [];
+    const recentMessages = (conversation.messages || []).slice(-Math.min(40, Math.max(10, Number(conversation.recentChatLimit || 20))));
+    if (recentMessages.length) {
+      sources.push({
+        id: 'conversation:recent',
+        label: conversation.type === 'group' ? `群聊最近 ${recentMessages.length} 条` : `私聊最近 ${recentMessages.length} 条`,
+        kind: 'chat',
+        build: () => {
+          const title = conversationDisplayTitle(conversation);
+          const boundary = conversation.type === 'group'
+            ? `知识归属：这是「${title}」群聊内容，默认群成员知道；群外角色不因此自动知道。`
+            : `知识归属：这是 User 与 ${canonicalContactName(contact(conversation.contactId || currentContactId))} 的私聊，默认只有双方知道。`;
+          const lines = recentMessages.map(message => `${messageSenderName(message, conversation)}：${String(message?.content || '').trim()}`).filter(line => !line.endsWith('：'));
+          return [`【微信${conversation.type === 'group' ? '群聊' : '私聊'} · ${title}】`, boundary, ...lines].join('\n');
+        },
+      });
+    }
+    const memory = getConversationMemory(scopeKey, currentContactId);
+    const recentMemory = Array.isArray(memory?.recent) ? memory.recent.map(x => String(x?.content || '').trim()).filter(Boolean) : [];
+    if (recentMemory.length) {
+      sources.push({ id: 'memory:recent', label: `手机近期记忆（${recentMemory.length} 段）`, kind: 'memory', build: () => `【手机近期记忆】\n${recentMemory.join('\n\n')}` });
+    }
+    if (String(memory?.longTermSummary || '').trim()) {
+      sources.push({ id: 'memory:long', label: '手机长期记忆', kind: 'memory', build: () => `【手机长期记忆】\n${String(memory.longTermSummary).trim()}` });
+    }
+
+    let moments = [];
+    if (conversation.type === 'private') {
+      const contactId = String(conversation.contactId || currentContactId || '');
+      const profile = listProfileMoments(scopeKey, contactId);
+      const publicRelevant = listPublicMoments(scopeKey).filter(item => ['user', contactId].includes(String(item?.author?.id || '')));
+      const seen = new Set();
+      moments = [...profile, ...publicRelevant].filter(item => item?.id && !seen.has(item.id) && seen.add(item.id)).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,8);
+    } else {
+      moments = listPublicMoments(scopeKey).slice(0,8);
+    }
+    moments.forEach((item, index) => {
+      const author = momentActorName(item.author);
+      const preview = String(item.content || '').replace(/\s+/g, ' ').slice(0, 34);
+      sources.push({
+        id: `moment:${item.surface || 'public'}:${item.id}`,
+        label: `朋友圈 · ${author}：${preview}${String(item.content || '').length > 34 ? '…' : ''}`,
+        kind: 'moment',
+        build: () => `【朋友圈】\n知识归属：这是手机朋友圈中的动态；只有实际接触到该动态的人才能据此知道内容，不默认正文全员知情。\n${injectionMomentText(item)}`,
+      });
+    });
+    return sources;
+  }
+
+  function selectedInjectionSourceIds() {
+    return [...(injectionSources?.querySelectorAll('input[data-injection-source]:checked') || [])].map(input => input.value);
+  }
+
+  function rebuildInjectionDraft() {
+    const selected = new Set(selectedInjectionSourceIds());
+    const catalog = injectionSourceCatalog();
+    const parts = catalog.filter(source => selected.has(source.id)).map(source => source.build()).filter(Boolean);
+    injectionEditor.value = parts.join('\n\n---\n\n');
+    syncInjectionSize();
+  }
+
+  function syncInjectionSize() {
+    const length = String(injectionEditor?.value || '').length;
+    if (injectionSize) injectionSize.textContent = `约 ${length} 字符`;
+  }
+
+  function renderInjectionComposer() {
+    const scopeKey = getScopeKey?.();
+    const catalog = injectionSourceCatalog();
+    if (injectionSources) {
+      injectionSources.innerHTML = catalog.length
+        ? catalog.map((source, index) => `<label class="moli-injection-source-row"><input type="checkbox" data-injection-source value="${escapeHtml(source.id)}" ${index === 0 ? 'checked' : ''}><span><strong>${escapeHtml(source.label)}</strong><small>${source.kind === 'chat' ? '原始聊天副本' : source.kind === 'memory' ? '手机记忆' : '具体动态'}</small></span></label>`).join('')
+        : '<div class="moli-empty">当前聊天还没有可整理的手机内容。你仍可以直接在下方编辑框输入内容。</div>';
+    }
+    rebuildInjectionDraft();
+    const pending = getPendingInjection(scopeKey);
+    if (injectionPendingStatus) injectionPendingStatus.textContent = pending
+      ? `当前正文已有一份等待“下一轮生成”使用的临时注入（${pending.text.length} 字符）。重新确认会替换它。`
+      : '当前没有等待注入下一轮正文的内容。';
+  }
+
+  async function armInjectionForNextGeneration() {
+    const scopeKey = getScopeKey?.();
+    const text = String(injectionEditor?.value || '').trim();
+    if (!scopeKey || !text) return toast('请先填写要注入的内容');
+    const labels = injectionSourceCatalog().filter(source => selectedInjectionSourceIds().includes(source.id)).map(source => source.label);
+    setPendingInjection(scopeKey, { text, sourceSummary: labels.join('；') });
+    if (injectionPendingStatus) injectionPendingStatus.textContent = `已等待下一轮正文生成 · ${text.length} 字符。生成成功后自动消费；停止/失败会保留。`;
+    toast('已准备注入下一轮正文');
+  }
+
+  async function insertInjectionAsAssistantBody() {
+    const text = String(injectionEditor?.value || '').trim();
+    if (!text) return toast('请先填写要插入的正文');
+    const ok = windowRef.confirm?.('将把当前编辑内容永久写成酒馆的一条 AI / Assistant 正文。之后正文会把它视为已经发生的历史；插入后不会自动继续生成。\n\n确认插入？') ?? false;
+    if (!ok) return;
+    try {
+      await insertAssistantBody(text);
+      toast('已作为 AI 正文插入酒馆');
+    } catch (error) {
+      console.error('[moli小手机] insert assistant body failed', error);
+      toast(error?.message || '插入 AI 正文失败');
+    }
+  }
 
   function messageSenderName(message, conversation) {
     if (message?.role === 'user') return '我';
@@ -3482,6 +3645,7 @@ export function createPhonePanel({
     if (name === 'contacts-tab') renderContactsTab();
     if (name === 'moments') renderMoments();
     if (name === 'contact-moments') renderContactMoments();
+    if (name === 'injection-composer') renderInjectionComposer();
 
     if (name === 'chat') {
       renderChat();
@@ -6748,8 +6912,24 @@ export function createPhonePanel({
   panel.querySelector(
     '[data-action="more"]'
   ).onclick = () => {
-    toast('＋ 小功能待定');
+    show('injection-composer');
   };
+
+  panel.querySelector('[data-action="injection-back"]')?.addEventListener('click', () => show('chat'));
+  injectionSources?.addEventListener('change', event => {
+    if (event.target?.matches?.('[data-injection-source]')) rebuildInjectionDraft();
+  });
+  injectionEditor?.addEventListener('input', syncInjectionSize);
+  panel.querySelector('[data-action="injection-rebuild"]')?.addEventListener('click', rebuildInjectionDraft);
+  panel.querySelector('[data-action="injection-clear"]')?.addEventListener('click', () => {
+    if (injectionEditor) injectionEditor.value = '';
+    const scopeKey = getScopeKey?.();
+    if (scopeKey) clearPendingInjection(scopeKey);
+    syncInjectionSize();
+    if (injectionPendingStatus) injectionPendingStatus.textContent = '当前没有等待注入下一轮正文的内容。';
+  });
+  panel.querySelector('[data-action="injection-arm"]')?.addEventListener('click', armInjectionForNextGeneration);
+  panel.querySelector('[data-action="injection-insert-ai"]')?.addEventListener('click', insertInjectionAsAssistantBody);
 
   panel.querySelector(
     '[data-action="send"]'
