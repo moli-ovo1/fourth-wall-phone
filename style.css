@@ -1215,3 +1215,27 @@
   #moli-phone-panel .moli-launcher-grid{grid-template-columns:repeat(4,64px);}
   #moli-phone-panel .moli-app-icon{width:64px;}
 }
+
+/* moli107 · 我们的墙层级视觉 + 最近轮次 */
+#moli-phone-panel .moli-injection-source-app>summary{font-size:17px;font-weight:750;color:#222;padding:13px 2px;}
+#moli-phone-panel .moli-injection-source-section>summary{font-size:15px;font-weight:680;color:#4a4a4a;padding:11px 2px;}
+#moli-phone-panel .moli-injection-source-owner>summary{font-size:13px;font-weight:620;color:#777;padding:10px 2px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+#moli-phone-panel .moli-injection-source-owner>summary>span{min-width:0;flex:1;}
+#moli-phone-panel .moli-injection-source-owner>summary::before{color:#999;flex:0 0 18px;}
+#moli-phone-panel .moli-injection-source-items{color:#888;}
+#moli-phone-panel .moli-injection-source-row strong{font-size:12px;font-weight:520;color:#666;}
+#moli-phone-panel .moli-injection-recent-btn{flex:0 0 auto;border:1px solid #d7d7d7;border-radius:999px;background:#fafafa;color:#777;padding:4px 8px;font-size:11px;line-height:1.2;cursor:pointer;}
+
+/* moli107 · Avatar Runtime: all avatar surfaces share the same image geometry */
+#moli-phone-panel .moli-avatar,
+#moli-phone-panel .moli-mini-avatar,
+#moli-phone-panel .moli-sync-avatar,
+#moli-phone-panel .moli-info-member-avatar,
+#moli-phone-panel .moli-contact-avatar-picker,
+#moli-phone-panel [class*="avatar"]{background-position:center;background-repeat:no-repeat;}
+#moli-phone-panel .moli-avatar img,
+#moli-phone-panel .moli-mini-avatar img,
+#moli-phone-panel .moli-sync-avatar img,
+#moli-phone-panel .moli-info-member-avatar img,
+#moli-phone-panel .moli-contact-avatar-picker img,
+#moli-phone-panel [class*="avatar"]>img{width:100%;height:100%;display:block;object-fit:cover;object-position:center;}
