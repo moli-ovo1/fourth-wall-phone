@@ -1191,7 +1191,12 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
 }
 
 
-function parsePublicWebBatch(text) {
+function safeInternetName(value, userName, fallback = '网友') {
+  const name = String(value || fallback).trim().slice(0, 24) || fallback;
+  return name === String(userName || '').trim() ? fallback : name;
+}
+
+function parsePublicWebBatch(text, userName = 'User') {
   const raw = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   let data;
   try { data = JSON.parse(raw); } catch {
@@ -1203,7 +1208,7 @@ function parsePublicWebBatch(text) {
   return posts.slice(0, 12).map(item => ({
     section: ['tianya','xiaohongshu','zhihu'].includes(item?.section) ? item.section : 'tianya',
     type: String(item?.type || ''),
-    author: { type:'internet_actor', id:String(item?.authorId || ''), name:String(item?.author || '匿名网友').slice(0,24) },
+    author: { type:'internet_actor', id:String(item?.authorId || ''), name:safeInternetName(item?.author, userName, '匿名网友') },
     title: String(item?.title || '').trim().slice(0,120),
     content: String(item?.content || '').trim().slice(0,6000),
     tags: Array.isArray(item?.tags) ? item.tags.map(x=>String(x).slice(0,30)).slice(0,8) : [],
@@ -1219,10 +1224,10 @@ function parsePublicWebBatch(text) {
           const target = rawComments.findIndex((x,j)=>j<i && String(x?.author||'').trim()===String(replyRaw).trim());
           if (target >= 0) replyToCommentId = ids[target];
         }
-        return {id:ids[i],author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now(),replyToCommentId};
+        return {id:ids[i],author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now(),replyToCommentId};
       }).filter(c=>c.content);
     })(),
-    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), imageText:String(item?.imageText || ''), answer:String(item?.answer || ''), answers:Array.isArray(item?.answers)?item.answers.slice(0,6).map((a,ai)=>({id:String(a?.id||`ans_${Date.now()}_${ai}`),author:{type:'internet_actor',id:String(a?.authorId||''),name:String(a?.author||'匿名用户').slice(0,24)},content:String(a?.content||a?.answer||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:Array.isArray(a?.comments)?a.comments.slice(0,15).map((c,ci)=>({id:String(c?.id||`zac_${Date.now()}_${ai}_${ci}`),author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:String(c?.replyToCommentId||'')})).filter(c=>c.content):[]})).filter(a=>a.content):[] }
+    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), imageText:String(item?.imageText || ''), answer:String(item?.answer || ''), answers:Array.isArray(item?.answers)?item.answers.slice(0,6).map((a,ai)=>({id:String(a?.id||`ans_${Date.now()}_${ai}`),author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author, userName, '匿名用户')},content:String(a?.content||a?.answer||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:Array.isArray(a?.comments)?a.comments.slice(0,15).map((c,ci)=>({id:String(c?.id||`zac_${Date.now()}_${ai}_${ci}`),author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:String(c?.replyToCommentId||'')})).filter(c=>c.content):[]})).filter(a=>a.content):[] }
   })).filter(item => item.title && (item.section !== 'xiaohongshu' || (item.extra?.imagePrompt && item.extra?.imageText)));
 }
 
@@ -1345,12 +1350,13 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
     const result=await generateProviderText(config,{system,messages:[{role:'user',content:user}]},{signal,timeoutMs:120000});
     text=String(result?.text||'').trim();
   }
-  let posts=parsePublicWebBatch(text).filter(p=>section==='recommend' || p.section===section);
+  let posts=parsePublicWebBatch(text, userName).filter(p=>section==='recommend' || p.section===section);
   if (!ghostStoriesEnabled) posts=posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
   return posts;
 }
 
 export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}) {
+  const userName = getTavernUserContext().name || 'User';
   if (!scopeKey || !post) throw new Error('当前帖子不可用');
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const existing=(post.comments||[]).map((c,i)=>`${i+1}楼 ${c.author?.name||'网友'}：${c.content||''}`).join('\n');
@@ -1359,11 +1365,12 @@ export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
   const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
   let data; try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('回复刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
-  return (Array.isArray(data?.comments)?data.comments:[]).slice(0,6).map(c=>{const floor=Number.parseInt(String(c?.replyToFloor||''),10);const target=Number.isInteger(floor)&&floor>=1&&floor<=(post.comments||[]).length?(post.comments||[])[floor-1]:null;return {author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,1000),replyToCommentId:String(target?.id||'')};}).filter(c=>c.content);
+  return (Array.isArray(data?.comments)?data.comments:[]).slice(0,6).map(c=>{const floor=Number.parseInt(String(c?.replyToFloor||''),10);const target=Number.isInteger(floor)&&floor>=1&&floor<=(post.comments||[]).length?(post.comments||[])[floor-1]:null;return {author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,1000),replyToCommentId:String(target?.id||'')};}).filter(c=>c.content);
 }
 
 
 export async function generateXiaohongshuCommentRefresh({ scopeKey, post, signal } = {}) {
+  const userName = getTavernUserContext().name || 'User';
   if (!scopeKey || !post) throw new Error('当前笔记不可用');
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const comments=Array.isArray(post.comments)?post.comments:[];
@@ -1379,7 +1386,7 @@ export async function generateXiaohongshuCommentRefresh({ scopeKey, post, signal
     const id=`webc_${Date.now()}_${Math.random().toString(36).slice(2,8)}_${created.length}`;
     const requested=String(c?.replyToCommentId||'');
     const replyToCommentId=known.has(requested)?requested:'';
-    const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,800),replyToCommentId};
+    const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId};
     if(item.content){created.push(item);known.add(id);}
   }
   return created;
@@ -1387,6 +1394,7 @@ export async function generateXiaohongshuCommentRefresh({ scopeKey, post, signal
 
 
 export async function generateZhihuAnswerCommentRefresh({ scopeKey, post, answer, signal } = {}) {
+  const userName = getTavernUserContext().name || 'User';
   if (!scopeKey || !post || !answer) throw new Error('当前知乎回答不可用');
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const comments=Array.isArray(answer.comments)?answer.comments:[];
@@ -1400,7 +1408,7 @@ export async function generateZhihuAnswerCommentRefresh({ scopeKey, post, answer
   for(const c of (Array.isArray(data?.comments)?data.comments:[]).slice(0,6)){
     const id=`zac_${Date.now()}_${Math.random().toString(36).slice(2,8)}_${created.length}`;
     const requested=String(c?.replyToCommentId||'');
-    const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:known.has(requested)?requested:''};
+    const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:known.has(requested)?requested:''};
     if(item.content){created.push(item);known.add(id);}
   }
   return created;
