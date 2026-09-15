@@ -80,7 +80,7 @@ import { getTavernWorldBookSnapshot, getTavernWorldBookCatalog } from '../core/t
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
-import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory, setMomentUserRead, recordProfileVisit, getProfileVisits, recordMomentChatEvent } from '../storage/moments-store.js';
+import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, exportProfileMomentToPublic, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory, setMomentUserRead, recordProfileVisit, getProfileVisits, recordMomentChatEvent } from '../storage/moments-store.js';
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
 import { getPendingInjection, setPendingInjection, clearPendingInjection } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
@@ -252,12 +252,9 @@ export function createPhonePanel({
         <div class="moli-nav-title">朋友圈</div>
         <div class="moli-nav-side right moli-moments-nav-actions"><button class="moli-icon-btn" data-action="moments-refresh" aria-label="刷新朋友圈">↻</button><button class="moli-icon-btn" data-action="moments-compose" aria-label="发朋友圈">📷</button></div>
       </header>
-      <div class="moli-moments-connect-row">
-        <span><strong>允许联系人互相互动</strong><small>默认开启。只控制联系人彼此点赞/评论；联系人始终可以对你的朋友圈互动。</small></span>
-        <label class="moli-switch"><input type="checkbox" data-moments-cross-interaction><i></i></label>
-      </div>
       <div class="moli-moments-cover" data-moments-cover role="button" aria-label="更换朋友圈封面">
         <div class="moli-moments-cover-shade"></div>
+        <label class="moli-moments-cross-compact" data-moments-cross-control><span>允许所有角色互动</span><span class="moli-switch"><input type="checkbox" data-moments-cross-interaction><i></i></span></label>
         <div class="moli-moments-cover-user"><span data-moments-cover-name></span><span data-moments-cover-avatar></span></div>
         <div class="moli-moments-traces" data-moments-traces></div>
       </div>
@@ -3593,7 +3590,7 @@ export function createPhonePanel({
       const comments = (item.comments || []).length
         ? `<div class="moli-moment-comments">${item.comments.map(comment => comment.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(momentActorName(comment.actor))}</strong> 删除了评论${comment.deletionReason ? `：${escapeHtml(comment.deletionReason)}` : ''}</div>` : `<div ${String(comment.actor?.id||'')==='user' ? `class="moli-user-comment-hold" data-user-comment-surface="public" data-moment-id="${escapeHtml(item.id)}" data-comment-id="${escapeHtml(comment.id)}"` : ''}><strong>${escapeHtml(momentActorName(comment.actor))}</strong>：${escapeHtml(comment.content || '')}</div>`).join('')}</div>` : '';
       return `<article class="moli-moment" data-moment-id="${escapeHtml(item.id)}">
-        ${avatar}
+        ${!isUser && authorContact ? `<button class="moli-moment-avatar-jump" data-action="moment-open-chat" data-contact-id="${escapeHtml(authorContact.id)}" aria-label="进入${escapeHtml(canonicalContactName(authorContact))}聊天">${avatar}</button>` : avatar}
         <div class="moli-moment-main">
           <div class="moli-moment-author">${escapeHtml(momentActorName(item.author))}</div>
           <div class="moli-moment-content">${escapeHtml(item.content || '')}${!isUser && readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div>
@@ -3672,7 +3669,7 @@ export function createPhonePanel({
       const likedByUser = (entry.likes || []).some(x => String(x?.id || '') === 'user');
       const likes = entry.likes?.length ? `<div class="moli-moment-likes">♥ ${escapeHtml(entry.likes.map(x => momentActorName(x)).join('、'))}</div>` : '';
       const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => c.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(momentActorName(c.actor))}</strong> 删除了评论${c.deletionReason ? `：${escapeHtml(c.deletionReason)}` : ''}</div>` : `<div ${String(c.actor?.id||'')==='user' ? `class="moli-user-comment-hold" data-user-comment-surface="profile" data-moment-id="${escapeHtml(entry.id)}" data-comment-id="${escapeHtml(c.id)}"` : ''}><strong>${escapeHtml(momentActorName(c.actor))}</strong>：${escapeHtml(c.content || '')}</div>`).join('')}</div>` : '';
-      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(momentActorName(entry.author) || canonicalContactName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
+      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(momentActorName(entry.author) || canonicalContactName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button><button class="moli-moment-action" data-action="profile-moment-export-public" data-moment-id="${escapeHtml(entry.id)}">投入我的朋友圈</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
     }).join('');
   }
 
@@ -6323,7 +6320,7 @@ export function createPhonePanel({
   panel.querySelector('[data-action="moments-compose-cancel"]')?.addEventListener('click', () => show('moments'));
   panel.querySelector('[data-action="moments-publish"]')?.addEventListener('click', publishMoment);
 
-  momentsCover?.addEventListener('click', () => momentsCoverInput?.click());
+  momentsCover?.addEventListener('click', event => { if(event.target.closest?.('[data-moments-cross-control]'))return; momentsCoverInput?.click(); });
   momentsCoverInput?.addEventListener('change', () => { const file=momentsCoverInput.files?.[0]; if(!file)return; const reader=new FileReader(); reader.onload=()=>{ const scopeKey=getScopeKey?.(); if(!scopeKey)return; updateMomentsSettings(scopeKey,{coverImage:String(reader.result||'')}); renderMoments(); toast('朋友圈封面已更换'); }; reader.readAsDataURL(file); momentsCoverInput.value=''; });
 
     momentsCrossInteraction?.addEventListener('change', () => {
@@ -6394,6 +6391,12 @@ export function createPhonePanel({
     if (button.dataset.action === 'profile-moment-forward') {
       const entry = listProfileMoments(scopeKey, item.id).find(moment => String(moment.id) === momentId);
       if (entry) openMomentForward(entry, { surface: 'profile', ownerContactId: item.id });
+      return;
+    }
+    if (button.dataset.action === 'profile-moment-export-public') {
+      exportProfileMomentToPublic(scopeKey, item.id, momentId);
+      renderContactMoments();
+      toast('已投入我的朋友圈，可开启全局角色互动');
     }
   });
 
@@ -6432,9 +6435,15 @@ export function createPhonePanel({
     const actionButton = event.target.closest?.('[data-action]');
     if (!actionButton) return;
     const scopeKey = getScopeKey?.();
-    const momentId = String(actionButton.dataset.momentId || '');
-    if (!scopeKey || !momentId) return;
     const action = String(actionButton.dataset.action || '');
+    if (!scopeKey) return;
+    if (action === 'moment-open-chat') {
+      const contactId=String(actionButton.dataset.contactId||''); if(!contactId)return;
+      const conv=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===contactId).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || ensureConversation(scopeKey,contactId);
+      currentContactId=String(conv?.conversationKey||contactId); markConversationRead(scopeKey,currentContactId); show('chat'); return;
+    }
+    const momentId = String(actionButton.dataset.momentId || '');
+    if (!momentId) return;
     if (action === 'moment-comment-delete') {
       const reason = String(windowRef.prompt?.('删除原因（角色会看到）', '') || '').trim();
       if (!(windowRef.confirm?.('删除这条评论？删除后会保留“已删除”和原因。') ?? true)) return;
