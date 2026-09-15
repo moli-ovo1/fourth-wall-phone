@@ -6289,7 +6289,12 @@ export function createPhonePanel({
     const author = escapeHtml(post.author?.name || '匿名网友');
     const commonTop = `<div class="moli-web-detail-nav"><button data-action="public-web-detail-back">← 返回</button>${post.section==='tianya'?`<button data-action="tianya-replies-refresh" data-post-id="${escapeHtml(post.id)}">[刷新]</button>`:''}<button data-action="public-web-favorite" data-post-id="${escapeHtml(post.id)}">[${favorited?'取消收藏':'收藏本帖'}]</button></div>`;
     if (post.section === 'xiaohongshu') {
-      feed.innerHTML = `${commonTop}<article class="moli-xhs-detail"><div class="moli-xhs-author">${author}</div><h2>${escapeHtml(post.title)}</h2>${post.extra?.imagePrompt?`<div class="moli-xhs-image-placeholder">📷 ${escapeHtml(post.extra.imagePrompt)}</div>`:''}<p>${escapeHtml(post.content)}</p><div class="moli-xhs-tags">${(post.tags||[]).map(x=>`#${escapeHtml(x)}`).join(' ')}</div><h3>评论</h3>${comments.map(c=>`<div class="moli-xhs-comment"><b>${escapeHtml(c.author?.name||'网友')}</b> ${escapeHtml(c.content||'')}</div>`).join('')||'<div class="moli-web-muted">暂无评论</div>'}<button class="moli-web-reply-btn" data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">说点什么…</button></article>`;
+      const topComments = comments.filter(c=>!c.replyToCommentId);
+      const commentHtml = topComments.map(c=>{
+        const replies=comments.filter(r=>String(r.replyToCommentId||'')===String(c.id));
+        return `<div class="moli-xhs-comment-thread"><div class="moli-xhs-comment"><b>${escapeHtml(c.author?.name||'网友')}</b><p>${escapeHtml(c.content||'')}</p><button data-action="xhs-comment-reply" data-post-id="${escapeHtml(post.id)}" data-comment-id="${escapeHtml(c.id)}" data-comment-author="${escapeHtml(c.author?.name||'网友')}">回复</button></div>${replies.length?`<div class="moli-xhs-comment-replies">${replies.map(r=>`<div><b>${escapeHtml(r.author?.name||'网友')}</b> ${escapeHtml(r.content||'')}</div>`).join('')}</div><div class="moli-xhs-expand-replies">展开 ${replies.length} 条回复</div>`:''}</div>`;
+      }).join('');
+      feed.innerHTML = `<article class="moli-xhs-detail"><div class="moli-xhs-detail-head"><button data-action="public-web-detail-back">‹</button><div class="moli-xhs-author">${author}</div><button class="moli-xhs-refresh" data-action="public-web-refresh-xhs" aria-label="刷新小红书">↻</button></div><div class="moli-xhs-detail-image"><span>${escapeHtml(post.extra?.imageText||'')}</span><small>${escapeHtml(post.extra?.imagePrompt||'')}</small><button class="moli-xhs-heart${favorited?' is-favorited':''}" data-action="public-web-favorite" data-post-id="${escapeHtml(post.id)}" aria-label="收藏">♥</button></div><h2>${escapeHtml(post.title)}</h2>${post.content?`<p class="moli-xhs-body">${escapeHtml(post.content)}</p>`:''}<div class="moli-xhs-tags">${(post.tags||[]).map(x=>`#${escapeHtml(x)}`).join(' ')}</div><div class="moli-xhs-comment-capsule"><button data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">留下你的想法吧</button></div><div class="moli-xhs-comments">${commentHtml||'<div class="moli-web-muted">暂无评论</div>'}</div></article>`;
     } else if (post.section === 'zhihu') {
       feed.innerHTML = `${commonTop}<article class="moli-zhihu-detail"><div class="moli-zhihu-question">问题</div><h2>${escapeHtml(post.title)}</h2><p>${escapeHtml(post.content)}</p>${post.extra?.answer?`<section class="moli-zhihu-answer"><b>${author} · 回答</b><p>${escapeHtml(post.extra.answer)}</p></section>`:''}<h3>评论</h3>${comments.map(c=>`<div class="moli-zhihu-comment"><b>${escapeHtml(c.author?.name||'网友')}</b>：${escapeHtml(c.content||'')}</div>`).join('')||'<div class="moli-web-muted">暂无评论</div>'}<button class="moli-web-reply-btn" data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">写评论</button></article>`;
     } else {
@@ -6320,9 +6325,12 @@ export function createPhonePanel({
       const xhsItems = posts.filter(p=>p.section==='xiaohongshu').slice(0,4);
       const zhihuItems = posts.filter(p=>p.section==='zhihu').slice(0,4);
       const tianya = tianyaItems.map(post=>`<button class="moli-recommend-tianya-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span>[${escapeHtml(post.extra?.subtitle || '天涯杂谈')}]</span>${escapeHtml(post.title||'无标题')}</button>`).join('');
-      const xhs = xhsItems.map(post=>`<button class="moli-recommend-xhs-card" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span class="moli-recommend-xhs-image"><em>${escapeHtml(post.title||'无标题')}</em></span></button>`).join('');
+      const xhs = xhsItems.map(post=>`<button class="moli-recommend-xhs-card" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span class="moli-recommend-xhs-image"><em>${escapeHtml(post.extra?.imageText||'')}</em></span><strong>${escapeHtml(post.title||'无标题')}</strong></button>`).join('');
       const zhihu = zhihuItems.map(post=>`<button class="moli-recommend-zhihu-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><strong>${escapeHtml(post.title||'无标题')}</strong><span>${escapeHtml(String(post.content||post.extra?.answer||'').slice(0,72))}</span></button>`).join('');
       feed.innerHTML = `<div class="moli-recommend-home"><header class="moli-recommend-today"><button type="button" class="moli-recommend-refresh" data-action="public-web-refresh-recommend" aria-label="刷新社区推荐">↻</button><span>今天的社区发生了什么……</span></header><div class="moli-recommend-doodle">⌁　✧　⌁</div>${tianya?`<section class="moli-recommend-sketch-section moli-recommend-tianya">${tianya}</section>`:''}${xhs?`<section class="moli-recommend-sketch-section moli-recommend-xhs-grid">${xhs}</section>`:''}${zhihu?`<section class="moli-recommend-sketch-section moli-recommend-zhihu">${zhihu}</section>`:''}${posts.length?'':'<div class="moli-recommend-empty">轻轻点一下 ↻，看看今天的社区。</div>'}</div>`;
+    } else if (currentPublicWebTab === 'xiaohongshu') {
+      const cards=posts.map(post=>{const favorited=(post.extra?.favorites||[]).includes('user');return `<article class="moli-xhs-waterfall-card"><button class="moli-xhs-card-open" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span class="moli-xhs-card-image"><em>${escapeHtml(post.extra?.imageText||'')}</em><small>${escapeHtml(post.extra?.imagePrompt||'')}</small></span><strong>${escapeHtml(post.title||'无标题')}</strong><span class="moli-xhs-card-author">${escapeHtml(post.author?.name||'网友')}</span></button><button class="moli-xhs-heart${favorited?' is-favorited':''}" data-action="public-web-favorite" data-post-id="${escapeHtml(post.id)}" aria-label="收藏">♥</button></article>`}).join('');
+      feed.innerHTML=`<div class="moli-xhs-home"><div class="moli-xhs-home-head"><b>小红书</b><button data-action="public-web-refresh-xhs" aria-label="刷新小红书">↻</button></div><div class="moli-xhs-waterfall">${cards||'<div class="moli-recommend-empty">点右上角 ↻ 刷新笔记。</div>'}</div><button class="moli-xhs-compose-fab" data-action="public-web-compose" aria-label="发布笔记">＋</button></div>`;
     } else {
       feed.innerHTML = `<div class="moli-tianya-topic-list">${rows||'<div class="moli-tianya-no-topics">这里还没有内容。</div>'}</div>`;
     }
@@ -6331,7 +6339,7 @@ export function createPhonePanel({
   panel.querySelector('[data-action="public-web-refresh"]')?.addEventListener('click', async event => {
     const button=event.currentTarget; if(button.disabled)return; button.disabled=true; const old=button.textContent; button.textContent='[刷新中…]';
     try {
-      if (!['recommend','tianya'].includes(currentPublicWebTab)) { windowRef.alert?.('这个入口的专属生成规则还在打磨中。'); return; }
+      if (!['recommend','tianya','xiaohongshu'].includes(currentPublicWebTab)) { windowRef.alert?.('这个入口的专属生成规则还在打磨中。'); return; }
       const settings=getPublicWebSettings(getScopeKey?.());
       if (currentPublicWebTab === 'recommend') {
         const batchId=`recommend_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
@@ -6339,8 +6347,8 @@ export function createPhonePanel({
         addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } })));
         updatePublicWebSettings(getScopeKey?.(),{ recommendationBatchId:batchId });
       } else {
-        const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:'tianya'});
-        replacePublicWebSectionPosts(getScopeKey?.(),'tianya',items);
+        const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:currentPublicWebTab});
+        replacePublicWebSectionPosts(getScopeKey?.(),currentPublicWebTab,items);
       }
       openedPublicWebPostId=''; renderPublicWeb();
     }
@@ -6367,6 +6375,12 @@ export function createPhonePanel({
       finally{recommendRefresh.disabled=false;recommendRefresh.classList.remove('is-spinning');}
       return;
     }
+    const xhsCompose=event.target?.closest?.('.moli-xhs-compose-fab[data-action="public-web-compose"]');
+    if(xhsCompose){const imagePrompt=windowRef.prompt?.('图片内容','')??null;if(imagePrompt===null)return;const imageText=windowRef.prompt?.('图片里的文字','')??null;if(imageText===null)return;const title=windowRef.prompt?.('标题','')??null;if(title===null)return;const content=windowRef.prompt?.('点进去的正文（可以留空）','')??null;if(content===null)return;if(!String(imagePrompt).trim()||!String(imageText).trim()||!String(title).trim()){windowRef.alert?.('图片、图片里的文字和标题都需要填写。');return;}createPublicWebPost(getScopeKey?.(),{section:'xiaohongshu',author:{type:'user',id:'user',name:getTavernUserContext()?.name||'User'},title,content,extra:{imagePrompt:String(imagePrompt).trim(),imageText:String(imageText).trim(),style:'user'}});renderPublicWeb();return;}
+    const xhsRefresh=event.target?.closest?.('[data-action="public-web-refresh-xhs"]');
+    if(xhsRefresh){if(xhsRefresh.disabled)return;xhsRefresh.disabled=true;xhsRefresh.classList.add('is-spinning');try{const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),section:'xiaohongshu'});replacePublicWebSectionPosts(getScopeKey?.(),'xiaohongshu',items);openedPublicWebPostId='';renderPublicWeb();}catch(error){console.error('[moli小手机] xhs refresh failed:',error);windowRef.alert?.(`刷新失败：${error?.message||error}`);}finally{xhsRefresh.disabled=false;xhsRefresh.classList.remove('is-spinning');}return;}
+    const xhsReply=event.target?.closest?.('[data-action="xhs-comment-reply"]');
+    if(xhsReply){const who=xhsReply.dataset.commentAuthor||'网友';const content=windowRef.prompt?.(`回复 @${who}`,'')??null;if(content&&String(content).trim())addPublicWebComment(getScopeKey?.(),xhsReply.dataset.postId,{author:{type:'user',id:'user',name:getTavernUserContext()?.name||'User'},content,replyToCommentId:xhsReply.dataset.commentId});renderPublicWeb();return;}
     const jump=event.target?.closest?.('[data-public-web-jump]'); if(jump){const target=String(jump.dataset.publicWebJump||'');const tab=panel.querySelector(`[data-public-web-tab="${target}"]`);tab?.click();return;}
     const open=event.target?.closest?.('[data-action="public-web-open"]'); if(open){openedPublicWebPostId=open.dataset.postId;renderPublicWeb();return;}
     if(event.target?.closest?.('[data-action="public-web-detail-back"]')){openedPublicWebPostId='';renderPublicWeb();return;}
