@@ -1207,8 +1207,8 @@ function parsePublicWebBatch(text) {
     content: String(item?.content || '').trim().slice(0,6000),
     tags: Array.isArray(item?.tags) ? item.tags.map(x=>String(x).slice(0,30)).slice(0,8) : [],
     comments: Array.isArray(item?.comments) ? item.comments.slice(0,8).map((c,i)=>({id:`seed_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now()})).filter(c=>c.content) : [],
-    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || ''), answer:String(item?.answer || '') }
-  })).filter(item => item.title && item.content);
+    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), imageText:String(item?.imageText || ''), answer:String(item?.answer || '') }
+  })).filter(item => item.title && (item.section !== 'xiaohongshu' || (item.extra?.imagePrompt && item.extra?.imageText)));
 }
 
 export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled = false, section = 'tianya', signal } = {}) {
@@ -1220,8 +1220,42 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
   const context = recent?.messages?.map(m=>`${m?.role==='user'?userName:(m?.name||'角色')}：${String(m?.content||'')}`).join('\n') || '当前没有打开正文。不要读取、猜测或讨论程序代码、插件、API、Prompt、SillyTavern、模型、世界书、角色卡、调试信息；只生成自然的普通社区内容。';
   const ghostRule = ghostStoriesEnabled ? '允许在内容自然适合时选择“莲蓬鬼话”。' : '“莲蓬鬼话”关闭：不得生成莲蓬鬼话分类，也不得用其他分类绕过限制生成灵异鬼话主题。';
   const tianyaSystem = `# 天涯社区 · 杂谈板块生成器\n\n你正在模拟一个真实存在于当前故事世界中的中文老式公共论坛。这里不是剧情旁白、角色聊天室、作者讨论区或为 User 服务的信息面板。你的任务不是写“像论坛的文案”，而是截取这个世界此刻真实天涯论坛中的一页。\n\n【世界来源】\n论坛与当前故事共享同一个现实世界。内容应以 {{char}}、{{user}}、正文世界、正文剧情、当前时间地点与社会环境为现实基础进行发散。不要机械复述正文，也不要让每个帖子都直接谈论 {{char}} 或 {{user}}。正文里的一件事可以向外扩散成当地人的吐槽、求助、社会讨论、旧事回忆、行业讨论，也允许同时存在与当前剧情无关的普通帖子。\n\n【天涯社区气质】\n这是传统中文 BBS，不是微博、小红书、知乎或现代短视频评论区。网友身份感强，昵称比头像重要；标题承担吸引和筛选作用；既有长文也有一句话水帖；有求助、树洞、记录、连载、讨论、争论、围观、爆料、转载、考据。楼主可能更新；网友会催更、马克、插眼、占楼、歪楼。回复质量和长度高度不均，有善意、刻薄、怀疑、抬杠、冷嘲，也可能认真长评；不要求正确、不要求共识、不要求都喜欢楼主。语言可有早期中文论坛感，但不同网友必须有不同口吻。\n\n【帖子形式】\n主动变化帖型，不要连续套同一模板。可以是：求助帖、情感/树洞帖、经历帖、直播/连载帖、讨论帖、社会观察帖、本地帖、职业帖、八卦帖、爆料帖、怀旧帖、历史/煮酒式长帖、娱乐帖、闲聊/水帖、调查/投票式帖子，以及世界中自然出现的其他形式。${ghostRule}\n\n【标题】\n标题首先像真人会在论坛取的标题，其次才考虑文学性。允许朴素、啰嗦、口语、悬念、求助、818、记录、讨论。不要整页使用现代内容营销式“震惊/必看/大盘点/你绝对想不到”。\n\n【正文】\n长度自然变化：几十字、几百字、少数长帖都可以。楼主写作能力不同：有人条理清楚，有人啰嗦，有人分段混乱，有人错别字或标点习惯明显。不要统一润色成同一种写作腔。\n\n【回复生态】\n回复是线性楼层。可以认真回答、追问、质疑、支持、反对、阴阳怪气、争吵、补充个人经历、纠正事实、求后续、马克、插眼、占楼、跑题、回复另一楼、引用某句话、给专业解释或只留一句话。不同网友有不同知识、立场和表达习惯。\n\n【页面多样性】\n一次刷新是一页论坛，不是专题策划。帖子之间必须有明显差异。部分可受剧情影响，部分来自世界社会背景，部分只是普通人的日常。禁止因为运行环境出现 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、生成器、调试信息，就默认这些属于故事世界；除非正文明确证明它们存在，否则一律不可见。\n\n【常驻规则】\n帖子是否常驻由界面中的红色笑脸决定，不由你决定。你只负责生成本次新帖子。\n\n只输出严格 JSON，不要解释。`;
+  const xiaohongshuSystem = `# 小红书社区模拟器
+
+你正在模拟一个真实存在于当前故事世界中的生活方式与经验分享社区。
+
+你的任务不是“写几条小红书风格文案”，而是模拟：
+“如果当前故事世界真实存在这样一个生活社区，此刻打开首页，会刷到什么？”
+
+【一、世界来源】
+社区与当前故事共享同一个现实世界。可以依据：
+1. {{char}} 的人物、生活环境、职业与经历
+2. {{user}} 在当前故事中的身份与生活
+3. 当前正文世界观
+4. 已经发生的正文剧情
+5. 当前时间、地点与社会环境
+6. 手机中已经建立的角色关系、聊天和记忆
+7. 已存在的公共网络人物和历史内容
+
+这些内容不是要求你复述剧情，而是帮助你理解这个世界里的人正在过怎样的生活，他们可能分享什么、搜索什么、抱怨什么、记录什么。正文发生一件事，不意味着所有笔记都必须谈论这件事。允许与 {{char}}、{{user}} 没有直接关系的普通生活内容。
+
+【二、这是“笔记”，不是论坛帖子】
+小红书内容首先是一篇可被浏览、收藏、评论的生活笔记。它可能是在分享、记录、推荐、避雷、求助、吐槽、记录变化、表达情绪等等。不要把它写成天涯长帖。不要把它写成知乎问答。不要把所有内容写成营销软文。
+
+每篇笔记都提供四个彼此独立的内容入口：图片内容 imageDescription、图片里的文字 imageText、标题 title、点进去的正文 content。由你根据这篇笔记自然决定它们具体如何配合；正文可以为空。
+
+【三、作者差异】
+不要让所有小红书用户拥有同一种语气。有人很活泼，有人很克制；有人爱用 emoji，有人完全不用；有人有轻微炫耀感，有人只是单纯记录，等等。不要为了“像小红书”让所有人都变成“姐妹们谁懂啊😭😭😭”。
+
+【四、评论生态】
+评论区不是客服区。评论者可能求教程、分享自己的经历、关注某个不起眼的细节、跑题、@别人、回复另一条评论、质疑真实性、给出建议等等。作者可以回复评论。评论允许形成小范围回复关系。
+
+【运行环境隔离】
+AI、API、Prompt、插件、SillyTavern、世界书、角色卡、调试信息、代码、生成器等，如果只是系统运行环境中的信息，而不是故事世界明确存在的事物，不得成为社区内容。
+
+只输出严格 JSON，不要解释。`;
   const genericSystem = section === 'xiaohongshu'
-    ? '生成自然的小红书式笔记。标题、正文、标签、评论应明显具有生活分享社区语法。只输出严格 JSON。'
+    ? xiaohongshuSystem
     : '生成自然的知乎式问题与回答。问题、问题补充、初始回答、评论应明显具有问答社区语法。只输出严格 JSON。';
   const recommendSystem = `# moli社区 · 社区推荐生成器
 
@@ -1234,7 +1268,7 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
 使用老式中文 BBS 语法：真人网名、口语标题、长短不一的主楼、线性楼层。可有求助、情感树洞、经历、连载、讨论、社会观察、本地、职业、八卦、爆料、怀旧、历史、娱乐、水帖、调查等。回复可以认真、质疑、抬杠、跑题、马克、催更，长度和立场不整齐。${ghostRule}
 
 【小红书候选】
-使用生活分享笔记语法。内容更具体、更个人、更视觉化，可以围绕穿搭、美食、居住、旅行、日常体验、关系感受、消费、学习工作经验等；标题允许口语、emoji和情绪，但不要每条都营销化。正文应有可感知的生活细节，tags 自然，imagePrompt 描述这篇笔记最可能配的画面。评论像真实笔记评论区，有共鸣、追问、求链接/地点、经验补充、不同意见。
+使用生活分享笔记语法。每篇笔记必须同时提供图片内容 imageDescription、图片里的文字 imageText、标题 title；点进去的正文 content 可由内容需要决定是否为空。四者不要混淆。作者和评论口吻要有差异，不要统一营销腔。
 
 【知乎候选】
 使用问答社区语法。title 是一个值得回答的问题，content 是问题补充或背景，answer 是一条有明确个人立场/知识来源的初始回答。问题可以来自世界中的职业、关系、社会现象、历史、生活经验、公共事件等。不要把所有回答写成百科全书，也不要整齐列点。评论围绕回答继续质疑、补充或讨论。
@@ -1245,8 +1279,10 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
   const schema = section === 'tianya'
     ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复"}]}]}。生成 6~10 条，初始回复数量可自然为 0~8，不要 markdown。`
     : section === 'recommend'
-      ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imagePrompt":"仅小红书使用的配图描述","answer":"仅知乎使用的初始回答","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 8~12 条，不要 markdown。`
-      : `返回：{"posts":[{"section":"${section}","author":"网名","title":"标题","content":"正文","comments":[]}]}。生成 6~10 条，不要 markdown。`;
+      ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 8~12 条，不要 markdown。`
+      : section === 'xiaohongshu'
+        ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称"}]}]}。生成 6~10 条，不要 markdown。`
+        : `返回：{"posts":[{"section":"${section}","author":"网名","title":"标题","content":"正文","comments":[]}]}。生成 6~10 条，不要 markdown。`;
   const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【当前可参考的故事上下文】\n${context}\n\n${schema}`;
   let text='';
   if (config.source === 'tavern') {
