@@ -1188,3 +1188,50 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
   }
   return { actors, consideredMomentIds: feed.map(item => item.id), contacts };
 }
+
+
+function parsePublicWebBatch(text) {
+  const raw = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  let data;
+  try { data = JSON.parse(raw); } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('公共网络刷新没有返回可解析的 JSON');
+    data = JSON.parse(match[0]);
+  }
+  const posts = Array.isArray(data?.posts) ? data.posts : [];
+  return posts.slice(0, 12).map(item => ({
+    section: ['tianya','xiaohongshu','zhihu'].includes(item?.section) ? item.section : 'tianya',
+    type: String(item?.type || ''),
+    author: { type:'internet_actor', id:String(item?.authorId || ''), name:String(item?.author || '匿名网友').slice(0,24) },
+    title: String(item?.title || '').trim().slice(0,120),
+    content: String(item?.content || '').trim().slice(0,6000),
+    tags: Array.isArray(item?.tags) ? item.tags.map(x=>String(x).slice(0,30)).slice(0,8) : [],
+    comments: Array.isArray(item?.comments) ? item.comments.slice(0,8).map((c,i)=>({id:`seed_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now()})).filter(c=>c.content) : [],
+    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || ''), answer:String(item?.answer || '') }
+  })).filter(item => item.title && item.content);
+}
+
+export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled = false, signal } = {}) {
+  if (!scopeKey) throw new Error('当前公共网络不可用');
+  const config = resolveApiRuntimeConfig(getApiSettings());
+  assertApiConfig(config);
+  const userName = getTavernUserContext().name || 'User';
+  const recent = getRecentTavernBody({ messageLimit: 10, charLimit: 9000 });
+  const context = recent?.messages?.map(m=>`${m?.role==='user'?userName:(m?.name||'角色')}：${String(m?.content||'')}`).join('\n') || '暂无可用正文；请生成自然、互不重复的公共网络内容。';
+  const ghostRule = ghostStoriesEnabled ? '天涯分类候选允许“莲蓬鬼话”。' : '禁止生成“莲蓬鬼话”分类或灵异鬼话主题。';
+  const system = `你是 moli 社区的公共网络内容生成器。一次刷新生成 6~10 条混合内容，由你根据上下文自然决定天涯、小红书、知乎的数量，不要固定配额。只输出 JSON。\n\n【共同原则】\n- 这些是互联网帖子，不是角色直接回复 user，不要每条都围着 user 转。\n- 可以受最近剧情/聊天气氛启发，但要像真实网络：有无关日常、热点讨论、经验分享、路人观点。\n- 作者可以是持续出现的网名或一次性网友；不要冒充现实公众人物。\n- 三个平台必须有明显不同的内容语法，禁止只换标签。\n\n【天涯 prompt】\n老式论坛主题。标题可以朴素、抓眼、求助、争论、长帖连载。正文是主楼口吻。subtitle 从“天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}”中按内容选择。style 可为 tianya-classic 或 douban-group；豆瓣小组式只是语言风格候选，不是独立平台。回复是线性楼层语气。${ghostRule}\n\n【小红书 prompt】\n生成一篇小红书笔记：标题短而有吸引力，正文更生活化、有体验感，可自然使用 emoji，但不要机械堆砌；tags 为话题；imagePrompt 是配图语义描述；评论像小红书评论区，可问链接、求细节、共鸣、补充经验。\n\n【知乎 prompt】\n生成一个知乎问题：title 是问题，content 是问题补充/背景；answer 放一条有观点、有论证的初始回答；评论围绕回答讨论。避免把知乎写成论坛水帖。`;
+  const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【最近可参考的正文上下文】\n${context}\n\n返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题/问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯","style":"仅天涯","tags":["仅小红书可用"],"imagePrompt":"仅小红书可用","answer":"仅知乎：初始回答","comments":[{"author":"网友","content":"评论/楼层回复"}]}]}。不要 markdown。`;
+  let text='';
+  if (config.source === 'tavern') {
+    if (signal?.aborted) throw new DOMException('Aborted','AbortError');
+    const generateRaw=getTavernContext?.()?.generateRaw;
+    if (typeof generateRaw !== 'function') throw new Error('当前 SillyTavern 未提供 generateRaw 接口');
+    text=String(await generateRaw({prompt:`User: ${user}`,systemPrompt:system})||'').trim();
+  } else {
+    const result=await generateProviderText(config,{system,messages:[{role:'user',content:user}]},{signal,timeoutMs:120000});
+    text=String(result?.text||'').trim();
+  }
+  const posts=parsePublicWebBatch(text);
+  if (!ghostStoriesEnabled) return posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
+  return posts;
+}
