@@ -39,3 +39,36 @@ export function createPublicWebPost(scopeKey, input = {}) {
 }
 
 export function getPublicWebState(scopeKey) { return read(scopeKey); }
+
+
+export function getPublicWebPost(scopeKey, postId) {
+  return (read(scopeKey).posts || []).find(item => item.id === postId) || null;
+}
+
+export function addPublicWebComment(scopeKey, postId, input = {}) {
+  const state = read(scopeKey);
+  const post = (state.posts || []).find(item => item.id === postId);
+  if (!post) return null;
+  const comment = {
+    id: input.id || `webc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    author: input.author || { type: 'user', id: 'user', name: 'User' },
+    content: String(input.content || '').trim(),
+    createdAt: Number(input.createdAt || Date.now()),
+  };
+  if (!comment.content) return null;
+  post.comments = [...(post.comments || []), comment];
+  write(scopeKey, state);
+  return comment;
+}
+
+export function togglePublicWebLike(scopeKey, postId, actorId = 'user') {
+  const state = read(scopeKey);
+  const post = (state.posts || []).find(item => item.id === postId);
+  if (!post) return null;
+  const likes = Array.isArray(post.extra?.likes) ? [...post.extra.likes] : [];
+  const index = likes.indexOf(actorId);
+  if (index >= 0) likes.splice(index, 1); else likes.push(actorId);
+  post.extra = { ...(post.extra || {}), likes };
+  write(scopeKey, state);
+  return { liked: likes.includes(actorId), count: likes.length };
+}
