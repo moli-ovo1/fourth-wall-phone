@@ -1253,3 +1253,12 @@
 #moli-phone-panel .moli-public-web-post small{font-size:11px;color:#999;}
 #moli-phone-panel .moli-public-web-post strong{font-size:15px;color:#333;}
 #moli-phone-panel .moli-public-web-post p{margin:0;color:#666;font-size:13px;line-height:1.65;white-space:pre-wrap;}
+
+/* moli109 · 天涯论坛 / 公共网络第一轮可玩化 */
+#moli-phone-panel .moli-public-web-meta{display:flex;align-items:center;gap:8px;color:#999;font-size:11px}
+#moli-phone-panel .moli-public-web-meta span+span:before{content:'·';margin-right:8px}
+#moli-phone-panel .moli-public-web-tags{font-size:12px;color:#55718e;line-height:1.5}
+#moli-phone-panel .moli-public-web-actions{display:flex;gap:16px;border-top:1px solid #f0f0f0;padding-top:8px;margin-top:3px}
+#moli-phone-panel .moli-public-web-actions button{border:0;background:transparent;padding:0;color:#777;font-size:12px}
+#moli-phone-panel .moli-public-web-comments{background:#f7f7f7;border-radius:7px;padding:7px 9px;font-size:12px;line-height:1.55;color:#666}
+#moli-phone-panel .moli-public-web-comments b{font-weight:600;color:#4e6380}
