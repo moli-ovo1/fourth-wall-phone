@@ -1378,3 +1378,55 @@
 #moli-phone-panel .moli-tianya-reply-tail{padding:10px 7px 18px;border-top:1px solid #b8cfe0;background:#f6f7ff;}
 #moli-phone-panel .moli-tianya-reply-tail button{border:0;background:transparent;color:#000099;text-decoration:underline;padding:0;font:12px "SimSun","宋体",sans-serif;}
 #moli-phone-panel .moli-web-detail-nav{display:flex;gap:10px;align-items:center;padding:5px 7px;background:#e7f1fa;border-bottom:1px solid #7ca8c8;}
+
+/* moli115 · moli社区全局导航 + 社区推荐首页 */
+#moli-phone-panel .moli-tianya-browser-body .moli-public-web-tabs{
+  height:34px;
+  padding:0 7px;
+  gap:2px;
+  align-items:end;
+  background:#f5f1e9;
+  border-top:1px solid #ded7cb;
+  border-bottom:1px solid #cfc6b7;
+}
+#moli-phone-panel .moli-tianya-browser-body .moli-public-web-tabs button{
+  height:30px;
+  padding:5px 6px 4px;
+  border:0;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  color:#625e57;
+  font:12px/1.2 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  text-decoration:none;
+}
+#moli-phone-panel .moli-tianya-browser-body .moli-public-web-tabs button.active{
+  background:#fffdf8;
+  color:#292724;
+  font-weight:700;
+  border-bottom-color:#8f3d3d;
+}
+#moli-phone-panel .moli-recommend-home{padding:14px 12px 24px;background:#fffdf8;color:#292724;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+#moli-phone-panel .moli-recommend-home>header{padding:4px 2px 12px;border-bottom:1px solid #ded8cd;}
+#moli-phone-panel .moli-recommend-home>header h2{margin:0;font:600 20px/1.35 Georgia,"Noto Serif SC","Songti SC",serif;letter-spacing:.04em;}
+#moli-phone-panel .moli-recommend-home>header p{margin:4px 0 0;color:#9a9287;font-size:11px;}
+#moli-phone-panel .moli-recommend-hot{padding:12px 0 8px;border-bottom:1px solid #ded8cd;}
+#moli-phone-panel .moli-recommend-hot h3{margin:0 0 7px;font-size:13px;letter-spacing:.12em;}
+#moli-phone-panel .moli-recommend-hot-row{width:100%;display:grid;grid-template-columns:25px 48px minmax(0,1fr);align-items:center;gap:5px;border:0;border-top:1px dotted #ddd4c7;background:transparent;padding:7px 1px;text-align:left;font-size:12px;}
+#moli-phone-panel .moli-recommend-hot-row>b{font:11px Georgia,serif;color:#aaa095;}
+#moli-phone-panel .moli-recommend-hot-row>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#moli-phone-panel .moli-recommend-source{font-size:10px;color:#776f65;}
+#moli-phone-panel .moli-recommend-source.is-tianya{color:#315e92;}.moli-recommend-source.is-xiaohongshu{color:#a14a4a;}.moli-recommend-source.is-zhihu{color:#416d87;}
+#moli-phone-panel .moli-recommend-section{padding:13px 0 7px;border-bottom:1px solid #ded8cd;}
+#moli-phone-panel .moli-recommend-section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+#moli-phone-panel .moli-recommend-section-head strong{font:600 14px Georgia,"Noto Serif SC","Songti SC",serif;}
+#moli-phone-panel .moli-recommend-section-head button{border:0;background:transparent;padding:2px;color:#8b8174;font-size:10px;}
+#moli-phone-panel .moli-recommend-item{width:100%;display:flex;flex-direction:column;gap:2px;border:0;border-top:1px dotted #e2dbd1;background:transparent;padding:7px 1px;text-align:left;}
+#moli-phone-panel .moli-recommend-item>span{font-size:12px;line-height:1.45;color:#302d29;}
+#moli-phone-panel .moli-recommend-item>small{font-size:9px;color:#a39a8e;line-height:1.3;}
+#moli-phone-panel .moli-recommend-section.is-xiaohongshu .moli-recommend-item{padding-left:8px;border-left:2px solid #ead6d3;}
+#moli-phone-panel .moli-recommend-section.is-zhihu .moli-recommend-item>span{font-weight:600;}
+#moli-phone-panel .moli-recommend-empty{padding:12px 2px;color:#aaa095;font-size:11px;}
+#moli-phone-panel .moli-tianya-sitebar.is-hidden,
+#moli-phone-panel [data-action="public-web-compose"].is-hidden{display:none!important;}
+#moli-phone-panel .moli-tianya-commandbar:not(.is-hidden):has([data-action="public-web-compose"].is-hidden){justify-content:flex-end;padding:5px 10px;background:#fffdf8;border-bottom:1px solid #ded8cd;}
+#moli-phone-panel .moli-tianya-commandbar:not(.is-hidden):has([data-action="public-web-compose"].is-hidden) [data-action="public-web-refresh"]{color:#8f3d3d;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;font-weight:600;}

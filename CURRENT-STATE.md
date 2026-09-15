@@ -221,3 +221,10 @@ User 提出：公共朋友圈可呈现角色“看过但没互动”的痕迹，
 ## moli114 / v0.4.56 startup hotfix
 - Fixed startup parse failure `Unexpected reserved word`: the delegated public-web feed click handler used `await generateTianyaReplyRefresh(...)` but the callback was not declared `async`.
 - No product/UI/prompt behavior changes in this hotfix.
+
+## moli115 / v0.4.57 — 社区推荐首页
+- 桌面 App 名改为「moli社区」；浏览器顶端仍为「天涯社区」，地址仍为 tianya.cn。
+- 全局导航改为 moli 自有的暖白/纸张感轻复古样式；入口为「社区推荐｜天涯社区｜小红书｜知乎｜收藏」。天涯社区内部仍保留老天涯页面语言。
+- 社区推荐成为独立综合刷新入口：一次 AI 请求混合生成 8–12 条 Tianya/Xiaohongshu/Zhihu 原生内容，不创造第四种推荐文风；生成后写入各自真实社区数据池。
+- 推荐首页布局：顶部“热门”混排，下面按天涯社区/小红书/知乎分区展示，并提供“更多”跳转。
+- 当前世界选择仍延期到三个入口完成后再放全局位置，本版未实现。

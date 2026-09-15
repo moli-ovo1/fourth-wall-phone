@@ -2817,3 +2817,7 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 ## moli114 / v0.4.56 startup hotfix
 - Fixed startup parse failure `Unexpected reserved word`: the delegated public-web feed click handler used `await generateTianyaReplyRefresh(...)` but the callback was not declared `async`.
 - No product/UI/prompt behavior changes in this hotfix.
+
+## moli115 / v0.4.57
+- 完成社区推荐第一版：moli 风格全局导航、综合 AI 刷新、三社区归档、热门+分区首页。
+- 下一步：分别打磨小红书、知乎专属 Prompt 与完整原生页面；完成后再加入正文外“当前世界”全局选择。
