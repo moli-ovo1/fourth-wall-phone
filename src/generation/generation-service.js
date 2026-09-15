@@ -23,7 +23,7 @@ import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getTavernUserContext, replaceUserPlaceholder } from '../core/tavern-user.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
-import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory } from '../storage/moments-store.js';
+import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, markMomentChatEventsDelivered } from '../storage/moments-store.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -56,6 +56,7 @@ function getContactMomentsContinuity(scopeKey, contactId) {
   const seenPublic = listPublicMoments(scopeKey)
     .filter(item => (item?.seenBy || []).map(String).includes(id))
     .slice(0, 10);
+  const authoredPublic = listPublicMoments(scopeKey).filter(item => String(item?.author?.id || '') === id).slice(0, 8);
 
   const blocks = [];
   if (archivedProfile?.summary) blocks.push(`【这个角色已整理的朋友圈长期记忆】\n${archivedProfile.summary}`);
@@ -67,6 +68,8 @@ ${ownProfile.map(formatMomentContinuityItem).join('\n\n')}`);
     blocks.push(`【这个角色已经看过的公共朋友圈】
 ${seenPublic.map(formatMomentContinuityItem).join('\n\n')}`);
   }
+  const userReceiptLines = authoredPublic.map(item => { const readAt=Number(item?.userReadAt||0); const userLiked=(item?.likes||[]).some(like=>String(like?.id||'')==='user'); const userComments=(item?.comments||[]).filter(comment=>String(comment?.actor?.id||'')==='user'&&!comment?.deletedAt); if(!readAt&&!userLiked&&!userComments.length)return ''; return `momentId=${item.id}｜${readAt ? 'User 已阅这条动态' : 'User 没有打已阅'}｜${userLiked ? '当前已点赞' : '当前未点赞'}｜${userComments.length ? `User 评论：${userComments.map(x=>x.content).join('｜')}` : '目前没有 User 评论'}`; }).filter(Boolean);
+  if (userReceiptLines.length) blocks.push(`【User 对这个角色朋友圈的回执】\n“已阅”是明确回执：User 打了已阅，就表示这个角色知道 User 看到了；没有已阅时，不得假定 User 已看到，可自然怀疑或试探。已阅但暂无点赞/评论时，可理解为“User 看到了，但目前没有公开反应”。\n${userReceiptLines.join('\n')}`);
   return blocks.join('\n\n');
 }
 
@@ -251,6 +254,10 @@ export async function generatePrivateReply({
     )
   ) ? getBaiBaiLongTermMemory() : null;
 
+  const pendingMomentEvents = getPendingMomentChatEvents(scopeKey, contact.id);
+  const momentEventIds = pendingMomentEvents.map(event => event.id);
+  const freshMomentContext = pendingMomentEvents.length ? `【自上次同步后新发生的朋友圈变化】\n这些是新鲜事件，只在本次作为新变化强调；你已经知道它们，可以自主决定是否主动提起，不要求必须回应。\n${pendingMomentEvents.map(event=>`- ${event.content}${event.momentId ? `（momentId=${event.momentId}）` : ''}`).join('\n')}\n\n` : '';
+
   const buildRequest = () => {
     const currentConversation = regenerateFromMessageId
       ? requestConversation
@@ -264,7 +271,7 @@ export async function generatePrivateReply({
       longTermMemoryText: baiBaiMemory?.text || '',
       longTermMemoryCoverage: baiBaiMemory?.coverage || null,
       phoneMemory: getConversationMemory(scopeKey, conversationKey),
-      momentsContext: getContactMomentsContinuity(scopeKey, contact.id),
+      momentsContext: freshMomentContext + getContactMomentsContinuity(scopeKey, contact.id),
       historyLimit: currentConversation.recentChatLimit || 100,
       fourthWallCharacterName: currentTavernCharacter?.name || '',
       fourthWallCommentary,
@@ -308,6 +315,8 @@ export async function generatePrivateReply({
     result = await generateProviderText(config, request, { signal, onDelta: isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false ? undefined : onDelta });
   }
 
+  if (momentEventIds.length) markMomentChatEventsDelivered(scopeKey, contact.id, momentEventIds);
+
   return {
     ...result,
     contact,
@@ -348,6 +357,10 @@ function fourthWallRuntime(scopeKey, conversationKey) {
     messageLimit: Math.max(1, Math.min(9999, Number(chatSettings?.maxChatLayers) || 20)),
     charLimit: 1000000,
   });
+  const pendingMomentEvents = getPendingMomentChatEvents(scopeKey, contact.id);
+  const momentEventIds = pendingMomentEvents.map(event => event.id);
+  const freshMomentContext = pendingMomentEvents.length ? `【自上次同步后新发生的朋友圈变化】\n这些是新鲜事件，只在本次作为新变化强调；你已经知道它们，可以自主决定是否主动提起，不要求必须回应。\n${pendingMomentEvents.map(event=>`- ${event.content}${event.momentId ? `（momentId=${event.momentId}）` : ''}`).join('\n')}\n\n` : '';
+
   const buildRequest = () => {
     const currentConversation = getConversation(scopeKey, conversationKey) || conversation;
     return buildPrivateGenerationRequest({
@@ -932,11 +945,13 @@ function parsePublicMomentsBatch(rawText = '', validIds = []) {
       const post = posts[0] || null;
       const reactions = Array.isArray(item?.reactions) ? item.reactions.map(reaction => ({
         momentId: String(reaction?.momentId || '').trim(),
-        action: ['LIKE', 'COMMENT', 'BOTH', 'DELETE_COMMENT'].includes(String(reaction?.action || '').toUpperCase()) ? String(reaction.action).toUpperCase() : '',
+        action: ['LIKE', 'UNLIKE', 'COMMENT', 'BOTH', 'DELETE_COMMENT'].includes(String(reaction?.action || '').toUpperCase()) ? String(reaction.action).toUpperCase() : '',
         commentId: String(reaction?.commentId || '').trim(),
         content: String(reaction?.content || '').trim().slice(0, 500),
       })).filter(reaction => reaction.momentId && reaction.action) : [];
-      return { actorId, post, posts, reactions };
+      const viewedMomentIds = Array.isArray(item?.viewedMomentIds) ? [...new Set(item.viewedMomentIds.map(String).filter(Boolean))].slice(0, 10) : [];
+      const profileVisitUser = Boolean(item?.profileVisitUser);
+      return { actorId, post, posts, reactions, viewedMomentIds, profileVisitUser };
     }).filter(Boolean);
   } catch {
     return [];
@@ -1153,13 +1168,14 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
 - 每个联系人必须保持自己的性格、关系与社交习惯；无动机就什么都不做。
 - 每个联系人本次最多可发布 2 条近期朋友圈，时间可为刚刚、数小时前、今天早些时候或昨天；第二条必须有自然的时间/情绪延续动机，例如昨天发过但无人回应、今天又产生了新的表达冲动。不要为了凑数强编。
 - 本次刷新所有联系人合计最多生成 10 条新朋友圈；这是本轮生成上限，不自动删除历史朋友圈。
-- 联系人始终可以点赞/评论 user(id=user) 的朋友圈。
+- 联系人可以浏览 User 的朋友圈主页，也可以实际看到某一条动态。主页访问与具体动态阅读是两件不同的事：profileVisitUser=true 表示本轮主动进入了 User 的朋友圈主页；viewedMomentIds 只填写本轮实际看到的具体 momentId。
+- 联系人始终可以点赞/评论 user(id=user) 的朋友圈；若先前已经点赞、本轮人物真实想取消，可用 UNLIKE。
 - 联系人也可以删除自己先前写下的评论：reaction.action=DELETE_COMMENT，填写 commentId，并可在 content 中写简短删除原因；删除原因会被其他人看到。只能删除自己的评论。
 - ${crossContactInteraction ? '联系人互相互动已开启：可以对其他联系人发布的朋友圈点赞/评论。' : '联系人互相互动已关闭：严禁对其他联系人发布的朋友圈点赞/评论，只能对 user 的动态互动。'}
 - 不要机械全员轮流，不要用随机替代人物动机。一次刷新可以 0 人行动。
 - 不要把私聊秘密无脑公开到朋友圈。
 - 只输出严格 JSON，不要解释。`;
-  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","posts":[]或最多2个{"content":"朋友圈正文","ageMinutes":0},"reactions":[{"momentId":"目标momentId","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论内容；DELETE_COMMENT 时作为删除原因"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
+  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","posts":[]或最多2个{"content":"朋友圈正文","ageMinutes":0},"profileVisitUser":false,"viewedMomentIds":["本轮实际看到的momentId"],"reactions":[{"momentId":"目标momentId","action":"LIKE|UNLIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论内容；DELETE_COMMENT 时作为删除原因"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
