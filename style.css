@@ -1344,3 +1344,26 @@
   #moli-phone-panel .moli-tianya-topic-link{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
   #moli-phone-panel .moli-tianya-mobile-meta{display:block;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 }
+
+/* moli112 public web: compact mixed index + native detail renderers */
+#moli-phone-panel .moli-tianya-topic-head.moli-simple-topic,
+#moli-phone-panel .moli-tianya-topic-row.moli-simple-topic{grid-template-columns:18px minmax(0,1fr)!important;}
+#moli-phone-panel .moli-tianya-topic-row.moli-simple-topic{background:#f7f7ff;color:#000;min-height:25px;border-bottom:1px solid #e0e2f2;}
+#moli-phone-panel .moli-tianya-topic-row.moli-simple-topic:nth-child(even){background:#eceeff;}
+#moli-phone-panel .moli-simple-topic .moli-tianya-topic-link{color:#000099;text-decoration:underline;font-size:12px;white-space:normal;line-height:1.35;}
+#moli-phone-panel .moli-simple-topic .moli-tianya-topic-link small{color:#008000;font-size:10px;margin-right:4px;text-decoration:none;}
+#moli-phone-panel .moli-web-detail-nav{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;padding:5px 7px;background:#e8f2fa;border-bottom:1px solid #7ca8c8;}
+#moli-phone-panel .moli-web-detail-nav button,#moli-phone-panel .moli-tianya-floor button{border:0;background:transparent;color:#000099;text-decoration:underline;padding:0;font:11px "SimSun","宋体",sans-serif;}
+#moli-phone-panel .moli-tianya-detail{font:12px/1.65 "SimSun","宋体",sans-serif;color:#111;background:#fff;}
+#moli-phone-panel .moli-tianya-detail>h2{font-size:15px;color:#000099;margin:8px 7px 3px;text-decoration:underline;}
+#moli-phone-panel .moli-tianya-detail-meta{padding:2px 7px 7px;border-bottom:2px solid #4a91c2;color:#555;}.moli-tianya-detail-meta a{color:#000099;}
+#moli-phone-panel .moli-tianya-floor{padding:7px;border-bottom:1px solid #b8cfe0;background:#fff;}.moli-tianya-floor:nth-child(even){background:#f6f7ff;}
+#moli-phone-panel .moli-tianya-floor-head{background:#e7f1fa;padding:2px 4px;color:#333;}.moli-tianya-floor-head a{color:#000099;text-decoration:underline;}
+#moli-phone-panel .moli-tianya-floor p{white-space:pre-wrap;margin:7px 2px;color:#111;}
+#moli-phone-panel .moli-xhs-detail,#moli-phone-panel .moli-zhihu-detail{padding:12px;background:#fff;min-height:100%;color:#222;}
+#moli-phone-panel .moli-xhs-detail h2,#moli-phone-panel .moli-zhihu-detail h2{font-size:18px;margin:8px 0 10px;line-height:1.4;}
+#moli-phone-panel .moli-xhs-detail p,#moli-phone-panel .moli-zhihu-detail p{font-size:13px;line-height:1.75;white-space:pre-wrap;}
+#moli-phone-panel .moli-xhs-author{font-weight:700;font-size:13px;}.moli-xhs-image-placeholder{padding:26px 12px;margin:8px 0;background:#f4f4f4;color:#888;text-align:center;font-size:11px;}.moli-xhs-tags{color:#315f9b;font-size:12px;margin:8px 0 15px;}
+#moli-phone-panel .moli-xhs-comment,#moli-phone-panel .moli-zhihu-comment{padding:8px 0;border-top:1px solid #eee;font-size:12px;line-height:1.55;}
+#moli-phone-panel .moli-zhihu-question{color:#056de8;font-size:12px;font-weight:700;}.moli-zhihu-answer{margin:12px -12px 0;padding:12px;border-top:8px solid #f5f6f7;border-bottom:8px solid #f5f6f7;}.moli-zhihu-answer b{font-size:12px;}
+#moli-phone-panel .moli-web-reply-btn{width:100%;margin-top:10px;padding:8px;border:1px solid #ddd;background:#fafafa;color:#666;border-radius:4px;}.moli-web-muted{padding:12px 0;color:#999;font-size:12px;}
