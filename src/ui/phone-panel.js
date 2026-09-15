@@ -152,6 +152,13 @@ export function createPhonePanel({
     </section>
 
     <section class="moli-page moli-tianya-page" data-page="tianya-home">
+      <nav class="moli-community-topnav" aria-label="moli社区入口">
+        <button type="button" class="active" data-public-web-tab="recommend">社区推荐</button>
+        <button type="button" data-public-web-tab="tianya">天涯社区</button>
+        <button type="button" data-public-web-tab="xiaohongshu">小红书</button>
+        <button type="button" data-public-web-tab="zhihu">知乎</button>
+        <button type="button" data-public-web-tab="favorites">收藏</button>
+      </nav>
       <div class="moli-retro-browser">
         <div class="moli-retro-browser-tabs">
           <button type="button" class="moli-retro-browser-back" data-action="app-home-back" aria-label="返回">‹</button>
@@ -160,13 +167,6 @@ export function createPhonePanel({
         </div>
         <div class="moli-retro-addressbar"><span>http://www.tianya.cn/</span><span>☆</span></div>
         <main class="moli-public-web moli-tianya-browser-body">
-          <nav class="moli-public-web-tabs" aria-label="天涯社区入口">
-            <button type="button" class="active" data-public-web-tab="recommend">社区推荐</button>
-            <button type="button" data-public-web-tab="tianya">天涯社区</button>
-            <button type="button" data-public-web-tab="xiaohongshu">小红书</button>
-            <button type="button" data-public-web-tab="zhihu">知乎</button>
-            <button type="button" data-public-web-tab="favorites">收藏</button>
-          </nav>
           <div class="moli-tianya-sitebar"><strong>[社区推荐]</strong></div>
           <div class="moli-tianya-commandbar">
             <button type="button" data-action="public-web-compose">[发表]</button>
@@ -6306,8 +6306,9 @@ export function createPhonePanel({
     const sitebar = panel.querySelector('.moli-tianya-sitebar strong'); if(sitebar) sitebar.textContent=`[${publicWebNames[currentPublicWebTab]}]`;
     const tianyaChrome = currentPublicWebTab === 'tianya';
     const recommendChrome = currentPublicWebTab === 'recommend';
+    panel.querySelector('.moli-retro-browser')?.classList.toggle('is-community-mode', !tianyaChrome);
     panel.querySelector('.moli-tianya-sitebar')?.classList.toggle('is-hidden', !tianyaChrome);
-    panel.querySelector('.moli-tianya-commandbar')?.classList.toggle('is-hidden', !(tianyaChrome || recommendChrome));
+    panel.querySelector('.moli-tianya-commandbar')?.classList.toggle('is-hidden', !tianyaChrome);
     panel.querySelector('[data-action="public-web-compose"]')?.classList.toggle('is-hidden', !tianyaChrome);
     panel.querySelector('.moli-tianya-moderators')?.classList.toggle('is-hidden', !tianyaChrome);
     panel.querySelector('.moli-tianya-tools')?.classList.toggle('is-hidden', !tianyaChrome);
@@ -6315,9 +6316,13 @@ export function createPhonePanel({
     if (tianyaChrome) {
       feed.innerHTML = `<div class="moli-tianya-recommend"><div class="moli-tianya-blue-title">§版块推荐</div><div>◎ 欢迎来到天涯社区，点击 [刷新] 看看杂谈里又有什么新帖子。</div></div><div class="moli-tianya-topic-list">${rows||'<div class="moli-tianya-no-topics">暂无帖子。点击上方 [刷新] 开始。</div>'}</div><div class="moli-tianya-pin-note">红色笑脸常驻</div>`;
     } else if (currentPublicWebTab === 'recommend') {
-      const hot = posts.slice(0, 5).map((post,i)=>`<button class="moli-recommend-hot-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><b>${String(i+1).padStart(2,'0')}</b><span class="moli-recommend-source is-${escapeHtml(post.section)}">${sourceLabel(post)}</span><span>${escapeHtml(post.title||'无标题')}</span></button>`).join('');
-      const sectionBlock = (section, title) => { const items=posts.filter(p=>p.section===section).slice(0,4); return `<section class="moli-recommend-section is-${section}"><div class="moli-recommend-section-head"><strong>${title}</strong><button data-public-web-jump="${section}">更多 ›</button></div>${items.map(post=>`<button class="moli-recommend-item" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span>${escapeHtml(post.title||'无标题')}</span>${section==='zhihu'?`<small>${Number(post.comments?.length||0)} 个回答</small>`:section==='xiaohongshu'?`<small>${(post.tags||[]).slice(0,2).map(x=>'#'+escapeHtml(x)).join(' ')}</small>`:'<small>来自天涯社区</small>'}</button>`).join('')||'<div class="moli-recommend-empty">本次没有这一类内容</div>'}</section>`; };
-      feed.innerHTML = `<div class="moli-recommend-home"><header><h2>社区推荐</h2><p>今天的网络，又发生了些什么</p></header><section class="moli-recommend-hot"><h3>热门</h3>${hot||'<div class="moli-recommend-empty">点击上方刷新，发现这一刻的新内容。</div>'}</section>${sectionBlock('tianya','天涯社区')}${sectionBlock('xiaohongshu','小红书')}${sectionBlock('zhihu','知乎')}</div>`;
+      const tianyaItems = posts.filter(p=>p.section==='tianya').slice(0,5);
+      const xhsItems = posts.filter(p=>p.section==='xiaohongshu').slice(0,4);
+      const zhihuItems = posts.filter(p=>p.section==='zhihu').slice(0,4);
+      const tianya = tianyaItems.map(post=>`<button class="moli-recommend-tianya-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span>[${escapeHtml(post.extra?.subtitle || '天涯杂谈')}]</span>${escapeHtml(post.title||'无标题')}</button>`).join('');
+      const xhs = xhsItems.map(post=>`<button class="moli-recommend-xhs-card" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span class="moli-recommend-xhs-image"><em>${escapeHtml(post.title||'无标题')}</em></span></button>`).join('');
+      const zhihu = zhihuItems.map(post=>`<button class="moli-recommend-zhihu-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><strong>${escapeHtml(post.title||'无标题')}</strong><span>${escapeHtml(String(post.content||post.extra?.answer||'').slice(0,72))}</span></button>`).join('');
+      feed.innerHTML = `<div class="moli-recommend-home"><header class="moli-recommend-today"><button type="button" class="moli-recommend-refresh" data-action="public-web-refresh-recommend" aria-label="刷新社区推荐">↻</button><span>今天的社区发生了什么……</span></header><div class="moli-recommend-doodle">⌁　✧　⌁</div>${tianya?`<section class="moli-recommend-sketch-section moli-recommend-tianya">${tianya}</section>`:''}${xhs?`<section class="moli-recommend-sketch-section moli-recommend-xhs-grid">${xhs}</section>`:''}${zhihu?`<section class="moli-recommend-sketch-section moli-recommend-zhihu">${zhihu}</section>`:''}${posts.length?'':'<div class="moli-recommend-empty">轻轻点一下 ↻，看看今天的社区。</div>'}</div>`;
     } else {
       feed.innerHTML = `<div class="moli-tianya-topic-list">${rows||'<div class="moli-tianya-no-topics">这里还没有内容。</div>'}</div>`;
     }
@@ -6349,6 +6354,19 @@ export function createPhonePanel({
     createPublicWebPost(getScopeKey?.(),{section,author:{type:'user',id:'user',name:userName},title,content,extra:{subtitle:section==='tianya'?pool[Math.floor(Math.random()*pool.length)]:'',style:'user'}}); renderPublicWeb();
   });
   panel.querySelector('[data-public-web-feed]')?.addEventListener('click', async event => {
+    const recommendRefresh=event.target?.closest?.('[data-action="public-web-refresh-recommend"]');
+    if(recommendRefresh){
+      if(recommendRefresh.disabled)return; recommendRefresh.disabled=true; recommendRefresh.classList.add('is-spinning');
+      try{
+        const settings=getPublicWebSettings(getScopeKey?.());
+        const batchId=`recommend_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+        const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:'recommend'});
+        addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } })));
+        updatePublicWebSettings(getScopeKey?.(),{ recommendationBatchId:batchId }); openedPublicWebPostId=''; renderPublicWeb();
+      }catch(error){console.error('[moli小手机] community recommend refresh failed:',error);windowRef.alert?.(`刷新失败：${error?.message||error}`);}
+      finally{recommendRefresh.disabled=false;recommendRefresh.classList.remove('is-spinning');}
+      return;
+    }
     const jump=event.target?.closest?.('[data-public-web-jump]'); if(jump){const target=String(jump.dataset.publicWebJump||'');const tab=panel.querySelector(`[data-public-web-tab="${target}"]`);tab?.click();return;}
     const open=event.target?.closest?.('[data-action="public-web-open"]'); if(open){openedPublicWebPostId=open.dataset.postId;renderPublicWeb();return;}
     if(event.target?.closest?.('[data-action="public-web-detail-back"]')){openedPublicWebPostId='';renderPublicWeb();return;}
