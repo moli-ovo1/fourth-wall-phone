@@ -15,6 +15,8 @@ function moment(value = {}, surface = 'public') {
   return {
     id: String(value?.id || id('moment')),
     sourceMomentId: String(value?.sourceMomentId || ''),
+    sourceProfileMomentId: String(value?.sourceProfileMomentId || ''),
+    sourceOwnerContactId: String(value?.sourceOwnerContactId || ''),
     surface: surface === 'profile' ? 'profile' : 'public',
     ownerContactId: String(value?.ownerContactId || ''),
     author: actor(value?.author),
@@ -112,10 +114,25 @@ export function recordProfileVisit(scopeKey, contactId, at=Date.now()) {
 }
 export function getProfileVisits(scopeKey) { return {...(getMomentsState(scopeKey).profileVisits || {})}; }
 
+export function exportProfileMomentToPublic(scopeKey, ownerContactId, momentId) {
+  const state=getMomentsState(scopeKey); const owner=String(ownerContactId||'');
+  const source=(state.profileFeeds[owner]||[]).find(x=>x.id===String(momentId)); if(!source)throw new Error('角色朋友圈动态不存在');
+  const existing=state.publicFeed.find(x=>String(x.sourceProfileMomentId||'')===String(source.id)&&String(x.sourceOwnerContactId||'')===owner);
+  if(existing)return existing;
+  const copy=moment({ ...source, id:id('moment'), sourceProfileMomentId:source.id, sourceOwnerContactId:owner, ownerContactId:'', likes:source.likes, comments:source.comments }, 'public');
+  state.publicFeed.unshift(copy); save(scopeKey,state); return copy;
+}
+
 export function importPublicMomentToProfile(scopeKey, momentId, ownerContactId, { likes, comments } = {}) {
   const state=getMomentsState(scopeKey); const source=state.publicFeed.find(x=>x.id===String(momentId)); if(!source)throw new Error('朋友圈动态不存在');
   const owner=String(ownerContactId||source.author.id||''); if(!owner)throw new Error('无法确定角色');
   state.profileFeeds[owner] ||= [];
+  const returningId=String(source.sourceProfileMomentId||'');
+  const returningOwner=String(source.sourceOwnerContactId||'');
+  if(returningId && returningOwner===owner){
+    const original=state.profileFeeds[owner].find(x=>String(x.id)===returningId);
+    if(original){ original.likes=(Array.isArray(likes)?likes:source.likes).map(actor); original.comments=(Array.isArray(comments)?comments:source.comments).map(socialEntry); original.updatedAt=Date.now(); state.publicFeed=state.publicFeed.filter(x=>x.id!==source.id); save(scopeKey,state); return original; }
+  }
   const existing=state.profileFeeds[owner].find(x=>String(x.sourceMomentId||'')===String(source.id));
   if(existing)return existing;
   const copy=moment({ ...source, id:id('profile-moment'), sourceMomentId:source.id, ownerContactId:owner, likes:Array.isArray(likes)?likes:source.likes, comments:Array.isArray(comments)?comments:source.comments }, 'profile');
