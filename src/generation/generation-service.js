@@ -1211,16 +1211,23 @@ function parsePublicWebBatch(text) {
   })).filter(item => item.title && item.content);
 }
 
-export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled = false, signal } = {}) {
+export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled = false, section = 'tianya', signal } = {}) {
   if (!scopeKey) throw new Error('当前公共网络不可用');
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const userName = getTavernUserContext().name || 'User';
-  const recent = getRecentTavernBody({ messageLimit: 10, charLimit: 9000 });
-  const context = recent?.messages?.map(m=>`${m?.role==='user'?userName:(m?.name||'角色')}：${String(m?.content||'')}`).join('\n') || '暂无可用正文；请生成自然、互不重复的公共网络内容。';
-  const ghostRule = ghostStoriesEnabled ? '天涯分类候选允许“莲蓬鬼话”。' : '禁止生成“莲蓬鬼话”分类或灵异鬼话主题。';
-  const system = `你是 moli 社区的公共网络内容生成器。一次刷新生成 6~10 条混合内容，由你根据上下文自然决定天涯、小红书、知乎的数量，不要固定配额。只输出 JSON。\n\n【共同原则】\n- 这些是互联网帖子，不是角色直接回复 user，不要每条都围着 user 转。\n- 可以受最近剧情/聊天气氛启发，但要像真实网络：有无关日常、热点讨论、经验分享、路人观点。\n- 作者可以是持续出现的网名或一次性网友；不要冒充现实公众人物。\n- 三个平台必须有明显不同的内容语法，禁止只换标签。\n\n【天涯 prompt】\n老式论坛主题。标题可以朴素、抓眼、求助、争论、长帖连载。正文是主楼口吻。subtitle 从“天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}”中按内容选择。style 可为 tianya-classic 或 douban-group；豆瓣小组式只是语言风格候选，不是独立平台。回复是线性楼层语气。${ghostRule}\n\n【小红书 prompt】\n生成一篇小红书笔记：标题短而有吸引力，正文更生活化、有体验感，可自然使用 emoji，但不要机械堆砌；tags 为话题；imagePrompt 是配图语义描述；评论像小红书评论区，可问链接、求细节、共鸣、补充经验。\n\n【知乎 prompt】\n生成一个知乎问题：title 是问题，content 是问题补充/背景；answer 放一条有观点、有论证的初始回答；评论围绕回答讨论。避免把知乎写成论坛水帖。`;
-  const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【最近可参考的正文上下文】\n${context}\n\n返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题/问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯","style":"仅天涯","tags":["仅小红书可用"],"imagePrompt":"仅小红书可用","answer":"仅知乎：初始回答","comments":[{"author":"网友","content":"评论/楼层回复"}]}]}。不要 markdown。`;
+  const recent = getRecentTavernBody({ messageLimit: 14, charLimit: 12000 });
+  const context = recent?.messages?.map(m=>`${m?.role==='user'?userName:(m?.name||'角色')}：${String(m?.content||'')}`).join('\n') || '当前没有打开正文。不要读取、猜测或讨论程序代码、插件、API、Prompt、SillyTavern、模型、世界书、角色卡、调试信息；只生成自然的普通社区内容。';
+  const ghostRule = ghostStoriesEnabled ? '允许在内容自然适合时选择“莲蓬鬼话”。' : '“莲蓬鬼话”关闭：不得生成莲蓬鬼话分类，也不得用其他分类绕过限制生成灵异鬼话主题。';
+  const tianyaSystem = `# 天涯社区 · 杂谈板块生成器\n\n你正在模拟一个真实存在于当前故事世界中的中文老式公共论坛。这里不是剧情旁白、角色聊天室、作者讨论区或为 User 服务的信息面板。你的任务不是写“像论坛的文案”，而是截取这个世界此刻真实天涯论坛中的一页。\n\n【世界来源】\n论坛与当前故事共享同一个现实世界。内容应以 {{char}}、{{user}}、正文世界、正文剧情、当前时间地点与社会环境为现实基础进行发散。不要机械复述正文，也不要让每个帖子都直接谈论 {{char}} 或 {{user}}。正文里的一件事可以向外扩散成当地人的吐槽、求助、社会讨论、旧事回忆、行业讨论，也允许同时存在与当前剧情无关的普通帖子。\n\n【天涯社区气质】\n这是传统中文 BBS，不是微博、小红书、知乎或现代短视频评论区。网友身份感强，昵称比头像重要；标题承担吸引和筛选作用；既有长文也有一句话水帖；有求助、树洞、记录、连载、讨论、争论、围观、爆料、转载、考据。楼主可能更新；网友会催更、马克、插眼、占楼、歪楼。回复质量和长度高度不均，有善意、刻薄、怀疑、抬杠、冷嘲，也可能认真长评；不要求正确、不要求共识、不要求都喜欢楼主。语言可有早期中文论坛感，但不同网友必须有不同口吻。\n\n【帖子形式】\n主动变化帖型，不要连续套同一模板。可以是：求助帖、情感/树洞帖、经历帖、直播/连载帖、讨论帖、社会观察帖、本地帖、职业帖、八卦帖、爆料帖、怀旧帖、历史/煮酒式长帖、娱乐帖、闲聊/水帖、调查/投票式帖子，以及世界中自然出现的其他形式。${ghostRule}\n\n【标题】\n标题首先像真人会在论坛取的标题，其次才考虑文学性。允许朴素、啰嗦、口语、悬念、求助、818、记录、讨论。不要整页使用现代内容营销式“震惊/必看/大盘点/你绝对想不到”。\n\n【正文】\n长度自然变化：几十字、几百字、少数长帖都可以。楼主写作能力不同：有人条理清楚，有人啰嗦，有人分段混乱，有人错别字或标点习惯明显。不要统一润色成同一种写作腔。\n\n【回复生态】\n回复是线性楼层。可以认真回答、追问、质疑、支持、反对、阴阳怪气、争吵、补充个人经历、纠正事实、求后续、马克、插眼、占楼、跑题、回复另一楼、引用某句话、给专业解释或只留一句话。不同网友有不同知识、立场和表达习惯。\n\n【页面多样性】\n一次刷新是一页论坛，不是专题策划。帖子之间必须有明显差异。部分可受剧情影响，部分来自世界社会背景，部分只是普通人的日常。禁止因为运行环境出现 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、生成器、调试信息，就默认这些属于故事世界；除非正文明确证明它们存在，否则一律不可见。\n\n【常驻规则】\n帖子是否常驻由界面中的红色笑脸决定，不由你决定。你只负责生成本次新帖子。\n\n只输出严格 JSON，不要解释。`;
+  const genericSystem = section === 'xiaohongshu'
+    ? '生成自然的小红书式笔记。标题、正文、标签、评论应明显具有生活分享社区语法。只输出严格 JSON。'
+    : '生成自然的知乎式问题与回答。问题、问题补充、初始回答、评论应明显具有问答社区语法。只输出严格 JSON。';
+  const system = section === 'tianya' ? tianyaSystem : genericSystem;
+  const schema = section === 'tianya'
+    ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复"}]}]}。生成 6~10 条，初始回复数量可自然为 0~8，不要 markdown。`
+    : `返回：{"posts":[{"section":"${section}","author":"网名","title":"标题","content":"正文","comments":[]}]}。生成 6~10 条，不要 markdown。`;
+  const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【当前可参考的故事上下文】\n${context}\n\n${schema}`;
   let text='';
   if (config.source === 'tavern') {
     if (signal?.aborted) throw new DOMException('Aborted','AbortError');
@@ -1231,7 +1238,20 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
     const result=await generateProviderText(config,{system,messages:[{role:'user',content:user}]},{signal,timeoutMs:120000});
     text=String(result?.text||'').trim();
   }
-  const posts=parsePublicWebBatch(text);
-  if (!ghostStoriesEnabled) return posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
+  let posts=parsePublicWebBatch(text).filter(p=>p.section===section);
+  if (!ghostStoriesEnabled) posts=posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
   return posts;
 }
+
+export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}) {
+  if (!scopeKey || !post) throw new Error('当前帖子不可用');
+  const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
+  const existing=(post.comments||[]).map((c,i)=>`${i+1}楼 ${c.author?.name||'网友'}：${c.content||''}`).join('\n');
+  const system=`你正在继续一个老式天涯论坛帖子。只生成新的后续楼层回复，不改写主楼和已有楼层。回复数量自然为 1~6。网友可以认真回答、追问、质疑、支持、反对、阴阳怪气、争论、补充经历、纠正事实、催更、马克、插眼、跑题、引用前楼。不同网友口吻、长度、立场应有差异。只输出严格 JSON。`;
+  const user=`帖子标题：${post.title}\n楼主：${post.author?.name||'匿名'}\n主楼：${post.content}\n\n已有楼层：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"网友昵称","authorId":"可选","content":"新楼层内容"}]}。不要 markdown。`;
+  const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
+  const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  let data; try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('回复刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
+  return (Array.isArray(data?.comments)?data.comments:[]).slice(0,6).map(c=>({author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,1000)})).filter(c=>c.content);
+}
+
