@@ -85,7 +85,7 @@ import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBe
 import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
-import { listPublicWebPosts } from '../storage/public-web-store.js';
+import { listPublicWebPosts, createPublicWebPost, addPublicWebComment, togglePublicWebLike } from '../storage/public-web-store.js';
 
 const APP_ICON_URLS = Object.freeze({
   wechat: new URL('../../assets/apps/wechat.jpg', import.meta.url).href,
@@ -153,7 +153,7 @@ export function createPhonePanel({
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="app-home-back" aria-label="返回">‹</button></div>
         <div class="moli-nav-title">天涯论坛</div>
-        <div class="moli-nav-side right"></div>
+        <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="public-web-compose" aria-label="发帖">＋</button></div>
       </header>
       <main class="moli-public-web">
         <nav class="moli-public-web-tabs" aria-label="天涯论坛分区">
@@ -6253,18 +6253,57 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => show('weibo-home'));
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
 
+  let currentPublicWebTab = 'recommend';
+  const publicWebNames = { recommend:'推荐', tianya:'天涯', xiaohongshu:'小红书', zhihu:'知乎', douban:'豆瓣' };
+  const publicWebTypeNames = { tianya:'帖子', xiaohongshu:'笔记', zhihu:'问题', douban:'小组帖' };
+  const renderPublicWeb = () => {
+    const feed = panel.querySelector('[data-public-web-feed]');
+    if (!feed) return;
+    const posts = listPublicWebPosts(getScopeKey?.(), { section: currentPublicWebTab });
+    feed.innerHTML = posts.length ? posts.map(post => {
+      const likes = Array.isArray(post.extra?.likes) ? post.extra.likes : [];
+      const comments = Array.isArray(post.comments) ? post.comments : [];
+      const author = post.author?.name || '匿名网友';
+      return `<article class="moli-public-web-post" data-public-web-post="${escapeHtml(post.id)}">
+        <div class="moli-public-web-meta"><span>${escapeHtml(publicWebNames[post.section] || post.section || '公共网络')}</span><span>${escapeHtml(author)}</span></div>
+        <strong>${escapeHtml(post.title || publicWebTypeNames[post.section] || '帖子')}</strong>
+        <p>${escapeHtml(post.content || '')}</p>
+        ${post.tags?.length ? `<div class="moli-public-web-tags">${post.tags.map(tag=>`#${escapeHtml(tag)}`).join(' ')}</div>` : ''}
+        <div class="moli-public-web-actions"><button type="button" data-action="public-web-like" data-post-id="${escapeHtml(post.id)}">${likes.includes('user') ? '♥' : '♡'} ${likes.length || ''}</button><button type="button" data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">评论 ${comments.length || ''}</button></div>
+        ${comments.length ? `<div class="moli-public-web-comments">${comments.slice(-5).map(c=>`<div><b>${escapeHtml(c.author?.name || '网友')}：</b>${escapeHtml(c.content || '')}</div>`).join('')}</div>` : ''}
+      </article>`;
+    }).join('') : `<div class="moli-public-web-empty"><strong>${publicWebNames[currentPublicWebTab] || '公共网络'}分区</strong><span>这里还没有内容。你可以先发第一条，之后角色和公共网友也会共用这套互联网世界。</span></div>`;
+  };
   panel.querySelectorAll('[data-public-web-tab]').forEach(button => {
     button.addEventListener('click', () => {
       panel.querySelectorAll('[data-public-web-tab]').forEach(item => item.classList.toggle('active', item === button));
-      const tab = String(button.dataset.publicWebTab || 'recommend');
-      const names = { recommend:'推荐', tianya:'天涯', xiaohongshu:'小红书', zhihu:'知乎', douban:'豆瓣' };
-      const feed = panel.querySelector('[data-public-web-feed]');
-      const posts = listPublicWebPosts(getScopeKey?.(), { section: tab });
-      if (feed) feed.innerHTML = posts.length
-        ? posts.map(post => `<article class="moli-public-web-post"><small>${escapeHtml(names[post.section] || post.section || '公共网络')}</small><strong>${escapeHtml(post.title || post.author?.name || '帖子')}</strong><p>${escapeHtml(post.content || '')}</p></article>`).join('')
-        : `<div class="moli-public-web-empty"><strong>${names[tab] || '公共网络'}分区</strong><span>moli108 已建立统一公共网络数据骨架。这里暂时没有帖子；下一阶段会接入发帖、角色/网友生成与评论互动。</span></div>`;
+      currentPublicWebTab = String(button.dataset.publicWebTab || 'recommend');
+      renderPublicWeb();
     });
   });
+  panel.querySelector('[data-action="public-web-compose"]')?.addEventListener('click', () => {
+    const section = currentPublicWebTab === 'recommend' ? 'tianya' : currentPublicWebTab;
+    const label = publicWebTypeNames[section] || '帖子';
+    const title = windowRef.prompt?.(`发布${label}：标题`, '') ?? null;
+    if (title === null) return;
+    const content = windowRef.prompt?.(`发布${label}：正文`, '') ?? null;
+    if (content === null || (!String(title).trim() && !String(content).trim())) return;
+    createPublicWebPost(getScopeKey?.(), { section, author:{ type:'user', id:'user', name:'User' }, title, content });
+    currentPublicWebTab = section;
+    panel.querySelectorAll('[data-public-web-tab]').forEach(item => item.classList.toggle('active', item.dataset.publicWebTab === section));
+    renderPublicWeb();
+  });
+  panel.querySelector('[data-public-web-feed]')?.addEventListener('click', event => {
+    const like = event.target?.closest?.('[data-action="public-web-like"]');
+    if (like) { togglePublicWebLike(getScopeKey?.(), like.dataset.postId, 'user'); renderPublicWeb(); return; }
+    const comment = event.target?.closest?.('[data-action="public-web-comment"]');
+    if (comment) {
+      const content = windowRef.prompt?.('写评论', '') ?? null;
+      if (content && String(content).trim()) addPublicWebComment(getScopeKey?.(), comment.dataset.postId, { author:{type:'user',id:'user',name:'User'}, content });
+      renderPublicWeb();
+    }
+  });
+  renderPublicWeb();
   panel.querySelectorAll('[data-action="app-home-back"]').forEach(button => {
     button.onclick = () => show('phone-home');
   });
@@ -7111,18 +7150,7 @@ export function createPhonePanel({
   panel.querySelector('[data-action="more"]')?.addEventListener('click', () => show('injection-composer'));
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
 
-  panel.querySelectorAll('[data-public-web-tab]').forEach(button => {
-    button.addEventListener('click', () => {
-      panel.querySelectorAll('[data-public-web-tab]').forEach(item => item.classList.toggle('active', item === button));
-      const tab = String(button.dataset.publicWebTab || 'recommend');
-      const names = { recommend:'推荐', tianya:'天涯', xiaohongshu:'小红书', zhihu:'知乎', douban:'豆瓣' };
-      const feed = panel.querySelector('[data-public-web-feed]');
-      const posts = listPublicWebPosts(getScopeKey?.(), { section: tab });
-      if (feed) feed.innerHTML = posts.length
-        ? posts.map(post => `<article class="moli-public-web-post"><small>${escapeHtml(names[post.section] || post.section || '公共网络')}</small><strong>${escapeHtml(post.title || post.author?.name || '帖子')}</strong><p>${escapeHtml(post.content || '')}</p></article>`).join('')
-        : `<div class="moli-public-web-empty"><strong>${names[tab] || '公共网络'}分区</strong><span>moli108 已建立统一公共网络数据骨架。这里暂时没有帖子；下一阶段会接入发帖、角色/网友生成与评论互动。</span></div>`;
-    });
-  });
+
 
   panel.querySelector('[data-action="injection-back"]')?.addEventListener('click', () => show('phone-home'));
   injectionSources?.addEventListener('change', event => {
