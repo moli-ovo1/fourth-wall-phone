@@ -82,7 +82,7 @@ import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
 import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, exportProfileMomentToPublic, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory, setMomentUserRead, recordProfileVisit, getProfileVisits, recordMomentChatEvent } from '../storage/moments-store.js';
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
-import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory } from '../storage/injection-store.js';
+import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
 
@@ -428,7 +428,7 @@ export function createPhonePanel({
       <main class="moli-injection-page">
         <div class="moli-settings-note">从整个手机世界挑选要带进正文的素材。程序只整理与标注，不压缩、不总结；最终由你决定哪些内容跨过这面墙。</div>
         <section class="moli-injection-source-card">
-          <div class="moli-conversation-section-title">素材库</div><div class="moli-injection-toolbar"><button type="button" class="moli-secondary-btn" data-action="injection-select-all">全选</button><button type="button" class="moli-secondary-btn" data-action="injection-select-none">全不选</button></div>
+          <div class="moli-conversation-section-title">素材库</div><div class="moli-injection-toolbar"><button type="button" class="moli-secondary-btn" data-action="injection-select-all">全选</button><button type="button" class="moli-secondary-btn" data-action="injection-select-none">全不选</button><button type="button" class="moli-secondary-btn" data-action="injection-selected-only" aria-pressed="false">只看已选</button></div>
           <div data-injection-sources></div>
         </section>
         <section class="moli-injection-editor-card">
@@ -1702,6 +1702,25 @@ export function createPhonePanel({
     injectionHistory.innerHTML=items.length ? items.map(item=>`<div class="moli-injection-history-row"><div><strong>${item.mode==='assistant'?'AI 正文':'临时上下文'}</strong><small>${new Date(item.createdAt).toLocaleString()} · ${escapeHtml(item.sourceSummary||'手动编辑')}</small></div><button type="button" class="moli-secondary-btn" data-action="injection-history-copy" data-history-id="${escapeHtml(item.id)}">复制成草稿</button></div>`).join('') : '<div class="moli-empty">还没有跨墙历史。</div>';
   }
 
+  function saveCurrentInjectionWorkspace() {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey) return;
+    saveInjectionWorkspace(scopeKey, { text: String(injectionEditor?.value || ''), sourceIds: selectedInjectionSourceIds() });
+  }
+
+  function applyInjectionSelectedOnly() {
+    const button = panel.querySelector('[data-action="injection-selected-only"]');
+    const selectedOnly = button?.getAttribute('aria-pressed') === 'true';
+    injectionSources?.querySelectorAll('.moli-injection-source-row').forEach(row => {
+      const checked = !!row.querySelector('input[data-injection-source]')?.checked;
+      row.hidden = selectedOnly && !checked;
+    });
+    injectionSources?.querySelectorAll('.moli-injection-source-group').forEach(group => {
+      const anyVisible = [...group.querySelectorAll('.moli-injection-source-row')].some(row => !row.hidden);
+      group.hidden = selectedOnly && !anyVisible;
+    });
+  }
+
   function renderInjectionComposer() {
     const scopeKey = getScopeKey?.();
     const catalog = injectionSourceCatalog();
@@ -1709,8 +1728,11 @@ export function createPhonePanel({
       const groups=new Map(); catalog.forEach(source=>{if(!groups.has(source.group))groups.set(source.group,[]);groups.get(source.group).push(source);});
       injectionSources.innerHTML = catalog.length ? [...groups.entries()].map(([group,items])=>`<details class="moli-injection-source-group" open><summary>${escapeHtml(group)} <small>${items.length} 项</small></summary>${items.map(source=>`<label class="moli-injection-source-row"><input type="checkbox" data-injection-source value="${escapeHtml(source.id)}"><span><strong>${escapeHtml(source.label)}</strong><small>${source.kind==='chat'?'原始消息':source.kind==='memory'?'手机记忆':'具体动态'}</small></span></label>`).join('')}</details>`).join('') : '<div class="moli-empty">手机里还没有可选素材。你仍可以直接在下方编辑框输入内容。</div>';
     }
-    if (injectionEditor) injectionEditor.value='';
-    updateInjectionBasket(); renderInjectionHistory();
+    const workspace = getInjectionWorkspace(scopeKey);
+    const wanted = new Set(workspace.sourceIds || []);
+    injectionSources?.querySelectorAll('input[data-injection-source]').forEach(input => { input.checked = wanted.has(input.value); });
+    if (injectionEditor) injectionEditor.value = workspace.text || '';
+    updateInjectionBasket(); applyInjectionSelectedOnly(); renderInjectionHistory();
     const pending = getPendingInjection(scopeKey);
     if (injectionPendingStatus) injectionPendingStatus.textContent = pending ? `当前正文已有一份等待“下一轮生成”使用的临时注入（${pending.text.length} 字符）。重新确认会替换它。` : '当前没有等待注入下一轮正文的内容。';
   }
@@ -7025,17 +7047,18 @@ export function createPhonePanel({
 
   panel.querySelector('[data-action="injection-back"]')?.addEventListener('click', () => show('phone-home'));
   injectionSources?.addEventListener('change', event => {
-    if (event.target?.matches?.('[data-injection-source]')) rebuildInjectionDraft();
+    if (event.target?.matches?.('[data-injection-source]')) { rebuildInjectionDraft(); saveCurrentInjectionWorkspace(); applyInjectionSelectedOnly(); }
   });
-  panel.querySelector('[data-action="injection-select-all"]')?.addEventListener('click',()=>{injectionSources?.querySelectorAll('input[data-injection-source]').forEach(x=>x.checked=true);rebuildInjectionDraft();});
-  panel.querySelector('[data-action="injection-select-none"]')?.addEventListener('click',()=>{injectionSources?.querySelectorAll('input[data-injection-source]').forEach(x=>x.checked=false);rebuildInjectionDraft();});
-  injectionHistory?.addEventListener('click',event=>{const button=event.target?.closest?.('[data-action="injection-history-copy"]');if(!button)return;const item=listInjectionHistory(getScopeKey?.()).find(x=>x.id===button.dataset.historyId);if(!item)return;if(injectionEditor)injectionEditor.value=item.text;syncInjectionSize();toast('已复制成新的跨墙草稿');});
-  injectionEditor?.addEventListener('input', syncInjectionSize);
-  panel.querySelector('[data-action="injection-rebuild"]')?.addEventListener('click', rebuildInjectionDraft);
+  panel.querySelector('[data-action="injection-select-all"]')?.addEventListener('click',()=>{injectionSources?.querySelectorAll('input[data-injection-source]').forEach(x=>x.checked=true);rebuildInjectionDraft();saveCurrentInjectionWorkspace();applyInjectionSelectedOnly();});
+  panel.querySelector('[data-action="injection-select-none"]')?.addEventListener('click',()=>{injectionSources?.querySelectorAll('input[data-injection-source]').forEach(x=>x.checked=false);rebuildInjectionDraft();saveCurrentInjectionWorkspace();applyInjectionSelectedOnly();});
+  panel.querySelector('[data-action="injection-selected-only"]')?.addEventListener('click',event=>{const button=event.currentTarget;const next=button.getAttribute('aria-pressed')!=='true';button.setAttribute('aria-pressed',String(next));button.textContent=next?'显示全部':'只看已选';applyInjectionSelectedOnly();});
+  injectionHistory?.addEventListener('click',event=>{const button=event.target?.closest?.('[data-action="injection-history-copy"]');if(!button)return;const item=listInjectionHistory(getScopeKey?.()).find(x=>x.id===button.dataset.historyId);if(!item)return;if(injectionEditor)injectionEditor.value=item.text;syncInjectionSize();saveCurrentInjectionWorkspace();toast('已复制成新的跨墙草稿');});
+  injectionEditor?.addEventListener('input', () => { syncInjectionSize(); saveCurrentInjectionWorkspace(); });
+  panel.querySelector('[data-action="injection-rebuild"]')?.addEventListener('click', () => { rebuildInjectionDraft(); saveCurrentInjectionWorkspace(); });
   panel.querySelector('[data-action="injection-clear"]')?.addEventListener('click', () => {
     if (injectionEditor) injectionEditor.value = '';
     const scopeKey = getScopeKey?.();
-    if (scopeKey) clearPendingInjection(scopeKey);
+    if (scopeKey) { clearPendingInjection(scopeKey); clearInjectionWorkspace(scopeKey); }
     syncInjectionSize();
     if (injectionPendingStatus) injectionPendingStatus.textContent = '当前没有等待注入下一轮正文的内容。';
   });
