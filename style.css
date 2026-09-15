@@ -1518,3 +1518,27 @@
 #moli-phone-panel .moli-xhs-comment-replies{margin:8px 0 0 18px;padding-left:10px;border-left:1px solid #eee;font-size:11px;line-height:1.7;color:#555;}
 #moli-phone-panel .moli-xhs-comment-replies b{color:#888;font-weight:500;}
 #moli-phone-panel .moli-xhs-expand-replies{margin:5px 0 0 28px;color:#777;font-size:10px;}
+
+/* moli118 · 当前角色世界 / 社区导航 / 天涯可读性修整 */
+#moli-phone-panel .moli-world-context-entry{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto 16px;align-items:center;gap:8px;margin:0 0 20px;padding:11px 12px;border:1px solid rgba(90,105,125,.14);border-radius:13px;background:rgba(255,255,255,.66);color:#2f3640;text-align:left;box-shadow:0 3px 12px rgba(70,85,105,.05);}
+#moli-phone-panel .moli-world-context-entry span{display:flex;flex-direction:column;gap:2px;font-size:13px;font-weight:600;}
+#moli-phone-panel .moli-world-context-entry span small{font-size:9px;font-weight:400;color:#8b939d;}
+#moli-phone-panel .moli-world-context-entry strong{max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500;color:#687381;}
+#moli-phone-panel .moli-world-context-entry em{font-style:normal;font-size:20px;color:#9aa2ab;}
+#moli-phone-panel .moli-community-topnav .moli-community-back{flex:0 0 28px;min-width:28px;padding:5px 2px 7px;font-size:24px;line-height:.8;border-radius:0;color:#5f584f;}
+#moli-phone-panel .moli-community-topnav .moli-community-back.active{background:transparent;box-shadow:none;}
+#moli-phone-panel .moli-tianya-sitebar{padding:5px 8px;font-size:14px;}
+#moli-phone-panel .moli-tianya-commandbar{gap:12px;padding:8px 9px 5px;font-size:14px;}
+#moli-phone-panel .moli-tianya-moderators{padding:4px 9px 7px;font-size:13px;line-height:1.5;}
+#moli-phone-panel .moli-tianya-tools{padding:6px 9px;font-size:13px;}
+#moli-phone-panel .moli-tianya-tools button{font-size:12px;}
+#moli-phone-panel .moli-tianya-topic-row.moli-simple-topic{min-height:34px;padding:3px 2px;}
+#moli-phone-panel .moli-simple-topic .moli-tianya-topic-link{font-size:15px;line-height:1.45;}
+#moli-phone-panel .moli-tianya-face{font-size:17px;}
+#moli-phone-panel .moli-tianya-no-topics{padding:22px 10px;font-size:13px;}
+#moli-phone-panel .moli-tianya-detail{font-size:14px;line-height:1.75;}
+#moli-phone-panel .moli-tianya-detail>h2{font-size:18px;line-height:1.45;margin:10px 9px 5px;}
+#moli-phone-panel .moli-tianya-detail-meta{padding:4px 9px 9px;font-size:12px;}
+#moli-phone-panel .moli-tianya-floor{padding:9px;}
+#moli-phone-panel .moli-tianya-floor-head{padding:4px 6px;font-size:12px;}
+#moli-phone-panel .moli-tianya-floor p{margin:8px 3px;font-size:14px;line-height:1.75;}
