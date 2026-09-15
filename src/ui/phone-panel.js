@@ -82,7 +82,7 @@ import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
 import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, exportProfileMomentToPublic, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory, setMomentUserRead, recordProfileVisit, getProfileVisits, recordMomentChatEvent } from '../storage/moments-store.js';
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
-import { getPendingInjection, setPendingInjection, clearPendingInjection } from '../storage/injection-store.js';
+import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
 
@@ -91,6 +91,14 @@ const APP_ICON_URLS = Object.freeze({
   xiaohongshu: new URL('../../assets/apps/xiaohongshu.jpg', import.meta.url).href,
   tianya: new URL('../../assets/apps/tianya.jpg', import.meta.url).href,
   weibo: new URL('../../assets/apps/weibo.jpg', import.meta.url).href,
+  wall: new URL('../../assets/apps/our-wall.png', import.meta.url).href,
+});
+const APP_TITLE_URLS = Object.freeze({
+  wechat: new URL('../../assets/apps/wechat-title.png', import.meta.url).href,
+  xiaohongshu: new URL('../../assets/apps/xiaohongshu-title.png', import.meta.url).href,
+  tianya: new URL('../../assets/apps/tianya-title.png', import.meta.url).href,
+  weibo: new URL('../../assets/apps/weibo-title.png', import.meta.url).href,
+  wall: new URL('../../assets/apps/our-wall-title.png', import.meta.url).href,
 });
 
 const BUILTIN_AVATAR_URLS = Object.freeze({
@@ -121,19 +129,23 @@ export function createPhonePanel({
         <div class="moli-launcher-grid" aria-label="手机主屏幕">
           <button class="moli-app-icon" data-action="open-wechat" aria-label="打开微信">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.wechat}" alt="" /></span>
-            <small>微信</small>
+            <img class="moli-app-title-art" src="${APP_TITLE_URLS.wechat}" alt="微信" />
           </button>
           <button class="moli-app-icon" data-action="open-xiaohongshu" aria-label="打开小红书">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.xiaohongshu}" alt="" /></span>
-            <small>小红书</small>
+            <img class="moli-app-title-art" src="${APP_TITLE_URLS.xiaohongshu}" alt="小红书" />
           </button>
           <button class="moli-app-icon" data-action="open-tianya" aria-label="打开天涯论坛">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.tianya}" alt="" /></span>
-            <small>天涯论坛</small>
+            <img class="moli-app-title-art" src="${APP_TITLE_URLS.tianya}" alt="天涯论坛" />
           </button>
           <button class="moli-app-icon" data-action="open-weibo" aria-label="打开微博">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.weibo}" alt="" /></span>
-            <small>微博</small>
+            <img class="moli-app-title-art" src="${APP_TITLE_URLS.weibo}" alt="微博" />
+          </button>
+          <button class="moli-app-icon" data-action="open-wall" aria-label="打开我们的墙">
+            <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.wall}" alt="" /></span>
+            <img class="moli-app-title-art" src="${APP_TITLE_URLS.wall}" alt="我们的墙" />
           </button>
         </div>
       </main>
@@ -410,7 +422,6 @@ export function createPhonePanel({
         <button class="moli-primary-btn moli-danger-btn" data-action="multi-delete">删除</button>
       </div>
       <footer class="moli-compose">
-        <button class="moli-plus" data-action="more" aria-label="更多">＋</button>
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
         <button class="moli-send" data-action="send">发送</button>
       </footer>
@@ -419,24 +430,24 @@ export function createPhonePanel({
     <section class="moli-page" data-page="injection-composer">
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="injection-back" aria-label="返回">‹</button></div>
-        <div class="moli-nav-title">注入正文</div>
+        <div class="moli-nav-title">我们的墙</div>
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-injection-page">
-        <div class="moli-settings-note">选择手机内容后会生成一份本次跨世界草稿。你可以直接删、改、补充；编辑只影响这次注入，不会修改手机原始记录。</div>
+        <div class="moli-settings-note">从整个手机世界挑选要带进正文的素材。程序只整理与标注，不压缩、不总结；最终由你决定哪些内容跨过这面墙。</div>
         <section class="moli-injection-source-card">
-          <div class="moli-conversation-section-title">选择内容源</div>
+          <div class="moli-conversation-section-title">素材库</div><div class="moli-injection-toolbar"><button type="button" class="moli-secondary-btn" data-action="injection-select-all">全选</button><button type="button" class="moli-secondary-btn" data-action="injection-select-none">全不选</button></div>
           <div data-injection-sources></div>
         </section>
         <section class="moli-injection-editor-card">
-          <div class="moli-injection-editor-head"><strong>注入预览</strong><small data-injection-size>0 字符</small></div>
+          <div class="moli-injection-editor-head"><strong>跨墙预览</strong><small data-injection-size>0 字符</small></div><div class="moli-injection-basket" data-injection-basket>素材篮 · 0 项</div>
           <textarea rows="16" data-injection-editor placeholder="选择上方内容源，或直接在这里输入希望跨过世界边界的内容。"></textarea>
           <div class="moli-injection-editor-tools">
             <button type="button" class="moli-secondary-btn" data-action="injection-rebuild">恢复自动整理内容</button>
             <button type="button" class="moli-secondary-btn" data-action="injection-clear">清空</button>
           </div>
         </section>
-        <div class="moli-settings-note" data-injection-pending-status></div>
+        <div class="moli-settings-note" data-injection-pending-status></div><section class="moli-injection-history-card"><div class="moli-conversation-section-title">入墙历史</div><div data-injection-history></div></section>
       </main>
       <footer class="moli-injection-footer">
         <button type="button" class="moli-secondary-btn" data-action="injection-arm">注入下一轮上下文</button>
@@ -1151,6 +1162,8 @@ export function createPhonePanel({
   const injectionEditor = panel.querySelector('[data-injection-editor]');
   const injectionSize = panel.querySelector('[data-injection-size]');
   const injectionPendingStatus = panel.querySelector('[data-injection-pending-status]');
+  const injectionBasket = panel.querySelector('[data-injection-basket]');
+  const injectionHistory = panel.querySelector('[data-injection-history]');
   const input = panel.querySelector('.moli-input');
   const sendButton = panel.querySelector('[data-action="send"]');
   const addMenu = panel.querySelector('[data-add-menu]');
@@ -1613,64 +1626,53 @@ export function createPhonePanel({
     ].filter(Boolean).join('\n');
   }
 
+  function injectionConversationHeader(conversation) {
+    const title = conversationDisplayTitle(conversation);
+    const boundary = conversation.type === 'group'
+      ? `知识归属：这是「${title}」群聊内容，默认群成员知道；群外角色不因此自动知道。`
+      : `知识归属：这是 User 与 ${canonicalContactName(contact(conversation.contactId || ''))} 的私聊，默认只有双方知道。`;
+    return [`【微信${conversation.type === 'group' ? '群聊' : '私聊'} · ${title}】`, injectionIdentityHeader(conversation), boundary].join('\n');
+  }
+
   function injectionSourceCatalog() {
     const scopeKey = getScopeKey?.();
-    const conversation = currentConversation();
-    if (!scopeKey || !conversation) return [];
+    if (!scopeKey) return [];
     const sources = [];
-    const recentMessages = (conversation.messages || []).slice(-Math.min(40, Math.max(10, Number(conversation.recentChatLimit || 20))));
-    if (recentMessages.length) {
-      sources.push({
-        id: 'conversation:recent',
-        label: conversation.type === 'group' ? `群聊最近 ${recentMessages.length} 条` : `私聊最近 ${recentMessages.length} 条`,
-        kind: 'chat',
-        build: () => {
-          const title = conversationDisplayTitle(conversation);
-          const boundary = conversation.type === 'group'
-            ? `知识归属：这是「${title}」群聊内容，默认群成员知道；群外角色不因此自动知道。`
-            : `知识归属：这是 User 与 ${canonicalContactName(contact(conversation.contactId || currentContactId))} 的私聊，默认只有双方知道。`;
-          const userName = getTavernUserContext().name || 'User';
-          const lines = recentMessages.map(message => {
-            const sender = message?.role === 'user' ? `User（${userName}）` : messageSenderName(message, conversation);
-            const content = sanitizeInjectionText(message?.content);
-            return content ? `${sender}：${content}` : '';
-          }).filter(Boolean);
-          return [
-            `【微信${conversation.type === 'group' ? '群聊' : '私聊'} · ${title}】`,
-            injectionIdentityHeader(conversation),
-            boundary,
-            ...lines,
-          ].join('\n');
-        },
+    const conversations = getScopeConversations(scopeKey) || [];
+    const userName = getTavernUserContext().name || 'User';
+    conversations.forEach(conversation => {
+      const title = conversationDisplayTitle(conversation);
+      const messages = Array.isArray(conversation.messages) ? conversation.messages.slice(-60) : [];
+      messages.forEach((message, index) => {
+        const content = sanitizeInjectionText(message?.content);
+        if (!content) return;
+        const sender = message?.role === 'user' ? `User（${userName}）` : messageSenderName(message, conversation);
+        const id = `chat:${conversation.key || conversation.id || conversation.contactId}:${message.id || index}`;
+        sources.push({
+          id, group: `微信 · ${conversation.type === 'group' ? '群聊' : '私聊'} · ${title}`, kind:'chat',
+          label: `${sender}：${content.replace(/\s+/g,' ').slice(0,72)}${content.length>72?'…':''}`,
+          build: () => `${injectionConversationHeader(conversation)}\n${sender}：${content}`,
+        });
       });
-    }
-    const memory = getConversationMemory(scopeKey, currentContactId);
-    const recentMemory = Array.isArray(memory?.recent) ? memory.recent.map(x => String(x?.content || '').trim()).filter(Boolean) : [];
-    if (recentMemory.length) {
-      sources.push({ id: 'memory:recent', label: `手机近期记忆（${recentMemory.length} 段）`, kind: 'memory', build: () => `【手机近期记忆】\n${recentMemory.join('\n\n')}` });
-    }
-    if (String(memory?.longTermSummary || '').trim()) {
-      sources.push({ id: 'memory:long', label: '手机长期记忆', kind: 'memory', build: () => `【手机长期记忆】\n${String(memory.longTermSummary).trim()}` });
-    }
-
-    let moments = [];
-    if (conversation.type === 'private') {
-      const contactId = String(conversation.contactId || currentContactId || '');
-      const profile = listProfileMoments(scopeKey, contactId);
-      const publicRelevant = listPublicMoments(scopeKey).filter(item => ['user', contactId].includes(String(item?.author?.id || '')));
-      const seen = new Set();
-      moments = [...profile, ...publicRelevant].filter(item => item?.id && !seen.has(item.id) && seen.add(item.id)).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,8);
-    } else {
-      moments = listPublicMoments(scopeKey).slice(0,8);
-    }
-    moments.forEach((item, index) => {
-      const author = momentActorName(item.author);
-      const preview = String(item.content || '').replace(/\s+/g, ' ').slice(0, 34);
-      sources.push({
-        id: `moment:${item.surface || 'public'}:${item.id}`,
-        label: `朋友圈 · ${author}：${preview}${String(item.content || '').length > 34 ? '…' : ''}`,
-        kind: 'moment',
-        build: () => `【朋友圈】\n知识归属：这是手机朋友圈中的动态；只有实际接触到该动态的人才能据此知道内容，不默认正文全员知情。\n${injectionMomentText(item)}`,
+      const conversationKey = conversation.key || conversation.id || conversation.contactId;
+      const memory = getConversationMemory(scopeKey, conversationKey);
+      const recentMemory = Array.isArray(memory?.recent) ? memory.recent : [];
+      recentMemory.forEach((entry,index)=>{
+        const text=String(entry?.content||'').trim(); if(!text)return;
+        sources.push({id:`memory:${conversationKey}:recent:${entry?.id||index}`,group:`微信 · 记忆 · ${title}`,kind:'memory',label:`近期记忆：${text.replace(/\s+/g,' ').slice(0,72)}${text.length>72?'…':''}`,build:()=>`【手机近期记忆 · ${title}】\n${text}`});
+      });
+      const longText=String(memory?.longTermSummary||'').trim();
+      if(longText) sources.push({id:`memory:${conversationKey}:long`,group:`微信 · 记忆 · ${title}`,kind:'memory',label:`长期记忆：${longText.replace(/\s+/g,' ').slice(0,72)}${longText.length>72?'…':''}`,build:()=>`【手机长期记忆 · ${title}】\n${longText}`});
+    });
+    listPublicMoments(scopeKey).slice(0,40).forEach(item=>{
+      const author=momentActorName(item.author), preview=String(item.content||'').replace(/\s+/g,' ').slice(0,72);
+      sources.push({id:`moment:public:${item.id}`,group:'微信 · User 公共朋友圈',kind:'moment',label:`${author}：${preview}${String(item.content||'').length>72?'…':''}`,build:()=>`【微信朋友圈 · 公共舞台】\n知识归属：公共朋友圈的多人互动属于 User 的娱乐/展示层，不自动写入任何角色的一对一私聊世界线。\n${injectionMomentText(item)}`});
+    });
+    getContacts().forEach(item=>{
+      const cid=String(item?.id||''); if(!cid)return;
+      listProfileMoments(scopeKey,cid).slice(0,20).forEach(moment=>{
+        const author=momentActorName(moment.author), preview=String(moment.content||'').replace(/\s+/g,' ').slice(0,72);
+        sources.push({id:`moment:profile:${cid}:${moment.id}`,group:`微信 · ${canonicalContactName(item)}的角色朋友圈`,kind:'moment',label:`${author}：${preview}${String(moment.content||'').length>72?'…':''}`,build:()=>`【微信角色朋友圈 · ${canonicalContactName(item)}】\n知识归属：这是该角色的一对一朋友圈世界线；公共娱乐池里的其他角色互动不因此自动成为该角色已知事实。\n${injectionMomentText(moment)}`});
       });
     });
     return sources;
@@ -1680,40 +1682,57 @@ export function createPhonePanel({
     return [...(injectionSources?.querySelectorAll('input[data-injection-source]:checked') || [])].map(input => input.value);
   }
 
+  function updateInjectionBasket() {
+    const selected = new Set(selectedInjectionSourceIds());
+    const catalog = injectionSourceCatalog();
+    const picked = catalog.filter(source => selected.has(source.id));
+    if (injectionBasket) injectionBasket.textContent = `素材篮 · ${picked.length} 项`;
+    const totals = new Map();
+    picked.forEach(source => totals.set(source.group, (totals.get(source.group)||0) + source.build().length));
+    const length = String(injectionEditor?.value || '').length;
+    const detail = [...totals.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4).map(([name,n])=>`${name} ${n}`).join(' · ');
+    if (injectionSize) injectionSize.textContent = `约 ${length} 字符${detail ? ` · ${detail}` : ''}`;
+  }
+
   function rebuildInjectionDraft() {
     const selected = new Set(selectedInjectionSourceIds());
     const catalog = injectionSourceCatalog();
     const parts = catalog.filter(source => selected.has(source.id)).map(source => source.build()).filter(Boolean);
-    injectionEditor.value = parts.join('\n\n---\n\n');
-    syncInjectionSize();
+    if (injectionEditor) injectionEditor.value = parts.join('\n\n---\n\n');
+    updateInjectionBasket();
   }
 
-  function syncInjectionSize() {
-    const length = String(injectionEditor?.value || '').length;
-    if (injectionSize) injectionSize.textContent = `约 ${length} 字符`;
+  function syncInjectionSize() { updateInjectionBasket(); }
+
+  function renderInjectionHistory() {
+    const scopeKey=getScopeKey?.(); if(!injectionHistory)return;
+    const items=listInjectionHistory(scopeKey);
+    injectionHistory.innerHTML=items.length ? items.map(item=>`<div class="moli-injection-history-row"><div><strong>${item.mode==='assistant'?'AI 正文':'临时上下文'}</strong><small>${new Date(item.createdAt).toLocaleString()} · ${escapeHtml(item.sourceSummary||'手动编辑')}</small></div><button type="button" class="moli-secondary-btn" data-action="injection-history-copy" data-history-id="${escapeHtml(item.id)}">复制成草稿</button></div>`).join('') : '<div class="moli-empty">还没有跨墙历史。</div>';
   }
 
   function renderInjectionComposer() {
     const scopeKey = getScopeKey?.();
     const catalog = injectionSourceCatalog();
     if (injectionSources) {
-      injectionSources.innerHTML = catalog.length
-        ? catalog.map((source, index) => `<label class="moli-injection-source-row"><input type="checkbox" data-injection-source value="${escapeHtml(source.id)}" ${index === 0 ? 'checked' : ''}><span><strong>${escapeHtml(source.label)}</strong><small>${source.kind === 'chat' ? '原始聊天副本' : source.kind === 'memory' ? '手机记忆' : '具体动态'}</small></span></label>`).join('')
-        : '<div class="moli-empty">当前聊天还没有可整理的手机内容。你仍可以直接在下方编辑框输入内容。</div>';
+      const groups=new Map(); catalog.forEach(source=>{if(!groups.has(source.group))groups.set(source.group,[]);groups.get(source.group).push(source);});
+      injectionSources.innerHTML = catalog.length ? [...groups.entries()].map(([group,items])=>`<details class="moli-injection-source-group" open><summary>${escapeHtml(group)} <small>${items.length} 项</small></summary>${items.map(source=>`<label class="moli-injection-source-row"><input type="checkbox" data-injection-source value="${escapeHtml(source.id)}"><span><strong>${escapeHtml(source.label)}</strong><small>${source.kind==='chat'?'原始消息':source.kind==='memory'?'手机记忆':'具体动态'}</small></span></label>`).join('')}</details>`).join('') : '<div class="moli-empty">手机里还没有可选素材。你仍可以直接在下方编辑框输入内容。</div>';
     }
-    rebuildInjectionDraft();
+    if (injectionEditor) injectionEditor.value='';
+    updateInjectionBasket(); renderInjectionHistory();
     const pending = getPendingInjection(scopeKey);
-    if (injectionPendingStatus) injectionPendingStatus.textContent = pending
-      ? `当前正文已有一份等待“下一轮生成”使用的临时注入（${pending.text.length} 字符）。重新确认会替换它。`
-      : '当前没有等待注入下一轮正文的内容。';
+    if (injectionPendingStatus) injectionPendingStatus.textContent = pending ? `当前正文已有一份等待“下一轮生成”使用的临时注入（${pending.text.length} 字符）。重新确认会替换它。` : '当前没有等待注入下一轮正文的内容。';
   }
 
   async function armInjectionForNextGeneration() {
     const scopeKey = getScopeKey?.();
     const text = String(injectionEditor?.value || '').trim();
     if (!scopeKey || !text) return toast('请先填写要注入的内容');
-    const labels = injectionSourceCatalog().filter(source => selectedInjectionSourceIds().includes(source.id)).map(source => source.label);
-    setPendingInjection(scopeKey, { text, sourceSummary: labels.join('；') });
+    const selectedIds = selectedInjectionSourceIds();
+    const labels = injectionSourceCatalog().filter(source => selectedIds.includes(source.id)).map(source => source.label);
+    const sessionId = `wall_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+    setPendingInjection(scopeKey, { text, sourceSummary: labels.join('；'), sourceIds: selectedIds, sessionId });
+    addInjectionHistory(scopeKey, { text, sourceSummary: labels.join('；'), sourceIds: selectedIds, mode: 'context', sessionId });
+    renderInjectionHistory();
     if (injectionPendingStatus) injectionPendingStatus.textContent = `已等待下一轮正文生成 · ${text.length} 字符。生成成功后自动消费；停止/失败会保留。`;
     toast('已准备注入下一轮正文');
   }
@@ -1725,6 +1744,8 @@ export function createPhonePanel({
     if (!ok) return;
     try {
       await insertAssistantBody(text);
+      const scopeKey=getScopeKey?.(); const selectedIds=selectedInjectionSourceIds(); const labels=injectionSourceCatalog().filter(source=>selectedIds.includes(source.id)).map(source=>source.label);
+      addInjectionHistory(scopeKey,{text,sourceSummary:labels.join('；'),sourceIds:selectedIds,mode:'assistant',sessionId:`wall_${Date.now()}_${Math.random().toString(36).slice(2,7)}`}); renderInjectionHistory();
       toast('已作为 AI 正文插入酒馆');
     } catch (error) {
       console.error('[moli小手机] insert assistant body failed', error);
@@ -3874,7 +3895,7 @@ export function createPhonePanel({
   const contact = id => getContacts().find(x => x.id === id);
 
   function privateConversationScopeAnnotation(conversation, ownTitle = '') {
-    const scope = conversation?.scopeMode === 'global' ? '全局陪伴' : '当前正文';
+    const scope = conversation?.scopeMode === 'global' ? '日常陪伴' : '当前正文';
     const title = String(ownTitle || conversation?.title || '').trim();
     return title ? `${scope}•${title}` : scope;
   }
@@ -6163,6 +6184,7 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-xiaohongshu"]')?.addEventListener('click', () => show('xiaohongshu-home'));
   panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => show('weibo-home'));
+  panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
   panel.querySelectorAll('[data-action="app-home-back"]').forEach(button => {
     button.onclick = () => show('phone-home');
   });
@@ -7006,16 +7028,16 @@ export function createPhonePanel({
   });
   panel.querySelector('[data-action="sync-scope-confirm"]')?.addEventListener('click', confirmTavernSyncScope);
 
-  panel.querySelector(
-    '[data-action="more"]'
-  ).onclick = () => {
-    show('injection-composer');
-  };
+  panel.querySelector('[data-action="more"]')?.addEventListener('click', () => show('injection-composer'));
+  panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
 
-  panel.querySelector('[data-action="injection-back"]')?.addEventListener('click', () => show('chat'));
+  panel.querySelector('[data-action="injection-back"]')?.addEventListener('click', () => show('phone-home'));
   injectionSources?.addEventListener('change', event => {
     if (event.target?.matches?.('[data-injection-source]')) rebuildInjectionDraft();
   });
+  panel.querySelector('[data-action="injection-select-all"]')?.addEventListener('click',()=>{injectionSources?.querySelectorAll('input[data-injection-source]').forEach(x=>x.checked=true);rebuildInjectionDraft();});
+  panel.querySelector('[data-action="injection-select-none"]')?.addEventListener('click',()=>{injectionSources?.querySelectorAll('input[data-injection-source]').forEach(x=>x.checked=false);rebuildInjectionDraft();});
+  injectionHistory?.addEventListener('click',event=>{const button=event.target?.closest?.('[data-action="injection-history-copy"]');if(!button)return;const item=listInjectionHistory(getScopeKey?.()).find(x=>x.id===button.dataset.historyId);if(!item)return;if(injectionEditor)injectionEditor.value=item.text;syncInjectionSize();toast('已复制成新的跨墙草稿');});
   injectionEditor?.addEventListener('input', syncInjectionSize);
   panel.querySelector('[data-action="injection-rebuild"]')?.addEventListener('click', rebuildInjectionDraft);
   panel.querySelector('[data-action="injection-clear"]')?.addEventListener('click', () => {
