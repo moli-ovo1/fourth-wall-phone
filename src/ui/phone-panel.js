@@ -85,6 +85,7 @@ import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBe
 import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
+import { listPublicWebPosts } from '../storage/public-web-store.js';
 
 const APP_ICON_URLS = Object.freeze({
   wechat: new URL('../../assets/apps/wechat.jpg', import.meta.url).href,
@@ -123,10 +124,6 @@ export function createPhonePanel({
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.wechat}" alt="" /></span>
             <small>微信</small>
           </button>
-          <button class="moli-app-icon" data-action="open-xiaohongshu" aria-label="打开小红书">
-            <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.xiaohongshu}" alt="" /></span>
-            <small>小红书</small>
-          </button>
           <button class="moli-app-icon" data-action="open-tianya" aria-label="打开天涯论坛">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.tianya}" alt="" /></span>
             <small>天涯论坛</small>
@@ -158,7 +155,18 @@ export function createPhonePanel({
         <div class="moli-nav-title">天涯论坛</div>
         <div class="moli-nav-side right"></div>
       </header>
-      <main class="moli-placeholder moli-app-placeholder">天涯论坛入口已预留</main>
+      <main class="moli-public-web">
+        <nav class="moli-public-web-tabs" aria-label="天涯论坛分区">
+          <button type="button" class="active" data-public-web-tab="recommend">推荐</button>
+          <button type="button" data-public-web-tab="tianya">天涯</button>
+          <button type="button" data-public-web-tab="xiaohongshu">小红书</button>
+          <button type="button" data-public-web-tab="zhihu">知乎</button>
+          <button type="button" data-public-web-tab="douban">豆瓣</button>
+        </nav>
+        <section class="moli-public-web-feed" data-public-web-feed>
+          <div class="moli-public-web-empty"><strong>公共网络正在建立</strong><span>这里会共享同一个互联网世界。天涯、小红书、知乎、豆瓣是不同分区，不是互相割裂的 App。</span></div>
+        </section>
+      </main>
     </section>
 
     <section class="moli-page" data-page="weibo-home">
@@ -1762,7 +1770,7 @@ export function createPhonePanel({
         const ownerHtml = [...owners.entries()].map(([owner, ownerItems]) => {
           const conversationKey = ownerItems.find(item => item.kind === 'chat')?.conversationKey || '';
           const recentButton = section !== 'moments' && conversationKey
-            ? `<button type="button" class="moli-injection-recent-btn" data-action="injection-recent-rounds" data-conversation-key="${escapeHtml(conversationKey)}">最近 n 轮</button>` : '';
+            ? `<button type="button" class="moli-injection-recent-btn" data-action="injection-recent-rounds" data-conversation-key="${escapeHtml(conversationKey)}">最近 n 条</button>` : '';
           return `
           <details class="moli-injection-source-owner">
             <summary><span>${escapeHtml(owner)} <small>${ownerItems.length} 项</small></span>${recentButton}</summary>
@@ -6244,6 +6252,19 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => show('weibo-home'));
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
+
+  panel.querySelectorAll('[data-public-web-tab]').forEach(button => {
+    button.addEventListener('click', () => {
+      panel.querySelectorAll('[data-public-web-tab]').forEach(item => item.classList.toggle('active', item === button));
+      const tab = String(button.dataset.publicWebTab || 'recommend');
+      const names = { recommend:'推荐', tianya:'天涯', xiaohongshu:'小红书', zhihu:'知乎', douban:'豆瓣' };
+      const feed = panel.querySelector('[data-public-web-feed]');
+      const posts = listPublicWebPosts(getScopeKey?.(), { section: tab });
+      if (feed) feed.innerHTML = posts.length
+        ? posts.map(post => `<article class="moli-public-web-post"><small>${escapeHtml(names[post.section] || post.section || '公共网络')}</small><strong>${escapeHtml(post.title || post.author?.name || '帖子')}</strong><p>${escapeHtml(post.content || '')}</p></article>`).join('')
+        : `<div class="moli-public-web-empty"><strong>${names[tab] || '公共网络'}分区</strong><span>moli108 已建立统一公共网络数据骨架。这里暂时没有帖子；下一阶段会接入发帖、角色/网友生成与评论互动。</span></div>`;
+    });
+  });
   panel.querySelectorAll('[data-action="app-home-back"]').forEach(button => {
     button.onclick = () => show('phone-home');
   });
@@ -7090,6 +7111,19 @@ export function createPhonePanel({
   panel.querySelector('[data-action="more"]')?.addEventListener('click', () => show('injection-composer'));
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
 
+  panel.querySelectorAll('[data-public-web-tab]').forEach(button => {
+    button.addEventListener('click', () => {
+      panel.querySelectorAll('[data-public-web-tab]').forEach(item => item.classList.toggle('active', item === button));
+      const tab = String(button.dataset.publicWebTab || 'recommend');
+      const names = { recommend:'推荐', tianya:'天涯', xiaohongshu:'小红书', zhihu:'知乎', douban:'豆瓣' };
+      const feed = panel.querySelector('[data-public-web-feed]');
+      const posts = listPublicWebPosts(getScopeKey?.(), { section: tab });
+      if (feed) feed.innerHTML = posts.length
+        ? posts.map(post => `<article class="moli-public-web-post"><small>${escapeHtml(names[post.section] || post.section || '公共网络')}</small><strong>${escapeHtml(post.title || post.author?.name || '帖子')}</strong><p>${escapeHtml(post.content || '')}</p></article>`).join('')
+        : `<div class="moli-public-web-empty"><strong>${names[tab] || '公共网络'}分区</strong><span>moli108 已建立统一公共网络数据骨架。这里暂时没有帖子；下一阶段会接入发帖、角色/网友生成与评论互动。</span></div>`;
+    });
+  });
+
   panel.querySelector('[data-action="injection-back"]')?.addEventListener('click', () => show('phone-home'));
   injectionSources?.addEventListener('change', event => {
     if (event.target?.matches?.('[data-injection-source]')) { rebuildInjectionDraft(); saveCurrentInjectionWorkspace(); applyInjectionSelectedOnly(); }
@@ -7099,17 +7133,17 @@ export function createPhonePanel({
     if (!button) return;
     event.preventDefault(); event.stopPropagation();
     const key = String(button.dataset.conversationKey || '');
-    const raw = windowRef.prompt?.('选择最近多少轮对话？（1–30）', '5');
+    const raw = windowRef.prompt?.('选择最近多少条消息？（1–60；一条消息按一条计算）', '5');
     if (raw === null || raw === undefined) return;
-    const rounds = Math.max(1, Math.min(30, Number.parseInt(raw, 10) || 5));
+    const count = Math.max(1, Math.min(60, Number.parseInt(raw, 10) || 5));
     const chatItems = injectionSourceCatalog().filter(item => item.kind === 'chat' && item.conversationKey === key);
-    let userTurns = 0; const wanted = new Set();
-    for (let i = chatItems.length - 1; i >= 0; i--) {
-      const item = chatItems[i]; wanted.add(item.id);
-      if (String(item.body?.() || '').startsWith('User（')) { userTurns += 1; if (userTurns >= rounds) break; }
-    }
-    injectionSources.querySelectorAll('input[data-injection-source]').forEach(input => { if (wanted.has(input.value)) input.checked = true; });
-    button.textContent = `最近 ${rounds} 轮`;
+    const wanted = new Set(chatItems.slice(-count).map(item => item.id));
+    // “最近 N 条”是一个确定选择器：先清掉这个会话已有的消息勾选，再只选末尾 N 条。
+    injectionSources.querySelectorAll('input[data-injection-source]').forEach(input => {
+      const source = injectionSourceCatalog().find(item => item.id === input.value);
+      if (source?.kind === 'chat' && source?.conversationKey === key) input.checked = wanted.has(input.value);
+    });
+    button.textContent = `最近 ${Math.min(count, chatItems.length)} 条`;
     rebuildInjectionDraft(); saveCurrentInjectionWorkspace();
   });
   injectionHistory?.addEventListener('click',event=>{const button=event.target?.closest?.('[data-action="injection-history-copy"]');if(!button)return;const item=listInjectionHistory(getScopeKey?.()).find(x=>x.id===button.dataset.historyId);if(!item)return;if(injectionEditor)injectionEditor.value=item.text;syncInjectionSize();saveCurrentInjectionWorkspace();toast('已复制成新的跨墙草稿');});
