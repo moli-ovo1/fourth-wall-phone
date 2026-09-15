@@ -1574,8 +1574,8 @@
 #moli-phone-panel .moli-comment-refresh.is-spinning{animation:moli-community-spin .8s linear infinite;}
 
 /* moli122 · community persistence / Zhihu feed */
-#moli-phone-panel .moli-recommend-today{position:relative;padding-right:92px;}
-#moli-phone-panel .moli-recommend-ghost-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#9a6a68;font-size:10px;white-space:nowrap;}
+#moli-phone-panel .moli-recommend-today{position:relative;padding-right:0;}
+#moli-phone-panel .moli-recommend-ghost-toggle{position:absolute;right:8px;top:100%;transform:translateY(-50%);border:0;background:transparent;color:#9a6a68;font-size:10px;white-space:nowrap;}
 #moli-phone-panel .moli-public-pinned-tail{margin-top:16px;padding-top:10px;border-top:1px dashed #d9d0c4;}
 #moli-phone-panel .moli-public-pinned-title{padding:4px 8px 8px;font-size:12px;font-weight:700;color:#8d6e63;letter-spacing:.12em;}
 #moli-phone-panel .moli-xhs-waterfall-card,#moli-phone-panel .moli-zhihu-feed-card{position:relative;}
@@ -1589,3 +1589,6 @@
 #moli-phone-panel .moli-zhihu-feed-card p{margin:6px 0;font-size:12px;line-height:1.65;color:#444;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
 #moli-phone-panel .moli-zhihu-feed-card small{font-size:10px;color:#999;}
 #moli-phone-panel .moli-zhihu-user-comment{border:0;background:transparent;color:#66758a;padding:0;font-size:10px;}
+
+/* moli123 · community polish */
+#moli-phone-panel .moli-xhs-waterfall-card .moli-card-pin{width:auto;height:auto;right:7px;top:7px;padding:2px;border:0;border-radius:0;background:transparent;box-shadow:none;font-size:18px;line-height:1;}
