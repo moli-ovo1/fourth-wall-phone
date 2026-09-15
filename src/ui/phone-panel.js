@@ -93,14 +93,6 @@ const APP_ICON_URLS = Object.freeze({
   weibo: new URL('../../assets/apps/weibo.jpg', import.meta.url).href,
   wall: new URL('../../assets/apps/our-wall.png', import.meta.url).href,
 });
-const APP_TITLE_URLS = Object.freeze({
-  wechat: new URL('../../assets/apps/wechat-title.png', import.meta.url).href,
-  xiaohongshu: new URL('../../assets/apps/xiaohongshu-title.png', import.meta.url).href,
-  tianya: new URL('../../assets/apps/tianya-title.png', import.meta.url).href,
-  weibo: new URL('../../assets/apps/weibo-title.png', import.meta.url).href,
-  wall: new URL('../../assets/apps/our-wall-title.png', import.meta.url).href,
-});
-
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
   'builtin:writer': new URL('../../assets/avatars/little-god.png', import.meta.url).href,
@@ -129,23 +121,23 @@ export function createPhonePanel({
         <div class="moli-launcher-grid" aria-label="手机主屏幕">
           <button class="moli-app-icon" data-action="open-wechat" aria-label="打开微信">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.wechat}" alt="" /></span>
-            <img class="moli-app-title-art" src="${APP_TITLE_URLS.wechat}" alt="微信" />
+            <small>微信</small>
           </button>
           <button class="moli-app-icon" data-action="open-xiaohongshu" aria-label="打开小红书">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.xiaohongshu}" alt="" /></span>
-            <img class="moli-app-title-art" src="${APP_TITLE_URLS.xiaohongshu}" alt="小红书" />
+            <small>小红书</small>
           </button>
           <button class="moli-app-icon" data-action="open-tianya" aria-label="打开天涯论坛">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.tianya}" alt="" /></span>
-            <img class="moli-app-title-art" src="${APP_TITLE_URLS.tianya}" alt="天涯论坛" />
+            <small>天涯论坛</small>
           </button>
           <button class="moli-app-icon" data-action="open-weibo" aria-label="打开微博">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.weibo}" alt="" /></span>
-            <img class="moli-app-title-art" src="${APP_TITLE_URLS.weibo}" alt="微博" />
+            <small>微博</small>
           </button>
           <button class="moli-app-icon" data-action="open-wall" aria-label="打开我们的墙">
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.wall}" alt="" /></span>
-            <img class="moli-app-title-art" src="${APP_TITLE_URLS.wall}" alt="我们的墙" />
+            <small>我们的墙</small>
           </button>
         </div>
       </main>
