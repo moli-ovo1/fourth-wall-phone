@@ -3,9 +3,11 @@ import { readJson, writeJson, removeValue } from './storage-adapter.js';
 const PREFIX = 'moli-phone:injection:v1:';
 const HISTORY_PREFIX = 'moli-phone:injection-history:v1:';
 const MAX_HISTORY = 30;
+const WORKSPACE_PREFIX = 'moli-phone:injection-workspace:v1:';
 
 function key(scopeKey) { return PREFIX + encodeURIComponent(String(scopeKey || '')); }
 function historyKey(scopeKey) { return HISTORY_PREFIX + encodeURIComponent(String(scopeKey || '')); }
+function workspaceKey(scopeKey) { return WORKSPACE_PREFIX + encodeURIComponent(String(scopeKey || '')); }
 function normalize(value) {
   const source = value && typeof value === 'object' ? value : {};
   return { scopeKey:String(source.scopeKey||''), text:String(source.text||'').trim(), sourceSummary:String(source.sourceSummary||''), sourceIds:Array.isArray(source.sourceIds)?source.sourceIds.map(String):[], sessionId:String(source.sessionId||''), createdAt:Math.max(0,Number(source.createdAt||0)), armedAt:Math.max(0,Number(source.armedAt||0)) };
@@ -24,3 +26,15 @@ export function addInjectionHistory(scopeKey,{text='',sourceSummary='',sourceIds
   const item={id:`inj_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,sessionId:String(sessionId||''),mode:mode==='assistant'?'assistant':'context',text:String(text).trim(),sourceSummary:String(sourceSummary||''),sourceIds:Array.isArray(sourceIds)?sourceIds.map(String):[],createdAt:Date.now()};
   writeJson(historyKey(scopeKey),[item,...listInjectionHistory(scopeKey)].slice(0,MAX_HISTORY)); return item;
 }
+
+export function getInjectionWorkspace(scopeKey){
+  if(!scopeKey)return {text:'',sourceIds:[],updatedAt:0};
+  const value=readJson(workspaceKey(scopeKey),null);
+  return value&&typeof value==='object'?{text:String(value.text||''),sourceIds:Array.isArray(value.sourceIds)?value.sourceIds.map(String):[],updatedAt:Math.max(0,Number(value.updatedAt||0))}:{text:'',sourceIds:[],updatedAt:0};
+}
+export function saveInjectionWorkspace(scopeKey,{text='',sourceIds=[]}={}){
+  if(!scopeKey)return null;
+  const item={text:String(text||''),sourceIds:Array.isArray(sourceIds)?sourceIds.map(String):[],updatedAt:Date.now()};
+  writeJson(workspaceKey(scopeKey),item); return item;
+}
+export function clearInjectionWorkspace(scopeKey){ if(scopeKey) removeValue(workspaceKey(scopeKey)); }
