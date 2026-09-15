@@ -1367,3 +1367,14 @@
 #moli-phone-panel .moli-xhs-comment,#moli-phone-panel .moli-zhihu-comment{padding:8px 0;border-top:1px solid #eee;font-size:12px;line-height:1.55;}
 #moli-phone-panel .moli-zhihu-question{color:#056de8;font-size:12px;font-weight:700;}.moli-zhihu-answer{margin:12px -12px 0;padding:12px;border-top:8px solid #f5f6f7;border-bottom:8px solid #f5f6f7;}.moli-zhihu-answer b{font-size:12px;}
 #moli-phone-panel .moli-web-reply-btn{width:100%;margin-top:10px;padding:8px;border:1px solid #ddd;background:#fafafa;color:#666;border-radius:4px;}.moli-web-muted{padding:12px 0;color:#999;font-size:12px;}
+
+/* moli113: 天涯杂谈归位 / 常驻笑脸 / 帖尾回复 */
+#moli-phone-panel .moli-tianya-commandbar.is-hidden,
+#moli-phone-panel .moli-tianya-moderators.is-hidden,
+#moli-phone-panel .moli-tianya-tools.is-hidden{display:none!important;}
+#moli-phone-panel .moli-tianya-face{border:0;background:transparent;padding:0;text-align:center;cursor:pointer;font-family:"SimSun","宋体",sans-serif;}
+#moli-phone-panel .moli-tianya-face.is-pinned{color:#c40000!important;font-weight:700;}
+#moli-phone-panel .moli-tianya-pin-note{padding:5px 7px;color:#999;font:10px "SimSun","宋体",sans-serif;background:#fff;}
+#moli-phone-panel .moli-tianya-reply-tail{padding:10px 7px 18px;border-top:1px solid #b8cfe0;background:#f6f7ff;}
+#moli-phone-panel .moli-tianya-reply-tail button{border:0;background:transparent;color:#000099;text-decoration:underline;padding:0;font:12px "SimSun","宋体",sans-serif;}
+#moli-phone-panel .moli-web-detail-nav{display:flex;gap:10px;align-items:center;padding:5px 7px;background:#e7f1fa;border-bottom:1px solid #7ca8c8;}
