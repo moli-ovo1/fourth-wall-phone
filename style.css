@@ -1127,3 +1127,12 @@
 #moli-phone-panel .moli-moment-content{position:relative}
 #moli-phone-panel .moli-moment-read-stamp{display:inline-flex;margin-left:10px;padding:2px 5px;border:2px solid #b33;border-radius:3px;color:#b33;font-size:11px;font-weight:800;line-height:1;transform:rotate(-7deg);letter-spacing:1px;vertical-align:middle;opacity:.88}
 #moli-phone-panel .moli-moment-meta .moli-moment-action.is-read{color:#b33;font-weight:700}
+
+/* moli103 · compact Moments cover controls / upward traces */
+#moli-phone-panel .moli-moments-connect-row{display:none!important}
+#moli-phone-panel .moli-moments-cover{min-height:205px;margin-bottom:34px}
+#moli-phone-panel .moli-moments-cross-compact{position:absolute;right:10px;top:10px;z-index:5;display:flex;align-items:center;gap:7px;padding:5px 7px 5px 9px;border-radius:14px;background:rgba(20,20,20,.38);color:#fff;font-size:10px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.35);cursor:pointer;backdrop-filter:blur(3px)}
+#moli-phone-panel .moli-moments-cross-compact .moli-switch{transform:scale(.72);transform-origin:right center;margin-left:-5px}
+#moli-phone-panel .moli-moments-traces{position:absolute;left:12px;right:88px;bottom:12px;top:auto;margin:0;padding:8px 10px;transform:none;z-index:3;border-radius:6px;background:rgba(255,255,255,.9);box-shadow:0 2px 10px rgba(0,0,0,.12);font-size:11px;line-height:1.55;color:#555;pointer-events:none;max-height:78px;overflow:hidden}
+#moli-phone-panel .moli-moment-avatar-jump{align-self:flex-start;flex:0 0 auto;border:0;background:transparent;padding:0;margin:0;cursor:pointer}
+#moli-phone-panel .moli-moment-avatar-jump .moli-moment-avatar{margin:0}
