@@ -84,6 +84,7 @@ import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfi
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
 import { getPendingInjection, setPendingInjection, clearPendingInjection } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
+import { getTavernUserContext } from '../core/tavern-user.js';
 
 const APP_ICON_URLS = Object.freeze({
   wechat: new URL('../../assets/apps/wechat.jpg', import.meta.url).href,
@@ -1545,6 +1546,45 @@ export function createPhonePanel({
   }
 
 
+  function injectionContactIdentity(item) {
+    if (!item) return '';
+    const name = canonicalContactName(item);
+    if (isFourthWallContact(item)) return `${name}：moli 内置“皮下”联系人，代表戏外/第四面墙视角；不是 User，也不是正文角色本人。`;
+    if (String(item?.id || '') === 'builtin:guide') return `${name}：moli 内置手机角色/群成员；不是 User。即使名称与当前正文 Persona 相近，也不得据此视为同一人。`;
+    if (String(item?.id || '') === 'builtin:writer') return `${name}：moli 内置手机角色/群成员；不是 User。`;
+    if (item?.kind === 'tavern') return `${name}：与 SillyTavern 正文角色来源关联的手机联系人；若正文存在该角色，应按同一角色理解，但手机记录仍只按其知识边界传播。`;
+    if (item?.kind === 'custom') return `${name}：User 自建的手机联系人/群成员。若正文中存在同名 NPC/角色，可结合名称与已有设定判断为对应人物；不要仅凭同名强行合并，也不要把其视为 User。`;
+    return `${name}：手机联系人/群成员；不是 User。`;
+  }
+
+  function injectionIdentityHeader(conversation) {
+    const user = getTavernUserContext();
+    const lines = [
+      '【身份说明】',
+      `User：当前正文 User Persona 为「${user.name || 'User'}」。手机记录中的“我”指 User 本人。`,
+      '不要因为姓名、读音或昵称相近，就把手机群成员/联系人误认成 User。',
+    ];
+    const ids = conversation?.type === 'group'
+      ? (conversation.memberIds || []).map(String)
+      : [String(conversation?.contactId || currentContactId || '')];
+    const seen = new Set();
+    ids.forEach(id => {
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      const item = contact(id);
+      const description = injectionContactIdentity(item);
+      if (description) lines.push(description);
+    });
+    return lines.join('\n');
+  }
+
+  function sanitizeInjectionText(value) {
+    return String(value || '')
+      .replace(/（这是你本人此前留下的评论）/g, '')
+      .replace(/\(这是你本人此前留下的评论\)/g, '')
+      .trim();
+  }
+
   function injectionMomentText(item) {
     const authorName = momentActorName(item?.author);
     const likes = (item?.likes || []).map(entry => momentActorName(entry)).filter(Boolean);
@@ -1581,8 +1621,18 @@ export function createPhonePanel({
           const boundary = conversation.type === 'group'
             ? `知识归属：这是「${title}」群聊内容，默认群成员知道；群外角色不因此自动知道。`
             : `知识归属：这是 User 与 ${canonicalContactName(contact(conversation.contactId || currentContactId))} 的私聊，默认只有双方知道。`;
-          const lines = recentMessages.map(message => `${messageSenderName(message, conversation)}：${String(message?.content || '').trim()}`).filter(line => !line.endsWith('：'));
-          return [`【微信${conversation.type === 'group' ? '群聊' : '私聊'} · ${title}】`, boundary, ...lines].join('\n');
+          const userName = getTavernUserContext().name || 'User';
+          const lines = recentMessages.map(message => {
+            const sender = message?.role === 'user' ? `User（${userName}）` : messageSenderName(message, conversation);
+            const content = sanitizeInjectionText(message?.content);
+            return content ? `${sender}：${content}` : '';
+          }).filter(Boolean);
+          return [
+            `【微信${conversation.type === 'group' ? '群聊' : '私聊'} · ${title}】`,
+            injectionIdentityHeader(conversation),
+            boundary,
+            ...lines,
+          ].join('\n');
         },
       });
     }
@@ -4502,7 +4552,7 @@ export function createPhonePanel({
         ? (target.memberIds || []).map(String)
         : [String(target.contactId || '')]);
       const snapshotComments = (moment.comments || []).map(comment => {
-        const ownMark = targetParticipantIds.has(String(comment.actorId || '')) ? '（这是你本人此前留下的评论）' : '';
+        const ownMark = targetParticipantIds.has(String(comment.actorId || '')) ? '（该评论由此群成员本人此前留下）' : '';
         return comment.deletedAt
           ? `${comment.actorName || '未知'}${ownMark} 删除了评论${comment.deletionReason ? `：${comment.deletionReason}` : ''}`
           : `${comment.actorName || '未知'}${ownMark}：${comment.content || ''}`;
