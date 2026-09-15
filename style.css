@@ -1471,3 +1471,50 @@
 #moli-phone-panel .moli-recommend-zhihu-row strong{font:600 13px/1.45 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#4d4944;}
 #moli-phone-panel .moli-recommend-zhihu-row span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;color:#958b80;font-size:10px;line-height:1.55;}
 #moli-phone-panel .moli-recommend-empty{text-align:center;padding:36px 8px;color:#aaa095;font:12px/1.7 "Noto Serif SC","Songti SC",serif;}
+
+/* moli117 · 小红书瀑布流 / 笔记详情 */
+#moli-phone-panel .moli-recommend-xhs-card{display:flex;flex-direction:column;gap:6px;text-align:left;color:#514a43;}
+#moli-phone-panel .moli-recommend-xhs-card>strong{display:block;padding:0 3px;font-size:11px;line-height:1.4;font-weight:600;}
+#moli-phone-panel .moli-recommend-xhs-image{align-items:center;justify-content:center;text-align:center;}
+#moli-phone-panel .moli-recommend-xhs-image em{max-width:90%;font-size:13px;line-height:1.5;text-align:center;}
+#moli-phone-panel .moli-xhs-home{position:relative;min-height:100%;padding:10px 9px 72px;background:#fff;}
+#moli-phone-panel .moli-xhs-home-head{display:flex;align-items:center;justify-content:space-between;padding:4px 5px 10px;}
+#moli-phone-panel .moli-xhs-home-head b{font-size:16px;color:#222;}
+#moli-phone-panel .moli-xhs-home-head button{border:0;background:transparent;font-size:22px;color:#555;padding:3px 8px;}
+#moli-phone-panel .moli-xhs-home-head button.is-spinning{animation:moli-community-spin .8s linear infinite;}
+#moli-phone-panel .moli-xhs-waterfall{column-count:2;column-gap:8px;}
+#moli-phone-panel .moli-xhs-waterfall-card{position:relative;display:inline-block;width:100%;margin:0 0 10px;break-inside:avoid;border-radius:8px;overflow:hidden;background:#fff;}
+#moli-phone-panel .moli-xhs-card-open{display:block;width:100%;padding:0;border:0;background:#fff;text-align:left;color:#222;}
+#moli-phone-panel .moli-xhs-card-image{display:flex;min-height:132px;aspect-ratio:1/1.18;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:8px;background:linear-gradient(145deg,#f6dfd8,#e7eef0 52%,#e5ead7);overflow:hidden;}
+#moli-phone-panel .moli-xhs-waterfall-card:nth-child(3n+2) .moli-xhs-card-image{aspect-ratio:1/.92;background:linear-gradient(145deg,#e4eddc,#f5e4d7 56%,#e9e5f1);}
+#moli-phone-panel .moli-xhs-waterfall-card:nth-child(3n) .moli-xhs-card-image{aspect-ratio:1/1.35;background:linear-gradient(145deg,#f1e7d2,#e1edf0 55%,#f2dfdf);}
+#moli-phone-panel .moli-xhs-card-image em{font:700 14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;text-align:center;color:#4c4944;}
+#moli-phone-panel .moli-xhs-card-image small{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:9px;line-height:1.4;color:#8d877f;text-align:center;}
+#moli-phone-panel .moli-xhs-card-open>strong{display:block;padding:7px 5px 2px;font-size:12px;line-height:1.45;font-weight:500;}
+#moli-phone-panel .moli-xhs-card-author{display:block;padding:2px 5px 7px;color:#999;font-size:9px;}
+#moli-phone-panel .moli-xhs-heart{border:0;background:rgba(255,255,255,.86);color:#b8b8b8;font-size:18px;line-height:1;padding:5px;border-radius:50%;}
+#moli-phone-panel .moli-xhs-waterfall-card>.moli-xhs-heart{position:absolute;right:6px;bottom:4px;background:transparent;}
+#moli-phone-panel .moli-xhs-heart.is-favorited{color:#ff2442;}
+#moli-phone-panel .moli-xhs-compose-fab{position:sticky;left:50%;bottom:12px;transform:translateX(-50%);display:block;width:50px;height:46px;margin:16px auto 0;border:0;border-radius:13px;background:#ff2442;color:#fff;font-size:32px;line-height:42px;box-shadow:0 5px 14px rgba(255,36,66,.22);}
+#moli-phone-panel .moli-xhs-detail{min-height:100%;padding:0 0 28px;background:#fff;color:#333;}
+#moli-phone-panel .moli-xhs-detail-head{position:sticky;top:0;z-index:3;display:grid;grid-template-columns:38px 1fr 38px;align-items:center;padding:7px 10px;background:rgba(255,255,255,.96);border-bottom:1px solid #f1f1f1;}
+#moli-phone-panel .moli-xhs-detail-head button{border:0;background:transparent;font-size:22px;color:#444;}
+#moli-phone-panel .moli-xhs-detail-head .moli-xhs-author{text-align:left;font-size:12px;font-weight:600;}
+#moli-phone-panel .moli-xhs-refresh.is-spinning{animation:moli-community-spin .8s linear infinite;}
+#moli-phone-panel .moli-xhs-detail-image{position:relative;display:flex;min-height:290px;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;background:linear-gradient(145deg,#fffbd8,#f3f0d8);}
+#moli-phone-panel .moli-xhs-detail-image>span{font-size:26px;line-height:1.5;font-weight:700;text-align:center;color:#40403c;white-space:pre-wrap;}
+#moli-phone-panel .moli-xhs-detail-image>small{max-width:85%;font-size:10px;line-height:1.5;color:#9b978c;text-align:center;}
+#moli-phone-panel .moli-xhs-detail-image>.moli-xhs-heart{position:absolute;right:14px;bottom:12px;background:rgba(255,255,255,.78);}
+#moli-phone-panel .moli-xhs-detail>h2{margin:14px 16px 7px;font-size:17px;line-height:1.45;font-weight:650;}
+#moli-phone-panel .moli-xhs-body{margin:0 16px 8px;font-size:13px;line-height:1.75;white-space:pre-wrap;}
+#moli-phone-panel .moli-xhs-tags{margin:6px 16px;color:#496d8d;font-size:11px;line-height:1.6;}
+#moli-phone-panel .moli-xhs-comment-capsule{margin:18px 14px 12px;padding-top:14px;border-top:1px solid #eee;}
+#moli-phone-panel .moli-xhs-comment-capsule button{width:100%;border:0;border-radius:999px;background:#f5f5f5;color:#aaa;padding:11px 15px;text-align:left;font-size:12px;}
+#moli-phone-panel .moli-xhs-comments{padding:0 15px;}
+#moli-phone-panel .moli-xhs-comment-thread{padding:12px 0;border-bottom:1px solid #f1f1f1;}
+#moli-phone-panel .moli-xhs-comment b{font-size:11px;color:#8a8a8a;font-weight:500;}
+#moli-phone-panel .moli-xhs-comment p{margin:4px 0 5px;font-size:13px;line-height:1.55;}
+#moli-phone-panel .moli-xhs-comment button{border:0;background:transparent;padding:0;color:#777;font-size:10px;font-weight:600;}
+#moli-phone-panel .moli-xhs-comment-replies{margin:8px 0 0 18px;padding-left:10px;border-left:1px solid #eee;font-size:11px;line-height:1.7;color:#555;}
+#moli-phone-panel .moli-xhs-comment-replies b{color:#888;font-weight:500;}
+#moli-phone-panel .moli-xhs-expand-replies{margin:5px 0 0 28px;color:#777;font-size:10px;}
