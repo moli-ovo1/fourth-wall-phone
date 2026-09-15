@@ -89,7 +89,7 @@ export function deletePublicWebPost(scopeKey, postId, actorId = 'user') {
 
 export function getPublicWebSettings(scopeKey) {
   const state = read(scopeKey);
-  return { ghostStoriesEnabled: Boolean(state.settings?.ghostStoriesEnabled) };
+  return { ghostStoriesEnabled: Boolean(state.settings?.ghostStoriesEnabled), recommendationBatchId: String(state.settings?.recommendationBatchId || '') };
 }
 
 export function updatePublicWebSettings(scopeKey, patch = {}) {
