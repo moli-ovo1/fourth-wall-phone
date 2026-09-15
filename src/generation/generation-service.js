@@ -1208,7 +1208,7 @@ function parsePublicWebBatch(text) {
     content: String(item?.content || '').trim().slice(0,6000),
     tags: Array.isArray(item?.tags) ? item.tags.map(x=>String(x).slice(0,30)).slice(0,8) : [],
     comments: (() => {
-      const rawComments = Array.isArray(item?.comments) ? item.comments.slice(0,8) : [];
+      const rawComments = Array.isArray(item?.comments) ? item.comments.slice(0, item?.section === 'xiaohongshu' ? 15 : 8) : [];
       const ids = rawComments.map((_,i)=>`seed_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`);
       return rawComments.map((c,i)=>{
         const replyRaw = c?.replyTo ?? c?.replyToCommentId ?? '';
@@ -1313,11 +1313,11 @@ AI、API、Prompt、插件、SillyTavern、世界书、角色卡、调试信息�
 一次生成 8~12 条。平台数量不要固定配额，由内容自然决定，但一页必须至少出现两种平台，通常三种都应出现。题材必须明显多样，不要整页围绕同一关键词。每条 section 必须准确标记 tianya / xiaohongshu / zhihu。只输出严格 JSON，不要解释。`;
   const system = section === 'tianya' ? tianyaSystem : section === 'recommend' ? recommendSystem : genericSystem;
   const schema = section === 'tianya'
-    ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复"}]}]}。生成 6~10 条，初始回复数量可自然为 0~8，不要 markdown。`
+    ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复","replyTo":"可选；回复已有楼层时填写被回复楼层序号，只能指向本条评论之前的楼层"}]}]}。生成 6~10 条，初始回复数量可自然为 0~8。回复某楼时不要把 @用户名 #楼层号 重复写进 content，由界面根据 replyTo 展示。不要 markdown。`
     : section === 'recommend'
       ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 8~12 条，不要 markdown。`
       : section === 'xiaohongshu'
-        ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称"}]}]}。生成 6~10 条，不要 markdown。`
+        ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~10 条；每篇笔记的主评论与子回复合计最多 15 条。不要 markdown。`
         : `返回：{"posts":[{"section":"${section}","author":"网名","title":"标题","content":"正文","comments":[]}]}。生成 6~10 条，不要 markdown。`;
   const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【当前可参考的故事上下文】\n${context}\n\n${schema}`;
   let text='';
@@ -1339,11 +1339,33 @@ export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}
   if (!scopeKey || !post) throw new Error('当前帖子不可用');
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const existing=(post.comments||[]).map((c,i)=>`${i+1}楼 ${c.author?.name||'网友'}：${c.content||''}`).join('\n');
-  const system=`你正在继续一个老式天涯论坛帖子。只生成新的后续楼层回复，不改写主楼和已有楼层。回复数量自然为 1~6。网友可以认真回答、追问、质疑、支持、反对、阴阳怪气、争论、补充经历、纠正事实、催更、马克、插眼、跑题、引用前楼。不同网友口吻、长度、立场应有差异。只输出严格 JSON。`;
-  const user=`帖子标题：${post.title}\n楼主：${post.author?.name||'匿名'}\n主楼：${post.content}\n\n已有楼层：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"网友昵称","authorId":"可选","content":"新楼层内容"}]}。不要 markdown。`;
+  const system=`你正在继续一个老式天涯论坛帖子。只生成新的后续楼层回复，不改写主楼和已有楼层。回复数量自然为 1~6。网友可以认真回答、追问、质疑、支持、反对、阴阳怪气、争论、补充经历、纠正事实、催更、马克、插眼、跑题，也可以回复某个已有楼层。天涯保持线性盖楼：回复某楼仍然产生一个新的独立楼层，不做缩进楼中楼。若回复某楼，用 replyToFloor 返回被回复楼层号；不要在 content 里重复写 @用户名 #楼层号，界面会显示。不同网友口吻、长度、立场应有差异。只输出严格 JSON。`;
+  const user=`帖子标题：${post.title}\n楼主：${post.author?.name||'匿名'}\n主楼：${post.content}\n\n已有楼层：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"网友昵称","authorId":"可选","content":"新楼层内容","replyToFloor":"可选，被回复的已有楼层号"}]}。不要 markdown。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
   const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
   let data; try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('回复刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
-  return (Array.isArray(data?.comments)?data.comments:[]).slice(0,6).map(c=>({author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,1000)})).filter(c=>c.content);
+  return (Array.isArray(data?.comments)?data.comments:[]).slice(0,6).map(c=>{const floor=Number.parseInt(String(c?.replyToFloor||''),10);const target=Number.isInteger(floor)&&floor>=1&&floor<=(post.comments||[]).length?(post.comments||[])[floor-1]:null;return {author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,1000),replyToCommentId:String(target?.id||'')};}).filter(c=>c.content);
 }
 
+
+export async function generateXiaohongshuCommentRefresh({ scopeKey, post, signal } = {}) {
+  if (!scopeKey || !post) throw new Error('当前笔记不可用');
+  const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
+  const comments=Array.isArray(post.comments)?post.comments:[];
+  const existing=comments.map((c,i)=>{const target=comments.find(x=>String(x.id)===String(c.replyToCommentId||''));return `${i+1}. id=${c.id}｜${c.author?.name||'网友'}${target?` 回复 ${target.author?.name||'网友'}(id=${target.id})`:''}：${c.content||''}`;}).join('\n');
+  const system=`你正在继续一篇小红书笔记的评论区。只新增评论，不改写笔记和已有评论。一次新增 1~6 条。新增内容可以是新的主评论，也可以回复已有的任意主评论或子回复；回复之间可以继续互相回复。数据关系可以有任意深度，但小红书界面会把同一主评论下的对话展示在一个回复区里。评论要像真实小红书用户：有人分享经历、追问、赞同、质疑、补充、提醒、玩梗，也可能作者本人回应；口吻和长度要有差异。只输出严格 JSON。`;
+  const user=`笔记作者：${post.author?.name||'网友'}\n标题：${post.title||''}\n正文：${post.content||''}\n\n已有评论（可回复其中任意 id）：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"昵称","authorId":"可选","content":"新增评论","replyToCommentId":"可选；回复已有评论时填写其 id；新主评论留空"}]}。不要 markdown。`;
+  const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
+  const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  let data; try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('新增评论没有返回可解析 JSON');data=JSON.parse(m[0]);}
+  const known=new Set(comments.map(c=>String(c.id)));
+  const created=[];
+  for(const c of (Array.isArray(data?.comments)?data.comments:[]).slice(0,6)){
+    const id=`webc_${Date.now()}_${Math.random().toString(36).slice(2,8)}_${created.length}`;
+    const requested=String(c?.replyToCommentId||'');
+    const replyToCommentId=known.has(requested)?requested:'';
+    const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:String(c?.author||'网友').slice(0,24)},content:String(c?.content||'').trim().slice(0,800),replyToCommentId};
+    if(item.content){created.push(item);known.add(id);}
+  }
+  return created;
+}
