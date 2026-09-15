@@ -122,3 +122,21 @@ export function listPublicWebFavorites(scopeKey, actorId = 'user') {
   return (read(scopeKey).posts || []).filter(post => (post.extra?.favorites || []).includes(actorId))
     .sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
 }
+
+
+export function togglePublicWebPinned(scopeKey, postId) {
+  const state = read(scopeKey);
+  const post = (state.posts || []).find(item => item.id === postId);
+  if (!post) return null;
+  post.extra = { ...(post.extra || {}), pinned: !Boolean(post.extra?.pinned) };
+  write(scopeKey, state);
+  return { pinned: Boolean(post.extra.pinned) };
+}
+
+export function replacePublicWebSectionPosts(scopeKey, section, items = []) {
+  const state = read(scopeKey);
+  const kept = (state.posts || []).filter(post => post.section !== section || Boolean(post.extra?.pinned) || post.author?.type === 'user');
+  state.posts = kept;
+  write(scopeKey, state);
+  return addPublicWebPosts(scopeKey, items);
+}
