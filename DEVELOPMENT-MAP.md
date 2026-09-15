@@ -2640,3 +2640,12 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 
 ### 下一节点：Phone Context Injection
 从 moli100 起进入手机 -> 正文注入框架。第一步只搭来源/语义 payload/注入计划通道，不先做大而全 UI。后续逐步接私聊最近 N 条、近期/长期 Memory、朋友圈、群聊与群 Memory，再做临时注入 vs 持久绑定、预览和 Token Budget。
+
+## 2026-09-15 — 权威当前状态页 / seenBy 可见化候选
+
+- 新增 `CURRENT-STATE.md`，作为新聊天 / 新维护者的首读交接页。
+- 阅读优先级明确为：**当前仓库代码 + CURRENT-STATE.md > SPEC.md 当前有效设计 > DEVELOPMENT-MAP.md 历史记录**；旧 TODO 不得脱离后续实现直接恢复。
+- 记录 User 新提案：未来公共朋友圈可考虑展示“看过但没互动”的人物痕迹，以及真实重复查看次数形成的“某人看过你的朋友圈 N 次”线索。
+- 当前不实现该 UI，也不把 `seenBy` 升级成 wake event。若未来实现，优先使用 `momentId + viewerContactId` 聚合统计（viewCount / firstViewedAt / lastViewedAt），避免保存每次查看的完整事件和额外 API 消耗。
+- “没互动原因”只允许复用已有行为判断/已有剧情事实，不为一句 UI 文案单独调用模型；“没看原因”不得无依据随机编造。
+- 此设计候选不阻塞下一节点 Phone Context Injection。
