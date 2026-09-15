@@ -4,6 +4,7 @@ import { createPhonePanel } from '../ui/phone-panel.js';
 import { getCurrentScopeKey } from './tavern-scope.js';
 import { createReviewAutomation } from '../automation/review.js';
 import { createPrivateAutomation } from '../automation/private-automation.js';
+import { createTavernInjectionBridge } from './tavern-injection.js';
 import {
   getContacts,
   getScopeConversations,
@@ -37,6 +38,7 @@ export function initApp() {
 
   const reviewAutomation = createReviewAutomation({ getScopeKey: getCurrentScopeKey });
   const privateAutomation = createPrivateAutomation({ getScopeKey: getCurrentScopeKey });
+  const injectionBridge = createTavernInjectionBridge();
 
   const handleController = createFloatingBall({
     uiState,
@@ -136,6 +138,7 @@ export function initApp() {
       destroyPanelController();
       reviewAutomation?.destroy?.();
       privateAutomation?.destroy?.();
+      injectionBridge?.destroy?.();
       window.removeEventListener('moli:unread-changed', syncHandleUnread);
       window.removeEventListener('moli:conversation-updated', syncHandleUnread);
       handleController.element.remove();
