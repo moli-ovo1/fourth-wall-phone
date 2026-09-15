@@ -1136,3 +1136,20 @@
 #moli-phone-panel .moli-moments-traces{position:absolute;left:12px;right:88px;bottom:12px;top:auto;margin:0;padding:8px 10px;transform:none;z-index:3;border-radius:6px;background:rgba(255,255,255,.9);box-shadow:0 2px 10px rgba(0,0,0,.12);font-size:11px;line-height:1.55;color:#555;pointer-events:none;max-height:78px;overflow:hidden}
 #moli-phone-panel .moli-moment-avatar-jump{align-self:flex-start;flex:0 0 auto;border:0;background:transparent;padding:0;margin:0;cursor:pointer}
 #moli-phone-panel .moli-moment-avatar-jump .moli-moment-avatar{margin:0}
+
+/* moli104 · restore user-provided handwritten app title artwork */
+#moli-phone-panel .moli-app-title-art{
+  display:block;width:72px;height:18px;object-fit:contain;overflow:visible;
+}
+#moli-phone-panel .moli-launcher-grid{row-gap:24px}
+#moli-phone-panel .moli-injection-toolbar{display:flex;gap:8px;margin:8px 0 10px}
+#moli-phone-panel .moli-injection-source-group{border-top:1px solid #eee;padding:6px 0}
+#moli-phone-panel .moli-injection-source-group:first-child{border-top:0}
+#moli-phone-panel .moli-injection-source-group summary{cursor:pointer;font-weight:650;padding:8px 2px;color:#333}
+#moli-phone-panel .moli-injection-source-group summary small{font-weight:400;color:#999;margin-left:4px}
+#moli-phone-panel .moli-injection-basket{font-size:12px;color:#777;margin:7px 0 10px;padding:7px 9px;background:#f6f6f6;border-radius:9px}
+#moli-phone-panel .moli-injection-history-card{margin-top:12px;background:#fff;border-radius:12px;padding:12px}
+#moli-phone-panel .moli-injection-history-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid #eee}
+#moli-phone-panel .moli-injection-history-row:first-child{border-top:0}
+#moli-phone-panel .moli-injection-history-row>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+#moli-phone-panel .moli-injection-history-row small{color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px}
