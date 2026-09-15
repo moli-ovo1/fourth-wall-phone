@@ -1,5 +1,5 @@
 const PREFIX = 'moli-phone:public-web:v1:';
-const SECTIONS = new Set(['tianya', 'xiaohongshu', 'zhihu', 'douban', 'weibo']);
+const SECTIONS = new Set(['tianya', 'xiaohongshu', 'zhihu', 'weibo']);
 
 function key(scopeKey) { return `${PREFIX}${String(scopeKey || 'default')}`; }
 function read(scopeKey) {
@@ -71,4 +71,30 @@ export function togglePublicWebLike(scopeKey, postId, actorId = 'user') {
   post.extra = { ...(post.extra || {}), likes };
   write(scopeKey, state);
   return { liked: likes.includes(actorId), count: likes.length };
+}
+
+
+export function deletePublicWebPost(scopeKey, postId, actorId = 'user') {
+  const state = read(scopeKey);
+  const index = (state.posts || []).findIndex(item => item.id === postId);
+  if (index < 0) return { ok: false, reason: 'not-found' };
+  const post = state.posts[index];
+  if (String(post.author?.id || '') !== String(actorId || 'user') || post.author?.type !== 'user') {
+    return { ok: false, reason: 'forbidden' };
+  }
+  state.posts.splice(index, 1);
+  write(scopeKey, state);
+  return { ok: true, post };
+}
+
+export function getPublicWebSettings(scopeKey) {
+  const state = read(scopeKey);
+  return { ghostStoriesEnabled: Boolean(state.settings?.ghostStoriesEnabled) };
+}
+
+export function updatePublicWebSettings(scopeKey, patch = {}) {
+  const state = read(scopeKey);
+  state.settings = { ...(state.settings || {}), ...(patch || {}) };
+  write(scopeKey, state);
+  return { ...state.settings };
 }
