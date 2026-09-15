@@ -1262,3 +1262,32 @@
 #moli-phone-panel .moli-public-web-actions button{border:0;background:transparent;padding:0;color:#777;font-size:12px}
 #moli-phone-panel .moli-public-web-comments{background:#f7f7f7;border-radius:7px;padding:7px 9px;font-size:12px;line-height:1.55;color:#666}
 #moli-phone-panel .moli-public-web-comments b{font-weight:600;color:#4e6380}
+
+/* moli110 · 天涯论坛母体：手机宽度安全 + 老论坛式信息密度 */
+#moli-phone-panel,
+#moli-phone-panel .moli-page,
+#moli-phone-panel .moli-public-web,
+#moli-phone-panel .moli-public-web-tabs,
+#moli-phone-panel .moli-public-web-feed,
+#moli-phone-panel .moli-public-web-post{max-width:100%;box-sizing:border-box;}
+#moli-phone-panel .moli-public-web{background:#f1eee6;}
+#moli-phone-panel .moli-public-web-tabs{background:#e7e0cf;border-bottom:1px solid #b8aa8d;padding:0 6px;}
+#moli-phone-panel .moli-public-web-tabs button{color:#655b48;padding:10px 12px 8px;border-bottom:2px solid transparent;}
+#moli-phone-panel .moli-public-web-tabs button.active{color:#7b321d;border-bottom-color:#9b4a2f;}
+#moli-phone-panel .moli-tianya-tools{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;background:#f7f3e9;border-bottom:1px solid #d5c9b3;font-size:10px;color:#8a806e;max-width:100%;box-sizing:border-box;}
+#moli-phone-panel .moli-tianya-tools span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#moli-phone-panel .moli-tianya-tools button{flex:0 0 auto;border:1px solid #bba98c;background:#fffaf0;border-radius:3px;padding:4px 7px;color:#76644d;font-size:10px;}
+#moli-phone-panel .moli-tianya-tools button[aria-pressed="true"]{background:#7b321d;color:#fff;border-color:#7b321d;}
+#moli-phone-panel .moli-public-web-feed{padding:8px;background:#f1eee6;}
+#moli-phone-panel .moli-tianya-thread{border-radius:0;border:1px solid #cfc3ae;border-left:3px solid #9a7451;margin-bottom:7px;padding:9px 10px;background:#fffdf8;gap:4px;}
+#moli-phone-panel .moli-tianya-thread strong{color:#5b2b1f;font-size:14px;line-height:1.45;}
+#moli-phone-panel .moli-tianya-thread p{font-size:12px;line-height:1.6;color:#514c43;}
+#moli-phone-panel .moli-tianya-subtitle{color:#8a4a2d;font-weight:650;}
+#moli-phone-panel .moli-tianya-thread .moli-public-web-actions{border-top:1px dotted #d8cdb9;}
+#moli-phone-panel .moli-public-web-delete{margin-left:auto!important;color:#a66!important;}
+#moli-phone-panel .moli-public-web-comments{border-radius:0;background:#f6f1e7;border-left:2px solid #c6b697;}
+#moli-phone-panel .moli-public-web-comments div{padding:3px 0;border-bottom:1px dotted #ded3c0;}
+#moli-phone-panel .moli-public-web-comments div:last-child{border-bottom:0;}
+#moli-phone-panel .moli-public-web-comments em{font-style:normal;color:#a58f70;margin-right:5px;font-size:10px;}
+/* 图标源图本身已有圆角边界：统一完整显示，不再用 cover 二次裁切 */
+#moli-phone-panel .moli-app-icon-image{width:100%;height:100%;max-width:100%;display:block;object-fit:contain;object-position:center;border-radius:inherit;}
