@@ -85,7 +85,7 @@ import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBe
 import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
-import { listPublicWebPosts, createPublicWebPost, addPublicWebComment, togglePublicWebLike } from '../storage/public-web-store.js';
+import { listPublicWebPosts, createPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings } from '../storage/public-web-store.js';
 
 const APP_ICON_URLS = Object.freeze({
   wechat: new URL('../../assets/apps/wechat.jpg', import.meta.url).href,
@@ -161,8 +161,11 @@ export function createPhonePanel({
           <button type="button" data-public-web-tab="tianya">天涯</button>
           <button type="button" data-public-web-tab="xiaohongshu">小红书</button>
           <button type="button" data-public-web-tab="zhihu">知乎</button>
-          <button type="button" data-public-web-tab="douban">豆瓣</button>
         </nav>
+        <div class="moli-tianya-tools" data-tianya-tools>
+          <span>帖子小标题随机混排 · 豆瓣式回帖语气进入风格池</span>
+          <button type="button" data-action="toggle-ghost-stories" aria-pressed="false">莲蓬鬼话：关闭</button>
+        </div>
         <section class="moli-public-web-feed" data-public-web-feed>
           <div class="moli-public-web-empty"><strong>公共网络正在建立</strong><span>这里会共享同一个互联网世界。天涯、小红书、知乎、豆瓣是不同分区，不是互相割裂的 App。</span></div>
         </section>
@@ -6254,8 +6257,9 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
 
   let currentPublicWebTab = 'recommend';
-  const publicWebNames = { recommend:'推荐', tianya:'天涯', xiaohongshu:'小红书', zhihu:'知乎', douban:'豆瓣' };
-  const publicWebTypeNames = { tianya:'帖子', xiaohongshu:'笔记', zhihu:'问题', douban:'小组帖' };
+  const publicWebNames = { recommend:'推荐', tianya:'天涯', xiaohongshu:'小红书', zhihu:'知乎' };
+  const publicWebTypeNames = { tianya:'帖子', xiaohongshu:'笔记', zhihu:'问题' };
+  const tianyaSubtitles = ['天涯杂谈','情感天地','娱乐八卦','煮酒论史','生活那点事'];
   const renderPublicWeb = () => {
     const feed = panel.querySelector('[data-public-web-feed]');
     if (!feed) return;
@@ -6264,13 +6268,16 @@ export function createPhonePanel({
       const likes = Array.isArray(post.extra?.likes) ? post.extra.likes : [];
       const comments = Array.isArray(post.comments) ? post.comments : [];
       const author = post.author?.name || '匿名网友';
-      return `<article class="moli-public-web-post" data-public-web-post="${escapeHtml(post.id)}">
-        <div class="moli-public-web-meta"><span>${escapeHtml(publicWebNames[post.section] || post.section || '公共网络')}</span><span>${escapeHtml(author)}</span></div>
+      const isTianyaShell = currentPublicWebTab === 'recommend' || currentPublicWebTab === 'tianya';
+      const subtitle = post.extra?.subtitle || (post.section === 'tianya' ? '天涯杂谈' : publicWebNames[post.section]);
+      const canDelete = post.author?.type === 'user' && post.author?.id === 'user';
+      return `<article class="moli-public-web-post ${isTianyaShell ? 'moli-tianya-thread' : ''}" data-public-web-post="${escapeHtml(post.id)}">
+        <div class="moli-public-web-meta"><span class="moli-tianya-subtitle">【${escapeHtml(subtitle || '天涯杂谈')}】</span><span>${escapeHtml(author)}</span></div>
         <strong>${escapeHtml(post.title || publicWebTypeNames[post.section] || '帖子')}</strong>
         <p>${escapeHtml(post.content || '')}</p>
         ${post.tags?.length ? `<div class="moli-public-web-tags">${post.tags.map(tag=>`#${escapeHtml(tag)}`).join(' ')}</div>` : ''}
-        <div class="moli-public-web-actions"><button type="button" data-action="public-web-like" data-post-id="${escapeHtml(post.id)}">${likes.includes('user') ? '♥' : '♡'} ${likes.length || ''}</button><button type="button" data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">评论 ${comments.length || ''}</button></div>
-        ${comments.length ? `<div class="moli-public-web-comments">${comments.slice(-5).map(c=>`<div><b>${escapeHtml(c.author?.name || '网友')}：</b>${escapeHtml(c.content || '')}</div>`).join('')}</div>` : ''}
+        <div class="moli-public-web-actions"><button type="button" data-action="public-web-like" data-post-id="${escapeHtml(post.id)}">${likes.includes('user') ? '♥' : '♡'} ${likes.length || ''}</button><button type="button" data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">回帖 ${comments.length || ''}</button>${canDelete ? `<button type="button" class="moli-public-web-delete" data-action="public-web-delete" data-post-id="${escapeHtml(post.id)}">删除</button>` : ''}</div>
+        ${comments.length ? `<div class="moli-public-web-comments">${comments.slice(-8).map((c,i)=>`<div><em>${i+1}楼</em><b>${escapeHtml(c.author?.name || '网友')}：</b>${escapeHtml(c.content || '')}</div>`).join('')}</div>` : ''}
       </article>`;
     }).join('') : `<div class="moli-public-web-empty"><strong>${publicWebNames[currentPublicWebTab] || '公共网络'}分区</strong><span>这里还没有内容。你可以先发第一条，之后角色和公共网友也会共用这套互联网世界。</span></div>`;
   };
@@ -6288,7 +6295,10 @@ export function createPhonePanel({
     if (title === null) return;
     const content = windowRef.prompt?.(`发布${label}：正文`, '') ?? null;
     if (content === null || (!String(title).trim() && !String(content).trim())) return;
-    createPublicWebPost(getScopeKey?.(), { section, author:{ type:'user', id:'user', name:'User' }, title, content });
+    const settings = getPublicWebSettings(getScopeKey?.());
+    const subtitlePool = settings.ghostStoriesEnabled ? [...tianyaSubtitles, '莲蓬鬼话'] : tianyaSubtitles;
+    const subtitle = section === 'tianya' ? subtitlePool[Math.floor(Math.random() * subtitlePool.length)] : publicWebNames[section];
+    createPublicWebPost(getScopeKey?.(), { section, author:{ type:'user', id:'user', name:'User' }, title, content, extra:{ subtitle, stylePool:['tianya','douban-group'] } });
     currentPublicWebTab = section;
     panel.querySelectorAll('[data-public-web-tab]').forEach(item => item.classList.toggle('active', item.dataset.publicWebTab === section));
     renderPublicWeb();
@@ -6296,6 +6306,11 @@ export function createPhonePanel({
   panel.querySelector('[data-public-web-feed]')?.addEventListener('click', event => {
     const like = event.target?.closest?.('[data-action="public-web-like"]');
     if (like) { togglePublicWebLike(getScopeKey?.(), like.dataset.postId, 'user'); renderPublicWeb(); return; }
+    const remove = event.target?.closest?.('[data-action="public-web-delete"]');
+    if (remove) {
+      if (windowRef.confirm?.('删除这篇帖子？删除后不可恢复。')) { deletePublicWebPost(getScopeKey?.(), remove.dataset.postId, 'user'); renderPublicWeb(); }
+      return;
+    }
     const comment = event.target?.closest?.('[data-action="public-web-comment"]');
     if (comment) {
       const content = windowRef.prompt?.('写评论', '') ?? null;
@@ -6304,6 +6319,20 @@ export function createPhonePanel({
     }
   });
   renderPublicWeb();
+  const syncGhostStoriesToggle = () => {
+    const button = panel.querySelector('[data-action="toggle-ghost-stories"]');
+    if (!button) return;
+    const enabled = getPublicWebSettings(getScopeKey?.()).ghostStoriesEnabled;
+    button.setAttribute('aria-pressed', String(enabled));
+    button.textContent = `莲蓬鬼话：${enabled ? '开启' : '关闭'}`;
+  };
+  panel.querySelector('[data-action="toggle-ghost-stories"]')?.addEventListener('click', () => {
+    const current = getPublicWebSettings(getScopeKey?.()).ghostStoriesEnabled;
+    updatePublicWebSettings(getScopeKey?.(), { ghostStoriesEnabled: !current });
+    syncGhostStoriesToggle();
+    renderPublicWeb();
+  });
+  syncGhostStoriesToggle();
   panel.querySelectorAll('[data-action="app-home-back"]').forEach(button => {
     button.onclick = () => show('phone-home');
   });
