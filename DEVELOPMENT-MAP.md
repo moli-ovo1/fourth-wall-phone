@@ -2812,3 +2812,8 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 完成公共网络入口职责重排：社区推荐成为未来综合入口，老天涯整套归入“杂谈”。加入天涯专属长 Prompt、红色笑脸常驻机制、板块刷新保留常驻/User帖、详情页 AI 回复刷新和帖尾 User 回复。正文外“当前世界”选择明确延期到三大入口全部完成后，以全局控件实现。
 
 下一步：分别打磨小红书 Prompt + 原生页面，再打磨知乎 Prompt + 原生页面；两者完成后实现“社区推荐”从三套成熟生成器中抽选/混排，并最后加入全局“当前世界”选择。
+
+
+## moli114 / v0.4.56 startup hotfix
+- Fixed startup parse failure `Unexpected reserved word`: the delegated public-web feed click handler used `await generateTianyaReplyRefresh(...)` but the callback was not declared `async`.
+- No product/UI/prompt behavior changes in this hotfix.

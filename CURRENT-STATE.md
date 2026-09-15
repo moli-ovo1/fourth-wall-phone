@@ -216,3 +216,8 @@ User 提出：公共朋友圈可呈现角色“看过但没互动”的痕迹，
 - 杂谈刷新仅替换普通 AI 天涯帖；User 自发帖和红色笑脸常驻帖保留。笑脸可点红/取消，板块底部提示“红色笑脸常驻”。
 - 天涯详情页增加 `[刷新] [收藏本帖]`；刷新只续生成 1~6 个新楼层回复；User 回复入口移动到整帖尾部，不再每楼放输入入口。
 - 杂谈列表去掉“论题”表头/统计栏与“精品文章”，帖子直接位于“§版块推荐”下。
+
+
+## moli114 / v0.4.56 startup hotfix
+- Fixed startup parse failure `Unexpected reserved word`: the delegated public-web feed click handler used `await generateTianyaReplyRefresh(...)` but the callback was not declared `async`.
+- No product/UI/prompt behavior changes in this hotfix.
