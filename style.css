@@ -1149,3 +1149,28 @@
 #moli-phone-panel .moli-injection-history-row:first-child{border-top:0}
 #moli-phone-panel .moli-injection-history-row>div{min-width:0;display:flex;flex-direction:column;gap:3px}
 #moli-phone-panel .moli-injection-history-row small{color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px}
+
+/* moli105 · launcher uses one geometry for every app item */
+#moli-phone-panel .moli-launcher-grid{
+  grid-auto-rows:90px;
+  row-gap:26px;
+}
+#moli-phone-panel .moli-app-icon{
+  width:100%;
+  height:90px;
+  justify-content:flex-start;
+  box-sizing:border-box;
+}
+#moli-phone-panel .moli-app-icon-tile{
+  flex:0 0 58px;
+}
+#moli-phone-panel .moli-app-icon small{
+  flex:0 0 15px;
+  height:15px;
+}
+#moli-phone-panel .moli-injection-toolbar [aria-pressed="true"]{
+  font-weight:700;
+}
+@media (max-width:360px){
+  #moli-phone-panel .moli-app-icon-tile{flex-basis:54px}
+}
