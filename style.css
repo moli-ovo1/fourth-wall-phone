@@ -1430,3 +1430,44 @@
 #moli-phone-panel [data-action="public-web-compose"].is-hidden{display:none!important;}
 #moli-phone-panel .moli-tianya-commandbar:not(.is-hidden):has([data-action="public-web-compose"].is-hidden){justify-content:flex-end;padding:5px 10px;background:#fffdf8;border-bottom:1px solid #ded8cd;}
 #moli-phone-panel .moli-tianya-commandbar:not(.is-hidden):has([data-action="public-web-compose"].is-hidden) [data-action="public-web-refresh"]{color:#8f3d3d;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;font-weight:600;}
+
+/* moli116 · 社区推荐手绘治愈页 / 全局顶栏独立于天涯浏览器 */
+#moli-phone-panel .moli-tianya-page{background:#f7f3ea;}
+#moli-phone-panel .moli-community-topnav{
+  flex:0 0 42px;display:flex;align-items:flex-end;gap:3px;padding:6px 8px 0;
+  max-width:100%;overflow-x:auto;background:#f8f3e9;border-bottom:1px solid #e2d8c8;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+}
+#moli-phone-panel .moli-community-topnav button{
+  flex:1 0 auto;min-width:58px;border:0;background:transparent;padding:8px 5px 7px;color:#81796e;
+  font-size:12px;line-height:1;border-radius:13px 13px 0 0;
+}
+#moli-phone-panel .moli-community-topnav button.active{background:#fffaf1;color:#4f4941;font-weight:700;box-shadow:0 -1px 0 #eee2d0 inset;}
+#moli-phone-panel .moli-retro-browser{flex:1;min-height:0;max-width:100%;}
+#moli-phone-panel .moli-retro-browser.is-community-mode>.moli-retro-browser-tabs,
+#moli-phone-panel .moli-retro-browser.is-community-mode>.moli-retro-addressbar{display:none!important;}
+#moli-phone-panel .moli-retro-browser.is-community-mode{border-radius:0;background:#fbf7ef;box-shadow:none;}
+#moli-phone-panel .moli-retro-browser.is-community-mode .moli-tianya-browser-body{background:#fbf7ef;}
+#moli-phone-panel .moli-retro-browser.is-community-mode .moli-public-web-feed{background:#fbf7ef;}
+
+#moli-phone-panel .moli-recommend-home{min-height:100%;padding:18px 14px 28px;background:#fbf7ef;color:#575047;}
+#moli-phone-panel .moli-recommend-today{display:flex!important;align-items:center;justify-content:center;gap:9px;padding:5px 0 15px!important;border-bottom:1px dashed #d8cdbd!important;text-align:center;}
+#moli-phone-panel .moli-recommend-today span{font:500 14px/1.4 "Noto Serif SC","Songti SC","STSong",serif;letter-spacing:.06em;color:#655d54;}
+#moli-phone-panel .moli-recommend-refresh{width:26px;height:26px;border:1px solid #d9cdbb;border-radius:50%;background:#fffaf2;color:#8d8174;font-size:18px;line-height:22px;padding:0;}
+#moli-phone-panel .moli-recommend-refresh.is-spinning{animation:moli-community-spin .8s linear infinite;}
+@keyframes moli-community-spin{to{transform:rotate(360deg)}}
+#moli-phone-panel .moli-recommend-doodle{text-align:center;color:#c9bba8;font-size:11px;letter-spacing:.2em;padding:8px 0 3px;}
+#moli-phone-panel .moli-recommend-sketch-section{margin:5px 0 12px;padding:7px 4px 11px;border-bottom:1px dashed #ddd1c0;}
+#moli-phone-panel .moli-recommend-tianya-row{width:100%;border:0;background:transparent;padding:6px 3px;text-align:left;color:#5c554c;font:12px/1.45 "Noto Serif SC","Songti SC","STSong",serif;}
+#moli-phone-panel .moli-recommend-tianya-row span{margin-right:5px;color:#8a7969;font-size:10px;}
+#moli-phone-panel .moli-recommend-tianya-row:nth-child(odd){transform:rotate(-.12deg)}
+#moli-phone-panel .moli-recommend-xhs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;border-bottom:1px dashed #ddd1c0;}
+#moli-phone-panel .moli-recommend-xhs-card{min-width:0;border:0;background:transparent;padding:0;}
+#moli-phone-panel .moli-recommend-xhs-image{position:relative;display:flex;align-items:flex-end;justify-content:flex-start;aspect-ratio:1/1.08;overflow:hidden;padding:10px;border:1px solid #e5d8c8;border-radius:16px 13px 15px 12px;background:linear-gradient(145deg,#f6dfd8,#e7eef0 52%,#e5ead7);box-shadow:1px 2px 0 rgba(128,111,91,.08);}
+#moli-phone-panel .moli-recommend-xhs-card:nth-child(2n) .moli-recommend-xhs-image{background:linear-gradient(145deg,#e2ebd8,#f5e2d4 55%,#e5e3f0);transform:rotate(.35deg)}
+#moli-phone-panel .moli-recommend-xhs-image:before{content:'✧';position:absolute;right:10px;top:8px;color:rgba(255,255,255,.9);font-size:18px;}
+#moli-phone-panel .moli-recommend-xhs-image em{position:relative;z-index:1;font:600 12px/1.4 "Noto Serif SC","Songti SC",serif;color:#514a43;text-align:left;text-shadow:0 1px rgba(255,255,255,.7);}
+#moli-phone-panel .moli-recommend-zhihu-row{width:100%;display:flex;flex-direction:column;gap:4px;border:0;border-bottom:1px solid #e6dccd;background:transparent;padding:9px 3px;text-align:left;}
+#moli-phone-panel .moli-recommend-zhihu-row strong{font:600 13px/1.45 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#4d4944;}
+#moli-phone-panel .moli-recommend-zhihu-row span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;color:#958b80;font-size:10px;line-height:1.55;}
+#moli-phone-panel .moli-recommend-empty{text-align:center;padding:36px 8px;color:#aaa095;font:12px/1.7 "Noto Serif SC","Songti SC",serif;}
