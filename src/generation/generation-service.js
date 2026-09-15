@@ -1223,10 +1223,30 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
   const genericSystem = section === 'xiaohongshu'
     ? '生成自然的小红书式笔记。标题、正文、标签、评论应明显具有生活分享社区语法。只输出严格 JSON。'
     : '生成自然的知乎式问题与回答。问题、问题补充、初始回答、评论应明显具有问答社区语法。只输出严格 JSON。';
-  const system = section === 'tianya' ? tianyaSystem : genericSystem;
+  const recommendSystem = `# moli社区 · 社区推荐生成器
+
+你正在刷新同一个故事世界中的公共互联网首页。这里不是第四种社区，也没有独立的“推荐文风”。你必须在天涯社区、小红书、知乎三种真实社区语法之间自行选择并混合生成一批全新的内容。生成后，这些内容会永久归档进各自社区，因此每一条都必须从一开始就像它所属社区的原生内容。
+
+【共同世界】
+三种社区共享当前正文世界、{{char}}、{{user}}、时间地点与社会环境。可以从剧情向外发散，但不要机械复述正文，也不要让整页只围绕主角。运行环境中的 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、调试信息都不是故事世界事实，除非正文明确证明其存在。
+
+【天涯社区候选】
+使用老式中文 BBS 语法：真人网名、口语标题、长短不一的主楼、线性楼层。可有求助、情感树洞、经历、连载、讨论、社会观察、本地、职业、八卦、爆料、怀旧、历史、娱乐、水帖、调查等。回复可以认真、质疑、抬杠、跑题、马克、催更，长度和立场不整齐。${ghostRule}
+
+【小红书候选】
+使用生活分享笔记语法。内容更具体、更个人、更视觉化，可以围绕穿搭、美食、居住、旅行、日常体验、关系感受、消费、学习工作经验等；标题允许口语、emoji和情绪，但不要每条都营销化。正文应有可感知的生活细节，tags 自然，imagePrompt 描述这篇笔记最可能配的画面。评论像真实笔记评论区，有共鸣、追问、求链接/地点、经验补充、不同意见。
+
+【知乎候选】
+使用问答社区语法。title 是一个值得回答的问题，content 是问题补充或背景，answer 是一条有明确个人立场/知识来源的初始回答。问题可以来自世界中的职业、关系、社会现象、历史、生活经验、公共事件等。不要把所有回答写成百科全书，也不要整齐列点。评论围绕回答继续质疑、补充或讨论。
+
+【推荐页要求】
+一次生成 8~12 条。平台数量不要固定配额，由内容自然决定，但一页必须至少出现两种平台，通常三种都应出现。题材必须明显多样，不要整页围绕同一关键词。每条 section 必须准确标记 tianya / xiaohongshu / zhihu。只输出严格 JSON，不要解释。`;
+  const system = section === 'tianya' ? tianyaSystem : section === 'recommend' ? recommendSystem : genericSystem;
   const schema = section === 'tianya'
     ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复"}]}]}。生成 6~10 条，初始回复数量可自然为 0~8，不要 markdown。`
-    : `返回：{"posts":[{"section":"${section}","author":"网名","title":"标题","content":"正文","comments":[]}]}。生成 6~10 条，不要 markdown。`;
+    : section === 'recommend'
+      ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imagePrompt":"仅小红书使用的配图描述","answer":"仅知乎使用的初始回答","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 8~12 条，不要 markdown。`
+      : `返回：{"posts":[{"section":"${section}","author":"网名","title":"标题","content":"正文","comments":[]}]}。生成 6~10 条，不要 markdown。`;
   const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【当前可参考的故事上下文】\n${context}\n\n${schema}`;
   let text='';
   if (config.source === 'tavern') {
@@ -1238,7 +1258,7 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
     const result=await generateProviderText(config,{system,messages:[{role:'user',content:user}]},{signal,timeoutMs:120000});
     text=String(result?.text||'').trim();
   }
-  let posts=parsePublicWebBatch(text).filter(p=>p.section===section);
+  let posts=parsePublicWebBatch(text).filter(p=>section==='recommend' || p.section===section);
   if (!ghostStoriesEnabled) posts=posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
   return posts;
 }
