@@ -1174,3 +1174,44 @@
 @media (max-width:360px){
   #moli-phone-panel .moli-app-icon-tile{flex-basis:54px}
 }
+
+/* moli106 · launcher: fixed four-column geometry; row 2 reuses column 1 exactly */
+#moli-phone-panel .moli-launcher-grid{
+  grid-template-columns:repeat(4,72px);
+  justify-content:space-between;
+  column-gap:0;
+  grid-auto-rows:90px;
+}
+#moli-phone-panel .moli-app-icon{
+  width:72px;
+  justify-self:center;
+}
+#moli-phone-panel .moli-app-icon:nth-child(5){grid-column:1;}
+
+/* moli106 · 我们的墙：微信 > 私聊 / 群聊 / 朋友圈 > 名称 > 素材 */
+#moli-phone-panel .moli-injection-source-app,
+#moli-phone-panel .moli-injection-source-section,
+#moli-phone-panel .moli-injection-source-owner{border-top:1px solid #eee;}
+#moli-phone-panel .moli-injection-source-app:first-child{border-top:0;}
+#moli-phone-panel .moli-injection-source-app>summary,
+#moli-phone-panel .moli-injection-source-section>summary,
+#moli-phone-panel .moli-injection-source-owner>summary{cursor:pointer;list-style:none;font-weight:650;padding:12px 2px;}
+#moli-phone-panel .moli-injection-source-app>summary::-webkit-details-marker,
+#moli-phone-panel .moli-injection-source-section>summary::-webkit-details-marker,
+#moli-phone-panel .moli-injection-source-owner>summary::-webkit-details-marker{display:none;}
+#moli-phone-panel .moli-injection-source-app>summary::before,
+#moli-phone-panel .moli-injection-source-section>summary::before,
+#moli-phone-panel .moli-injection-source-owner>summary::before{content:'▶';display:inline-block;width:18px;font-size:11px;transform-origin:center;}
+#moli-phone-panel details[open].moli-injection-source-app>summary::before,
+#moli-phone-panel details[open].moli-injection-source-section>summary::before,
+#moli-phone-panel details[open].moli-injection-source-owner>summary::before{transform:rotate(90deg);}
+#moli-phone-panel .moli-injection-source-section{margin-left:12px;}
+#moli-phone-panel .moli-injection-source-owner{margin-left:16px;}
+#moli-phone-panel .moli-injection-source-items{margin-left:16px;}
+#moli-phone-panel .moli-injection-source-app summary small,
+#moli-phone-panel .moli-injection-source-section summary small,
+#moli-phone-panel .moli-injection-source-owner summary small{font-weight:400;color:#aaa;margin-left:4px;}
+@media (max-width:360px){
+  #moli-phone-panel .moli-launcher-grid{grid-template-columns:repeat(4,64px);}
+  #moli-phone-panel .moli-app-icon{width:64px;}
+}
