@@ -71,7 +71,7 @@ export function listPublicMoments(scopeKey) { return getMomentsState(scopeKey).p
 export function listProfileMoments(scopeKey, contactId) { return (getMomentsState(scopeKey).profileFeeds[String(contactId)] || []).slice().sort((a,b)=>b.createdAt-a.createdAt); }
 export function createPublicMoment(scopeKey, { author, content, imageDescription = '', location='', mentionContactIds=[], visibility={mode:'public',contactIds:[]}, createdAt } = {}) {
   const text = String(content || '').trim(); const imageText = String(imageDescription || '').trim(); if (!scopeKey || (!text && !imageText)) throw new Error('朋友圈内容不能为空');
-  const state = getMomentsState(scopeKey); const item = moment({ author, content:text, imageDescription:imageText, location, mentionContactIds, visibility, createdAt: Number(createdAt || Date.now()) }, 'public'); state.publicFeed.unshift(item); save(scopeKey,state); return item;
+  const state = getMomentsState(scopeKey); const item = moment({ author, content:text, imageDescription:imageText, location, mentionContactIds, visibility, createdAt: Number(createdAt || Date.now()) }, 'public'); state.publicFeed.unshift(item); state.publicFeed = state.publicFeed.slice().sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,10); save(scopeKey,state); return item;
 }
 export function deletePublicMoment(scopeKey, momentId, authorId = '') {
   const state=getMomentsState(scopeKey); const i=state.publicFeed.findIndex(x=>x.id===String(momentId)); if(i<0)return false;
