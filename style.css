@@ -2100,3 +2100,13 @@
   box-shadow:0 14px 34px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.58)!important;
   backdrop-filter:blur(24px) saturate(1.22)!important;-webkit-backdrop-filter:blur(24px) saturate(1.22)!important;
 }
+
+/* moli162 — Community shell is layout-only: remove the last visible full-page backing plate. */
+#moli-phone-panel:has(.moli-tianya-page.active){
+  background:transparent!important;
+  box-shadow:none!important;
+}
+#moli-phone-panel:has(.moli-tianya-page.active)>.moli-tianya-page.active{
+  background:transparent!important;
+  box-shadow:none!important;
+}

@@ -3111,3 +3111,7 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 
 ## moli161 / v0.5.01 — Community Recommend clear-glass correction
 社区推荐视觉改为与自创板块一致的偏白 iPhone 半透明毛玻璃：移除最外层着色底板，导航、主体、“我只想看”覆盖浮层均使用中性透明玻璃。仅视觉修正，不改变社区机制；主线恢复计划不变。
+
+
+### moli162 / v0.5.02 — 社区最外层背景清除
+社区页激活时，`#moli-phone-panel` 最外层仅作为布局容器，不再绘制整块背景或阴影；保留独立导航毛玻璃、社区推荐主体毛玻璃及“我只想看”毛玻璃浮层。未修改 Community Runtime / World Event。
