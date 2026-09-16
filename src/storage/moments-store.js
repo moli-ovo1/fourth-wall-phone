@@ -21,6 +21,7 @@ function moment(value = {}, surface = 'public') {
     ownerContactId: String(value?.ownerContactId || ''),
     author: actor(value?.author),
     content: String(value?.content || '').trim(),
+    imageDescription: String(value?.imageDescription || '').trim(),
     createdAt: Number(value?.createdAt || Date.now()),
     updatedAt: Number(value?.updatedAt || value?.createdAt || Date.now()),
     likes: Array.isArray(value?.likes) ? value.likes.map(actor).filter(x => x.id) : [],
@@ -65,9 +66,9 @@ export function updateMomentsSettings(scopeKey, patch = {}) {
 }
 export function listPublicMoments(scopeKey) { return getMomentsState(scopeKey).publicFeed.slice().sort((a,b)=>b.createdAt-a.createdAt); }
 export function listProfileMoments(scopeKey, contactId) { return (getMomentsState(scopeKey).profileFeeds[String(contactId)] || []).slice().sort((a,b)=>b.createdAt-a.createdAt); }
-export function createPublicMoment(scopeKey, { author, content, createdAt } = {}) {
-  const text = String(content || '').trim(); if (!scopeKey || !text) throw new Error('朋友圈内容不能为空');
-  const state = getMomentsState(scopeKey); const item = moment({ author, content:text, createdAt: Number(createdAt || Date.now()) }, 'public'); state.publicFeed.unshift(item); save(scopeKey,state); return item;
+export function createPublicMoment(scopeKey, { author, content, imageDescription = '', createdAt } = {}) {
+  const text = String(content || '').trim(); const imageText = String(imageDescription || '').trim(); if (!scopeKey || (!text && !imageText)) throw new Error('朋友圈内容不能为空');
+  const state = getMomentsState(scopeKey); const item = moment({ author, content:text, imageDescription:imageText, createdAt: Number(createdAt || Date.now()) }, 'public'); state.publicFeed.unshift(item); save(scopeKey,state); return item;
 }
 export function deletePublicMoment(scopeKey, momentId, authorId = '') {
   const state=getMomentsState(scopeKey); const i=state.publicFeed.findIndex(x=>x.id===String(momentId)); if(i<0)return false;
