@@ -539,15 +539,15 @@ export function createPhonePanel({
         <div class="moli-nav-side">
           <button class="moli-icon-btn moli-back" data-action="prompt-settings-back" aria-label="返回">‹</button>
         </div>
-        <div class="moli-nav-title">线上聊天预设</div>
+        <div class="moli-nav-title">moli 预设</div>
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-prompt-settings">
         <label class="moli-switch-row moli-prompt-master">
-          <span><strong>启用线上聊天预设</strong><small>关闭后生成时不注入下面的全局线上规则</small></span>
+          <span><strong>启用 moli 预设</strong><small>关闭后不注入全局 / 微信 / 社区预设</small></span>
           <input type="checkbox" data-prompt-master>
         </label>
-        <div class="moli-settings-note">这些是普通 moli 私聊与群聊共用的线上行为规则。私聊完整使用启用条目；群聊同样使用行为条目，但“输出协议”由群聊自己的 JSON / 单气泡协议接管以避免格式冲突。皮下使用独立 Fourth Wall Protocol，不注入这里。角色卡、世界书、正文等动态资料仍由上下文层实时提供。</div>
+        <div class="moli-prompt-scope-tabs"><button data-prompt-scope="global">全局</button><button data-prompt-scope="wechat" class="is-active">微信</button><button data-prompt-scope="community">社区</button></div><div class="moli-settings-note">旧版已有预设自动归入“微信”；全局预设会与当前模块预设组合。私聊完整使用启用条目；群聊同样使用行为条目，但“输出协议”由群聊自己的 JSON / 单气泡协议接管以避免格式冲突。皮下使用独立 Fourth Wall Protocol，不注入这里。角色卡、世界书、正文等动态资料仍由上下文层实时提供。</div>
         <div class="moli-prompt-block-list" data-prompt-block-list></div>
         <button type="button" class="moli-secondary-btn" data-action="prompt-add-custom">＋ 添加自定义条目</button>
         <button type="button" class="moli-secondary-btn moli-prompt-restore" data-action="prompt-restore">恢复默认预设</button>
@@ -1376,6 +1376,7 @@ export function createPhonePanel({
   const CHAT_HISTORY_WINDOW_LIMIT = 60;
   const chatHistoryWindows = new Map();
   let activePromptBlockId = null;
+  let activePromptScope = 'wechat';
 
   panel.addEventListener(
     'click',
@@ -4092,7 +4093,7 @@ export function createPhonePanel({
     const settings = getPromptSettings();
     if (promptMaster) promptMaster.checked = settings.enabled !== false;
     if (!promptBlockList) return;
-    promptBlockList.innerHTML = settings.blocks.map(item => `
+    promptBlockList.innerHTML = settings.blocks.filter(item => String(item.scope || 'wechat') === activePromptScope).map(item => `
       <div class="moli-prompt-block" data-prompt-block="${escapeHtml(item.id)}">
         <label class="moli-prompt-block-toggle">
           <input type="checkbox" data-prompt-block-enabled="${escapeHtml(item.id)}" ${item.enabled !== false ? 'checked' : ''}>
@@ -4116,7 +4117,7 @@ export function createPhonePanel({
   }
 
   function addCustomPromptBlock() {
-    const item = createCustomPromptBlock({ title: '自定义条目', content: '' });
+    const item = createCustomPromptBlock({ title: '自定义条目', content: '', scope: activePromptScope });
     openPromptEditor(item.id);
   }
 
@@ -6504,6 +6505,7 @@ export function createPhonePanel({
   let openedPublicWebPostId = '';
   const publicWebGenerating = new Set();
   const expandedXhsThreads = new Set();
+  const communityAuthorDisplay = author => String(author?.uiName || author?.name || '网友');
   const sourceLabel = post => post?.section==='custom' ? String(post?.extra?.customCommunityName||'自创') : ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post?.section] || '社区');
   const communityDiscussionContext = post => {
     const rows=(post?.comments||[]).slice(-20).map((item,index)=>`${index+1}. ${item?.author?.name||'网友'}：${item?.content||''}`).filter(Boolean);
@@ -6535,25 +6537,19 @@ export function createPhonePanel({
     if(!target)windowRef.alert?.('没有这个联系人。');
     return target||null;
   };
-  const askPublicWebUserComment = (label='评论', postId='') => {
-    const anonymous = windowRef.confirm?.(`${label}是否匿名？\n确定＝匿名；取消＝使用当前 User 名称`) ?? false;
-    let anonymousAlias='';
-    if(anonymous){
-      const previous=getAnonymousAlias(postId);
-      const picked=windowRef.prompt?.('匿名网名（只在这篇帖子内默认沿用，可随时修改）', previous||'匿名用户');
-      if(picked===null)return null;
-      anonymousAlias=String(picked||'').trim()||'匿名用户';
-      setAnonymousAlias(postId,anonymousAlias);
-    }
-    let content = windowRef.prompt?.(`${label}\n输入 @ 可选择微信角色`, '') ?? null;
-    if (!content || !String(content).trim()) return null;
-    let mentionTarget=null;
-    if(String(content).includes('@')){
-      mentionTarget=chooseCommunityMentionContact();
-      if(mentionTarget)content=String(content).replace('@',`@${displayName(mentionTarget)} `);
-    }
-    return { content:String(content).trim(), author: anonymous ? {type:'user',id:'user',name:anonymousAlias,anonymous:true,knownIdentityId:'user',identityKnownBy:['user']} : {type:'user',id:'user',name:getTavernUserContext()?.name||'User',anonymous:false}, mentionTarget };
+  let communityComposerState = null;
+  const isUserOwnedPost = post => String(post?.author?.id||post?.author?.knownIdentityId||'')==='user' || post?.extra?.userOwned===true;
+  const openCommunityComposer = ({postId, replyToCommentId='', zhihuAnswerId='', replyLabel=''}) => {
+    const post=getPublicWebPost(getScopeKey?.(),postId); if(!post)return;
+    communityComposerState={postId:String(postId),replyToCommentId:String(replyToCommentId||''),zhihuAnswerId:String(zhihuAnswerId||''),replyLabel:String(replyLabel||'')};
+    const modal=panel.querySelector('[data-community-composer]'); const identity=modal?.querySelector('[data-community-identity]');
+    if(identity){ identity.innerHTML=`<option value="real">本名</option><option value="anonymous">匿名</option>${isUserOwnedPost(post)?'<option value="owner">我是楼主</option>':''}`; identity.value='real'; }
+    const alias=modal?.querySelector('[data-community-alias]'); if(alias){alias.value=getAnonymousAlias(postId)||'匿名用户';alias.hidden=true;}
+    const target=modal?.querySelector('[data-community-reply-target]'); if(target){target.textContent=replyLabel?`回复 ${replyLabel}`:'';target.hidden=!replyLabel;}
+    const input=modal?.querySelector('[data-community-content]'); if(input){input.value='';input.focus();}
+    modal?.classList.add('is-open');
   };
+  const closeCommunityComposer=()=>{panel.querySelector('[data-community-composer]')?.classList.remove('is-open');communityComposerState=null;};
   const runCommunityMention = async ({post,userEntry,mentionTarget,replyToCommentId='',zhihuAnswerId=''}) => {
     if(!post||!mentionTarget||!userEntry)return;
     const scopeKey=getScopeKey?.();
@@ -6561,12 +6557,12 @@ export function createPhonePanel({
     const mentionWorldEvent=recordWorldEvent(getScopeKey?.(),{source:`community.${post?.section||'unknown'}`,actorId:'user',action:'MENTION',targetContactIds:[mentionTarget.id],objectId:String(userEntry?.id||post?.id||''),content:`User 在${post?.section||'社区'}中 @了你：${String(userEntry?.content||'').trim()}`,metadata:{postId:String(post?.id||''),commentId:String(userEntry?.id||'')},awareness:'known'});
     const busyKey=`community-mention:${mentionTarget.id}:${post.id}:${Date.now()}`; publicWebGenerating.add(busyKey);
     try{
-      const platform=sourceLabel(post); const instruction=`【moli社区事件｜${platform} @提及】\nUser 在${platform}的一条内容下 @了你。\n帖子/问题：${post.title||'无标题'}\n正文：${post.content||'无'}\nUser 的评论：${userEntry.content}\n你可以完全按自己的性格决定：REPLY（只公开回复）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。不要因为被 @ 就必须回应。\n严格追加机器可读块：<community_action>REPLY|MESSAGE|BOTH|SKIP</community_action>；若公开回复，再追加 <community_reply>公开回复正文</community_reply>；若私聊，再用正常 <msg>私聊内容</msg>。公开回复只能以你自己的身份发言，绝不能代替 User。`;
+      const platform=sourceLabel(post); const instruction=`【moli社区事件｜${platform} @提及】\nUser 在${platform}的一条内容下 @了你。\n帖子/问题：${post.title||'无标题'}\n正文：${post.content||'无'}\nUser 的评论：${userEntry.content}\n这是 User 对你的明确 @，你必须公开跟帖回应。你可以自行决定是否另外私聊 User，但公开回复不可省略。\n严格追加机器可读块：<community_action>REPLY|BOTH</community_action><community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias>；公开回复追加 <community_reply>公开回复正文</community_reply>；若私聊，再用正常 <msg>私聊内容</msg>。公开回复只能以你自己的身份发言，绝不能代替 User。`;
       const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction,allowNoPendingUser:true});
-      const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(REPLY|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
-      const publicReply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim();
+      const raw=String(result?.text||''); let action=(raw.match(/<community_action>\s*(REPLY|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'REPLY').toUpperCase(); if(!['REPLY','BOTH'].includes(action))action='REPLY';
+      const publicReply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim(); const identity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase(); const alias=String(raw.match(/<community_alias>([\s\S]*?)<\/community_alias>/i)?.[1]||'').trim()||'匿名用户';
       const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
-      const roleAuthor={type:'contact',id:mentionTarget.id,name:displayName(mentionTarget)};
+      const roleAuthor=identity==='ANONYMOUS'?{type:'contact',id:mentionTarget.id,name:alias,uiName:`${alias}（${displayName(mentionTarget)}）`,anonymous:true,knownIdentityId:mentionTarget.id,identityKnownBy:[mentionTarget.id]}:{type:'contact',id:mentionTarget.id,name:displayName(mentionTarget),anonymous:false};
       if((action==='REPLY'||action==='BOTH')&&publicReply){
         if(post.section==='zhihu'&&zhihuAnswerId)addZhihuAnswerComments(scopeKey,post.id,zhihuAnswerId,[{id:`zac_role_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,author:roleAuthor,content:publicReply,replyToCommentId:String(replyToCommentId||'')}]);
         else addPublicWebComment(scopeKey,post.id,{author:roleAuthor,content:publicReply,replyToCommentId:String(replyToCommentId||'')});
@@ -6592,7 +6588,7 @@ export function createPhonePanel({
     const author = escapeHtml(post.author?.name || '匿名网友');
     const tianyaBusy=publicWebGenerating.has(`tianya-comments:${post.id}`); const pinned=Boolean(post.extra?.pinned);
     const inviteAction = post.section==='zhihu' ? `<button class="moli-community-invite" data-action="zhihu-invite-answer" data-post-id="${escapeHtml(post.id)}" aria-label="邀请主角回答">ʕ•̫͡•ʕ•̫͡•ʔ</button>` : `<button class="moli-community-invite" data-action="public-web-invite" data-post-id="${escapeHtml(post.id)}" aria-label="邀请主角评论">ʕ•̫͡•ʕ•̫͡•ʔ</button>`;
-    const communityActions=`<div class="moli-community-detail-actions">${inviteAction}<button class="moli-community-share" data-action="public-web-share" data-post-id="${escapeHtml(post.id)}">转发</button><button class="moli-community-symbol${pinned?' is-active':''}" data-action="public-web-pin" data-post-id="${escapeHtml(post.id)}" aria-label="${pinned?'取消常驻':'设为常驻'}">☺</button><button class="moli-community-symbol${favorited?' is-active':''}" data-action="public-web-favorite" data-post-id="${escapeHtml(post.id)}" aria-label="${favorited?'取消投入我们的墙':'投入我们的墙'}">${favorited?'★':'☆'}</button></div>`; const commonTop = `<div class="moli-web-detail-nav"><button data-action="public-web-detail-back">← 返回</button><div class="moli-web-detail-right">${communityActions}${post.section==='tianya'?`<button class="moli-comment-refresh${tianyaBusy?' is-spinning':''}" data-action="tianya-replies-refresh" data-post-id="${escapeHtml(post.id)}" aria-label="新增回复" ${tianyaBusy?'disabled':''}>↻</button>`:''}</div></div>`;
+    const communityActions=`<div class="moli-community-detail-actions">${inviteAction}<button class="moli-community-share" data-action="public-web-share" data-post-id="${escapeHtml(post.id)}">转发</button><button class="moli-community-symbol${pinned?' is-active':''}" data-action="public-web-pin" data-post-id="${escapeHtml(post.id)}" aria-label="${pinned?'取消常驻':'设为常驻'}">☺</button><button class="moli-community-symbol${favorited?' is-active':''}" data-action="public-web-favorite" data-post-id="${escapeHtml(post.id)}" aria-label="${favorited?'取消投入我们的墙':'投入我们的墙'}">${favorited?'★':'☆'}</button></div>`; const commonTop = `<div class="moli-web-detail-nav"><button data-action="public-web-detail-back">← 返回</button><div class="moli-web-detail-right">${communityActions}${['tianya','custom'].includes(post.section)?`<button class="moli-comment-refresh${tianyaBusy?' is-spinning':''}" data-action="tianya-replies-refresh" data-post-id="${escapeHtml(post.id)}" aria-label="新增回复" ${tianyaBusy?'disabled':''}>↻</button>`:''}</div></div>`;
     if (post.section === 'custom') {
       const customName=escapeHtml(post.extra?.customCommunityName||'自创');
       const created=new Date(Number(post.createdAt||Date.now())).toLocaleString();
@@ -6605,18 +6601,18 @@ export function createPhonePanel({
         const replies=comments.filter(r=>String(r.id)!==String(c.id)&&String(rootOf(r)?.id||'')===String(c.id));
         const expanded=expandedXhsThreads.has(String(c.id));
         const visible=expanded?replies:replies.slice(0,1);
-        const replyRows=visible.map(r=>{const target=byId.get(String(r.replyToCommentId||''));const targetName=target?.author?.name||c.author?.name||'网友';return `<div class="moli-xhs-comment-reply"><div><b>${escapeHtml(r.author?.name||'网友')}</b>${target?` <span>回复 ${escapeHtml(targetName)}：</span>`:'：'}${escapeHtml(r.content||'')}</div><button data-action="xhs-comment-reply" data-post-id="${escapeHtml(post.id)}" data-comment-id="${escapeHtml(r.id)}" data-comment-author="${escapeHtml(r.author?.name||'网友')}">回复</button></div>`;}).join('');
+        const replyRows=visible.map(r=>{const target=byId.get(String(r.replyToCommentId||''));const targetName=target?.author?.name||c.author?.name||'网友';return `<div class="moli-xhs-comment-reply"><div><b>${escapeHtml(communityAuthorDisplay(r.author))}</b>${target?` <span>回复 ${escapeHtml(targetName)}：</span>`:'：'}${escapeHtml(r.content||'')}</div><button data-action="xhs-comment-reply" data-post-id="${escapeHtml(post.id)}" data-comment-id="${escapeHtml(r.id)}" data-comment-author="${escapeHtml(communityAuthorDisplay(r.author))}">回复</button></div>`;}).join('');
         const expand=replies.length>1?`<button class="moli-xhs-expand-replies" data-action="xhs-toggle-replies" data-comment-id="${escapeHtml(c.id)}">${expanded?'收起回复':`展开 ${replies.length} 条回复`}</button>`:'';
-        return `<div class="moli-xhs-comment-thread"><div class="moli-xhs-comment"><b>${escapeHtml(c.author?.name||'网友')}</b><p>${escapeHtml(c.content||'')}</p><button data-action="xhs-comment-reply" data-post-id="${escapeHtml(post.id)}" data-comment-id="${escapeHtml(c.id)}" data-comment-author="${escapeHtml(c.author?.name||'网友')}">回复</button></div>${replies.length?`<div class="moli-xhs-comment-replies">${replyRows}</div>${expand}`:''}</div>`;
+        return `<div class="moli-xhs-comment-thread"><div class="moli-xhs-comment"><b>${escapeHtml(communityAuthorDisplay(c.author))}</b><p>${escapeHtml(c.content||'')}</p><button data-action="xhs-comment-reply" data-post-id="${escapeHtml(post.id)}" data-comment-id="${escapeHtml(c.id)}" data-comment-author="${escapeHtml(communityAuthorDisplay(c.author))}">回复</button></div>${replies.length?`<div class="moli-xhs-comment-replies">${replyRows}</div>${expand}`:''}</div>`;
       }).join('');
       const commentBusy=publicWebGenerating.has(`xhs-comments:${post.id}`);
       feed.innerHTML = `<article class="moli-xhs-detail"><div class="moli-xhs-detail-head"><button data-action="public-web-detail-back">‹</button><div class="moli-xhs-author">${author}</div><span></span></div><div class="moli-xhs-detail-image"><span>${escapeHtml(post.extra?.imageText||'')}</span><small>${escapeHtml(post.extra?.imagePrompt||'')}</small></div><h2>${escapeHtml(post.title)}</h2>${post.content?`<p class="moli-xhs-body">${escapeHtml(post.content)}</p>`:''}<div class="moli-xhs-tags">${(post.tags||[]).map(x=>`#${escapeHtml(x)}`).join(' ')}</div>${communityActions}<div class="moli-xhs-comment-capsule"><button data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">留下你的想法吧</button><button class="moli-xhs-add-comments${commentBusy?' is-spinning':''}" data-action="xhs-comments-add" data-post-id="${escapeHtml(post.id)}" aria-label="新增评论" ${commentBusy?'disabled':''}>↻</button></div><div class="moli-xhs-comments">${commentHtml||'<div class="moli-web-muted">暂无评论</div>'}</div></article>`;
     } else if (post.section === 'zhihu') {
       const answers=Array.isArray(post.extra?.answers)&&post.extra.answers.length?post.extra.answers:(post.extra?.answer?[{id:`legacy_${post.id}`,author:post.author,content:post.extra.answer,upvotes:0,comments}]:[]);
-      const answerHtml=answers.map((answer,index)=>{const ac=Array.isArray(answer.comments)?answer.comments:[];const busy=publicWebGenerating.has(`zhihu-comments:${post.id}:${answer.id}`);return `<section class="moli-zhihu-answer"><div class="moli-zhihu-answer-author"><b>${escapeHtml(answer.author?.name||'匿名用户')}</b><span>回答</span></div><p>${escapeHtml(answer.content||'')}</p><div class="moli-zhihu-answer-meta moli-comment-head"><span>赞同 ${Number(answer.upvotes||0)} · ${ac.length} 条评论　<button class="moli-zhihu-user-comment" data-action="zhihu-user-comment" data-post-id="${escapeHtml(post.id)}" data-answer-id="${escapeHtml(answer.id)}">评论</button></span><button class="moli-comment-refresh${busy?' is-spinning':''}" data-action="zhihu-comments-add" data-post-id="${escapeHtml(post.id)}" data-answer-id="${escapeHtml(answer.id)}" aria-label="新增评论" ${busy?'disabled':''}>↻</button></div>${ac.length?`<div class="moli-zhihu-answer-comments">${ac.slice(0,3).map(c=>`<div class="moli-zhihu-comment"><b>${escapeHtml(c.author?.name||'网友')}</b>：${escapeHtml(c.content||'')}</div>`).join('')}<button data-action="zhihu-comments-open" data-post-id="${escapeHtml(post.id)}" data-answer-index="${index}">查看全部 ${ac.length} 条评论</button></div>`:''}</section>`;}).join('');
+      const answerHtml=answers.map((answer,index)=>{const ac=Array.isArray(answer.comments)?answer.comments:[];const busy=publicWebGenerating.has(`zhihu-comments:${post.id}:${answer.id}`);return `<section class="moli-zhihu-answer"><div class="moli-zhihu-answer-author"><b>${escapeHtml(communityAuthorDisplay(answer.author))}</b><span>回答</span></div><p>${escapeHtml(answer.content||'')}</p><div class="moli-zhihu-answer-meta moli-comment-head"><span>赞同 ${Number(answer.upvotes||0)} · ${ac.length} 条评论　<button class="moli-zhihu-user-comment" data-action="zhihu-user-comment" data-post-id="${escapeHtml(post.id)}" data-answer-id="${escapeHtml(answer.id)}">评论</button></span><button class="moli-comment-refresh${busy?' is-spinning':''}" data-action="zhihu-comments-add" data-post-id="${escapeHtml(post.id)}" data-answer-id="${escapeHtml(answer.id)}" aria-label="新增评论" ${busy?'disabled':''}>↻</button></div>${ac.length?`<div class="moli-zhihu-answer-comments">${ac.slice(0,3).map(c=>`<div class="moli-zhihu-comment"><b>${escapeHtml(communityAuthorDisplay(c.author))}</b>：${escapeHtml(c.content||'')} <button data-action="zhihu-comment-reply" data-post-id="${escapeHtml(post.id)}" data-answer-id="${escapeHtml(answer.id)}" data-comment-id="${escapeHtml(c.id)}" data-comment-author="${escapeHtml(communityAuthorDisplay(c.author))}">回复</button></div>`).join('')}<button data-action="zhihu-comments-open" data-post-id="${escapeHtml(post.id)}" data-answer-index="${index}">查看全部 ${ac.length} 条评论</button></div>`:''}</section>`;}).join('');
       feed.innerHTML = `<article class="moli-zhihu-detail"><div class="moli-zhihu-backrow"><button data-action="public-web-detail-back" aria-label="返回">‹</button></div><h2>${escapeHtml(post.title)}</h2>${post.content?`<p class="moli-zhihu-question-body">${escapeHtml(post.content)}</p>`:''}<div class="moli-zhihu-question-actions">${communityActions}<button data-action="zhihu-write-answer" data-post-id="${escapeHtml(post.id)}">增加回答</button></div><div class="moli-zhihu-answer-count">${answers.length} 个回答</div>${answerHtml||'<div class="moli-web-muted">还没有回答</div>'}</article>`;
     } else {
-      feed.innerHTML = `${commonTop}<article class="moli-tianya-detail"><h2>[${escapeHtml(post.section==='custom'?(post.extra?.customCommunityName||'自创'):(post.extra?.subtitle||'天涯杂谈'))}] ${escapeHtml(cleanTianyaTitle(post.title))}</h2><div class="moli-tianya-detail-meta">楼主：<a>${author}</a>　发表于：${new Date(Number(post.createdAt||Date.now())).toLocaleString()}</div><section class="moli-tianya-floor"><div class="moli-tianya-floor-head"><b>楼主</b>　${author}</div><p>${escapeHtml(post.content)}</p></section>${comments.map((c,i)=>{const targetIndex=comments.findIndex(x=>String(x.id)===String(c.replyToCommentId||''));const target=targetIndex>=0?comments[targetIndex]:null;return `<section class="moli-tianya-floor"><div class="moli-tianya-floor-head"><b>${i+1}楼</b>　<a>${escapeHtml(c.author?.name||'网友')}</a></div>${target?`<div class="moli-tianya-reply-ref">@${escapeHtml(target.author?.name||'网友')} #${targetIndex+1}</div>`:''}<p>${escapeHtml(c.content||'')}</p><button class="moli-tianya-floor-reply" data-action="tianya-floor-reply" data-post-id="${escapeHtml(post.id)}" data-comment-id="${escapeHtml(c.id)}" data-floor="${i+1}" data-comment-author="${escapeHtml(c.author?.name||'网友')}">回复</button></section>`;}).join('')}<div class="moli-tianya-reply-tail"><button data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">[回复本帖]</button></div></article>`;
+      feed.innerHTML = `${commonTop}<article class="moli-tianya-detail"><h2>[${escapeHtml(post.section==='custom'?(post.extra?.customCommunityName||'自创'):(post.extra?.subtitle||'天涯杂谈'))}] ${escapeHtml(cleanTianyaTitle(post.title))}</h2><div class="moli-tianya-detail-meta">楼主：<a>${author}</a>　发表于：${new Date(Number(post.createdAt||Date.now())).toLocaleString()}</div><section class="moli-tianya-floor"><div class="moli-tianya-floor-head"><b>楼主</b>　${author}</div><p>${escapeHtml(post.content)}</p></section>${comments.map((c,i)=>{const targetIndex=comments.findIndex(x=>String(x.id)===String(c.replyToCommentId||''));const target=targetIndex>=0?comments[targetIndex]:null;return `<section class="moli-tianya-floor"><div class="moli-tianya-floor-head"><b>${i+1}楼</b>　<a>${escapeHtml(communityAuthorDisplay(c.author))}</a></div>${target?`<div class="moli-tianya-reply-ref">@${escapeHtml(communityAuthorDisplay(target.author))} #${targetIndex+1}</div>`:''}<p>${escapeHtml(c.content||'')}</p><button class="moli-tianya-floor-reply" data-action="tianya-floor-reply" data-post-id="${escapeHtml(post.id)}" data-comment-id="${escapeHtml(c.id)}" data-floor="${i+1}" data-comment-author="${escapeHtml(communityAuthorDisplay(c.author))}">回复</button></section>`;}).join('')}<div class="moli-tianya-reply-tail"><button data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">[回复本帖]</button></div></article>`;
     }
   };
   let recommendFilterOpen=false;
@@ -6697,7 +6693,7 @@ export function createPhonePanel({
       const cards=ordinaryPosts.map(xhsCard).join(''); const pinnedCards=pinnedPosts.map(xhsCard).join('');
       feed.innerHTML=`<div class="moli-xhs-home"><div class="moli-xhs-home-head"><span></span><span></span></div><div class="moli-xhs-waterfall">${cards||'<div class="moli-recommend-empty">这里还没有普通笔记。</div>'}</div>${pinnedCards?`<section class="moli-public-pinned-tail"><div class="moli-public-pinned-title">常驻</div><div class="moli-xhs-waterfall">${pinnedCards}</div></section>`:''}<button class="moli-xhs-compose-fab" data-action="public-web-compose" aria-label="发布笔记">＋</button></div>`;
     } else if (currentPublicWebTab === 'zhihu') {
-      const zhihuCard=post=>{const answers=Array.isArray(post.extra?.answers)?post.extra.answers:[];const first=answers[0];return `<article class="moli-zhihu-feed-card"><button data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><h3>${escapeHtml(post.title||'无标题')}</h3>${first?`<b>${escapeHtml(first.author?.name||'匿名用户')}</b><p>${escapeHtml(String(first.content||'').slice(0,150))}${String(first.content||'').length>150?'…':''}</p><small>赞同 ${Number(first.upvotes||0)} · ${(first.comments||[]).length} 条评论</small>`:(post.content?`<p>${escapeHtml(String(post.content).slice(0,150))}</p>`:'')}</button></article>`};
+      const zhihuCard=post=>{const answers=Array.isArray(post.extra?.answers)?post.extra.answers:[];const first=answers[0];return `<article class="moli-zhihu-feed-card"><button data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><h3>${escapeHtml(post.title||'无标题')}</h3>${first?`<b>${escapeHtml(communityAuthorDisplay(first.author))}</b><p>${escapeHtml(String(first.content||'').slice(0,150))}${String(first.content||'').length>150?'…':''}</p><small>赞同 ${Number(first.upvotes||0)} · ${(first.comments||[]).length} 条评论</small>`:(post.content?`<p>${escapeHtml(String(post.content).slice(0,150))}</p>`:'')}</button></article>`};
       feed.innerHTML=`<div class="moli-zhihu-feed">${ordinaryPosts.map(zhihuCard).join('')||'<div class="moli-recommend-empty">这里还没有问题。</div>'}${pinnedPosts.length?`<section class="moli-public-pinned-tail"><div class="moli-public-pinned-title">常驻</div>${pinnedPosts.map(zhihuCard).join('')}</section>`:''}</div>`;
     } else {
       feed.innerHTML = `<div class="moli-tianya-topic-list">${rows||'<div class="moli-tianya-no-topics">这里还没有内容。</div>'}${pinnedTail}</div>`;
@@ -6777,9 +6773,9 @@ export function createPhonePanel({
     const xhsAdd=event.target?.closest?.('[data-action="xhs-comments-add"]');
     if(xhsAdd){const postId=String(xhsAdd.dataset.postId||'');const busyKey=`xhs-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const additions=await generateXiaohongshuCommentRefresh({scopeKey:getScopeKey?.(),post});for(const item of additions)addPublicWebComment(getScopeKey?.(),postId,item);renderPublicWeb();}catch(error){console.error('[moli小手机] xhs add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const tianyaFloorReply=event.target?.closest?.('[data-action="tianya-floor-reply"]');
-    if(tianyaFloorReply){const who=tianyaFloorReply.dataset.commentAuthor||'网友';const floor=tianyaFloorReply.dataset.floor||'';const entry=askPublicWebUserComment(`回复 @${who} #${floor}`,tianyaFloorReply.dataset.postId);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),tianyaFloorReply.dataset.postId,{...stored,replyToCommentId:tianyaFloorReply.dataset.commentId});const post=getPublicWebPost(getScopeKey?.(),tianyaFloorReply.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
+    if(tianyaFloorReply){openCommunityComposer({postId:tianyaFloorReply.dataset.postId,replyToCommentId:tianyaFloorReply.dataset.commentId,replyLabel:`@${tianyaFloorReply.dataset.commentAuthor||'网友'} #${tianyaFloorReply.dataset.floor||''}`});return;}
     const xhsReply=event.target?.closest?.('[data-action="xhs-comment-reply"]');
-    if(xhsReply){const who=xhsReply.dataset.commentAuthor||'网友';const entry=askPublicWebUserComment(`回复 @${who}`,xhsReply.dataset.postId);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),xhsReply.dataset.postId,{...stored,replyToCommentId:xhsReply.dataset.commentId});const post=getPublicWebPost(getScopeKey?.(),xhsReply.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
+    if(xhsReply){openCommunityComposer({postId:xhsReply.dataset.postId,replyToCommentId:xhsReply.dataset.commentId,replyLabel:`@${xhsReply.dataset.commentAuthor||'网友'}`});return;}
     const jump=event.target?.closest?.('[data-public-web-jump]'); if(jump){const target=String(jump.dataset.publicWebJump||'');const tab=panel.querySelector(`[data-public-web-tab="${target}"]`);tab?.click();return;}
     const open=event.target?.closest?.('[data-action="public-web-open"]'); if(open){openedPublicWebPostId=open.dataset.postId;renderPublicWeb();return;}
     if(event.target?.closest?.('[data-action="public-web-detail-back"]')){openedPublicWebPostId='';renderPublicWeb();return;}
@@ -6795,12 +6791,12 @@ export function createPhonePanel({
       recordWorldEvent(scopeKey,{source:`community.${post.section}`,actorId:'user',action:'INVITE_COMMENT',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 邀请你参与社区帖子：${post.title||'无标题'}`,metadata:{postId:String(post.id||'')},awareness:'known'});
       const busyKey=`community-invite:${target.id}:${post.id}`; if(publicWebGenerating.has(busyKey))return; publicWebGenerating.add(busyKey); toast(`已邀请${displayName(target)}，等待他的决定…`);
       try{
-        const instruction=`【moli社区事件｜邀请评论】\nUser 邀请你参与一条${sourceLabel(post)}内容。\n标题：${post.title||'无标题'}\n正文：${post.content||'无'}\n【当前帖子已有讨论】\n${communityDiscussionContext(post)}\n\n请把主帖和已有讨论视为这次邀请本身的上下文；这次社区邀请不要求微信私聊里存在一条等待回复的新消息。\n你可以 COMMENT（公开评论）、MESSAGE（只私聊 User）、BOTH 或 SKIP。若公开参与，还要自行决定 REAL（本名）或 ANONYMOUS（匿名）；匿名发表时帖子里的其他人不能凭空知道是你；若选择匿名，请自己取一个适合当前帖子的匿名网名。\n严格追加：<community_action>COMMENT|MESSAGE|BOTH|SKIP</community_action>；公开评论时追加 <community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias><community_reply>评论正文</community_reply>；私聊用正常 <msg>内容</msg>。`;
+        const instruction=`【moli社区事件｜邀请评论】\nUser 邀请你参与一条${sourceLabel(post)}内容。\n标题：${post.title||'无标题'}\n正文：${post.content||'无'}\n【当前帖子已有讨论】\n${communityDiscussionContext(post)}\n\n请把主帖和已有讨论视为这次邀请本身的上下文；这次社区邀请不要求微信私聊里存在一条等待回复的新消息。\n这是 User 的明确邀请，你必须公开跟帖。你可以自行决定 REAL（本名）或 ANONYMOUS（匿名），也可以另外私聊 User；匿名发表时帖子里的其他人不能凭空知道是你；若选择匿名，请自己取一个适合当前帖子的匿名网名。\n严格追加：<community_action>COMMENT|BOTH</community_action>；公开评论时追加 <community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias><community_reply>评论正文</community_reply>；私聊用正常 <msg>内容</msg>。`;
         const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction,allowNoPendingUser:true});
-        const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(COMMENT|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
+        const raw=String(result?.text||''); let action=(raw.match(/<community_action>\s*(COMMENT|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'COMMENT').toUpperCase(); if(!['COMMENT','BOTH'].includes(action))action='COMMENT';
         const identity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase();
         const reply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim(); const alias=String(raw.match(/<community_alias>([\s\S]*?)<\/community_alias>/i)?.[1]||'').trim()||'匿名用户'; const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
-        if((action==='COMMENT'||action==='BOTH')&&reply)addPublicWebComment(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:alias,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:reply});
+        if((action==='COMMENT'||action==='BOTH')&&reply)addPublicWebComment(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:alias,uiName:`${alias}（${displayName(target)}）`,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:reply});
         if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-invite',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});
         renderPublicWeb(); toast(action==='SKIP'?`${displayName(target)}没有回应这次邀请`:`${displayName(target)}已处理邀请`);
       }catch(error){console.error('[moli小手机] community invite failed:',error);windowRef.alert?.(`邀请处理失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);} return;
@@ -6817,41 +6813,54 @@ export function createPhonePanel({
       recordWorldEvent(scopeKey,{source:'community.zhihu',actorId:'user',action:'INVITE_ANSWER',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 邀请你回答知乎问题：${post.title}${String(note).trim()?`；邀请语：${String(note).trim()}`:''}`,metadata:{postId:String(post.id||'')},awareness:'known'});
       const busyKey=`community-role:${target.id}:${post.id}`; if(publicWebGenerating.has(busyKey))return; publicWebGenerating.add(busyKey); toast(`已邀请${displayName(target)}，等待他的决定…`);
       try{
-        const instruction=`【moli社区事件｜知乎邀请回答】\nUser 邀请你回答知乎问题。\n问题：${post.title}\n补充：${post.content||'无'}\n邀请语：${String(note).trim()||'无'}\n【当前问题已有讨论】\n${communityDiscussionContext(post)}\n\n请把问题和已有回答/评论视为这次邀请本身的上下文；这次社区邀请不要求微信私聊里存在一条等待回复的新消息。\n你可以完全按自己的性格决定：ANSWER（只公开回答）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。不要因为被邀请就必须回答。\n请在正常角色口吻之外严格追加机器可读块：<community_action>ANSWER|MESSAGE|BOTH|SKIP</community_action>；如果包含公开回答，还要自行决定 REAL（本名）或 ANONYMOUS（匿名），追加 <community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias><community_answer>你的知乎回答正文</community_answer>；如果包含私聊，再用正常 <msg>私聊内容</msg>。匿名回答时，帖子里的其他人不能凭空知道真实身份。`;
+        const instruction=`【moli社区事件｜知乎邀请回答】\nUser 邀请你回答知乎问题。\n问题：${post.title}\n补充：${post.content||'无'}\n邀请语：${String(note).trim()||'无'}\n【当前问题已有讨论】\n${communityDiscussionContext(post)}\n\n请把问题和已有回答/评论视为这次邀请本身的上下文；这次社区邀请不要求微信私聊里存在一条等待回复的新消息。\n这是 User 的明确邀请，你必须公开回答。你可以自行决定本名或匿名，也可以另外私聊 User，但公开回答不可省略。\n请在正常角色口吻之外严格追加机器可读块：<community_action>ANSWER|BOTH</community_action>；如果包含公开回答，还要自行决定 REAL（本名）或 ANONYMOUS（匿名），追加 <community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias><community_answer>你的知乎回答正文</community_answer>；如果包含私聊，再用正常 <msg>私聊内容</msg>。匿名回答时，帖子里的其他人不能凭空知道真实身份。`;
         const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction,allowNoPendingUser:true});
-        const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(ANSWER|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
+        const raw=String(result?.text||''); let action=(raw.match(/<community_action>\s*(ANSWER|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'ANSWER').toUpperCase(); if(!['ANSWER','BOTH'].includes(action))action='ANSWER';
         const answer=String(raw.match(/<community_answer>([\s\S]*?)<\/community_answer>/i)?.[1]||'').trim(); const answerAlias=String(raw.match(/<community_alias>([\s\S]*?)<\/community_alias>/i)?.[1]||'').trim()||'匿名用户'; const identity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase();
         const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
-        if((action==='ANSWER'||action==='BOTH')&&answer)addZhihuAnswer(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:answerAlias,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:answer});
+        if((action==='ANSWER'||action==='BOTH')&&answer)addZhihuAnswer(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:answerAlias,uiName:`${answerAlias}（${displayName(target)}）`,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:answer});
         if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-event',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});
         renderPublicWeb(); toast(action==='SKIP'?`${displayName(target)}没有回应这次邀请`:`${displayName(target)}已处理邀请`);
       }catch(error){console.error('[moli小手机] zhihu invite bridge failed:',error);windowRef.alert?.(`邀请处理失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);} return;
     }
     const zhihuWrite=event.target?.closest?.('[data-action="zhihu-write-answer"]'); if(zhihuWrite){windowRef.alert?.('“增加回答”交互将在知乎联动阶段接入，本轮先完成问题、多回答与评论数据结构。');return;}
-    const zhihuUserComment=event.target?.closest?.('[data-action="zhihu-user-comment"]'); if(zhihuUserComment){const entry=askPublicWebUserComment('写评论',zhihuUserComment.dataset.postId);if(entry){const {mentionTarget,...stored}=entry;const saved={id:`zac_user_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,...stored,replyToCommentId:''};addZhihuAnswerComments(getScopeKey?.(),zhihuUserComment.dataset.postId,zhihuUserComment.dataset.answerId,[saved]);const post=getPublicWebPost(getScopeKey?.(),zhihuUserComment.dataset.postId);if(mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id,zhihuAnswerId:zhihuUserComment.dataset.answerId});}renderPublicWeb();return;}
+    const zhihuCommentReply=event.target?.closest?.('[data-action="zhihu-comment-reply"]'); if(zhihuCommentReply){openCommunityComposer({postId:zhihuCommentReply.dataset.postId,zhihuAnswerId:zhihuCommentReply.dataset.answerId,replyToCommentId:zhihuCommentReply.dataset.commentId,replyLabel:`@${zhihuCommentReply.dataset.commentAuthor||'网友'}`});return;}
+    const zhihuUserComment=event.target?.closest?.('[data-action="zhihu-user-comment"]'); if(zhihuUserComment){openCommunityComposer({postId:zhihuUserComment.dataset.postId,zhihuAnswerId:zhihuUserComment.dataset.answerId});return;}
     const zhihuAdd=event.target?.closest?.('[data-action="zhihu-comments-add"]'); if(zhihuAdd){const postId=String(zhihuAdd.dataset.postId||'');const answerId=String(zhihuAdd.dataset.answerId||'');const busyKey=`zhihu-comments:${postId}:${answerId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const answer=(post?.extra?.answers||[]).find(a=>String(a.id)===answerId);const additions=await generateZhihuAnswerCommentRefresh({scopeKey:getScopeKey?.(),post,answer});addZhihuAnswerComments(getScopeKey?.(),postId,answerId,additions);renderPublicWeb();}catch(error){console.error('[moli小手机] zhihu add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const share=event.target?.closest?.('[data-action="public-web-share"]'); if(share){
       const post=getPublicWebPost(getScopeKey?.(),share.dataset.postId);if(!post)return;
-      const candidates=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta');
-      if(!candidates.length){windowRef.alert?.('微信里还没有可以转发的角色。');return;}
-      const menu=candidates.map((item,i)=>`${i+1}. ${displayName(item)}`).join('\n');
+      const people=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta').map(item=>({kind:'private',id:item.id,label:displayName(item),target:item}));
+      const groups=getScopeConversations(getScopeKey?.()).filter(item=>item?.type==='group').map(item=>({kind:'group',id:String(item.conversationKey||item.id||''),label:String(item.name||'群聊'),target:item}));
+      const candidates=[...people,...groups];
+      if(!candidates.length){windowRef.alert?.('微信里还没有可以转发的联系人或群聊。');return;}
+      const menu=candidates.map((item,i)=>`${i+1}. ${item.kind==='group'?'[群聊] ':'[联系人] '}${item.label}`).join('\n');
       const picked=windowRef.prompt?.(`转发给谁？\n${menu}\n\n输入序号`,'1');if(picked===null)return;
-      const target=candidates[Number(picked)-1];if(!target){windowRef.alert?.('没有这个联系人。');return;}
-      const scopeKey=getScopeKey?.();const conversationKey=privateConversationKeyFor(scopeKey,target.id);
+      const choice=candidates[Number(picked)-1];if(!choice){windowRef.alert?.('没有这个联系人或群聊。');return;}
+      const target=choice.target; const scopeKey=getScopeKey?.();const conversationKey=choice.kind==='group'?choice.id:privateConversationKeyFor(scopeKey,target.id);
       const platform=sourceLabel(post);
       const forwardSnapshot={postId:String(post.id||''),section:String(post.section||''),platform,customCommunityId:String(post.extra?.customCommunityId||''),customCommunityName:String(post.extra?.customCommunityName||''),authorName:String(post.author?.name||post.authorName||'匿名网友'),title:String(post.title||'无标题'),content:String(post.content||''),snapshotAt:Date.now()};
       const saved=appendMessage(scopeKey,conversationKey,'user',`转发了一篇${platform}帖子：${forwardSnapshot.title}`,{source:'community-forward',messageType:'community-forward',communityForward:forwardSnapshot,senderId:'user'});
       if(!saved){windowRef.alert?.('转发失败：消息没有写入聊天记录。');return;}
-      recordWorldEvent(scopeKey,{source:`community.${post.section||'custom'}`,actorId:'user',action:'FORWARD',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 转发给你一条${platform}内容：${post.title||'无标题'}`,metadata:{postId:String(post.id||''),customCommunityId:String(post.extra?.customCommunityId||'')},awareness:'known'});
-      toast(`已转发给 ${displayName(target)}`);
+      recordWorldEvent(scopeKey,{source:`community.${post.section||'custom'}`,actorId:'user',action:'FORWARD',targetContactIds:choice.kind==='group'?(target.memberIds||[]):[target.id],objectId:String(post.id||''),content:`User 转发给你一条${platform}内容：${post.title||'无标题'}`,metadata:{postId:String(post.id||''),customCommunityId:String(post.extra?.customCommunityId||'')},awareness:'known'});
+      toast(`已转发给 ${choice.kind==='group'?choice.label:displayName(target)}`);
       return;
     }
     const favorite=event.target?.closest?.('[data-action="public-web-favorite"]'); if(favorite){const result=togglePublicWebFavorite(getScopeKey?.(),favorite.dataset.postId,'user');renderPublicWeb();toast(result?.favorited?'已投入我们的墙':'已从我们的墙移除');return;}
     const pin=event.target?.closest?.('[data-action="public-web-pin"]'); if(pin){togglePublicWebPinned(getScopeKey?.(),pin.dataset.postId);renderPublicWeb();return;}
     const replyRefresh=event.target?.closest?.('[data-action="tianya-replies-refresh"]'); if(replyRefresh){const postId=String(replyRefresh.dataset.postId||'');const busyKey=`tianya-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const replies=await generateTianyaReplyRefresh({scopeKey:getScopeKey?.(),post});for(const reply of replies)addPublicWebComment(getScopeKey?.(),post.id,reply);renderPublicWeb();}catch(error){console.error('[moli小手机] tianya replies refresh failed:',error);windowRef.alert?.(`新增回复失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
-    const comment=event.target?.closest?.('[data-action="public-web-comment"]'); if(comment){const entry=askPublicWebUserComment('回复内容',comment.dataset.postId);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),comment.dataset.postId,stored);const post=getPublicWebPost(getScopeKey?.(),comment.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
+    const comment=event.target?.closest?.('[data-action="public-web-comment"]'); if(comment){openCommunityComposer({postId:comment.dataset.postId});return;}
   });
   renderPublicWeb();
+
+  const communityComposer=document.createElement('div');
+  communityComposer.className='moli-community-composer-backdrop'; communityComposer.dataset.communityComposer='';
+  communityComposer.innerHTML=`<div class="moli-community-composer-panel"><div class="moli-community-composer-tools"><select data-community-identity><option value="real">本名</option><option value="anonymous">匿名</option></select><button type="button" data-community-at>@</button><span data-community-reply-target hidden></span><button type="button" data-community-close>×</button></div><input class="moli-community-alias" data-community-alias hidden placeholder="匿名网名"><textarea data-community-content placeholder="说点什么……"></textarea><button type="button" class="moli-community-send" data-community-send>发送</button></div>`;
+  panel.appendChild(communityComposer);
+  communityComposer.querySelector('[data-community-close]')?.addEventListener('click',closeCommunityComposer);
+  communityComposer.addEventListener('click',e=>{if(e.target===communityComposer)closeCommunityComposer();});
+  communityComposer.querySelector('[data-community-identity]')?.addEventListener('change',e=>{const alias=communityComposer.querySelector('[data-community-alias]');if(alias)alias.hidden=e.target.value!=='anonymous';});
+  communityComposer.querySelector('[data-community-at]')?.addEventListener('click',()=>{const target=chooseCommunityMentionContact();if(!target)return;if(communityComposerState)communityComposerState.mentionTarget=target;const input=communityComposer.querySelector('[data-community-content]');if(input&&!input.value.includes(`@${displayName(target)}`))input.value=`@${displayName(target)} ${input.value}`;input?.focus();});
+  communityComposer.querySelector('[data-community-send]')?.addEventListener('click',()=>{const state=communityComposerState;if(!state)return;const post=getPublicWebPost(getScopeKey?.(),state.postId);if(!post)return;const content=String(communityComposer.querySelector('[data-community-content]')?.value||'').trim();if(!content)return;const mode=communityComposer.querySelector('[data-community-identity]')?.value||'real';let author;if(mode==='anonymous'){const alias=String(communityComposer.querySelector('[data-community-alias]')?.value||'').trim()||'匿名用户';setAnonymousAlias(state.postId,alias);author={type:'user',id:'user',name:alias,anonymous:true,knownIdentityId:'user',identityKnownBy:['user']};}else if(mode==='owner'&&isUserOwnedPost(post)){author={...(post.author||{}),type:'user',id:'user',uiName:`${post.author?.name||'楼主'}（楼主）`,knownIdentityId:'user'};}else author={type:'user',id:'user',name:getTavernUserContext()?.name||'User',anonymous:false};const entry={id:`userc_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,author,content,replyToCommentId:state.replyToCommentId};let saved;if(post.section==='zhihu'&&state.zhihuAnswerId){saved={...entry};addZhihuAnswerComments(getScopeKey?.(),post.id,state.zhihuAnswerId,[saved]);}else saved=addPublicWebComment(getScopeKey?.(),post.id,entry);const mention=state.mentionTarget;const answerId=state.zhihuAnswerId;closeCommunityComposer();renderPublicWeb();if(saved&&mention)void runCommunityMention({post:getPublicWebPost(getScopeKey?.(),post.id),userEntry:saved,mentionTarget:mention,replyToCommentId:saved.id,zhihuAnswerId:answerId});});
 
   panel.querySelectorAll('[data-action="app-home-back"]').forEach(button => {
     button.onclick = () => show('phone-home');
@@ -7285,6 +7294,8 @@ export function createPhonePanel({
     renderPromptSettings();
     toast('已恢复默认预设');
   });
+  panel.querySelectorAll('[data-prompt-scope]').forEach(button=>button.addEventListener('click',()=>{ activePromptScope=String(button.dataset.promptScope||'wechat'); panel.querySelectorAll('[data-prompt-scope]').forEach(x=>x.classList.toggle('is-active',x===button)); renderPromptSettings(); }));
+
   promptMaster?.addEventListener('change', () => {
     const settings = getPromptSettings();
     settings.enabled = promptMaster.checked;
