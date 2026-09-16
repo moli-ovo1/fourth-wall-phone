@@ -3108,3 +3108,6 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 - 社区推荐主体改为独立大毛玻璃面板，主体内部背景透明，不再以不透明米白层遮住壁纸。
 - 保留 moli159 的刷新胶囊、左侧轻文字入口与覆盖式“我只想看”浮层。
 - 本包仅做视觉分层，不修改 Community Runtime / World Event。
+
+## moli161 / v0.5.01 — Community Recommend clear-glass correction
+社区推荐视觉改为与自创板块一致的偏白 iPhone 半透明毛玻璃：移除最外层着色底板，导航、主体、“我只想看”覆盖浮层均使用中性透明玻璃。仅视觉修正，不改变社区机制；主线恢复计划不变。
