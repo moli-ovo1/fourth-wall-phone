@@ -1980,3 +1980,18 @@
 #moli-phone-panel .moli-zhihu-question-actions>.moli-community-detail-actions{margin-right:auto!important}
 
 #moli-phone-panel .moli-community-forward-post-title{font-size:14px;font-weight:700;line-height:1.45;margin:4px 0 6px;color:#222}
+
+/* moli153: unified community composer */
+#moli-phone-panel .moli-community-composer-backdrop{position:absolute;inset:0;z-index:90;display:none;align-items:flex-end;justify-content:center;background:rgba(20,20,20,.16);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+#moli-phone-panel .moli-community-composer-backdrop.is-open{display:flex}
+#moli-phone-panel .moli-community-composer-panel{position:relative;width:calc(100% - 24px);margin:0 12px 18px;padding:12px;border:1px solid rgba(255,255,255,.5);border-radius:18px;background:rgba(248,248,248,.72);box-shadow:0 16px 40px rgba(0,0,0,.18);backdrop-filter:blur(20px) saturate(1.25);-webkit-backdrop-filter:blur(20px) saturate(1.25)}
+#moli-phone-panel .moli-community-composer-tools{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+#moli-phone-panel .moli-community-composer-tools select,#moli-phone-panel .moli-community-composer-tools button{border:1px solid rgba(0,0,0,.12);border-radius:9px;background:rgba(255,255,255,.68);padding:6px 9px;font:12px/1.2 system-ui,sans-serif;color:#333}
+#moli-phone-panel .moli-community-composer-tools [data-community-reply-target]{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:11px/1.2 system-ui,sans-serif;color:#777}
+#moli-phone-panel .moli-community-composer-tools [data-community-close]{margin-left:auto}
+#moli-phone-panel .moli-community-alias{width:100%;box-sizing:border-box;margin-bottom:7px;border:0;border-bottom:1px solid rgba(0,0,0,.12);background:transparent;padding:6px 4px;font:12px system-ui,sans-serif;outline:none}
+#moli-phone-panel .moli-community-composer-panel textarea{width:100%;height:150px;box-sizing:border-box;resize:none;border:1px solid rgba(0,0,0,.1);border-radius:13px;background:rgba(255,255,255,.48);padding:11px 11px 42px;font:14px/1.55 system-ui,sans-serif;color:#222;outline:none}
+#moli-phone-panel .moli-community-send{position:absolute;right:22px;bottom:23px;border:0;border-radius:10px;background:rgba(40,40,40,.82);color:#fff;padding:7px 13px;font:12px system-ui,sans-serif}
+#moli-phone-panel .moli-prompt-scope-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+#moli-phone-panel .moli-prompt-scope-tabs button{border:0;border-radius:9px;background:#e6e6e6;padding:8px;font-size:12px;color:#555}
+#moli-phone-panel .moli-prompt-scope-tabs button.is-active{background:#fff;color:#111;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.08)}

@@ -3081,7 +3081,12 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 - 角色仍可 COMMENT/ANSWER、MESSAGE、BOTH 或 SKIP；公开结果继续回写原帖。
 - 修复知乎匿名邀请回答的匿名网名变量错误。
 
-## moli152 / v0.4.92 — 社区邀请修复锚点
-- 不再把“社区邀请”走成“等待私聊回复”的前置条件。调用 `generatePrivateReply` 时必须保留 `allowNoPendingUser:true`；帖子主文与已有讨论由 `automationInstruction` 提供本次事件上下文。
-- 以后若再次出现“没有等待回复的新消息”，先全仓搜索该错误字符串并核对真实调用参数，不得只根据设计文档判断功能已接通。
-- 普通社区匿名评论变量为 `alias`；知乎匿名回答变量为 `answerAlias`。二者不要交叉引用。
+
+## moli153 / v0.4.93 — Community Composer + explicit interaction rules
+- Community reply UI is now a unified frosted-glass composer for Tianya, Xiaohongshu, Zhihu and custom boards. Main-post comments and comment replies use the same composer.
+- Identity choices: real name / anonymous / “I am the OP” (only when the post is User-owned). Anonymous alias is stable per thread and editable.
+- Explicit User @ and invitation are mandatory public-response events: no SKIP. Invited/mentioned roles choose real name or anonymous; anonymous UI shows `alias（角色名）` only as a User-facing hint while stored public alias remains anonymous.
+- Ordinary User comments are not assigned to a fixed responder. On reply refresh, AI must generate at least one response to the latest User comment and may naturally choose OP, replied-to participant, existing ID, or a new ID.
+- Community forwarding picker now includes both private contacts and group conversations.
+- Prompt presets are scoped as Global / WeChat / Community. Legacy preset blocks migrate to WeChat scope; Global and Community start empty. Generation composes Global + current module scope.
+- Deprecated: community explicit interactions using proactive SKIP semantics. Explicit User invite/@ is not an Automation opportunity.
