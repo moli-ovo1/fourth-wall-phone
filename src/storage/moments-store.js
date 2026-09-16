@@ -27,6 +27,7 @@ function moment(value = {}, surface = 'public') {
     comments: Array.isArray(value?.comments) ? value.comments.map(socialEntry).filter(x => x.actor.id && (x.content || x.deletedAt)) : [],
     seenBy: Array.isArray(value?.seenBy) ? [...new Set(value.seenBy.map(String).filter(Boolean))] : [],
     userReadAt: Number(value?.userReadAt || 0),
+    memoryOrganizedAt: Number(value?.memoryOrganizedAt || 0),
     likeEvents: Array.isArray(value?.likeEvents) ? value.likeEvents.map(entry => ({ actorId:String(entry?.actorId||''), action:String(entry?.action||''), at:Number(entry?.at||0) })).filter(entry => entry.actorId && entry.action && entry.at).slice(-40) : [],
   };
 }
@@ -148,8 +149,15 @@ export function createProfileMoment(scopeKey, ownerContactId, { author, content,
   const item = moment({ ownerContactId: owner, author, content: text, createdAt: Number(createdAt || Date.now()) }, 'profile');
   state.profileFeeds[owner] ||= [];
   state.profileFeeds[owner].unshift(item);
+  state.profileFeeds[owner] = state.profileFeeds[owner].slice(0, 6);
   save(scopeKey, state);
   return item;
+}
+
+export function markProfileMomentsMemoryOrganized(scopeKey, contactId, momentIds = [], at = Date.now()) {
+  const owner=String(contactId||''); const ids=new Set((momentIds||[]).map(String).filter(Boolean)); if(!scopeKey||!owner||!ids.size)return 0;
+  const state=getMomentsState(scopeKey); let changed=0; for(const item of state.profileFeeds[owner]||[]){ if(ids.has(String(item.id))){ item.memoryOrganizedAt=Number(at||Date.now()); changed++; } }
+  if(changed)save(scopeKey,state); return changed;
 }
 
 export function getProfileMomentStatus(scopeKey, contactId) {
