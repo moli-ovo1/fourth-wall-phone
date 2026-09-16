@@ -1734,3 +1734,59 @@
 #moli-phone-panel .moli-chat-tools-menu{position:absolute;z-index:80;right:15px;bottom:72px;width:132px;padding:10px}
 #moli-phone-panel .moli-chat-tools-menu[hidden]{display:none!important}
 #moli-phone-panel .moli-chat-tools-menu button{width:58px;height:62px;border:0;border-radius:14px;background:rgba(255,255,255,.34);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#333}
+
+/* moli128 · chat layout repair: stable canvas, lower accessory tray, smaller title */
+#moli-phone-panel [data-page="chat"]{
+  overflow:hidden!important;
+  isolation:isolate;
+}
+#moli-phone-panel [data-page="chat"]::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  background:#fff;
+  background-image:var(--moli-chat-wallpaper,none);
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+  pointer-events:none;
+}
+#moli-phone-panel:not(.moli-has-chat-wallpaper) [data-page="chat"]::before{background-image:none}
+#moli-phone-panel [data-page="chat"]>.moli-nav,
+#moli-phone-panel [data-page="chat"]>.moli-chat-error,
+#moli-phone-panel [data-page="chat"]>.moli-quote-draft,
+#moli-phone-panel [data-page="chat"]>.moli-multi-bar,
+#moli-phone-panel [data-page="chat"]>.moli-compose,
+#moli-phone-panel [data-page="chat"]>.moli-chat-tools-menu{flex-shrink:0}
+#moli-phone-panel [data-page="chat"] .moli-nav-title{font-size:15px!important}
+#moli-phone-panel [data-page="chat"] .moli-chat-body{
+  flex:1 1 0!important;
+  min-height:0!important;
+  width:100%;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  background:transparent!important;
+}
+#moli-phone-panel [data-page="chat"] .moli-compose{
+  width:auto!important;
+  flex:0 0 auto!important;
+}
+/* + opens a real lower accessory tray, beneath the input capsule. */
+#moli-phone-panel [data-page="chat"] .moli-chat-tools-menu{
+  position:static!important;
+  right:auto!important;
+  bottom:auto!important;
+  width:auto!important;
+  min-height:86px;
+  margin:-2px 12px 10px!important;
+  padding:10px 12px!important;
+  display:flex;
+  align-items:flex-start;
+  justify-content:flex-start;
+  z-index:3;
+}
+#moli-phone-panel [data-page="chat"] .moli-chat-tools-menu[hidden]{display:none!important}
+#moli-phone-panel [data-page="chat"] .moli-chat-tools-menu button{
+  flex:0 0 58px;
+}
