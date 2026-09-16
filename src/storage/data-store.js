@@ -1,3 +1,4 @@
+import { isPersistentScopeKey } from './scope-policy.js';
 import { listKeys, readJson, writeJson } from './storage-adapter.js';
 
 const BUILTIN_CONTACTS = [
@@ -402,6 +403,8 @@ export function getContacts() {
   return list;
 }
 
+const transientScopes = new Map();
+
 function key(scopeKey) {
   return (
     SCOPE_PREFIX +
@@ -500,12 +503,14 @@ function migrateLegacyScope(scopeKey) {
 }
 
 export function loadScope(scopeKey) {
+  if (!isPersistentScopeKey(scopeKey)) {
+    return transientScopes.get(String(scopeKey || '')) || { schemaVersion: SCOPE_SCHEMA_VERSION, conversations: {} };
+  }
+
   const existing = loadStoredScope(scopeKey);
   if (existing) return existing;
 
-  const fallbackMigrated = migrateFallbackScope(scopeKey);
-  if (fallbackMigrated) return fallbackMigrated;
-
+  // Fallback scopes are display-only. Never claim their data into a formal chat scope.
   const migrated = migrateLegacyScope(scopeKey);
   if (migrated) return migrated;
 
@@ -516,10 +521,12 @@ export function loadScope(scopeKey) {
 }
 
 function saveScope(scopeKey, data) {
-  writeJson(
-    key(scopeKey),
-    migrateScopeData(data)
-  );
+  const migrated = migrateScopeData(data);
+  if (!isPersistentScopeKey(scopeKey)) {
+    transientScopes.set(String(scopeKey || ''), migrated);
+    return;
+  }
+  writeJson(key(scopeKey), migrated);
 }
 
 function loadGlobalConversationStore() {

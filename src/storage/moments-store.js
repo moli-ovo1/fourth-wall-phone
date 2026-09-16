@@ -1,8 +1,10 @@
 import { recordWorldEvent, markWorldEventsKnownByObject } from './world-event-store.js';
 import { readJson, writeJson } from './storage-adapter.js';
+import { isPersistentScopeKey } from './scope-policy.js';
 
 const PREFIX = 'moli-phone:moments:v2:';
 const SCHEMA_VERSION = 8;
+const transientStates = new Map();
 
 function key(scopeKey) { return PREFIX + encodeURIComponent(String(scopeKey || '')); }
 function id(prefix) { return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`; }
@@ -59,8 +61,8 @@ function normalize(value) {
     }])) : {},
   };
 }
-function save(scopeKey, state) { writeJson(key(scopeKey), state); return state; }
-export function getMomentsState(scopeKey) { return normalize(readJson(key(scopeKey), null)); }
+function save(scopeKey, state) { if (isPersistentScopeKey(scopeKey)) writeJson(key(scopeKey), state); else transientStates.set(String(scopeKey || ''), state); return state; }
+export function getMomentsState(scopeKey) { return normalize(isPersistentScopeKey(scopeKey) ? readJson(key(scopeKey), null) : transientStates.get(String(scopeKey || ''))); }
 export function getMomentsSettings(scopeKey) { return getMomentsState(scopeKey).settings; }
 export function updateMomentsSettings(scopeKey, patch = {}) {
   const state = getMomentsState(scopeKey);
