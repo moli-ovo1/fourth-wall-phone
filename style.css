@@ -1909,3 +1909,14 @@
 #moli-phone-panel .moli-custom-editor-actions{display:flex;justify-content:flex-end;gap:8px}
 #moli-phone-panel .moli-custom-editor-actions button{border:0;border-radius:10px;padding:8px 14px;background:#eee8df;color:#554d45}
 #moli-phone-panel .moli-custom-editor-actions button:last-child{background:#514b43;color:#fff}
+
+/* moli146 community action alignment */
+#moli-phone-panel .moli-recommend-subtools{border-bottom:0!important;}
+#moli-phone-panel .moli-recommend-help{position:absolute;left:72px;top:0;border:0;background:transparent;color:#9a6a68;font-size:10px;padding:0;}
+#moli-phone-panel .moli-community-detail-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:8px 4px;}
+#moli-phone-panel .moli-community-symbol{border:0;background:transparent;padding:2px 4px;color:#6f6a64;font-size:20px;line-height:1;}
+#moli-phone-panel .moli-community-symbol.is-active{color:#8a625f;}
+#moli-phone-panel .moli-web-detail-right{display:flex;align-items:center;gap:8px;}
+#moli-phone-panel .moli-web-detail-right .moli-community-detail-actions{margin:0;}
+#moli-phone-panel .moli-xhs-detail>.moli-community-detail-actions{margin-top:4px;}
+#moli-phone-panel .moli-zhihu-question-actions>.moli-community-detail-actions{margin:0 auto 0 0;}
