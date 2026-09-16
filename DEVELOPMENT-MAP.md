@@ -3101,3 +3101,10 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 
 ### moli159 / v0.4.99 — Community Recommend polish
 社区推荐页完成最后一轮视觉收口：整体毛玻璃、刷新胶囊、左侧轻工具入口、窄幅覆盖式“我只想看”浮层。此项属于 Community CLOSED 前的 UI polish，不改变社区互动/事件机制。主线恢复点仍为：World Event 事件聚合 → 人物认知连续性 → 社区事件源接入 → 统一人物行为入口 → 尽快接回 Phone Context Injection。
+
+
+## moli160 / v0.5.00 — 社区推荐最终玻璃分层
+- 社区顶部导航改为独立毛玻璃胶囊，与主体面板保留间距；当前板块使用稍深玻璃态。
+- 社区推荐主体改为独立大毛玻璃面板，主体内部背景透明，不再以不透明米白层遮住壁纸。
+- 保留 moli159 的刷新胶囊、左侧轻文字入口与覆盖式“我只想看”浮层。
+- 本包仅做视觉分层，不修改 Community Runtime / World Event。
