@@ -1728,3 +1728,11 @@
 #moli-phone-panel .moli-wallpaper-scope-menu[hidden]{display:none!important}
 #moli-phone-panel .moli-wallpaper-scope-title{padding:3px 7px 7px;font-size:11px;color:#777}
 #moli-phone-panel .moli-wallpaper-scope-menu button{display:block;width:100%;border:0;border-radius:13px;background:rgba(255,255,255,.34);padding:9px 10px;margin-top:5px;text-align:left;font-size:13px;color:#222}
+
+/* moli133 · 角色朋友圈精简工具栏 */
+#moli-phone-panel [data-page="contact-moments"]{background:#fff}
+#moli-phone-panel [data-page="contact-moments"] .moli-nav-title{display:none}
+#moli-phone-panel .moli-contact-moments-tools{width:auto;min-width:max-content;gap:10px;padding-right:14px}
+#moli-phone-panel .moli-contact-moments-tools .moli-text-btn{border:0;background:transparent;padding:4px 0;color:#222;font:inherit;font-size:13px;line-height:1;white-space:nowrap}
+#moli-phone-panel .moli-contact-moments-tools .moli-icon-btn{width:28px;height:28px;font-size:20px}
+#moli-phone-panel .moli-profile-moments-feed{padding-top:0;background:#fff}

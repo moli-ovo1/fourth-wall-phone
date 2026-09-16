@@ -3818,3 +3818,11 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 - Chat title is a compact liquid-glass capsule; composer is slimmer and keeps ♡ / + frameless.
 - Chat wallpaper supports global fallback plus per-conversation override; only the active resolved wallpaper is rendered.
 - WeChat list shell stays white while the search field remains light gray.
+
+
+### v0.4.72 · 角色专属朋友圈整理收口
+- 顶部不显示页面标题和条数/整理提醒；右上角为「整理 / 说明书 / 刷新」。
+- 保留既有“某角色最近没有新的朋友圈”及其状态注释功能，不改动这块逻辑。
+- 可见动态上限为 6 条，新增后最老动态自然退出。
+- 「整理」只提交尚未成功整理的动态；长期记忆成功写入后才标记，失败不标记，避免二次整理重复提炼。
+- 删除底部“清空本页朋友圈”和空页大字提示；角色专属朋友圈补齐 User「已阅」。
