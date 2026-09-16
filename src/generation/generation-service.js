@@ -25,9 +25,16 @@ import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, getRecentMomentChatEvents, markMomentChatEventsDelivered , markProfileMomentsMemoryOrganized} from '../storage/moments-store.js';
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
+import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
+}
+
+function momentVisibleToContact(item, contactId) {
+  if (item?.visibility?.mode !== 'only') return true;
+  const allowed = (item?.visibility?.contactIds || []).map(String);
+  return allowed.includes(String(contactId || ''));
 }
 
 function formatMomentContinuityItem(item) {
@@ -55,11 +62,14 @@ function getContactMomentsContinuity(scopeKey, contactId) {
   const ownProfile = listProfileMoments(scopeKey, id).slice(0, 8);
   const archivedProfile = getProfileMomentMemory(scopeKey, id);
   const seenPublic = listPublicMoments(scopeKey)
+    .filter(item => momentVisibleToContact(item,id))
     .filter(item => (item?.seenBy || []).map(String).includes(id))
     .slice(0, 10);
   const authoredPublic = listPublicMoments(scopeKey).filter(item => String(item?.author?.id || '') === id).slice(0, 8);
 
   const blocks = [];
+  const knownWorldEvents = summarizeWorldEventsForContext(scopeKey,{contactId:id,awareness:'known',limit:24});
+  if (knownWorldEvents) blocks.push(`【这个角色已经知道的手机世界事件】\n这些是已经真正进入角色认知的事实；SKIP 只代表当时没有行动，不代表遗忘。\n${knownWorldEvents}`);
   const knownMomentEvents = getRecentMomentChatEvents(scopeKey, id, 20);
   if (knownMomentEvents.length) blocks.push(`【这个角色最近已经知道的 User 朋友圈互动】\n这些事实已经结算给角色；之前没有行动不代表遗忘，后续聊天中可在人物真正会在意时自然提起。\n${knownMomentEvents.map(event => `- ${event.content}${event.momentId ? `（momentId=${event.momentId}）` : ''}`).join('\n')}`);
   if (archivedProfile?.summary) blocks.push(`【这个角色已整理的朋友圈长期记忆】\n${archivedProfile.summary}`);
@@ -1190,7 +1200,7 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
   const contacts = allContacts.filter(item => item && String(item.id || '') !== 'builtin:meta');
   if (!contacts.length) return { actors: [], consideredMomentIds: [], contacts: [] };
 
-  const feed = listPublicMoments(scopeKey).slice(0, 10);
+  const feed = listPublicMoments(scopeKey).filter(item=>momentVisibleToContact(item,contact.id)).slice(0, 10);
   const feedText = feed.map(item => {
     const comments = (item.comments || []).map(comment => comment.deletedAt ? `${comment.actor?.name || '未知'} 删除了评论${comment.deletionReason ? `：${comment.deletionReason}` : ''}` : `${comment.actor?.name || '未知'}：${comment.content}`).join('；');
     return `momentId=${item.id}｜作者=${item.author?.name || '未知'}(id=${item.author?.id || ''})｜${new Date(Number(item.createdAt || Date.now())).toLocaleString()}\n${item.content}${comments ? `\n评论：${comments}` : ''}`;
@@ -1201,7 +1211,8 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
     const worldBook = item?.kind === 'custom'
       ? await getActivatedCustomWorldBook({ contact: item, scanText })
       : await getActivatedTavernWorldBook({ contact: item, scanText });
-    actorBlocks.push(`===== CONTACT id=${item.id}｜${contactLabel(item)} =====\n【身份】\n${batchRoleProfile(item, scanText)}\n\n【本人的世界书】\n${clipBatchText(worldBook?.text || '', 4500) || '本轮无激活条目'}\n\n【本人的手机连续性】\n${formatPhoneBridge(scopeKey, item)}\n===== END =====`);
+    const privateVisibleFeed=feed.filter(moment=>moment?.visibility?.mode==='only'&&momentVisibleToContact(moment,item.id)).map(moment=>`momentId=${moment.id}｜作者=${moment.author?.name||'未知'}(id=${moment.author?.id||''})｜${new Date(Number(moment.createdAt||Date.now())).toLocaleString()}\n${moment.content}`).join('\n\n');
+    actorBlocks.push(`===== CONTACT id=${item.id}｜${contactLabel(item)} =====\n【身份】\n${batchRoleProfile(item, scanText)}\n\n【仅此联系人被允许看到的朋友圈】\n${privateVisibleFeed||'无'}\n\n【本人的世界书】\n${clipBatchText(worldBook?.text || '', 4500) || '本轮无激活条目'}\n\n【本人的手机连续性】\n${formatPhoneBridge(scopeKey, item)}\n===== END =====`);
   }
 
   const system = `你在推进 moli小手机 的 User 公共朋友圈。所有候选联系人都有资格看到朋友圈，但绝不是每个人都必须点赞、评论或发动态。
