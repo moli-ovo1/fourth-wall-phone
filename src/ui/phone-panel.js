@@ -423,7 +423,7 @@ export function createPhonePanel({
       <input type="file" accept="image/*" data-chat-wallpaper-input hidden>
       <footer class="moli-compose">
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
-        <button class="moli-send" data-action="send" aria-label="发送">♥</button>
+        <button class="moli-send" data-action="send" aria-label="发送">♡</button>
         <button class="moli-compose-plus" data-action="chat-tools" aria-label="更多">＋</button>
       </footer>
     </section>
@@ -5199,7 +5199,7 @@ export function createPhonePanel({
     chatTitle.textContent = isGroup ? conversation.name || '未命名群聊' : privateConversationTitle(conversation, item);
     if (sendButton) {
       const busy = isGenerationActive(scopeKey, currentContactId);
-      sendButton.textContent = busy ? '■' : '♥';
+      sendButton.textContent = busy ? '■' : '♡';
       sendButton.classList.toggle('is-generating', busy);
     }
 
@@ -5669,7 +5669,7 @@ export function createPhonePanel({
       : (conversation.type === 'group' ? (conversation.name || '未命名群聊') : privateConversationTitle(conversation, contact(conversation.contactId || currentContactId)));
     chatTitle?.classList.toggle('moli-generation-title', Boolean(busy));
     if (!sendButton) return;
-    sendButton.textContent = busy ? '■' : '♥';
+    sendButton.textContent = busy ? '■' : '♡';
     sendButton.classList.toggle('is-generating', Boolean(busy));
   }
 
