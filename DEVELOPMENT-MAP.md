@@ -3002,3 +3002,13 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - 聊天气泡长按菜单移除内部白色按钮底，统一为半透明液态玻璃。
 - 多选底栏改为与聊天输入框一致的液态玻璃胶囊条；删除仍保留危险色，但整体容器不再是白色矩形。
 - 下一步：在现有朋友圈互动结算稳定后，把微信/朋友圈/社区事件统一收口到 Social/World Event Pipeline；事实记录、认知结算、人物判断、实际行动继续保持分层。
+
+
+## moli140 / v0.4.81 — World/Social Event Pipeline 第一纵切
+- 朋友圈“谁可以看”不再复用 help-sheet：点击箭头直接进入联系人列表；无人选择=公开，选择一人或多人=仅所选角色可见。
+- 新增 `src/storage/world-event-store.js` 作为统一手机世界事实账本 v1：记录 source / actor / action / target / object / content / metadata，并为每个目标人物分别维护 pending/known 认知状态。
+- 朋友圈既有 `recordMomentChatEvent` 同步登记 World Event；朋友圈刷新真正把待处理事件交给角色后，同步把对应 World Event 从 pending 标为 known。SKIP 不删除已知事实。
+- 主动私聊默认开启：仅对“没有显式保存过开关”的联系人应用；用户明确关闭过的联系人保持关闭。默认主动程度仍为 30。
+- 主动程度 0–100 不是随机触发概率。普通后台主动评估在 0 时不自行唤醒；但已经由明确社交事件产生的判断机会，在“允许主动私聊=开启”时仍可由人物自行决定 PRIVATE_CHAT，即使倾向为 0。
+- 固定原则：事实 ≠ 认知；知道 ≠ 在意 ≠ 行动；开关是权限，主动程度是人物习惯；@ 属于明确点名，可即时形成判断机会；偷看/已阅/点赞等允许积累到朋友圈刷新统一结算。
+- World Event v1 的 source 字段从第一版即支持 `wechat.* / xiaohongshu / zhihu / tianya / tavern / future-app`，避免未来 Phone Context Injection 被写死成微信专用。后续社区迁移必须渐进接入，不推倒现有可用生成链。

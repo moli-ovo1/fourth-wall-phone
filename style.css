@@ -1834,3 +1834,12 @@
 #moli-phone-panel .moli-moments-visibility-public,#moli-phone-panel .moli-moments-visibility-person{width:100%;min-height:48px;border:0;border-bottom:1px solid rgba(0,0,0,.07);background:transparent;display:flex;align-items:center;justify-content:space-between;padding:0 8px;font:inherit;color:#222;text-align:left;cursor:pointer}
 #moli-phone-panel .moli-moments-visibility-public b,#moli-phone-panel .moli-moments-visibility-person b{visibility:hidden;color:#16a765;font-size:18px}
 #moli-phone-panel .moli-moments-visibility-public.is-selected b,#moli-phone-panel .moli-moments-visibility-person.is-selected b{visibility:visible}
+/* moli140: 朋友圈“谁可以看”改为独立联系人选择页，绕开通用 help sheet。 */
+#moli-phone-panel .moli-moments-visibility-page{flex:1;min-height:0;overflow:auto;background:rgba(248,248,248,.96);padding:10px 14px 24px}
+#moli-phone-panel .moli-moments-visibility-list{overflow:hidden;border-radius:18px;background:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.9);box-shadow:0 10px 30px rgba(40,50,65,.08);-webkit-backdrop-filter:blur(18px) saturate(135%);backdrop-filter:blur(18px) saturate(135%)}
+#moli-phone-panel .moli-moments-visibility-row{width:100%;min-height:58px;border:0;border-bottom:1px solid rgba(0,0,0,.06);background:transparent;display:grid;grid-template-columns:40px 1fr 28px;gap:10px;align-items:center;padding:8px 14px;text-align:left;font:inherit;color:#222}
+#moli-phone-panel .moli-moments-visibility-row:last-child{border-bottom:0}
+#moli-phone-panel .moli-moments-visibility-avatar{width:36px;height:36px;border-radius:8px;overflow:hidden;display:grid;place-items:center;background:rgba(0,0,0,.06);font-weight:600}
+#moli-phone-panel .moli-moments-visibility-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+#moli-phone-panel .moli-moments-visibility-row b{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;border:1.5px solid #bbb;color:transparent;font-size:14px}
+#moli-phone-panel .moli-moments-visibility-row.is-selected b{background:#07c160;border-color:#07c160;color:#fff}
