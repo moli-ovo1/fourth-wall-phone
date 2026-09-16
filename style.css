@@ -1923,7 +1923,7 @@
 #moli-phone-panel .moli-zhihu-question-actions>.moli-community-detail-actions{margin:0 auto 0 0;}
 
 /* moli147 · 自创社区月档案视觉 */
-@import url("https://fontsapi.zeoseven.com/256/main/result.css");
+
 #moli-phone-panel .moli-custom-home{
   min-height:100%; padding:22px 18px 34px; box-sizing:border-box;
   background:linear-gradient(rgba(255,255,255,.08),rgba(255,255,255,.08)),url("./assets/community/custom-home-bg.jpg") center/cover fixed;
@@ -2137,3 +2137,9 @@
 #moli-phone-panel .moli-quoted-message{background:rgba(255,255,255,.58)!important;border-left-color:rgba(55,55,55,.46)!important;color:#333!important;opacity:1!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 #moli-phone-panel .moli-quoted-message *{color:inherit!important;opacity:1!important}
 #moli-phone-panel .moli-quoted-sender{color:#2c2c2c!important}
+
+
+/* moli164 — help sheet clipping: the glass shell owns the rounded mask; only body scrolls. */
+#moli-phone-panel .moli-community-help-sheet{display:flex;flex-direction:column;overflow:hidden!important;height:min(82%,680px);max-height:82%!important}
+#moli-phone-panel .moli-community-help-sheet>h2{flex:0 0 auto}
+#moli-phone-panel .moli-community-help-scroll{flex:1 1 auto;min-height:0;max-height:none!important;overflow-y:auto!important;overflow-x:hidden;overscroll-behavior:contain;padding:0 4px 14px}

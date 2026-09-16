@@ -3118,3 +3118,15 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 
 ### moli163 / v0.5.03
 社区 CLOSED 后的视觉/说明书收尾：社区推荐可读性、稳定滚动玻璃边框、正式说明书、纸飞机转发图标、引用卡片深色壁纸可读性；同时修正主动行为错误地要求“待回复新消息”的遗留前提。删除联系人语义固定为：删除联系人 + 私聊/记忆，保留群聊历史但移出群成员。
+
+## v0.5.04 主线恢复护栏
+
+回到 World Event / Awareness 主线前已完成环境收尾。后续不要重新开发社区按钮，也不要把 Community Interaction Runtime 重新解释成“整个世界认知已经闭环”。
+
+下一阶段顺序：World Event 事件聚合 → Awareness（谁知道什么）→ pending/known/consumed 生命周期 → 社区/朋友圈/微信逐步汇入统一事实层 → Unified Character Decision → 行动结果回写（公开回复/私聊/SKIP）→ Cross-App Continuity → anonymous identityKnownBy 传播 → Phone Context Source。
+
+执行队列与事实账本可以分层存在：Community Pending 等可继续承担具体 App 的待执行工作；World Event 负责统一事实、认知与处理状态。目标是状态互相可追踪，而不是为了形式统一强行把所有 Store 合成一张表。
+
+正文边界保持不变：手机 → 正文由 User 通过「我们的墙」选择；不得自动把手机世界事件灌入正文。正文 → 手机也应通过明确、受控的 Context/Event 来源接入。
+
+Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式当前档数据；`:fallback:` / `:no-chat` 只允许临时内存状态，禁止迁移到正式 scope。
