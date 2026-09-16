@@ -3812,3 +3812,9 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 - 微信主导航精简为「微信 / 通讯录 / 发现」，移除「我」入口；全局设置入口迁至手机主屏幕设置 App。
 - 微信聊天列表增加搜索框，调整列表字号、行距、头像与右上角 + 的视觉层级；底部导航改为三项主题化胶囊布局。
 - 天涯斑竹显示改为 `{{user}}，{{char}}`，移除 moli。
+
+
+### v0.4.71 · WeChat visual/wallpaper refinement
+- Chat title is a compact liquid-glass capsule; composer is slimmer and keeps ♡ / + frameless.
+- Chat wallpaper supports global fallback plus per-conversation override; only the active resolved wallpaper is rendered.
+- WeChat list shell stays white while the search field remains light gray.

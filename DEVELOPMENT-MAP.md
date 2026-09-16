@@ -2926,3 +2926,11 @@ moli47 旧包曾因启动链回归导致悬浮球消失。以后每个补丁除 
 - 微信主导航精简为「微信 / 通讯录 / 发现」，移除「我」入口；全局设置入口迁至手机主屏幕设置 App。
 - 微信聊天列表增加搜索框，调整列表字号、行距、头像与右上角 + 的视觉层级；底部导航改为三项主题化胶囊布局。
 - 天涯斑竹显示改为 `{{user}}，{{char}}`，移除 moli。
+
+- v0.4.70（moli131，基于稳定 moli126）：微信列表纯白并上移搜索框；聊天页保持原 flex 结构，壁纸全铺；液态玻璃消息气泡/底部单胶囊；发送改为镂空 ♡；+ 菜单固定悬浮于输入胶囊上方；聊天标题缩小。
+
+
+### v0.4.71 · WeChat visual/wallpaper refinement
+- Chat title is a compact liquid-glass capsule; composer is slimmer and keeps ♡ / + frameless.
+- Chat wallpaper supports global fallback plus per-conversation override; only the active resolved wallpaper is rendered.
+- WeChat list shell stays white while the search field remains light gray.
