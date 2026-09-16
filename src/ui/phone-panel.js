@@ -208,9 +208,9 @@ export function createPhonePanel({
       <div class="moli-chat-search-wrap"><span>⌕</span><input type="search" data-chat-list-search placeholder="搜索" autocomplete="off" /></div>
       <main class="moli-chat-list"></main>
       <nav class="moli-phone-tabs" aria-label="小手机主导航">
-        <button class="active" data-action="tab-home"><span class="moli-tab-glyph">●</span><small>微信</small></button>
-        <button data-action="tab-contacts"><span class="moli-tab-glyph">♙</span><small>通讯录</small></button>
-        <button data-action="tab-discover"><span class="moli-tab-glyph">◈</span><small>发现</small></button>
+        <button class="active" data-action="tab-home"><span class="moli-tab-glyph moli-tab-chat" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.8 4.5c-3.5 0-6.3 2.4-6.3 5.4 0 1.7.9 3.2 2.4 4.2l-.7 2.4 2.8-1.4c.6.1 1.2.2 1.8.2 3.5 0 6.3-2.4 6.3-5.4s-2.8-5.4-6.3-5.4Z"/><path d="M15.5 9.1c3.3 0 6 2.2 6 5 0 1.6-.9 3-2.3 3.9l.6 2.2-2.5-1.2c-.6.1-1.2.2-1.8.2-2.9 0-5.4-1.8-5.9-4.3 3.8-.3 6.7-2.7 6.7-5.8h-.8Z"/></svg></span><small>微信</small></button>
+        <button data-action="tab-contacts"><span class="moli-tab-glyph moli-tab-contacts" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7.2" r="3.2"/><path d="M5.5 19.5c.4-4 2.7-6.2 6.5-6.2s6.1 2.2 6.5 6.2"/></svg></span><small>通讯录</small></button>
+        <button data-action="tab-discover"><span class="moli-tab-glyph moli-tab-discover" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m14.9 8.6-1.8 4.5-4 2.3 1.8-4.5 4-2.3Z"/></svg></span><small>发现</small></button>
       </nav>
       <div class="moli-add-menu" data-add-menu hidden>
         <button data-action="sync-tavern">同步酒馆角色</button>
@@ -228,9 +228,9 @@ export function createPhonePanel({
       </header>
       <main class="moli-tab-list" data-contacts-tab-list></main>
       <nav class="moli-phone-tabs" aria-label="小手机主导航">
-        <button data-action="tab-home"><span class="moli-tab-glyph">●</span><small>微信</small></button>
-        <button class="active" data-action="tab-contacts"><span class="moli-tab-glyph">♙</span><small>通讯录</small></button>
-        <button data-action="tab-discover"><span class="moli-tab-glyph">◈</span><small>发现</small></button>
+        <button data-action="tab-home"><span class="moli-tab-glyph moli-tab-chat" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.8 4.5c-3.5 0-6.3 2.4-6.3 5.4 0 1.7.9 3.2 2.4 4.2l-.7 2.4 2.8-1.4c.6.1 1.2.2 1.8.2 3.5 0 6.3-2.4 6.3-5.4s-2.8-5.4-6.3-5.4Z"/><path d="M15.5 9.1c3.3 0 6 2.2 6 5 0 1.6-.9 3-2.3 3.9l.6 2.2-2.5-1.2c-.6.1-1.2.2-1.8.2-2.9 0-5.4-1.8-5.9-4.3 3.8-.3 6.7-2.7 6.7-5.8h-.8Z"/></svg></span><small>微信</small></button>
+        <button class="active" data-action="tab-contacts"><span class="moli-tab-glyph moli-tab-contacts" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7.2" r="3.2"/><path d="M5.5 19.5c.4-4 2.7-6.2 6.5-6.2s6.1 2.2 6.5 6.2"/></svg></span><small>通讯录</small></button>
+        <button data-action="tab-discover"><span class="moli-tab-glyph moli-tab-discover" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m14.9 8.6-1.8 4.5-4 2.3 1.8-4.5 4-2.3Z"/></svg></span><small>发现</small></button>
       </nav>
     </section>
 
@@ -248,9 +248,9 @@ export function createPhonePanel({
         </button>
       </main>
       <nav class="moli-phone-tabs" aria-label="小手机主导航">
-        <button data-action="tab-home"><span class="moli-tab-glyph">●</span><small>微信</small></button>
-        <button data-action="tab-contacts"><span class="moli-tab-glyph">♙</span><small>通讯录</small></button>
-        <button class="active" data-action="tab-discover"><span class="moli-tab-glyph">◈</span><small>发现</small></button>
+        <button data-action="tab-home"><span class="moli-tab-glyph moli-tab-chat" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.8 4.5c-3.5 0-6.3 2.4-6.3 5.4 0 1.7.9 3.2 2.4 4.2l-.7 2.4 2.8-1.4c.6.1 1.2.2 1.8.2 3.5 0 6.3-2.4 6.3-5.4s-2.8-5.4-6.3-5.4Z"/><path d="M15.5 9.1c3.3 0 6 2.2 6 5 0 1.6-.9 3-2.3 3.9l.6 2.2-2.5-1.2c-.6.1-1.2.2-1.8.2-2.9 0-5.4-1.8-5.9-4.3 3.8-.3 6.7-2.7 6.7-5.8h-.8Z"/></svg></span><small>微信</small></button>
+        <button data-action="tab-contacts"><span class="moli-tab-glyph moli-tab-contacts" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7.2" r="3.2"/><path d="M5.5 19.5c.4-4 2.7-6.2 6.5-6.2s6.1 2.2 6.5 6.2"/></svg></span><small>通讯录</small></button>
+        <button class="active" data-action="tab-discover"><span class="moli-tab-glyph moli-tab-discover" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m14.9 8.6-1.8 4.5-4 2.3 1.8-4.5 4-2.3Z"/></svg></span><small>发现</small></button>
       </nav>
     </section>
 
