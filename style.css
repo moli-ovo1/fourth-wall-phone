@@ -1851,3 +1851,31 @@
 #moli-phone-panel .moli-moments-visibility-inline-row:last-child{border-bottom:0}
 #moli-phone-panel .moli-moments-visibility-inline-row b{visibility:hidden;color:#07c160;font-size:17px}
 #moli-phone-panel .moli-moments-visibility-inline-row.is-selected b{visibility:visible}
+/* moli143 · 朋友圈可见范围常驻名单 */
+#moli-phone-panel .moli-moments-visibility-static-head{min-height:58px;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid rgba(0,0,0,.06);color:#222}
+#moli-phone-panel .moli-moments-visibility-static-head .moli-moments-option-icon{flex:0 0 24px}
+#moli-phone-panel .moli-moments-visibility-static-head b{font-weight:500}
+#moli-phone-panel .moli-moments-visibility-static-head em{margin-left:auto;font-style:normal;color:#999;font-size:14px}
+#moli-phone-panel .moli-moments-visibility-inline{margin:0 14px 12px;border-radius:12px;background:rgba(248,248,248,.78);border:1px solid rgba(0,0,0,.055);box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+#moli-phone-panel .moli-moments-visibility-inline-list{max-height:190px;overflow:auto}
+#moli-phone-panel .moli-moments-visibility-inline-row{min-height:40px;padding:0 12px;font-size:14px}
+
+/* moli143 · 自创社区 */
+#moli-phone-panel .moli-custom-community-home{padding:12px;display:flex;flex-direction:column;gap:10px}
+#moli-phone-panel .moli-custom-community-home>header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px;border:1px solid #eadfce;background:#fffaf1;border-radius:12px}
+#moli-phone-panel .moli-custom-community-home>header div{display:flex;flex-direction:column;gap:4px;min-width:0}
+#moli-phone-panel .moli-custom-community-home>header strong{font-size:16px;color:#3e3932}
+#moli-phone-panel .moli-custom-community-home>header small{font-size:11px;line-height:1.5;color:#8c8274}
+#moli-phone-panel .moli-custom-community-home>header button,#moli-phone-panel .moli-custom-community-actions button{border:1px solid #d9cbb7;background:#fff;color:#625849;border-radius:8px;padding:7px 10px;font-size:12px}
+#moli-phone-panel .moli-custom-community-card{padding:12px;border:1px solid #e7ddcf;background:#fff;border-radius:12px;display:flex;flex-direction:column;gap:9px}
+#moli-phone-panel .moli-custom-community-card>div:first-child{display:flex;flex-direction:column;gap:4px}
+#moli-phone-panel .moli-custom-community-card strong{font-size:15px;color:#403a33}
+#moli-phone-panel .moli-custom-community-card small{font-size:11px;color:#9a8d7c}
+#moli-phone-panel .moli-custom-community-card p{margin:0;white-space:pre-wrap;font-size:12px;line-height:1.6;color:#71675c}
+#moli-phone-panel .moli-custom-community-actions{display:flex;gap:7px;justify-content:flex-end}
+#moli-phone-panel .moli-custom-generated{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+#moli-phone-panel .moli-custom-generated h3{margin:4px 2px;font-size:13px;color:#766b5e}
+#moli-phone-panel .moli-custom-post-row,#moli-phone-panel .moli-recommend-custom-row{width:100%;border:1px solid #eadfce;background:#fffaf2;border-radius:10px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:3px;color:#403a33}
+#moli-phone-panel .moli-custom-post-row span,#moli-phone-panel .moli-recommend-custom-row span{font-size:10px;color:#a07557}
+#moli-phone-panel .moli-custom-post-row strong,#moli-phone-panel .moli-recommend-custom-row strong{font-size:13px;font-weight:600}
+#moli-phone-panel .moli-recommend-custom{display:flex;flex-direction:column;gap:7px}
