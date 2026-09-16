@@ -25,5 +25,16 @@ export function addZhihuAnswer(scopeKey,postId,input={}){const state=read(scopeK
 
 
 export function listCustomCommunities(scopeKey){return [...(read(scopeKey).customCommunities||[])];}
+export function ensureCustomCommunityPresets(scopeKey){
+  const state=read(scopeKey); state.customCommunities=Array.isArray(state.customCommunities)?state.customCommunities:[];
+  if(state.customCommunityPresetsInitialized)return [...state.customCommunities];
+  const presets=[
+    {id:'custom_preset_anonymous_treehole',name:'匿名树洞',description:'请模拟 {{char}} (或者被卷入的路人) 在匿名论坛(如Reddit或NGA)发布的一个帖子。标题要震惊，内容是关于刚才发生的事件。'},
+    {id:'custom_preset_private_diary',name:'私密日记',description:'基于刚才发生的事件，写一篇 {{char}} 的日记。内容重点——角色如何看待与 {{user}} 的最新互动，以及情感波动。'},
+  ];
+  for(const preset of presets){if(!state.customCommunities.some(x=>String(x.id)===preset.id))state.customCommunities.push({...preset,updatedAt:Date.now()});}
+  state.customCommunityPresetsInitialized=true; write(scopeKey,state); return [...state.customCommunities];
+}
+export function deleteCustomCommunities(scopeKey,ids=[]){const wanted=new Set((Array.isArray(ids)?ids:[ids]).map(String));if(!wanted.size)return 0;const state=read(scopeKey);const before=(state.customCommunities||[]).length;state.customCommunities=(state.customCommunities||[]).filter(x=>!wanted.has(String(x.id)));write(scopeKey,state);return before-state.customCommunities.length;}
 export function saveCustomCommunity(scopeKey,input={}){const state=read(scopeKey);state.customCommunities=Array.isArray(state.customCommunities)?state.customCommunities:[];const id=String(input.id||`custom_${Date.now()}_${Math.random().toString(36).slice(2,7)}`);const item={id,name:String(input.name||'未命名').trim(),description:String(input.description||'').trim(),updatedAt:Date.now()};const i=state.customCommunities.findIndex(x=>String(x.id)===id);if(i>=0)state.customCommunities[i]=item;else state.customCommunities.push(item);write(scopeKey,state);return item;}
 export function deleteCustomCommunity(scopeKey,id){const state=read(scopeKey);state.customCommunities=(state.customCommunities||[]).filter(x=>String(x.id)!==String(id));write(scopeKey,state);}
