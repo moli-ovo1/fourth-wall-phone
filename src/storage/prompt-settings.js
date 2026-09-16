@@ -482,6 +482,7 @@ function mergeSavedDefaultBlock(defaultItem, savedItem) {
     id: defaultItem.id,
     title: savedItem.title || defaultItem.title,
     custom: false,
+    scope: String(savedItem.scope || defaultItem.scope || 'wechat'),
   };
 }
 
@@ -489,6 +490,7 @@ function cloneDefaults() {
   return DEFAULT_ONLINE_PROMPT_BLOCKS.map(item => ({
     ...item,
     custom: false,
+    scope: String(item.scope || 'wechat'),
   }));
 }
 
@@ -507,6 +509,7 @@ function normalizeCustomBlock(item, index = 0) {
     enabled: item.enabled !== false,
     content,
     custom: true,
+    scope: ['global','wechat','community'].includes(String(item.scope)) ? String(item.scope) : 'wechat',
   };
 }
 
@@ -563,6 +566,7 @@ export function savePromptSettings(next) {
           enabled: item?.enabled !== false,
           content: String(item?.content ?? defaultItem.content),
           custom: false,
+          scope: String(item?.scope || defaultItem.scope || 'wechat'),
         };
       }
       return normalizeCustomBlock(item, index);
@@ -572,7 +576,7 @@ export function savePromptSettings(next) {
   return value;
 }
 
-export function createCustomPromptBlock({ title = '自定义条目', content = '' } = {}) {
+export function createCustomPromptBlock({ title = '自定义条目', content = '', scope = 'wechat' } = {}) {
   const settings = getPromptSettings();
   const item = {
     id: `custom:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
@@ -580,6 +584,7 @@ export function createCustomPromptBlock({ title = '自定义条目', content = '
     enabled: true,
     content: String(content || ''),
     custom: true,
+    scope: ['global','wechat','community'].includes(String(scope)) ? String(scope) : 'wechat',
   };
   settings.blocks.push(item);
   savePromptSettings(settings);
@@ -611,11 +616,15 @@ export function restoreDefaultPromptSettings() {
   return value;
 }
 
-export function buildOnlinePresetPrompt(settings = getPromptSettings(), { excludeIds = [] } = {}) {
+export function buildPresetPrompt(scope = 'wechat', settings = getPromptSettings(), { excludeIds = [] } = {}) {
   if (settings?.enabled === false) return '';
   const excluded = new Set((Array.isArray(excludeIds) ? excludeIds : []).map(String));
+  const wanted = String(scope || 'wechat');
   return (settings?.blocks || [])
-    .filter(item => item?.enabled !== false && !excluded.has(String(item?.id || '')) && String(item?.content || '').trim())
+    .filter(item => { const itemScope=String(item?.scope || 'wechat'); return item?.enabled !== false && (itemScope==='global' || itemScope===wanted) && !excluded.has(String(item?.id || '')) && String(item?.content || '').trim(); })
     .map(item => String(item.content).trim())
     .join('\n\n');
 }
+
+export function buildOnlinePresetPrompt(settings = getPromptSettings(), options = {}) { return buildPresetPrompt('wechat', settings, options); }
+export function buildCommunityPresetPrompt(settings = getPromptSettings(), options = {}) { return buildPresetPrompt('community', settings, options); }
