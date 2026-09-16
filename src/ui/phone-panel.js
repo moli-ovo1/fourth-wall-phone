@@ -417,15 +417,15 @@ export function createPhonePanel({
         <button class="moli-secondary-btn" data-action="multi-forward">转发</button>
         <button class="moli-primary-btn moli-danger-btn" data-action="multi-delete">删除</button>
       </div>
-      <input type="file" accept="image/*" data-chat-wallpaper-input hidden>
-      <footer class="moli-compose">
-        <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
-        <button class="moli-send" data-action="send" aria-label="发送">♡</button>
-        <button class="moli-compose-plus" data-action="chat-tools" aria-label="更多">＋</button>
-      </footer>
       <div class="moli-chat-tools-menu" data-chat-tools-menu hidden>
         <button type="button" data-action="chat-wallpaper"><span>▧</span><small>壁纸</small></button>
       </div>
+      <input type="file" accept="image/*" data-chat-wallpaper-input hidden>
+      <footer class="moli-compose">
+        <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
+        <button class="moli-send" data-action="send" aria-label="发送">♥</button>
+        <button class="moli-compose-plus" data-action="chat-tools" aria-label="更多">＋</button>
+      </footer>
     </section>
 
     <section class="moli-page" data-page="injection-composer">
@@ -5199,7 +5199,7 @@ export function createPhonePanel({
     chatTitle.textContent = isGroup ? conversation.name || '未命名群聊' : privateConversationTitle(conversation, item);
     if (sendButton) {
       const busy = isGenerationActive(scopeKey, currentContactId);
-      sendButton.textContent = busy ? '■' : '♡';
+      sendButton.textContent = busy ? '■' : '♥';
       sendButton.classList.toggle('is-generating', busy);
     }
 
@@ -5669,7 +5669,7 @@ export function createPhonePanel({
       : (conversation.type === 'group' ? (conversation.name || '未命名群聊') : privateConversationTitle(conversation, contact(conversation.contactId || currentContactId)));
     chatTitle?.classList.toggle('moli-generation-title', Boolean(busy));
     if (!sendButton) return;
-    sendButton.textContent = busy ? '■' : '♡';
+    sendButton.textContent = busy ? '■' : '♥';
     sendButton.classList.toggle('is-generating', Boolean(busy));
   }
 
@@ -7393,16 +7393,10 @@ export function createPhonePanel({
 
   panel.querySelector('[data-action="chat-tools"]')?.addEventListener('click', event => {
     event.stopPropagation();
-    if (chatToolsMenu) {
-      chatToolsMenu.hidden = !chatToolsMenu.hidden;
-      chatToolsMenu.closest('[data-page="chat"]')?.classList.toggle('moli-chat-tools-open', !chatToolsMenu.hidden);
-    }
+    if (chatToolsMenu) chatToolsMenu.hidden = !chatToolsMenu.hidden;
   });
   panel.querySelector('[data-action="chat-wallpaper"]')?.addEventListener('click', () => {
-    if (chatToolsMenu) {
-      chatToolsMenu.hidden = true;
-      chatToolsMenu.closest('[data-page="chat"]')?.classList.remove('moli-chat-tools-open');
-    }
+    if (chatToolsMenu) chatToolsMenu.hidden = true;
     chatWallpaperInput?.click();
   });
   chatWallpaperInput?.addEventListener('change', () => {
