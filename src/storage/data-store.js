@@ -1228,6 +1228,21 @@ export function appendMessage(
     };
   }
 
+  if (options?.communityForward && typeof options.communityForward === 'object') {
+    const cf = options.communityForward;
+    message.communityForward = {
+      postId: String(cf.postId || ''),
+      section: String(cf.section || ''),
+      platform: String(cf.platform || 'moli社区'),
+      customCommunityId: String(cf.customCommunityId || ''),
+      customCommunityName: String(cf.customCommunityName || ''),
+      authorName: String(cf.authorName || '匿名网友'),
+      title: String(cf.title || '无标题'),
+      content: String(cf.content || ''),
+      snapshotAt: Number(cf.snapshotAt || Date.now()),
+    };
+  }
+
   if (options?.senderId) {
     message.senderId = String(options.senderId);
   }
@@ -1803,6 +1818,16 @@ function contextMessageForContact(message, conversation, contactId) {
             content: String(item?.content || ''),
             ts: Number(item?.ts || 0),
           })),
+        }
+      : null,
+    communityForward: message.communityForward && typeof message.communityForward === 'object'
+      ? {
+          postId: String(message.communityForward.postId || ''),
+          section: String(message.communityForward.section || ''),
+          platform: String(message.communityForward.platform || 'moli社区'),
+          authorName: String(message.communityForward.authorName || '匿名网友'),
+          title: String(message.communityForward.title || '无标题'),
+          content: String(message.communityForward.content || ''),
         }
       : null,
   };
