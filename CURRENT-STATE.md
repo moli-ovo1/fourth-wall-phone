@@ -47,3 +47,9 @@
 - 天涯/小红书/自创邀请会携带当前主帖与最近评论；知乎邀请回答会携带问题、已有回答与评论。
 - 角色仍可 COMMENT/ANSWER、MESSAGE、BOTH 或 SKIP；公开结果继续回写原帖。
 - 修复知乎匿名邀请回答的匿名网名变量错误。
+
+## moli152 / v0.4.92 — 社区邀请真实入口修复
+- 实机报错“没有等待回复的新消息”的唯一抛出点位于 `src/generation/prompt-builder.js`；实际社区邀请调用仍遗漏 `allowNoPendingUser:true`，因此 moli151 的文字说明与真实代码不一致。
+- 天涯 / 小红书 / 自创邀请评论与知乎邀请回答的实际 `generatePrivateReply` 调用均显式传入 `allowNoPendingUser:true`。社区邀请现在由帖子本身 + 当前讨论作为本次生成上下文，不再依赖微信私聊存在待回复 User 消息。
+- 同时修复社区匿名公开参与的两个变量串名：普通社区使用 `alias`，知乎回答使用 `answerAlias`；避免邀请生成成功后在回写原帖时触发 `ReferenceError`。
+- 验收标准：目标角色私聊为空也能执行邀请；若角色选择 COMMENT/ANSWER/BOTH，公开内容立即回写原帖；SKIP 与 API 失败继续区分。

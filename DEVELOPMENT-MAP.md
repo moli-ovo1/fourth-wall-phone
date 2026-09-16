@@ -3080,3 +3080,8 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 - 天涯/小红书/自创邀请会携带当前主帖与最近评论；知乎邀请回答会携带问题、已有回答与评论。
 - 角色仍可 COMMENT/ANSWER、MESSAGE、BOTH 或 SKIP；公开结果继续回写原帖。
 - 修复知乎匿名邀请回答的匿名网名变量错误。
+
+## moli152 / v0.4.92 — 社区邀请修复锚点
+- 不再把“社区邀请”走成“等待私聊回复”的前置条件。调用 `generatePrivateReply` 时必须保留 `allowNoPendingUser:true`；帖子主文与已有讨论由 `automationInstruction` 提供本次事件上下文。
+- 以后若再次出现“没有等待回复的新消息”，先全仓搜索该错误字符串并核对真实调用参数，不得只根据设计文档判断功能已接通。
+- 普通社区匿名评论变量为 `alias`；知乎匿名回答变量为 `answerAlias`。二者不要交叉引用。
