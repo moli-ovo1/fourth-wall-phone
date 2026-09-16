@@ -91,6 +91,7 @@ import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
 import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings, togglePublicWebFavorite, togglePublicWebPinned, replacePublicWebSectionPosts, trimPublicWebSectionPosts, forceDeletePublicWebPost, addZhihuAnswerComments, addZhihuAnswer, listPublicWebFavorites, listCustomCommunities, ensureCustomCommunityPresets, deleteCustomCommunities, saveCustomCommunity, deleteCustomCommunity } from '../storage/public-web-store.js';
 import { getSelectedWorldContactId, setSelectedWorldContactId } from '../storage/world-context-store.js';
+import { isPersistentScopeKey } from '../storage/scope-policy.js';
 import { recordWorldEvent, markWorldEventsKnown, summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
@@ -2827,6 +2828,7 @@ export function createPhonePanel({
           <button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>朋友资料</span><strong>›</strong></button>
           <button type="button" class="moli-info-setting-row moli-contact-profile-moments" data-action="contact-moments"><span>朋友圈</span><strong>›</strong></button>
           <button type="button" class="moli-contact-profile-action" data-action="chat">发送消息</button>
+          ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-contact-profile-action moli-danger-row" data-action="delete-contact">删除联系人</button>`}
         `;
         return;
       }
@@ -6505,6 +6507,8 @@ export function createPhonePanel({
   let openedPublicWebPostId = '';
   const publicWebGenerating = new Set();
   const expandedXhsThreads = new Set();
+  const transientCommunityAliases = new Map();
+  let transientCommunityPending = [];
   const communityAuthorDisplay = author => String(author?.uiName || author?.name || '网友');
   const sourceLabel = post => post?.section==='custom' ? String(post?.extra?.customCommunityName||'自创') : ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post?.section] || '社区');
   const communityDiscussionContext = post => {
@@ -6524,8 +6528,8 @@ export function createPhonePanel({
     return String(contactId);
   };
   const anonymousAliasKey = postId => `moli:community:anonymous-alias:${String(getScopeKey?.()||'')}::${String(postId||'')}`;
-  const getAnonymousAlias = postId => { try{return String(windowRef.localStorage?.getItem(anonymousAliasKey(postId))||'').trim();}catch{return '';} };
-  const setAnonymousAlias = (postId,alias) => { try{windowRef.localStorage?.setItem(anonymousAliasKey(postId),String(alias||'').trim());}catch{} };
+  const getAnonymousAlias = postId => { const scopeKey=getScopeKey?.(); if(!isPersistentScopeKey(scopeKey))return String(transientCommunityAliases.get(String(postId||''))||'').trim(); try{return String(windowRef.localStorage?.getItem(anonymousAliasKey(postId))||'').trim();}catch{return '';} };
+  const setAnonymousAlias = (postId,alias) => { const scopeKey=getScopeKey?.(); if(!isPersistentScopeKey(scopeKey)){transientCommunityAliases.set(String(postId||''),String(alias||'').trim());return;} try{windowRef.localStorage?.setItem(anonymousAliasKey(postId),String(alias||'').trim());}catch{} };
   const cleanTianyaTitle = title => String(title || '无标题').replace(/^(?:\s*[\[【][^\]】]{1,12}[\]】]\s*)+/, '').trim() || '无标题';
   let communityComposerState = null;
   const isUserOwnedPost = post => String(post?.author?.id||post?.author?.knownIdentityId||'')==='user' || post?.extra?.userOwned===true;
@@ -6543,8 +6547,8 @@ export function createPhonePanel({
   };
   const closeCommunityComposer=()=>{panel.querySelector('[data-community-composer]')?.classList.remove('is-open');communityComposerState=null;};
   const communityPendingKey = () => `moli:community:pending:${String(getScopeKey?.()||'')}`;
-  const readCommunityPending = () => { try{const v=JSON.parse(windowRef.localStorage?.getItem(communityPendingKey())||'[]');return Array.isArray(v)?v:[];}catch{return [];} };
-  const writeCommunityPending = items => { try{windowRef.localStorage?.setItem(communityPendingKey(),JSON.stringify(Array.isArray(items)?items:[]));}catch{} };
+  const readCommunityPending = () => { if(!isPersistentScopeKey(getScopeKey?.()))return transientCommunityPending; try{const v=JSON.parse(windowRef.localStorage?.getItem(communityPendingKey())||'[]');return Array.isArray(v)?v:[];}catch{return [];} };
+  const writeCommunityPending = items => { const rows=Array.isArray(items)?items:[]; if(!isPersistentScopeKey(getScopeKey?.())){transientCommunityPending=rows;return;} try{windowRef.localStorage?.setItem(communityPendingKey(),JSON.stringify(rows));}catch{} };
   const queueCommunityPending = item => { const rows=readCommunityPending();rows.push({id:`cpi_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,createdAt:Date.now(),...item});writeCommunityPending(rows); };
   const pendingForPost = postId => readCommunityPending().filter(x=>String(x.postId||'')===String(postId||''));
   const consumePending = ids => { const set=new Set((ids||[]).map(String));writeCommunityPending(readCommunityPending().filter(x=>!set.has(String(x.id)))); };
