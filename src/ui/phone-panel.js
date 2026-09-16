@@ -7393,10 +7393,16 @@ export function createPhonePanel({
 
   panel.querySelector('[data-action="chat-tools"]')?.addEventListener('click', event => {
     event.stopPropagation();
-    if (chatToolsMenu) chatToolsMenu.hidden = !chatToolsMenu.hidden;
+    if (chatToolsMenu) {
+      chatToolsMenu.hidden = !chatToolsMenu.hidden;
+      chatToolsMenu.closest('[data-page="chat"]')?.classList.toggle('moli-chat-tools-open', !chatToolsMenu.hidden);
+    }
   });
   panel.querySelector('[data-action="chat-wallpaper"]')?.addEventListener('click', () => {
-    if (chatToolsMenu) chatToolsMenu.hidden = true;
+    if (chatToolsMenu) {
+      chatToolsMenu.hidden = true;
+      chatToolsMenu.closest('[data-page="chat"]')?.classList.remove('moli-chat-tools-open');
+    }
     chatWallpaperInput?.click();
   });
   chatWallpaperInput?.addEventListener('change', () => {
