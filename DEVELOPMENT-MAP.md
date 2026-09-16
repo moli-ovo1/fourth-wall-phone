@@ -3098,3 +3098,9 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 - Community Composer 重做为顶部独立毛玻璃“身份 / @”胶囊 + 覆盖式下拉面板 + 融合式右下发送块；身份始终提供本名/匿名/楼主，User 选择楼主即以楼主身份发言。
 - 社区 @ 使用点击角色名列表；邀请评论、知乎邀请回答、社区转发（联系人+群聊）、当前角色世界选择改为点选列表，不再输入数字序号；朋友圈 @ 角色也改为点选列表。
 - 知乎回答评论继续统一写入 answer.comments，并由统一 Community Composer 承接用户评论/回复。
+
+
+## moli155 / v0.4.95 — startup blocker verification
+- Verified the actual merged v0.4.94 repository after the `Unexpected reserved word` boot failure. The failing community delegated click path is the Tianya reply refresh path containing `await generateTianyaReplyRefresh(...)`; its containing public-web click listener must be declared `async`.
+- The merged source now carries the corrected `async event =>` listener in both the active `src/ui/phone-panel.js` and legacy mirror `phone-panel.js`. No product/UI behavior is changed in this startup-only package.
+- Release gate: all JavaScript files pass `node --check`.
