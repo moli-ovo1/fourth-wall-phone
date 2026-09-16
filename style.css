@@ -1,3 +1,4 @@
+@import url("https://fontsapi.zeoseven.com/256/main/result.css");
 #moli-phone-handle{
     position:absolute;
     z-index:2147483600;
@@ -1951,3 +1952,26 @@
 #moli-phone-panel .moli-recommend-default-note{font-size:10px;color:#aaa096}
 /* 修复：简化后的天涯列表只有一个标题单元，不能再占 18px 的旧图标列。 */
 #moli-phone-panel .moli-tianya-topic-row.moli-simple-topic{grid-template-columns:minmax(0,1fr)!important}
+
+
+/* moli148 · 自创书信 / 社区动作收口 */
+#moli-phone-panel .moli-recommend-filter-top{justify-content:flex-start!important}
+#moli-phone-panel .moli-recommend-filter-top label{margin:0!important}
+#moli-phone-panel .moli-custom-section-head{width:100%;display:flex;align-items:center;justify-content:space-between;border:0;background:transparent;padding:0;color:inherit;text-align:left}
+#moli-phone-panel .moli-custom-section-head h3{margin:0!important}
+#moli-phone-panel .moli-custom-section-head span{font-size:16px;color:#766d63}
+#moli-phone-panel .moli-custom-section-body{padding-top:8px}
+#moli-phone-panel .moli-custom-letter-detail,
+#moli-phone-panel .moli-custom-letter-paper,
+#moli-phone-panel .moli-custom-letter-body{font-family:"Huiwen-mincho","Songti SC","SimSun",serif!important;font-weight:normal}
+#moli-phone-panel .moli-custom-letter-meta{display:flex!important;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:#968b80;letter-spacing:.08em}
+#moli-phone-panel .moli-custom-letter-meta>span{min-width:0}
+#moli-phone-panel .moli-custom-letter-meta .moli-community-detail-actions{flex:0 0 auto;margin:0!important;gap:9px}
+#moli-phone-panel .moli-custom-letter-body{padding-top:28px}
+#moli-phone-panel .moli-community-detail-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px}
+#moli-phone-panel .moli-community-detail-actions button{border:0;background:transparent;padding:4px 3px;color:inherit;line-height:1.1}
+#moli-phone-panel .moli-community-invite{font-size:12px;white-space:nowrap}
+#moli-phone-panel .moli-community-share{font-size:12px;white-space:nowrap}
+#moli-phone-panel .moli-community-symbol{font-family:"SimSun","宋体",serif!important;font-size:19px!important}
+#moli-phone-panel .moli-xhs-detail>.moli-community-detail-actions{margin:6px 0 8px!important}
+#moli-phone-panel .moli-zhihu-question-actions>.moli-community-detail-actions{margin-right:auto!important}
