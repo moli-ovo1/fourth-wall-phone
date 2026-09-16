@@ -3948,19 +3948,19 @@ export function createPhonePanel({
   const runMomentMention = async ({surface='public',ownerContactId='',moment,userComment,mentionTarget}) => {
     if(!moment||!userComment||!mentionTarget)return;
     const scopeKey=getScopeKey?.(); if(!scopeKey)return;
-    const conv=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(mentionTarget.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0]||ensureConversation(scopeKey,mentionTarget.id);
+    const conversationKey=privateConversationKeyFor(scopeKey,mentionTarget.id);
     try{
       recordMomentChatEvent(scopeKey,{contactId:mentionTarget.id,type:'USER_MENTIONED_YOU_IN_MOMENT',momentId:moment.id,content:`User 在朋友圈评论区 @了你：${userComment.content}`});
       const ownerName=surface==='profile' ? canonicalContactName(contact(ownerContactId)) : momentActorName(moment.author);
       const instruction=`【moli朋友圈事件｜@提及】\nUser 在朋友圈评论区 @了你。\n动态作者：${ownerName||'未知'}\n动态正文：${moment.content||'无'}\nUser 的评论：${userComment.content}\n你已经收到这次 @，但绝不要求你回应。请按人物性格、关系和当前状态决定：REPLY（只在评论区公开回复）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。\n严格追加机器可读块：<moment_action>REPLY|MESSAGE|BOTH|SKIP</moment_action>；若公开回复，再追加 <moment_reply>回复正文</moment_reply>；若私聊，再用正常 <msg>私聊内容</msg>。`;
-      const result=await generatePrivateReply({scopeKey,conversationKey:conv.id||mentionTarget.id,automationInstruction:instruction});
+      const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction});
       const raw=String(result?.text||'');
       const action=(raw.match(/<moment_action>\s*(REPLY|MESSAGE|BOTH|SKIP)\s*<\/moment_action>/i)?.[1]||'SKIP').toUpperCase();
       const publicReply=String(raw.match(/<moment_reply>([\s\S]*?)<\/moment_reply>/i)?.[1]||'').trim();
       const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
       const roleAuthor={type:'contact',id:mentionTarget.id,name:canonicalContactName(mentionTarget)};
       if((action==='REPLY'||action==='BOTH')&&publicReply) addMomentComment(scopeKey,{surface,ownerContactId,momentId:moment.id,actor:roleAuthor,content:publicReply,replyToId:userComment.id||''});
-      if(action==='MESSAGE'||action==='BOTH') for(const text of msgs) appendMessage(scopeKey,conv.id||mentionTarget.id,'assistant',text,{source:'moment-mention',senderId:mentionTarget.id,senderSnapshot:{name:canonicalContactName(mentionTarget),avatar:avatarUrl(mentionTarget)}});
+      if(action==='MESSAGE'||action==='BOTH') for(const text of msgs) appendMessage(scopeKey,conversationKey,'assistant',text,{source:'moment-mention',senderId:mentionTarget.id,senderSnapshot:{name:canonicalContactName(mentionTarget),avatar:avatarUrl(mentionTarget)}});
       surface==='profile' ? renderContactMoments() : renderMoments();
     }catch(error){ console.error('[moli小手机] moment mention bridge failed:',error); toast(`@角色联动失败：${error?.message||error}`); }
   };
@@ -5482,6 +5482,14 @@ export function createPhonePanel({
                 </details>
               ` : ''}
               <div class="moli-bubble">
+                ${message.messageType === 'community-forward' && message.communityForward ? `
+                  <button type="button" class="moli-moment-forward-card moli-community-forward-card">
+                    <div class="moli-moment-forward-title">${escapeHtml(message.communityForward.platform || 'moli社区')} · 帖子分享</div>
+                    <div class="moli-community-forward-post-title">${escapeHtml(message.communityForward.title || '无标题')}</div>
+                    <div class="moli-moment-forward-content">${escapeHtml(String(message.communityForward.content || '').slice(0,220))}</div>
+                    <div class="moli-moment-forward-footer">来自 ${escapeHtml(message.communityForward.platform || 'moli社区')}</div>
+                  </button>
+                ` : ''}
                 ${message.messageType === 'moment-forward' && message.momentForward ? `
                   <button type="button" class="moli-moment-forward-card">
                     <div class="moli-moment-forward-title">${escapeHtml(message.momentForward.authorName || '未知')}的朋友圈</div>
@@ -5521,7 +5529,7 @@ export function createPhonePanel({
                     <div>${escapeHtml(message.quote.content || '')}</div>
                   </div>
                 ` : ''}
-                ${message.forward || message.messageType === 'moment-forward' ? '' : escapeHtml(message.content)}
+                ${message.forward || message.messageType === 'moment-forward' || message.messageType === 'community-forward' ? '' : escapeHtml(message.content)}
               </div>
             </div>
           </div>
@@ -6496,7 +6504,16 @@ export function createPhonePanel({
   let openedPublicWebPostId = '';
   const publicWebGenerating = new Set();
   const expandedXhsThreads = new Set();
-  const sourceLabel = post => ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post?.section] || '天涯');
+  const sourceLabel = post => post?.section==='custom' ? String(post?.extra?.customCommunityName||'自创') : ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post?.section] || '社区');
+  const privateConversationKeyFor = (scopeKey, contactId) => {
+    const existing=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(contactId)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
+    if(existing) return String(existing.conversationKey||existing.contactId||contactId);
+    ensureConversation(scopeKey,contactId);
+    return String(contactId);
+  };
+  const anonymousAliasKey = postId => `moli:community:anonymous-alias:${String(getScopeKey?.()||'')}::${String(postId||'')}`;
+  const getAnonymousAlias = postId => { try{return String(windowRef.localStorage?.getItem(anonymousAliasKey(postId))||'').trim();}catch{return '';} };
+  const setAnonymousAlias = (postId,alias) => { try{windowRef.localStorage?.setItem(anonymousAliasKey(postId),String(alias||'').trim());}catch{} };
   const cleanTianyaTitle = title => String(title || '无标题').replace(/^(?:\s*[\[【][^\]】]{1,12}[\]】]\s*)+/, '').trim() || '无标题';
   const chooseCommunityMentionContact = () => {
     const candidates=getContacts().filter(item=>item && item.id && item.kind!=='group' && String(item.id)!=='builtin:meta');
@@ -6508,8 +6525,16 @@ export function createPhonePanel({
     if(!target)windowRef.alert?.('没有这个联系人。');
     return target||null;
   };
-  const askPublicWebUserComment = (label='评论') => {
+  const askPublicWebUserComment = (label='评论', postId='') => {
     const anonymous = windowRef.confirm?.(`${label}是否匿名？\n确定＝匿名；取消＝使用当前 User 名称`) ?? false;
+    let anonymousAlias='';
+    if(anonymous){
+      const previous=getAnonymousAlias(postId);
+      const picked=windowRef.prompt?.('匿名网名（只在这篇帖子内默认沿用，可随时修改）', previous||'匿名用户');
+      if(picked===null)return null;
+      anonymousAlias=String(picked||'').trim()||'匿名用户';
+      setAnonymousAlias(postId,anonymousAlias);
+    }
     let content = windowRef.prompt?.(`${label}\n输入 @ 可选择微信角色`, '') ?? null;
     if (!content || !String(content).trim()) return null;
     let mentionTarget=null;
@@ -6517,17 +6542,17 @@ export function createPhonePanel({
       mentionTarget=chooseCommunityMentionContact();
       if(mentionTarget)content=String(content).replace('@',`@${displayName(mentionTarget)} `);
     }
-    return { content:String(content).trim(), author: anonymous ? {type:'user',id:'user',name:'匿名用户',anonymous:true} : {type:'user',id:'user',name:getTavernUserContext()?.name||'User'}, mentionTarget };
+    return { content:String(content).trim(), author: anonymous ? {type:'user',id:'user',name:anonymousAlias,anonymous:true,knownIdentityId:'user',identityKnownBy:['user']} : {type:'user',id:'user',name:getTavernUserContext()?.name||'User',anonymous:false}, mentionTarget };
   };
   const runCommunityMention = async ({post,userEntry,mentionTarget,replyToCommentId='',zhihuAnswerId=''}) => {
     if(!post||!mentionTarget||!userEntry)return;
     const scopeKey=getScopeKey?.();
-    const conv=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(mentionTarget.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0]||ensureConversation(scopeKey,mentionTarget.id);
+    const conversationKey=privateConversationKeyFor(scopeKey,mentionTarget.id);
     const mentionWorldEvent=recordWorldEvent(getScopeKey?.(),{source:`community.${post?.section||'unknown'}`,actorId:'user',action:'MENTION',targetContactIds:[mentionTarget.id],objectId:String(userEntry?.id||post?.id||''),content:`User 在${post?.section||'社区'}中 @了你：${String(userEntry?.content||'').trim()}`,metadata:{postId:String(post?.id||''),commentId:String(userEntry?.id||'')},awareness:'known'});
     const busyKey=`community-mention:${mentionTarget.id}:${post.id}:${Date.now()}`; publicWebGenerating.add(busyKey);
     try{
       const platform=sourceLabel(post); const instruction=`【moli社区事件｜${platform} @提及】\nUser 在${platform}的一条内容下 @了你。\n帖子/问题：${post.title||'无标题'}\n正文：${post.content||'无'}\nUser 的评论：${userEntry.content}\n你可以完全按自己的性格决定：REPLY（只公开回复）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。不要因为被 @ 就必须回应。\n严格追加机器可读块：<community_action>REPLY|MESSAGE|BOTH|SKIP</community_action>；若公开回复，再追加 <community_reply>公开回复正文</community_reply>；若私聊，再用正常 <msg>私聊内容</msg>。公开回复只能以你自己的身份发言，绝不能代替 User。`;
-      const result=await generatePrivateReply({scopeKey,conversationKey:conv.id||mentionTarget.id,automationInstruction:instruction});
+      const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction});
       const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(REPLY|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
       const publicReply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim();
       const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
@@ -6536,7 +6561,7 @@ export function createPhonePanel({
         if(post.section==='zhihu'&&zhihuAnswerId)addZhihuAnswerComments(scopeKey,post.id,zhihuAnswerId,[{id:`zac_role_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,author:roleAuthor,content:publicReply,replyToCommentId:String(replyToCommentId||'')}]);
         else addPublicWebComment(scopeKey,post.id,{author:roleAuthor,content:publicReply,replyToCommentId:String(replyToCommentId||'')});
       }
-      if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conv.id||mentionTarget.id,'assistant',text,{source:'community-mention',senderId:mentionTarget.id,senderSnapshot:{name:displayName(mentionTarget),avatar:avatarUrl(mentionTarget)}});
+      if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-mention',senderId:mentionTarget.id,senderSnapshot:{name:displayName(mentionTarget),avatar:avatarUrl(mentionTarget)}});
       renderPublicWeb();
     }catch(error){console.error('[moli小手机] community mention bridge failed:',error);windowRef.alert?.(`@角色联动失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);}
   };
@@ -6742,9 +6767,9 @@ export function createPhonePanel({
     const xhsAdd=event.target?.closest?.('[data-action="xhs-comments-add"]');
     if(xhsAdd){const postId=String(xhsAdd.dataset.postId||'');const busyKey=`xhs-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const additions=await generateXiaohongshuCommentRefresh({scopeKey:getScopeKey?.(),post});for(const item of additions)addPublicWebComment(getScopeKey?.(),postId,item);renderPublicWeb();}catch(error){console.error('[moli小手机] xhs add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const tianyaFloorReply=event.target?.closest?.('[data-action="tianya-floor-reply"]');
-    if(tianyaFloorReply){const who=tianyaFloorReply.dataset.commentAuthor||'网友';const floor=tianyaFloorReply.dataset.floor||'';const entry=askPublicWebUserComment(`回复 @${who} #${floor}`);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),tianyaFloorReply.dataset.postId,{...stored,replyToCommentId:tianyaFloorReply.dataset.commentId});const post=getPublicWebPost(getScopeKey?.(),tianyaFloorReply.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
+    if(tianyaFloorReply){const who=tianyaFloorReply.dataset.commentAuthor||'网友';const floor=tianyaFloorReply.dataset.floor||'';const entry=askPublicWebUserComment(`回复 @${who} #${floor}`,tianyaFloorReply.dataset.postId);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),tianyaFloorReply.dataset.postId,{...stored,replyToCommentId:tianyaFloorReply.dataset.commentId});const post=getPublicWebPost(getScopeKey?.(),tianyaFloorReply.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
     const xhsReply=event.target?.closest?.('[data-action="xhs-comment-reply"]');
-    if(xhsReply){const who=xhsReply.dataset.commentAuthor||'网友';const entry=askPublicWebUserComment(`回复 @${who}`);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),xhsReply.dataset.postId,{...stored,replyToCommentId:xhsReply.dataset.commentId});const post=getPublicWebPost(getScopeKey?.(),xhsReply.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
+    if(xhsReply){const who=xhsReply.dataset.commentAuthor||'网友';const entry=askPublicWebUserComment(`回复 @${who}`,xhsReply.dataset.postId);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),xhsReply.dataset.postId,{...stored,replyToCommentId:xhsReply.dataset.commentId});const post=getPublicWebPost(getScopeKey?.(),xhsReply.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
     const jump=event.target?.closest?.('[data-public-web-jump]'); if(jump){const target=String(jump.dataset.publicWebJump||'');const tab=panel.querySelector(`[data-public-web-tab="${target}"]`);tab?.click();return;}
     const open=event.target?.closest?.('[data-action="public-web-open"]'); if(open){openedPublicWebPostId=open.dataset.postId;renderPublicWeb();return;}
     if(event.target?.closest?.('[data-action="public-web-detail-back"]')){openedPublicWebPostId='';renderPublicWeb();return;}
@@ -6756,17 +6781,17 @@ export function createPhonePanel({
       const menu=candidates.map((item,i)=>`${i+1}. ${displayName(item)}`).join('\n');
       const picked=windowRef.prompt?.(`邀请谁来评论？\n${menu}\n\n输入序号`,'1'); if(picked===null)return;
       const target=candidates[Number(picked)-1]; if(!target){windowRef.alert?.('没有这个联系人。');return;}
-      const scopeKey=getScopeKey?.(); const conv=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(target.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0]||ensureConversation(scopeKey,target.id);
+      const scopeKey=getScopeKey?.(); const conversationKey=privateConversationKeyFor(scopeKey,target.id);
       recordWorldEvent(scopeKey,{source:`community.${post.section}`,actorId:'user',action:'INVITE_COMMENT',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 邀请你参与社区帖子：${post.title||'无标题'}`,metadata:{postId:String(post.id||'')},awareness:'known'});
       const busyKey=`community-invite:${target.id}:${post.id}`; if(publicWebGenerating.has(busyKey))return; publicWebGenerating.add(busyKey); toast(`已邀请${displayName(target)}，等待他的决定…`);
       try{
-        const instruction=`【moli社区事件｜邀请评论】\nUser 邀请你参与一条${sourceLabel(post)}内容。\n标题：${post.title||'无标题'}\n正文：${post.content||'无'}\n你可以 COMMENT（公开评论）、MESSAGE（只私聊 User）、BOTH 或 SKIP。若公开参与，还要自行决定 REAL（本名）或 ANONYMOUS（匿名）；匿名发表时帖子里的其他人不能凭空知道是你。\n严格追加：<community_action>COMMENT|MESSAGE|BOTH|SKIP</community_action>；公开评论时追加 <community_identity>REAL|ANONYMOUS</community_identity><community_reply>评论正文</community_reply>；私聊用正常 <msg>内容</msg>。`;
-        const result=await generatePrivateReply({scopeKey,conversationKey:conv.id||target.id,automationInstruction:instruction});
+        const instruction=`【moli社区事件｜邀请评论】\nUser 邀请你参与一条${sourceLabel(post)}内容。\n标题：${post.title||'无标题'}\n正文：${post.content||'无'}\n你可以 COMMENT（公开评论）、MESSAGE（只私聊 User）、BOTH 或 SKIP。若公开参与，还要自行决定 REAL（本名）或 ANONYMOUS（匿名）；匿名发表时帖子里的其他人不能凭空知道是你；若选择匿名，请自己取一个适合当前帖子的匿名网名。\n严格追加：<community_action>COMMENT|MESSAGE|BOTH|SKIP</community_action>；公开评论时追加 <community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias><community_reply>评论正文</community_reply>；私聊用正常 <msg>内容</msg>。`;
+        const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction});
         const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(COMMENT|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
         const identity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase();
-        const reply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim(); const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
-        if((action==='COMMENT'||action==='BOTH')&&reply)addPublicWebComment(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:'匿名用户',anonymous:true,knownIdentityId:target.id}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:reply});
-        if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conv.id||target.id,'assistant',text,{source:'community-invite',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});
+        const reply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim(); const alias=String(raw.match(/<community_alias>([\s\S]*?)<\/community_alias>/i)?.[1]||'').trim()||'匿名用户'; const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
+        if((action==='COMMENT'||action==='BOTH')&&reply)addPublicWebComment(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:alias,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:reply});
+        if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-invite',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});
         renderPublicWeb(); toast(action==='SKIP'?`${displayName(target)}没有回应这次邀请`:`${displayName(target)}已处理邀请`);
       }catch(error){console.error('[moli小手机] community invite failed:',error);windowRef.alert?.(`邀请处理失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);} return;
     }
@@ -6778,28 +6803,43 @@ export function createPhonePanel({
       const picked=windowRef.prompt?.(`邀请谁回答？\n${menu}\n\n输入序号`, '1'); if(picked===null)return;
       const target=candidates[Number(picked)-1]; if(!target){windowRef.alert?.('没有这个联系人。');return;}
       const note=windowRef.prompt?.('邀请文本（可以留空）','')??null; if(note===null)return;
-      const scopeKey=getScopeKey?.(); const conv=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(target.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0]||ensureConversation(scopeKey,target.id);
+      const scopeKey=getScopeKey?.(); const conversationKey=privateConversationKeyFor(scopeKey,target.id);
       recordWorldEvent(scopeKey,{source:'community.zhihu',actorId:'user',action:'INVITE_ANSWER',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 邀请你回答知乎问题：${post.title}${String(note).trim()?`；邀请语：${String(note).trim()}`:''}`,metadata:{postId:String(post.id||'')},awareness:'known'});
       const busyKey=`community-role:${target.id}:${post.id}`; if(publicWebGenerating.has(busyKey))return; publicWebGenerating.add(busyKey); toast(`已邀请${displayName(target)}，等待他的决定…`);
       try{
         const instruction=`【moli社区事件｜知乎邀请回答】\nUser 邀请你回答知乎问题。\n问题：${post.title}\n补充：${post.content||'无'}\n邀请语：${String(note).trim()||'无'}\n你可以完全按自己的性格决定：ANSWER（只公开回答）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。不要因为被邀请就必须回答。\n请在正常角色口吻之外严格追加机器可读块：<community_action>ANSWER|MESSAGE|BOTH|SKIP</community_action>；如果包含公开回答，还要自行决定 REAL（本名）或 ANONYMOUS（匿名），追加 <community_identity>REAL|ANONYMOUS</community_identity><community_answer>你的知乎回答正文</community_answer>；如果包含私聊，再用正常 <msg>私聊内容</msg>。匿名回答时，帖子里的其他人不能凭空知道真实身份。`;
-        const result=await generatePrivateReply({scopeKey,conversationKey:conv.id||target.id,automationInstruction:instruction});
+        const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction});
         const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(ANSWER|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
-        const answer=String(raw.match(/<community_answer>([\s\S]*?)<\/community_answer>/i)?.[1]||'').trim(); const identity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase();
+        const answer=String(raw.match(/<community_answer>([\s\S]*?)<\/community_answer>/i)?.[1]||'').trim(); const answerAlias=String(raw.match(/<community_alias>([\s\S]*?)<\/community_alias>/i)?.[1]||'').trim()||'匿名用户'; const identity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase();
         const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
-        if((action==='ANSWER'||action==='BOTH')&&answer)addZhihuAnswer(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:'匿名用户',anonymous:true,knownIdentityId:target.id}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:answer});
-        if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conv.id||target.id,'assistant',text,{source:'community-event',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});
+        if((action==='ANSWER'||action==='BOTH')&&answer)addZhihuAnswer(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:alias,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:answer});
+        if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-event',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});
         renderPublicWeb(); toast(action==='SKIP'?`${displayName(target)}没有回应这次邀请`:`${displayName(target)}已处理邀请`);
       }catch(error){console.error('[moli小手机] zhihu invite bridge failed:',error);windowRef.alert?.(`邀请处理失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);} return;
     }
     const zhihuWrite=event.target?.closest?.('[data-action="zhihu-write-answer"]'); if(zhihuWrite){windowRef.alert?.('“增加回答”交互将在知乎联动阶段接入，本轮先完成问题、多回答与评论数据结构。');return;}
-    const zhihuUserComment=event.target?.closest?.('[data-action="zhihu-user-comment"]'); if(zhihuUserComment){const entry=askPublicWebUserComment('写评论');if(entry){const {mentionTarget,...stored}=entry;const saved={id:`zac_user_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,...stored,replyToCommentId:''};addZhihuAnswerComments(getScopeKey?.(),zhihuUserComment.dataset.postId,zhihuUserComment.dataset.answerId,[saved]);const post=getPublicWebPost(getScopeKey?.(),zhihuUserComment.dataset.postId);if(mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id,zhihuAnswerId:zhihuUserComment.dataset.answerId});}renderPublicWeb();return;}
+    const zhihuUserComment=event.target?.closest?.('[data-action="zhihu-user-comment"]'); if(zhihuUserComment){const entry=askPublicWebUserComment('写评论',zhihuUserComment.dataset.postId);if(entry){const {mentionTarget,...stored}=entry;const saved={id:`zac_user_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,...stored,replyToCommentId:''};addZhihuAnswerComments(getScopeKey?.(),zhihuUserComment.dataset.postId,zhihuUserComment.dataset.answerId,[saved]);const post=getPublicWebPost(getScopeKey?.(),zhihuUserComment.dataset.postId);if(mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id,zhihuAnswerId:zhihuUserComment.dataset.answerId});}renderPublicWeb();return;}
     const zhihuAdd=event.target?.closest?.('[data-action="zhihu-comments-add"]'); if(zhihuAdd){const postId=String(zhihuAdd.dataset.postId||'');const answerId=String(zhihuAdd.dataset.answerId||'');const busyKey=`zhihu-comments:${postId}:${answerId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const answer=(post?.extra?.answers||[]).find(a=>String(a.id)===answerId);const additions=await generateZhihuAnswerCommentRefresh({scopeKey:getScopeKey?.(),post,answer});addZhihuAnswerComments(getScopeKey?.(),postId,answerId,additions);renderPublicWeb();}catch(error){console.error('[moli小手机] zhihu add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
-    const share=event.target?.closest?.('[data-action="public-web-share"]'); if(share){const post=getPublicWebPost(getScopeKey?.(),share.dataset.postId);if(!post)return;const candidates=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta');if(!candidates.length){windowRef.alert?.('微信里还没有可以转发的角色。');return;}const menu=candidates.map((item,i)=>`${i+1}. ${displayName(item)}`).join('\n');const picked=windowRef.prompt?.(`转发给谁？\n${menu}\n\n输入序号`,'1');if(picked===null)return;const target=candidates[Number(picked)-1];if(!target){windowRef.alert?.('没有这个联系人。');return;}const scopeKey=getScopeKey?.();const conv=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(target.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0]||ensureConversation(scopeKey,target.id);const platform=post.extra?.customCommunityName||'自创';const text=`[转发 · ${platform}]\n${post.title||'无标题'}${post.content?`\n${post.content}`:''}`;appendMessage(scopeKey,conv.id||target.id,'user',text,{source:'community-forward',senderId:'user'});recordWorldEvent(scopeKey,{source:'community.custom',actorId:'user',action:'FORWARD',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 转发给你一条自创社区内容：${post.title||'无标题'}`,metadata:{postId:String(post.id||''),customCommunityId:String(post.extra?.customCommunityId||'')},awareness:'known'});toast(`已转发给 ${displayName(target)}`);return;}
+    const share=event.target?.closest?.('[data-action="public-web-share"]'); if(share){
+      const post=getPublicWebPost(getScopeKey?.(),share.dataset.postId);if(!post)return;
+      const candidates=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta');
+      if(!candidates.length){windowRef.alert?.('微信里还没有可以转发的角色。');return;}
+      const menu=candidates.map((item,i)=>`${i+1}. ${displayName(item)}`).join('\n');
+      const picked=windowRef.prompt?.(`转发给谁？\n${menu}\n\n输入序号`,'1');if(picked===null)return;
+      const target=candidates[Number(picked)-1];if(!target){windowRef.alert?.('没有这个联系人。');return;}
+      const scopeKey=getScopeKey?.();const conversationKey=privateConversationKeyFor(scopeKey,target.id);
+      const platform=sourceLabel(post);
+      const forwardSnapshot={postId:String(post.id||''),section:String(post.section||''),platform,customCommunityId:String(post.extra?.customCommunityId||''),customCommunityName:String(post.extra?.customCommunityName||''),authorName:String(post.author?.name||post.authorName||'匿名网友'),title:String(post.title||'无标题'),content:String(post.content||''),snapshotAt:Date.now()};
+      const saved=appendMessage(scopeKey,conversationKey,'user',`转发了一篇${platform}帖子：${forwardSnapshot.title}`,{source:'community-forward',messageType:'community-forward',communityForward:forwardSnapshot,senderId:'user'});
+      if(!saved){windowRef.alert?.('转发失败：消息没有写入聊天记录。');return;}
+      recordWorldEvent(scopeKey,{source:`community.${post.section||'custom'}`,actorId:'user',action:'FORWARD',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 转发给你一条${platform}内容：${post.title||'无标题'}`,metadata:{postId:String(post.id||''),customCommunityId:String(post.extra?.customCommunityId||'')},awareness:'known'});
+      toast(`已转发给 ${displayName(target)}`);
+      return;
+    }
     const favorite=event.target?.closest?.('[data-action="public-web-favorite"]'); if(favorite){const result=togglePublicWebFavorite(getScopeKey?.(),favorite.dataset.postId,'user');renderPublicWeb();toast(result?.favorited?'已投入我们的墙':'已从我们的墙移除');return;}
     const pin=event.target?.closest?.('[data-action="public-web-pin"]'); if(pin){togglePublicWebPinned(getScopeKey?.(),pin.dataset.postId);renderPublicWeb();return;}
     const replyRefresh=event.target?.closest?.('[data-action="tianya-replies-refresh"]'); if(replyRefresh){const postId=String(replyRefresh.dataset.postId||'');const busyKey=`tianya-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const replies=await generateTianyaReplyRefresh({scopeKey:getScopeKey?.(),post});for(const reply of replies)addPublicWebComment(getScopeKey?.(),post.id,reply);renderPublicWeb();}catch(error){console.error('[moli小手机] tianya replies refresh failed:',error);windowRef.alert?.(`新增回复失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
-    const comment=event.target?.closest?.('[data-action="public-web-comment"]'); if(comment){const entry=askPublicWebUserComment('回复内容');if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),comment.dataset.postId,stored);const post=getPublicWebPost(getScopeKey?.(),comment.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
+    const comment=event.target?.closest?.('[data-action="public-web-comment"]'); if(comment){const entry=askPublicWebUserComment('回复内容',comment.dataset.postId);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),comment.dataset.postId,stored);const post=getPublicWebPost(getScopeKey?.(),comment.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
   });
   renderPublicWeb();
 
