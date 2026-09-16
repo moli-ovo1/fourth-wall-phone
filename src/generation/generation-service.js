@@ -160,6 +160,7 @@ export async function generatePrivateReply({
   signal,
   onDelta,
   automationInstruction = '',
+  allowNoPendingUser = false,
   fourthWallCommentary = null,
   regenerateFromMessageId = '',
 } = {}) {
@@ -288,6 +289,7 @@ export async function generatePrivateReply({
       historyLimit: currentConversation.recentChatLimit || 100,
       fourthWallCharacterName: currentTavernCharacter?.name || '',
       fourthWallCommentary,
+      allowNoPendingUser,
       fourthWallDisableAssistantPrefill: fourthWallPrefillCompatibility?.disableAssistantPrefill,
       userContext,
     });

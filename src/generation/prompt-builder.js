@@ -225,6 +225,7 @@ export function buildPrivateGenerationRequest({
   fourthWallCharacterName = '',
   fourthWallCommentary = null,
   fourthWallAllowNoPendingUser = false,
+  allowNoPendingUser = false,
   fourthWallDisableAssistantPrefill = null,
   userContext = null,
 } = {}) {
@@ -246,7 +247,7 @@ export function buildPrivateGenerationRequest({
     ? conversation.messages
     : [];
 
-  if (!pendingUserCount(messages) && !fourthWallCommentary && !(isFourthWall && fourthWallAllowNoPendingUser)) {
+  if (!pendingUserCount(messages) && !fourthWallCommentary && !allowNoPendingUser && !(isFourthWall && fourthWallAllowNoPendingUser)) {
     throw new Error('没有等待回复的新消息');
   }
 
