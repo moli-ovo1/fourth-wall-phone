@@ -93,6 +93,9 @@ import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWe
 import { getSelectedWorldContactId, setSelectedWorldContactId } from '../storage/world-context-store.js';
 import { recordWorldEvent, markWorldEventsKnown, summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 
+const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
+
+
 const APP_ICON_URLS = Object.freeze({
   wechat: new URL('../../assets/apps/wechat.jpg', import.meta.url).href,
   xiaohongshu: new URL('../../assets/apps/xiaohongshu.jpg', import.meta.url).href,
@@ -2866,6 +2869,7 @@ export function createPhonePanel({
         <button type="button" class="moli-info-setting-row" data-action="contact-api-settings"><span>独立 API</span><strong>${item.apiOverride?.enabled ? '已启用' : '跟随主设置'} ›</strong></button>
         <button type="button" class="moli-info-setting-row" data-action="search-messages"><span>查找聊天记录</span><strong>›</strong></button>
         <button type="button" class="moli-info-setting-row moli-danger-row" data-action="clear-chat-history"><span>清空聊天记录</span><strong>›</strong></button>
+        ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-setting-row moli-danger-row" data-action="delete-contact"><span>删除联系人</span><strong>›</strong></button>`}
         <div class="moli-info-note moli-info-note-slot" data-info-note-slot hidden></div>
       `;
       return;
@@ -6601,7 +6605,7 @@ export function createPhonePanel({
     const author = escapeHtml(post.author?.name || '匿名网友');
     const tianyaBusy=publicWebGenerating.has(`tianya-comments:${post.id}`); const pinned=Boolean(post.extra?.pinned);
     const inviteAction = post.section==='zhihu' ? `<button class="moli-community-invite" data-action="zhihu-invite-answer" data-post-id="${escapeHtml(post.id)}" aria-label="邀请主角回答">ʕ•̫͡•ʕ•̫͡•ʔ</button>` : `<button class="moli-community-invite" data-action="public-web-invite" data-post-id="${escapeHtml(post.id)}" aria-label="邀请主角评论">ʕ•̫͡•ʕ•̫͡•ʔ</button>`;
-    const communityActions=`<div class="moli-community-detail-actions">${inviteAction}<button class="moli-community-share" data-action="public-web-share" data-post-id="${escapeHtml(post.id)}">转发</button><button class="moli-community-symbol${pinned?' is-active':''}" data-action="public-web-pin" data-post-id="${escapeHtml(post.id)}" aria-label="${pinned?'取消常驻':'设为常驻'}">☺</button><button class="moli-community-symbol${favorited?' is-active':''}" data-action="public-web-favorite" data-post-id="${escapeHtml(post.id)}" aria-label="${favorited?'取消投入我们的墙':'投入我们的墙'}">${favorited?'★':'☆'}</button></div>`; const commonTop = `<div class="moli-web-detail-nav"><button data-action="public-web-detail-back">← 返回</button><div class="moli-web-detail-right">${communityActions}${['tianya','custom'].includes(post.section)?`<button class="moli-comment-refresh${tianyaBusy?' is-spinning':''}" data-action="tianya-replies-refresh" data-post-id="${escapeHtml(post.id)}" aria-label="新增回复" ${tianyaBusy?'disabled':''}>↻</button>`:''}</div></div>`;
+    const communityActions=`<div class="moli-community-detail-actions">${inviteAction}<button class="moli-community-share" data-action="public-web-share" data-post-id="${escapeHtml(post.id)}" aria-label="转发">${COMMUNITY_SHARE_ICON}</button><button class="moli-community-symbol${pinned?' is-active':''}" data-action="public-web-pin" data-post-id="${escapeHtml(post.id)}" aria-label="${pinned?'取消常驻':'设为常驻'}">☺</button><button class="moli-community-symbol${favorited?' is-active':''}" data-action="public-web-favorite" data-post-id="${escapeHtml(post.id)}" aria-label="${favorited?'取消投入我们的墙':'投入我们的墙'}">${favorited?'★':'☆'}</button></div>`; const commonTop = `<div class="moli-web-detail-nav"><button data-action="public-web-detail-back">← 返回</button><div class="moli-web-detail-right">${communityActions}${['tianya','custom'].includes(post.section)?`<button class="moli-comment-refresh${tianyaBusy?' is-spinning':''}" data-action="tianya-replies-refresh" data-post-id="${escapeHtml(post.id)}" aria-label="新增回复" ${tianyaBusy?'disabled':''}>↻</button>`:''}</div></div>`;
     if (post.section === 'custom') {
       const customName=escapeHtml(post.extra?.customCommunityName||'自创');
       const created=new Date(Number(post.createdAt||Date.now())).toLocaleString();
@@ -6726,7 +6730,12 @@ export function createPhonePanel({
   panel.querySelector('[data-public-web-feed]')?.addEventListener('click', event=>{
     const scope=getScopeKey?.();
     const filter=event.target.closest('[data-action="recommend-filter-toggle"]'); if(filter){recommendFilterOpen=!recommendFilterOpen;renderPublicWeb();return;}
-    const help=event.target.closest('[data-action="recommend-help"]'); if(help){windowRef.alert?.('社区推荐说明书\n\n（说明书内容待补充）');return;}
+    const help=event.target.closest('[data-action="recommend-help"]'); if(help){
+      panel.querySelector('.moli-community-help-backdrop')?.remove();
+      const sheet=document.createElement('div'); sheet.className='moli-community-help-backdrop';
+      sheet.innerHTML=`<section class="moli-community-help-sheet" role="dialog" aria-modal="true" aria-label="moli 社区说明书"><button class="moli-community-help-close" type="button" aria-label="关闭">×</button><h2>moli 社区说明书</h2><div class="moli-community-help-scroll"><h3>符号说明</h3><p class="moli-help-note">帖子正文右下角设有四个功能：</p><div class="moli-help-symbols"><b>ʕ•̫͡•ʕ•̫͡•ʔ</b><span>可邀请各角色参与帖子评论。</span><b>${COMMUNITY_SHARE_ICON}</b><span>转发给角色后，可进聊天框围绕此帖聊天。</span><b>☺</b><span>常驻后的帖子不会被社区帖子栏自动清走。</span><b>☆</b><span>将帖子投入「我们的墙」App，进入「注入正文」的待选内容。</span></div><h3>帖子内互动</h3><p>帖子内支持 —— @角色、评论、回复。</p><p>★ 建议同时完成2项以上操作后，再一次性调取 API。</p><p>★ 完成互动后，点击评论区右上角的刷新按钮，即可收到互动回馈。</p><h3>社区推荐</h3><p>点击刷新后，默认混合生成约 6条 社区内容。</p><p>左上角「我只想看」可自行选择本次想看的板块内容。</p><p>生成后的帖子会同时流入对应板块。各板块分为：<br><b>流入栏 / 常驻栏</b></p><p>流入栏容量为 10条。超过容量后，新流入帖子挤走最旧帖子；<br>★ 常驻栏不受此规则影响，可持续贴内互动 ★</p><h3>自创</h3><p>User可以自行编辑自创的板块。</p><p>在「条目」中编辑并保存自己想看的场景、小剧场或其他内容模板，回到社区推荐点选生成。</p></div></section>`;
+      const close=()=>sheet.remove(); sheet.addEventListener('click',e=>{if(e.target===sheet||e.target.closest('.moli-community-help-close'))close();}); panel.appendChild(sheet); return;
+    }
     const customToggle=event.target.closest('[data-action="recommend-custom-toggle"]'); if(customToggle){recommendCustomOpen=!recommendCustomOpen;renderPublicWeb();return;}
     const listToggle=event.target.closest('[data-action="custom-list-toggle"]'); if(listToggle){customListOpen=!customListOpen;renderPublicWeb();return;}
     const postsToggle=event.target.closest('[data-action="custom-posts-toggle"]'); if(postsToggle){customPostsOpen=!customPostsOpen;renderPublicWeb();return;}
