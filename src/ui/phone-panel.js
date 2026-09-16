@@ -279,6 +279,18 @@ export function createPhonePanel({
       </main>
     </section>
 
+    <section class="moli-page" data-page="moments-visibility">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="moments-visibility-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">谁可以看</div>
+        <div class="moli-nav-side right"><button class="moli-nav-text-btn" data-action="moments-visibility-done">完成</button></div>
+      </header>
+      <main class="moli-moments-visibility-page">
+        <div class="moli-settings-note">不选择任何角色时为公开；选择角色后，仅所选角色可见。</div>
+        <div class="moli-moments-visibility-list" data-moments-visibility-list></div>
+      </main>
+    </section>
+
     <section class="moli-page" data-page="sync-tavern">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -1189,6 +1201,7 @@ export function createPhonePanel({
   const momentsMetaBody = panel.querySelector('[data-moments-meta-body]');
   const momentsLocationLabel = panel.querySelector('[data-moments-location-label]');
   const momentsVisibilityLabel = panel.querySelector('[data-moments-visibility-label]');
+  const momentsVisibilityList = panel.querySelector('[data-moments-visibility-list]');
   const contactMomentsPeekLabel = panel.querySelector('[data-contact-moments-peek-label]');
   const contactMomentsFeed = panel.querySelector('[data-contact-moments-feed]');
   const contactMomentsTitle = panel.querySelector('[data-contact-moments-title]');
@@ -3861,6 +3874,14 @@ export function createPhonePanel({
     if(momentsVisibilityLabel) momentsVisibilityLabel.textContent=pendingMomentVisibility.mode==='only' ? (pendingMomentVisibility.contactIds.length===1?'仅对方可见':`仅${pendingMomentVisibility.contactIds.length}人可见`) : '公开';
   }
   function composeSelectableContacts(){ return getContacts().map(hydratedContact).filter(c=>c&&String(c.id)!=='builtin:meta'); }
+  function renderMomentsVisibilityPicker(){
+    if(!momentsVisibilityList)return;
+    const selected=new Set((pendingMomentVisibility.contactIds||[]).map(String));
+    const contacts=composeSelectableContacts();
+    momentsVisibilityList.innerHTML=contacts.length ? contacts.map(c=>{const id=String(c.id); const avatar=avatarUrl(c); return `<button type="button" class="moli-moments-visibility-row ${selected.has(id)?'is-selected':''}" data-visibility-contact="${escapeHtml(id)}"><span class="moli-moments-visibility-avatar">${avatar?`<img src="${escapeHtml(avatar)}" alt="">`:escapeHtml(canonicalContactName(c).slice(0,1))}</span><span>${escapeHtml(canonicalContactName(c))}</span><b>✓</b></button>`;}).join('') : '<div class="moli-empty">微信里还没有角色。</div>';
+    momentsVisibilityList.querySelectorAll('[data-visibility-contact]').forEach(row=>row.addEventListener('click',()=>row.classList.toggle('is-selected')));
+  }
+  function openMomentsVisibility(){ renderMomentsVisibilityPicker(); show('moments-visibility'); }
   function openMomentsMeta(mode){
     momentsMetaMode=mode; if(!momentsMetaSheet||!momentsMetaBody)return;
     if(mode==='location'){
@@ -6858,7 +6879,12 @@ export function createPhonePanel({
   });
   panel.querySelector('[data-action="moments-photo-remove"]')?.addEventListener('click', () => { pendingMomentImageDescription=''; renderPendingMomentPhoto(); });
   panel.querySelector('[data-action="moments-location"]')?.addEventListener('click',()=>openMomentsMeta('location'));
-  panel.querySelector('[data-action="moments-visibility"]')?.addEventListener('click',(event)=>{ event.preventDefault(); event.stopPropagation(); openMomentsMeta('visibility'); });
+  panel.querySelector('[data-action="moments-visibility"]')?.addEventListener('click',(event)=>{ event.preventDefault(); event.stopPropagation(); openMomentsVisibility(); });
+  panel.querySelector('[data-action="moments-visibility-back"]')?.addEventListener('click',()=>show('moments-compose'));
+  panel.querySelector('[data-action="moments-visibility-done"]')?.addEventListener('click',()=>{
+    const ids=[...(momentsVisibilityList?.querySelectorAll('[data-visibility-contact].is-selected')||[])].map(x=>String(x.dataset.visibilityContact||'')).filter(Boolean);
+    pendingMomentVisibility=ids.length?{mode:'only',contactIds:ids}:{mode:'public',contactIds:[]}; renderMomentComposeMeta(); show('moments-compose');
+  });
   panel.querySelector('[data-action="moments-meta-close"]')?.addEventListener('click',()=>{if(momentsMetaSheet)momentsMetaSheet.hidden=true;});
   panel.querySelector('[data-action="moments-meta-confirm"]')?.addEventListener('click',()=>{
     if(!momentsMetaSheet||!momentsMetaBody)return;
