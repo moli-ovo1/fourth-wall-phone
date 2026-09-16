@@ -3099,11 +3099,5 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 - 社区 @ 使用点击角色名列表；邀请评论、知乎邀请回答、社区转发（联系人+群聊）、当前角色世界选择改为点选列表，不再输入数字序号；朋友圈 @ 角色也改为点选列表。
 - 知乎回答评论继续统一写入 answer.comments，并由统一 Community Composer 承接用户评论/回复。
 
-### moli158 — Community Interaction Queue / Refresh Settlement
-- [x] 邀请不即时生成，写入 pending queue，刷新后处理。
-- [x] @ 支持多人点选并即时写入编辑框；发送时排队，刷新后处理。
-- [x] User 普通评论/楼中回复登记 pending，刷新评论区后由社区生成继续讨论。
-- [x] 明确邀请与 @ 在结算时必须公开回应；普通 User 评论不预设回应者。
-- [x] 知乎邀请回答由问题回答区刷新结算；回答下“评论”仍只属于该回答；评论“回复”保持 parent comment 关系。
-- [x] 清理预设页开发期长注释。
-- [ ] 后续闭环验收：多角色同帖 pending 的失败重试/部分成功可视化、重开持久化、去重、常驻/收藏/转发联动最终检查。
+### moli159 / v0.4.99 — Community Recommend polish
+社区推荐页完成最后一轮视觉收口：整体毛玻璃、刷新胶囊、左侧轻工具入口、窄幅覆盖式“我只想看”浮层。此项属于 Community CLOSED 前的 UI polish，不改变社区互动/事件机制。主线恢复点仍为：World Event 事件聚合 → 人物认知连续性 → 社区事件源接入 → 统一人物行为入口 → 尽快接回 Phone Context Injection。
