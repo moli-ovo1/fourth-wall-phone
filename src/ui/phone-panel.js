@@ -142,7 +142,7 @@ export function createPhonePanel({
             <small>微博</small>
           </button>
           <button class="moli-app-icon" data-action="open-wall" aria-label="打开我们的墙">
-            <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.wall}" alt="" /></span>
+            <span class="moli-app-icon-tile moli-wall-app-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.wall}" alt="" /></span>
             <small>我们的墙</small>
           </button>
           <button class="moli-app-icon" data-action="settings" aria-label="打开设置">
@@ -222,12 +222,8 @@ export function createPhonePanel({
 
 
     <section class="moli-page" data-page="contacts-tab">
-      <header class="moli-nav">
-        <div class="moli-nav-side"></div>
-        <div class="moli-nav-title">通讯录</div>
-        <div class="moli-nav-side right"></div>
-      </header>
-      <main class="moli-tab-list" data-contacts-tab-list></main>
+      <header class="moli-nav moli-contacts-blank-nav" aria-label="通讯录"></header>
+      <main class="moli-tab-list moli-contacts-directory" data-contacts-tab-list></main>
       <nav class="moli-phone-tabs" aria-label="小手机主导航">
         <button data-action="tab-home"><span class="moli-tab-glyph moli-tab-chat" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.8 4.5c-3.5 0-6.3 2.4-6.3 5.4 0 1.7.9 3.2 2.4 4.2l-.7 2.4 2.8-1.4c.6.1 1.2.2 1.8.2 3.5 0 6.3-2.4 6.3-5.4s-2.8-5.4-6.3-5.4Z"/><path d="M15.5 9.1c3.3 0 6 2.2 6 5 0 1.6-.9 3-2.3 3.9l.6 2.2-2.5-1.2c-.6.1-1.2.2-1.8.2-2.9 0-5.4-1.8-5.9-4.3 3.8-.3 6.7-2.7 6.7-5.8h-.8Z"/></svg></span><small>微信</small></button>
         <button class="active" data-action="tab-contacts"><span class="moli-tab-glyph moli-tab-contacts" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7.2" r="3.2"/><path d="M5.5 19.5c.4-4 2.7-6.2 6.5-6.2s6.1 2.2 6.5 6.2"/></svg></span><small>通讯录</small></button>
@@ -3622,7 +3618,10 @@ export function createPhonePanel({
       }
     }
 
-    contactsTabList.innerHTML = rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>';
+    const groups = conversations.filter(conversation => conversation?.type === 'group').sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
+    const groupRows = groups.map(group => `<button class="moli-contact-group-row" data-contact-group-conversation="${escapeHtml(group.conversationKey || group.id || '')}"><span>${escapeHtml(group.name || '群聊')}</span></button>`).join('');
+    const groupSection = `<section class="moli-contact-groups"><button type="button" class="moli-contact-groups-toggle" data-action="contacts-groups-toggle"><span class="moli-contact-groups-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.8 19c.4-4 2.2-6 5.7-6s5.3 2 5.7 6M13.5 14c3.4-.3 5.5 1.4 5.9 4.5"/></svg></span><b>群聊</b><i>›</i></button><div class="moli-contact-group-list" data-contact-group-list hidden>${groupRows || '<div class="moli-contact-group-empty">暂无群聊</div>'}</div></section>`;
+    contactsTabList.innerHTML = groupSection + (rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>');
   }
 
   function openMomentForward(item, { surface = 'public', ownerContactId = '' } = {}) {
@@ -3863,7 +3862,7 @@ export function createPhonePanel({
   function openMomentsMeta(mode){
     momentsMetaMode=mode; if(!momentsMetaSheet||!momentsMetaBody)return;
     if(mode==='location'){ momentsMetaTitle.textContent='所在位置'; momentsMetaBody.innerHTML=`<input class="moli-moments-meta-input" data-meta-location maxlength="120" placeholder="输入位置" value="${escapeHtml(pendingMomentLocation)}">`; }
-    else { const selected=new Set(mode==='at'?pendingMomentMentionIds:pendingMomentVisibility.contactIds); momentsMetaTitle.textContent=mode==='at'?'@谁':'谁可以看'; momentsMetaBody.innerHTML=`${mode==='visibility'?`<label class="moli-moments-meta-choice"><input type="radio" name="moli-vis" value="public" ${pendingMomentVisibility.mode==='public'?'checked':''}><span>公开</span></label>`:''}<div class="moli-moments-role-picker">${composeSelectableContacts().map(c=>`<label><input type="checkbox" value="${escapeHtml(c.id)}" ${selected.has(String(c.id))?'checked':''}><span>${escapeHtml(canonicalContactName(c))}</span></label>`).join('')}</div>${mode==='visibility'?'<small>选择一人就是“仅对方可见”；也可以多选，仅这些角色可见。</small>':''}`; }
+    else { const selected=new Set(pendingMomentVisibility.contactIds); momentsMetaTitle.textContent='谁可以看'; momentsMetaBody.innerHTML=`<label class="moli-moments-meta-choice"><input type="radio" name="moli-vis" value="public" ${pendingMomentVisibility.mode==='public'?'checked':''}><span>公开</span></label><div class="moli-moments-role-picker">${composeSelectableContacts().map(c=>`<label><input type="checkbox" value="${escapeHtml(c.id)}" ${selected.has(String(c.id))?'checked':''}><span>${escapeHtml(canonicalContactName(c))}</span></label>`).join('')}</div><small>选择一人就是“仅对方可见”；也可以多选，仅这些角色可见。</small>`; }
     momentsMetaSheet.hidden=false;
   }
   function publishMoment() {
@@ -6784,13 +6783,12 @@ export function createPhonePanel({
   });
   panel.querySelector('[data-action="moments-photo-remove"]')?.addEventListener('click', () => { pendingMomentImageDescription=''; renderPendingMomentPhoto(); });
   panel.querySelector('[data-action="moments-location"]')?.addEventListener('click',()=>openMomentsMeta('location'));
-  momentsComposeText?.addEventListener('input',()=>{ if(/@\s*$/.test(String(momentsComposeText.value||''))) openMomentsMeta('at'); });
   panel.querySelector('[data-action="moments-visibility"]')?.addEventListener('click',()=>openMomentsMeta('visibility'));
   panel.querySelector('[data-action="moments-meta-close"]')?.addEventListener('click',()=>{if(momentsMetaSheet)momentsMetaSheet.hidden=true;});
   panel.querySelector('[data-action="moments-meta-confirm"]')?.addEventListener('click',()=>{
     if(!momentsMetaSheet||!momentsMetaBody)return;
     if(momentsMetaMode==='location') pendingMomentLocation=String(momentsMetaBody.querySelector('[data-meta-location]')?.value||'').trim();
-    else { const ids=[...momentsMetaBody.querySelectorAll('.moli-moments-role-picker input:checked')].map(x=>String(x.value)); if(momentsMetaMode==='at') { pendingMomentMentionIds=ids; const names=ids.map(id=>contact(id)).filter(Boolean).map(c=>`@${canonicalContactName(c)}`); if(momentsComposeText&&names.length){ const raw=String(momentsComposeText.value||''); momentsComposeText.value=raw.replace(/@\s*$/, '') + (raw&&!/\s$/.test(raw)?' ':'') + names.join(' ') + ' '; momentsComposeText.focus(); } } else { const pub=momentsMetaBody.querySelector('input[name="moli-vis"]:checked')?.value==='public' && ids.length===0; pendingMomentVisibility=pub?{mode:'public',contactIds:[]}:{mode:'only',contactIds:ids}; } }
+    else { const ids=[...momentsMetaBody.querySelectorAll('.moli-moments-role-picker input:checked')].map(x=>String(x.value)); const pub=momentsMetaBody.querySelector('input[name="moli-vis"]:checked')?.value==='public' && ids.length===0; pendingMomentVisibility=pub?{mode:'public',contactIds:[]}:{mode:'only',contactIds:ids}; }
     momentsMetaSheet.hidden=true; renderMomentComposeMeta();
   });
   panel.querySelector('[data-action="moments-publish"]')?.addEventListener('click', publishMoment);
@@ -6815,6 +6813,10 @@ export function createPhonePanel({
   });
 
   contactsTabList?.addEventListener('click', event => {
+    const groupToggle = event.target.closest?.('[data-action="contacts-groups-toggle"]');
+    if (groupToggle) { const list=contactsTabList.querySelector('[data-contact-group-list]'); if(list){list.hidden=!list.hidden;groupToggle.classList.toggle('expanded',!list.hidden);} return; }
+    const groupRow = event.target.closest?.('[data-contact-group-conversation]');
+    if (groupRow) { const scopeKey=getScopeKey?.(); const conversationKey=String(groupRow.dataset.contactGroupConversation||''); if(!scopeKey||!conversationKey)return; currentContactId=conversationKey; markConversationRead(scopeKey,conversationKey); show('chat'); return; }
     const row = event.target.closest?.('[data-contact-tab-id]');
     if (!row) return;
     const scopeKey = getScopeKey?.();
