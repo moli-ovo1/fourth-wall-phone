@@ -23,7 +23,7 @@ import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getTavernUserContext, replaceUserPlaceholder } from '../core/tavern-user.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
-import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, markMomentChatEventsDelivered , markProfileMomentsMemoryOrganized} from '../storage/moments-store.js';
+import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, getRecentMomentChatEvents, markMomentChatEventsDelivered , markProfileMomentsMemoryOrganized} from '../storage/moments-store.js';
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 
 function findContact(contactId) {
@@ -60,6 +60,8 @@ function getContactMomentsContinuity(scopeKey, contactId) {
   const authoredPublic = listPublicMoments(scopeKey).filter(item => String(item?.author?.id || '') === id).slice(0, 8);
 
   const blocks = [];
+  const knownMomentEvents = getRecentMomentChatEvents(scopeKey, id, 20);
+  if (knownMomentEvents.length) blocks.push(`【这个角色最近已经知道的 User 朋友圈互动】\n这些事实已经结算给角色；之前没有行动不代表遗忘，后续聊天中可在人物真正会在意时自然提起。\n${knownMomentEvents.map(event => `- ${event.content}${event.momentId ? `（momentId=${event.momentId}）` : ''}`).join('\n')}`);
   if (archivedProfile?.summary) blocks.push(`【这个角色已整理的朋友圈长期记忆】\n${archivedProfile.summary}`);
   if (ownProfile.length) {
     blocks.push(`【这个角色自己的朋友圈】
@@ -611,6 +613,8 @@ function batchRoleProfile(contact, scanText = '', userName = 'User') {
   const fidelity = contact?.source?.roleFidelity || {};
   const sources = contact?.roleSources || {};
   const blocks = [];
+  const knownMomentEvents = getRecentMomentChatEvents(scopeKey, id, 20);
+  if (knownMomentEvents.length) blocks.push(`【这个角色最近已经知道的 User 朋友圈互动】\n这些事实已经结算给角色；之前没有行动不代表遗忘，后续聊天中可在人物真正会在意时自然提起。\n${knownMomentEvents.map(event => `- ${event.content}${event.momentId ? `（momentId=${event.momentId}）` : ''}`).join('\n')}`);
   const add = (label, value, max = 5000) => {
     const text = clipBatchText(value, max);
     if (text) blocks.push(`【${label}】\n${text}`);
@@ -903,8 +907,12 @@ function parseMomentRefreshDecision(rawText = '') {
   if (!objectText) return fallback;
   try {
     const value = JSON.parse(objectText);
-    const action = String(value?.action || '').toUpperCase() === 'POST' ? 'POST' : 'SKIP';
+    let action = String(value?.action || 'SKIP').toUpperCase().replace(/\s+/g, '');
+    if (action === 'POST+私聊' || action === 'POST+CHAT') action = 'POST+PRIVATE_CHAT';
+    if (!['SKIP', 'POST', 'PRIVATE_CHAT', 'POST+PRIVATE_CHAT'].includes(action)) action = 'SKIP';
     const content = String(value?.content || '').trim();
+    const rawPrivate = Array.isArray(value?.privateMessages) ? value.privateMessages : (value?.privateChat ? [value.privateChat] : []);
+    const privateMessages = rawPrivate.map(item => String(item || '').trim()).filter(Boolean).slice(0, 3);
     const ageMinutes = Math.max(0, Math.min(2880, Number(value?.ageMinutes) || 0));
     const statusNote = String(value?.statusNote || '').trim().slice(0, 160);
     const onlyUserVisible = Boolean(value?.onlyUserVisible);
@@ -919,8 +927,9 @@ function parseMomentRefreshDecision(rawText = '') {
       content: String(item?.content || '').trim().slice(0, 500),
       replyToId: String(item?.replyToId || '').trim(),
     })).filter(item => item.targetMomentId && item.action) : [];
-    if (action === 'POST' && content) return { action, content: content.slice(0, 2000), ageMinutes, statusNote, onlyUserVisible, interactions };
-    return { action: 'SKIP', statusNote, onlyUserVisible:false, interactions };
+    if ((action === 'POST' || action === 'POST+PRIVATE_CHAT') && !content) action = action === 'POST+PRIVATE_CHAT' && privateMessages.length ? 'PRIVATE_CHAT' : 'SKIP';
+    if ((action === 'PRIVATE_CHAT' || action === 'POST+PRIVATE_CHAT') && !privateMessages.length) action = action === 'POST+PRIVATE_CHAT' && content ? 'POST' : 'SKIP';
+    return { action, content: content.slice(0, 2000), ageMinutes, statusNote, onlyUserVisible: action === 'POST' || action === 'POST+PRIVATE_CHAT' ? onlyUserVisible : false, interactions, privateMessages };
   } catch {
     return fallback;
   }
@@ -1025,6 +1034,15 @@ export async function generateContactMoment({ scopeKey, contactId, signal } = {}
     )
     .sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
 
+  const privateConversation = conversations.find(conversation => conversation?.type === 'private') || null;
+  const proactiveEnabled = privateConversation?.automation?.autoChatEnabled === true;
+  const proactiveTendency = Math.max(0, Math.min(100, Number(privateConversation?.automation?.autoChatProbability ?? 30) || 0));
+  const pendingMomentEvents = getPendingMomentChatEvents(scopeKey, contact.id);
+  const pendingMomentEventIds = pendingMomentEvents.map(event => event.id);
+  const interactionBatch = pendingMomentEvents.length
+    ? pendingMomentEvents.map(event => `- ${event.content}${event.momentId ? `（momentId=${event.momentId}）` : ''}`).join('\n')
+    : '本轮没有尚未结算的新 User 互动。';
+
   const recentLines = [];
   for (const conversation of conversations.slice(0, 5)) {
     const label = conversation.type === 'group' ? `群聊「${conversation.name || '未命名群聊'}」` : '与用户私聊';
@@ -1093,6 +1111,8 @@ ${personaParts}
 - 可以来自最近聊天/群聊/角色世界的余波，但不要无脑公开私聊原文或他人秘密。
 - 时间不必是现在：如果自然，可以是刚刚、数小时前、今天早些时候或昨天。
 - 已有朋友圈不要机械重复。
+- 本次刷新同时是一次“认知结算”：下方【待结算的 User 互动】从现在起都视为你已经知道的事实。知道不等于在意，在意也不等于必须行动。
+- 若主动私聊权限开启，你可以结合人物性格、关系、当前情绪与这些互动，自主决定 PRIVATE_CHAT / POST+PRIVATE_CHAT / SKIP；不要机械回应每一次点赞、已阅、偷看或删除。主动倾向只是总体习惯，不是概率骰子。
 - 即使 SKIP，也要给一个很短的 statusNote：可以是为什么没发、正在忙什么、当前心情、写了又删、懒得公开，或对 user 的一句很角色化私下反应。它不是朋友圈正文，也不是状态面板。
 - statusNote 不要每次都暧昧，不要为了回执强编重大事件。
 - 你还可以让角色本人、世界书里明确存在的 NPC、小上帝、moli 对已有角色朋友圈产生点赞/评论；不是每个人都必须互动。
@@ -1114,6 +1134,13 @@ ${recentBody?.messages?.map(message => `${message?.role === 'user' ? '用户' : 
 【这个角色已有朋友圈】
 ${profileSocial || momentHistory || '暂无'}
 
+【待结算的 User 互动】
+${interactionBatch}
+
+【主动私聊权限与倾向】
+主动私聊：${proactiveEnabled ? '开启' : '关闭'}
+主动倾向：${proactiveTendency}%（只表示人物总体有多容易主动联系 User，不是本次触发概率。0% 在日常情况下几乎不主动，但本次若存在人物认为足够重大的真实动机，权限开启时仍可主动；关闭则绝不主动私聊。）
+
 【可作为朋友圈参与者来源的世界书条目】
 ${npcSources.length ? npcSources.map(entry => `npcSourceKey=${entry.key}｜${entry.title}\n${entry.content}`).join('\n\n') : '暂无明确世界书来源'}
 
@@ -1123,8 +1150,8 @@ ${replaceUserPlaceholder(getBuiltinPersonaPrompt('builtin:writer'), getTavernUse
 【moli】
 ${replaceUserPlaceholder(getBuiltinPersonaPrompt('builtin:guide'), getTavernUserContext().name)}
 
-请只返回一个 JSON：
-{"action":"SKIP|POST","content":"POST 时填写朋友圈正文，否则空字符串","ageMinutes":0,"onlyUserVisible":false,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论时填写；DELETE_COMMENT 时作为 deletionReason","replyToId":"可选，回复某条评论 id"}]}。
+${proactiveEnabled ? '' : '【硬边界】主动私聊当前关闭：action 不得为 PRIVATE_CHAT / POST+PRIVATE_CHAT，privateMessages 必须为空。\n\n'}请只返回一个 JSON：
+{"action":"SKIP|POST|PRIVATE_CHAT|POST+PRIVATE_CHAT","content":"POST 时填写朋友圈正文，否则空字符串","privateMessages":["仅主动私聊时填写，1~3条真实手机气泡；主动私聊关闭时必须为空"],"ageMinutes":0,"onlyUserVisible":false,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论时填写；DELETE_COMMENT 时作为 deletionReason","replyToId":"可选，回复某条评论 id"}]}。
 ageMinutes 范围 0~2880。interactions 可以为空。`;
 
   let text = '';
@@ -1139,6 +1166,11 @@ ageMinutes 范围 0~2880。interactions 可以为空。`;
   }
 
   const decision = parseMomentRefreshDecision(text);
+  if (!proactiveEnabled && (decision.action === 'PRIVATE_CHAT' || decision.action === 'POST+PRIVATE_CHAT')) {
+    decision.action = decision.action === 'POST+PRIVATE_CHAT' && decision.content ? 'POST' : 'SKIP';
+    decision.privateMessages = [];
+  }
+  if (pendingMomentEventIds.length) markMomentChatEventsDelivered(scopeKey, contact.id, pendingMomentEventIds);
   return {
     ...decision,
     createdAt: decision.action === 'POST' ? Date.now() - decision.ageMinutes * 60 * 1000 : 0,
