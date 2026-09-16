@@ -44,8 +44,8 @@ function formatMomentContinuityItem(item) {
   ].filter(Boolean).join('；');
   const createdAt = Number(item?.createdAt || 0);
   const when = createdAt ? new Date(createdAt).toLocaleString() : '';
-  return `${when ? `[${when}] ` : ''}${item?.author?.name || '未知'}：${String(item?.content || '').trim()}${social ? `
-${social}` : ''}`.trim();
+  const image = String(item?.imageDescription || '').trim();
+  return `${when ? `[${when}] ` : ''}${item?.author?.name || '未知'}：${String(item?.content || '').trim()}${image ? `\n[附图：${image}]` : ''}${social ? `\n${social}` : ''}`.trim();
 }
 
 function getContactMomentsContinuity(scopeKey, contactId) {
