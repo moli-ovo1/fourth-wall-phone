@@ -3883,6 +3883,46 @@ export function createPhonePanel({
     }
     momentsMetaSheet.hidden=false;
   }
+  function chooseMomentMentionContact(){
+    const contacts=composeSelectableContacts();
+    if(!contacts.length){ windowRef.alert?.('微信里还没有可 @ 的角色。'); return null; }
+    const menu=contacts.map((c,i)=>`${i+1}. ${canonicalContactName(c)}`).join('\n');
+    const picked=windowRef.prompt?.(`@ 谁？\n${menu}\n\n输入序号`, '1');
+    if(picked===null)return null;
+    const index=Number.parseInt(String(picked).trim(),10)-1;
+    return contacts[index]||null;
+  }
+  function askMomentUserComment(label='评论'){
+    let content=windowRef.prompt?.(`${label}\n输入 @ 可选择微信角色`, '') ?? null;
+    if(content===null)return null;
+    let mentionTarget=null;
+    if(String(content).includes('@')){
+      mentionTarget=chooseMomentMentionContact();
+      if(mentionTarget)content=String(content).replace('@',`@${canonicalContactName(mentionTarget)} `);
+    }
+    content=String(content).trim();
+    return content ? {content,mentionTarget} : null;
+  }
+  const runMomentMention = async ({surface='public',ownerContactId='',moment,userComment,mentionTarget}) => {
+    if(!moment||!userComment||!mentionTarget)return;
+    const scopeKey=getScopeKey?.(); if(!scopeKey)return;
+    const conv=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(mentionTarget.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0]||ensureConversation(scopeKey,mentionTarget.id);
+    try{
+      recordMomentChatEvent(scopeKey,{contactId:mentionTarget.id,type:'USER_MENTIONED_YOU_IN_MOMENT',momentId:moment.id,content:`User 在朋友圈评论区 @了你：${userComment.content}`});
+      const ownerName=surface==='profile' ? canonicalContactName(contact(ownerContactId)) : momentActorName(moment.author);
+      const instruction=`【moli朋友圈事件｜@提及】\nUser 在朋友圈评论区 @了你。\n动态作者：${ownerName||'未知'}\n动态正文：${moment.content||'无'}\nUser 的评论：${userComment.content}\n你已经收到这次 @，但绝不要求你回应。请按人物性格、关系和当前状态决定：REPLY（只在评论区公开回复）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。\n严格追加机器可读块：<moment_action>REPLY|MESSAGE|BOTH|SKIP</moment_action>；若公开回复，再追加 <moment_reply>回复正文</moment_reply>；若私聊，再用正常 <msg>私聊内容</msg>。`;
+      const result=await generatePrivateReply({scopeKey,conversationKey:conv.id||mentionTarget.id,automationInstruction:instruction});
+      const raw=String(result?.text||'');
+      const action=(raw.match(/<moment_action>\s*(REPLY|MESSAGE|BOTH|SKIP)\s*<\/moment_action>/i)?.[1]||'SKIP').toUpperCase();
+      const publicReply=String(raw.match(/<moment_reply>([\s\S]*?)<\/moment_reply>/i)?.[1]||'').trim();
+      const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
+      const roleAuthor={type:'contact',id:mentionTarget.id,name:canonicalContactName(mentionTarget)};
+      if((action==='REPLY'||action==='BOTH')&&publicReply) addMomentComment(scopeKey,{surface,ownerContactId,momentId:moment.id,actor:roleAuthor,content:publicReply,replyToId:userComment.id||''});
+      if(action==='MESSAGE'||action==='BOTH') for(const text of msgs) appendMessage(scopeKey,conv.id||mentionTarget.id,'assistant',text,{source:'moment-mention',senderId:mentionTarget.id,senderSnapshot:{name:canonicalContactName(mentionTarget),avatar:avatarUrl(mentionTarget)}});
+      surface==='profile' ? renderContactMoments() : renderMoments();
+    }catch(error){ console.error('[moli小手机] moment mention bridge failed:',error); toast(`@角色联动失败：${error?.message||error}`); }
+  };
+
   function publishMoment() {
     const scopeKey = getScopeKey?.();
     const content = String(momentsComposeText?.value || '').trim();
@@ -6818,7 +6858,7 @@ export function createPhonePanel({
   });
   panel.querySelector('[data-action="moments-photo-remove"]')?.addEventListener('click', () => { pendingMomentImageDescription=''; renderPendingMomentPhoto(); });
   panel.querySelector('[data-action="moments-location"]')?.addEventListener('click',()=>openMomentsMeta('location'));
-  panel.querySelector('[data-action="moments-visibility"]')?.addEventListener('click',()=>openMomentsMeta('visibility'));
+  panel.querySelector('[data-action="moments-visibility"]')?.addEventListener('click',(event)=>{ event.preventDefault(); event.stopPropagation(); openMomentsMeta('visibility'); });
   panel.querySelector('[data-action="moments-meta-close"]')?.addEventListener('click',()=>{if(momentsMetaSheet)momentsMetaSheet.hidden=true;});
   panel.querySelector('[data-action="moments-meta-confirm"]')?.addEventListener('click',()=>{
     if(!momentsMetaSheet||!momentsMetaBody)return;
@@ -6906,12 +6946,16 @@ export function createPhonePanel({
       renderContactMoments(); toast('评论已删除'); return;
     }
     if (button.dataset.action === 'profile-moment-comment') {
-      const text = String(windowRef.prompt?.('评论') || '').trim();
-      if (!text) return;
-      addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: text });
+      const entry = askMomentUserComment('评论');
+      if (!entry) return;
+      const targetMoment=listProfileMoments(scopeKey,item.id).find(moment=>String(moment.id)===momentId);
+      const beforeIds=new Set((targetMoment?.comments||[]).map(c=>String(c.id)));
+      addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: entry.content });
+      const savedComment=(listProfileMoments(scopeKey,item.id).find(moment=>String(moment.id)===momentId)?.comments||[]).find(c=>!beforeIds.has(String(c.id))&&String(c.actor?.id||'')==='user');
       renderContactMoments();
-      recordMomentChatEvent(scopeKey,{contactId:item.id,type:'USER_COMMENT',momentId,content:`User 在这条角色专属朋友圈下评论：${text}`});
-      toast('已评论。点右上角刷新看看有没有回应。');
+      recordMomentChatEvent(scopeKey,{contactId:item.id,type:'USER_COMMENT',momentId,content:`User 在这条角色专属朋友圈下评论：${entry.content}`});
+      if(entry.mentionTarget&&targetMoment) void runMomentMention({surface:'profile',ownerContactId:item.id,moment:targetMoment,userComment:savedComment||{content:entry.content},mentionTarget:entry.mentionTarget});
+      toast(entry.mentionTarget?'已评论并 @ 角色；对方是否回应由人物自行决定。':'已评论。点右上角刷新看看有没有回应。');
       return;
     }
     if (button.dataset.action === 'profile-moment-forward') {
@@ -7001,15 +7045,19 @@ export function createPhonePanel({
       return;
     }
     if (action === 'moment-comment') {
-      const text = String(windowRef.prompt?.('评论') || '').trim();
-      if (!text) return;
-      addMomentComment(scopeKey, { surface: 'public', momentId, actor: userMomentsActor(), content: text });
+      const entry = askMomentUserComment('评论');
+      if (!entry) return;
+      const targetMomentBefore = listPublicMoments(scopeKey).find(x => String(x.id) === momentId);
+      const beforeIds=new Set((targetMomentBefore?.comments||[]).map(c=>String(c.id)));
+      addMomentComment(scopeKey, { surface: 'public', momentId, actor: userMomentsActor(), content: entry.content });
       renderMoments();
       const targetMoment = listPublicMoments(scopeKey).find(x => String(x.id) === momentId);
+      const savedComment=(targetMoment?.comments||[]).find(c=>!beforeIds.has(String(c.id))&&String(c.actor?.id||'')==='user');
       if (targetMoment?.author?.id && targetMoment.author.id !== 'user') {
-        try { notifyMomentInteractionOpportunity({ scopeKey, contactId: targetMoment.author.id, momentId, eventType:'user-comment', content:text }); }
+        try { notifyMomentInteractionOpportunity({ scopeKey, contactId: targetMoment.author.id, momentId, eventType:'user-comment', content:entry.content }); }
         catch (error) { console.warn('[moli小手机] queue public moment interaction failed:', error); }
       }
+      if(entry.mentionTarget&&targetMoment) void runMomentMention({surface:'public',moment:targetMoment,userComment:savedComment||{content:entry.content},mentionTarget:entry.mentionTarget});
       return;
     }
     if (action === 'moment-forward') {
