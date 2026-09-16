@@ -1961,9 +1961,12 @@
 #moli-phone-panel .moli-custom-section-head h3{margin:0!important}
 #moli-phone-panel .moli-custom-section-head span{font-size:16px;color:#766d63}
 #moli-phone-panel .moli-custom-section-body{padding-top:8px}
-#moli-phone-panel .moli-custom-letter-detail,
-#moli-phone-panel .moli-custom-letter-paper,
+#moli-phone-panel .moli-custom-letter-paper h2,
 #moli-phone-panel .moli-custom-letter-body{font-family:"Huiwen-mincho","Songti SC","SimSun",serif!important;font-weight:normal}
+#moli-phone-panel .moli-custom-letter-detail,
+#moli-phone-panel .moli-custom-letter-paper header small,
+#moli-phone-panel .moli-custom-letter-meta,
+#moli-phone-panel .moli-custom-letter-meta button{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif!important}
 #moli-phone-panel .moli-custom-letter-meta{display:flex!important;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:#968b80;letter-spacing:.08em}
 #moli-phone-panel .moli-custom-letter-meta>span{min-width:0}
 #moli-phone-panel .moli-custom-letter-meta .moli-community-detail-actions{flex:0 0 auto;margin:0!important;gap:9px}
@@ -1975,3 +1978,5 @@
 #moli-phone-panel .moli-community-symbol{font-family:"SimSun","宋体",serif!important;font-size:19px!important}
 #moli-phone-panel .moli-xhs-detail>.moli-community-detail-actions{margin:6px 0 8px!important}
 #moli-phone-panel .moli-zhihu-question-actions>.moli-community-detail-actions{margin-right:auto!important}
+
+#moli-phone-panel .moli-community-forward-post-title{font-size:14px;font-weight:700;line-height:1.45;margin:4px 0 6px;color:#222}
