@@ -274,11 +274,11 @@ export function createPhonePanel({
     <section class="moli-page" data-page="moments-compose">
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="moments-compose-cancel" aria-label="取消">‹</button></div>
-        <div class="moli-nav-title">发表文字</div>
+        <div class="moli-nav-title"></div>
         <div class="moli-nav-side right"><button class="moli-nav-text-btn" data-action="moments-publish">发表</button></div>
       </header>
       <main class="moli-moments-compose-page">
-        <textarea data-moments-compose-text maxlength="4000" placeholder="这一刻的想法…"></textarea>
+        <textarea data-moments-compose-text maxlength="4000" placeholder="这一刻的想法…"></textarea><div class="moli-moments-compose-media"><button type="button" class="moli-moments-add-photo" data-action="moments-add-photo" aria-label="添加照片">＋</button><div class="moli-moments-photo-desc" data-moments-photo-desc hidden><span data-moments-photo-desc-text></span><button type="button" data-action="moments-photo-remove">×</button></div></div>
       </main>
     </section>
 
@@ -1140,6 +1140,15 @@ export function createPhonePanel({
       </div>
     </div>
 
+    <div class="moli-help-sheet" data-moments-photo-sheet hidden>
+      <div class="moli-help-card moli-photo-description-card" role="dialog" aria-modal="true">
+        <div class="moli-help-head"><strong>添加照片</strong><button class="moli-icon-btn" data-action="moments-photo-cancel" aria-label="关闭">×</button></div>
+        <p class="moli-photo-description-hint">用文字描述图片里实际能看到的内容。发布后，角色会把它当作这条朋友圈真正附带的一张图片。</p>
+        <textarea data-moments-photo-input maxlength="1200" placeholder="例如：傍晚的海边，桌上放着两杯冰咖啡……"></textarea>
+        <button class="moli-help-confirm" data-action="moments-photo-confirm">添加</button>
+      </div>
+    </div>
+
     <div class="moli-help-sheet" data-contact-moments-help-sheet hidden>
       <div class="moli-help-card" role="dialog" aria-modal="true" aria-labelledby="moli-moments-help-title">
         <div class="moli-help-head"><strong id="moli-moments-help-title">朋友圈说明书</strong><button class="moli-icon-btn" data-action="contact-moments-help-close" aria-label="关闭">×</button></div>
@@ -1173,6 +1182,10 @@ export function createPhonePanel({
   const momentsCoverAvatar = panel.querySelector('[data-moments-cover-avatar]');
   const momentsCrossInteraction = panel.querySelector('[data-moments-cross-interaction]');
   const momentsComposeText = panel.querySelector('[data-moments-compose-text]');
+  const momentsPhotoDesc = panel.querySelector('[data-moments-photo-desc]');
+  const momentsPhotoDescText = panel.querySelector('[data-moments-photo-desc-text]');
+  const momentsPhotoSheet = panel.querySelector('[data-moments-photo-sheet]');
+  const momentsPhotoInput = panel.querySelector('[data-moments-photo-input]');
   const contactMomentsFeed = panel.querySelector('[data-contact-moments-feed]');
   const contactMomentsTitle = panel.querySelector('[data-contact-moments-title]');
   const contactMomentsNotice = panel.querySelector('[data-contact-moments-notice]');
@@ -1652,6 +1665,7 @@ export function createPhonePanel({
     }).filter(Boolean);
     return [
       `${authorName} 发布朋友圈：${String(item?.content || '').trim()}`,
+      item?.imageDescription ? `并附带一张图片。图片内容：${String(item.imageDescription).trim()}` : '',
       likes.length ? `点赞：${likes.join('、')}` : '',
       comments.length ? `评论：\n${comments.join('\n')}` : '',
       seen.length ? `已知看过：${seen.join('、')}` : '',
@@ -3713,7 +3727,7 @@ export function createPhonePanel({
         ${!isUser && authorContact ? `<button class="moli-moment-avatar-jump" data-action="moment-open-chat" data-contact-id="${escapeHtml(authorContact.id)}" aria-label="进入${escapeHtml(canonicalContactName(authorContact))}聊天">${avatar}</button>` : avatar}
         <div class="moli-moment-main">
           <div class="moli-moment-author">${escapeHtml(momentActorName(item.author))}</div>
-          <div class="moli-moment-content">${escapeHtml(item.content || '')}${!isUser && readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div>
+          <div class="moli-moment-content">${escapeHtml(item.content || '')}${item.imageDescription ? `<div class="moli-moment-photo" aria-label="图片：${escapeHtml(item.imageDescription)}"><span>图片</span></div>` : ''}${!isUser && readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div>
           <div class="moli-moment-meta">
             <span>${escapeHtml(formatMomentTime(item.createdAt))}</span>
             ${isUser ? `<button data-action="moment-delete" data-moment-id="${escapeHtml(item.id)}">删除</button>` : ''}
@@ -3779,7 +3793,7 @@ export function createPhonePanel({
     const items = listProfileMoments(scopeKey, item.id);
     const status = getProfileMomentStatus(scopeKey, item.id);
     if (contactMomentsStatus) {
-      const hasStatus = Boolean(status?.message || status?.note);
+      const hasStatus = String(status?.kind || '') !== 'post' && Boolean(status?.message || status?.note);
       contactMomentsStatus.hidden = !hasStatus;
       contactMomentsStatus.innerHTML = hasStatus ? `<strong>${escapeHtml(status.message || '')}</strong>${status.note ? `<small>${escapeHtml(status.note)}</small>` : ''}` : '';
     }
@@ -3795,7 +3809,7 @@ export function createPhonePanel({
       const readByUser = Number(entry.userReadAt || 0) > 0;
       const likes = entry.likes?.length ? `<div class="moli-moment-likes">♥ ${escapeHtml(entry.likes.map(x => momentActorName(x)).join('、'))}</div>` : '';
       const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => c.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(momentActorName(c.actor))}</strong> 删除了评论${c.deletionReason ? `：${escapeHtml(c.deletionReason)}` : ''}</div>` : `<div ${String(c.actor?.id||'')==='user' ? `class="moli-user-comment-hold" data-user-comment-surface="profile" data-moment-id="${escapeHtml(entry.id)}" data-comment-id="${escapeHtml(c.id)}"` : ''}><strong>${escapeHtml(momentActorName(c.actor))}</strong>：${escapeHtml(c.content || '')}</div>`).join('')}</div>` : '';
-      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(momentActorName(entry.author) || canonicalContactName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}${readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action ${readByUser ? 'is-read' : ''}" data-action="profile-moment-read" data-moment-id="${escapeHtml(entry.id)}">已阅</button><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button><button class="moli-moment-action" data-action="profile-moment-export-public" data-moment-id="${escapeHtml(entry.id)}">投入我的朋友圈</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
+      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(momentActorName(entry.author) || canonicalContactName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}${entry.imageDescription ? `<div class="moli-moment-photo" aria-label="图片：${escapeHtml(entry.imageDescription)}"><span>图片</span></div>` : ''}${readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action ${readByUser ? 'is-read' : ''}" data-action="profile-moment-read" data-moment-id="${escapeHtml(entry.id)}">已阅</button><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button><button class="moli-moment-action" data-action="profile-moment-export-public" data-moment-id="${escapeHtml(entry.id)}">投入我的朋友圈</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
     }).join('');
   }
 
@@ -3821,14 +3835,24 @@ export function createPhonePanel({
     });
   }
 
+  let pendingMomentImageDescription = '';
+
+  function renderPendingMomentPhoto() {
+    if (!momentsPhotoDesc || !momentsPhotoDescText) return;
+    momentsPhotoDesc.hidden = !pendingMomentImageDescription;
+    momentsPhotoDescText.textContent = pendingMomentImageDescription ? `图片：${pendingMomentImageDescription}` : '';
+  }
+
   function publishMoment() {
     const scopeKey = getScopeKey?.();
     const content = String(momentsComposeText?.value || '').trim();
     if (!scopeKey) return toast('当前朋友圈不可用');
-    if (!content) return toast('写点什么再发表');
+    if (!content && !pendingMomentImageDescription) return toast('写点什么或添加一张照片再发表');
     try {
-      createPublicMoment(scopeKey, { author: userMomentsActor(), content });
+      createPublicMoment(scopeKey, { author: userMomentsActor(), content, imageDescription: pendingMomentImageDescription });
       momentsComposeText.value = '';
+      pendingMomentImageDescription = '';
+      renderPendingMomentPhoto();
       show('moments');
       toast('已发表');
     } catch (error) {
@@ -6716,10 +6740,24 @@ export function createPhonePanel({
 
   panel.querySelector('[data-action="moments-compose"]')?.addEventListener('click', () => {
     if (momentsComposeText) momentsComposeText.value = '';
+    pendingMomentImageDescription = '';
+    renderPendingMomentPhoto();
     show('moments-compose');
     requestAnimationFrame(() => momentsComposeText?.focus());
   });
-  panel.querySelector('[data-action="moments-compose-cancel"]')?.addEventListener('click', () => show('moments'));
+  panel.querySelector('[data-action="moments-compose-cancel"]')?.addEventListener('click', () => { pendingMomentImageDescription=''; renderPendingMomentPhoto(); show('moments'); });
+  panel.querySelector('[data-action="moments-add-photo"]')?.addEventListener('click', () => {
+    if (momentsPhotoInput) momentsPhotoInput.value = pendingMomentImageDescription;
+    if (momentsPhotoSheet) momentsPhotoSheet.hidden = false;
+    requestAnimationFrame(() => momentsPhotoInput?.focus());
+  });
+  panel.querySelector('[data-action="moments-photo-cancel"]')?.addEventListener('click', () => { if (momentsPhotoSheet) momentsPhotoSheet.hidden = true; });
+  panel.querySelector('[data-action="moments-photo-confirm"]')?.addEventListener('click', () => {
+    pendingMomentImageDescription = String(momentsPhotoInput?.value || '').trim();
+    renderPendingMomentPhoto();
+    if (momentsPhotoSheet) momentsPhotoSheet.hidden = true;
+  });
+  panel.querySelector('[data-action="moments-photo-remove"]')?.addEventListener('click', () => { pendingMomentImageDescription=''; renderPendingMomentPhoto(); });
   panel.querySelector('[data-action="moments-publish"]')?.addEventListener('click', publishMoment);
 
   momentsCover?.addEventListener('click', event => { if(event.target.closest?.('[data-moments-cross-control]'))return; momentsCoverInput?.click(); });
