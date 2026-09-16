@@ -1755,3 +1755,24 @@
 #moli-phone-panel .moli-help-body p{margin:10px 0}
 #moli-phone-panel .moli-help-confirm{align-self:flex-end;margin:6px 16px 14px;border:0;background:transparent;color:#5c79aa;font:inherit;font-weight:600;padding:8px 10px}
 #moli-phone-panel .moli-settings-app-tile{background:transparent}
+
+/* moli v0.4.74 · 朋友圈细节修整 */
+#moli-phone-panel .moli-settings-app-tile .moli-app-icon-image{object-fit:cover;width:100%;height:100%}
+#moli-phone-panel [data-page="contact-moments"] .moli-contact-moments-tools{align-items:center}
+#moli-phone-panel [data-page="contact-moments"] .moli-contact-moments-tools [data-action="contact-moments-refresh"]{transform:translateY(0);display:flex;align-items:center;justify-content:center;line-height:1}
+#moli-phone-panel .moli-profile-peek-control input[type="checkbox"]{opacity:1;filter:contrast(1.8);accent-color:#555}
+#moli-phone-panel .moli-moments-traces{background:rgba(25,25,25,.38);color:#fff;border:1px solid rgba(255,255,255,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 4px 14px rgba(0,0,0,.12);-webkit-backdrop-filter:blur(12px) saturate(135%);backdrop-filter:blur(12px) saturate(135%);text-shadow:0 1px 2px rgba(0,0,0,.25)}
+#moli-phone-panel .moli-moments-traces>div+div{border-top-color:rgba(255,255,255,.18)}
+#moli-phone-panel .moli-moments-trace-empty{color:rgba(255,255,255,.82)}
+#moli-phone-panel [data-page="moments-compose"]>.moli-nav{background:#fff;border-bottom:0}
+#moli-phone-panel .moli-moments-compose-page{padding:18px;background:#fff}
+#moli-phone-panel .moli-moments-compose-page textarea{height:150px;border:0!important;outline:0!important;box-shadow:none!important;-webkit-appearance:none;appearance:none}
+#moli-phone-panel .moli-moments-compose-page textarea:focus{border:0!important;outline:0!important;box-shadow:none!important}
+#moli-phone-panel .moli-moments-compose-media{display:flex;align-items:flex-start;gap:10px;margin-top:14px}
+#moli-phone-panel .moli-moments-add-photo{width:74px;height:74px;flex:0 0 74px;border:0;background:#f3f3f3;color:#777;font-size:38px;font-weight:300;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
+#moli-phone-panel .moli-moments-photo-desc{min-height:74px;flex:1;min-width:0;background:#f6f6f6;padding:10px 32px 10px 10px;position:relative;color:#777;font-size:12px;line-height:1.5;overflow:hidden}
+#moli-phone-panel .moli-moments-photo-desc button{position:absolute;right:6px;top:4px;border:0;background:transparent;color:#999;font-size:20px}
+#moli-phone-panel .moli-moment-photo{width:132px;height:96px;margin-top:8px;background:linear-gradient(145deg,#f2f2f2,#e6e6e6);display:flex;align-items:center;justify-content:center;color:#999;font-size:13px;border-radius:4px}
+#moli-phone-panel .moli-photo-description-card textarea{width:100%;min-height:130px;resize:none;border:1px solid #e2e2e2;border-radius:12px;padding:11px 12px;font:inherit;font-size:14px;line-height:1.55;outline:none;background:#fafafa;box-sizing:border-box}
+#moli-phone-panel .moli-photo-description-card textarea:focus{border-color:#cfcfcf;box-shadow:none}
+#moli-phone-panel .moli-photo-description-hint{margin:2px 0 12px;color:#777;font-size:12px;line-height:1.6}
