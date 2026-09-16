@@ -1790,3 +1790,45 @@
 #moli-phone-panel [data-page="chat"] .moli-chat-tools-menu button{
   flex:0 0 58px;
 }
+
+
+/* moli129 · wallpaper is a fixed full-chat canvas; accessory tray overlays below composer. */
+#moli-phone-panel [data-page="chat"]{
+  background:#fff!important;
+  background-image:none!important;
+}
+#moli-phone-panel [data-page="chat"]::before{
+  z-index:0!important;
+  background-color:#fff!important;
+  background-image:var(--moli-chat-wallpaper,none)!important;
+  background-size:cover!important;
+  background-position:center center!important;
+  background-repeat:no-repeat!important;
+}
+#moli-phone-panel [data-page="chat"] > *{
+  position:relative;
+  z-index:1;
+}
+#moli-phone-panel [data-page="chat"] .moli-chat-body{
+  background:transparent!important;
+}
+/* The tray must not participate in flex layout: opening + cannot resize the wallpaper/chat canvas. */
+#moli-phone-panel [data-page="chat"] .moli-chat-tools-menu{
+  position:absolute!important;
+  left:12px!important;
+  right:12px!important;
+  bottom:10px!important;
+  width:auto!important;
+  min-height:86px;
+  margin:0!important;
+  z-index:82!important;
+}
+#moli-phone-panel [data-page="chat"].moli-chat-tools-open .moli-compose{
+  transform:translateY(-96px);
+  transition:transform .16s ease;
+}
+#moli-phone-panel [data-page="chat"] .moli-compose{
+  transform:translateY(0);
+  transition:transform .16s ease;
+  z-index:83!important;
+}
