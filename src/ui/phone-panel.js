@@ -84,7 +84,7 @@ import { getTavernWorldBookSnapshot, getTavernWorldBookCatalog } from '../core/t
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
-import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, exportProfileMomentToPublic, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory, setMomentUserRead, recordProfileVisit, getProfileVisits, getProfilePeek, setProfilePeek, recordMomentChatEvent } from '../storage/moments-store.js';
+import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, exportProfileMomentToPublic, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory, setMomentUserRead, recordProfileVisit, clearProfileVisitRound, getProfileVisits, getProfilePeek, setProfilePeek, recordMomentChatEvent } from '../storage/moments-store.js';
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
 import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
@@ -98,6 +98,7 @@ const APP_ICON_URLS = Object.freeze({
   tianya: new URL('../../assets/apps/tianya.jpg', import.meta.url).href,
   weibo: new URL('../../assets/apps/weibo.jpg', import.meta.url).href,
   wall: new URL('../../assets/apps/our-wall.png', import.meta.url).href,
+  settings: new URL('../../assets/apps/settings.png', import.meta.url).href,
   settings: new URL('../../assets/apps/settings.png', import.meta.url).href,
 });
 const BUILTIN_AVATAR_URLS = Object.freeze({
@@ -279,6 +280,7 @@ export function createPhonePanel({
       </header>
       <main class="moli-moments-compose-page">
         <textarea data-moments-compose-text maxlength="4000" placeholder="这一刻的想法…"></textarea><div class="moli-moments-compose-media"><button type="button" class="moli-moments-add-photo" data-action="moments-add-photo" aria-label="添加照片">＋</button><div class="moli-moments-photo-desc" data-moments-photo-desc hidden><span data-moments-photo-desc-text></span><button type="button" data-action="moments-photo-remove">×</button></div></div>
+        <div class="moli-moments-compose-options"><button type="button" data-action="moments-location"><span>⌖</span><b>所在位置</b><em data-moments-location-label></em><i>›</i></button><button type="button" data-action="moments-mention"><span>@</span><b>提醒谁看</b><em data-moments-mention-label></em><i>›</i></button><button type="button" data-action="moments-visibility"><span>♙</span><b>谁可以看</b><em data-moments-visibility-label>公开</em><i>›</i></button></div>
       </main>
     </section>
 
@@ -1143,11 +1145,12 @@ export function createPhonePanel({
     <div class="moli-help-sheet" data-moments-photo-sheet hidden>
       <div class="moli-help-card moli-photo-description-card" role="dialog" aria-modal="true">
         <div class="moli-help-head"><strong>添加照片</strong><button class="moli-icon-btn" data-action="moments-photo-cancel" aria-label="关闭">×</button></div>
-        <p class="moli-photo-description-hint">用文字描述图片里实际能看到的内容。发布后，角色会把它当作这条朋友圈真正附带的一张图片。</p>
         <textarea data-moments-photo-input maxlength="1200" placeholder="例如：傍晚的海边，桌上放着两杯冰咖啡……"></textarea>
         <button class="moli-help-confirm" data-action="moments-photo-confirm">添加</button>
       </div>
     </div>
+
+    <div class="moli-help-sheet" data-moments-meta-sheet hidden><div class="moli-help-card moli-moments-meta-card" role="dialog" aria-modal="true"><div class="moli-help-head"><strong data-moments-meta-title></strong><button class="moli-icon-btn" data-action="moments-meta-close">×</button></div><div data-moments-meta-body></div><button class="moli-help-confirm" data-action="moments-meta-confirm">确定</button></div></div>
 
     <div class="moli-help-sheet" data-contact-moments-help-sheet hidden>
       <div class="moli-help-card" role="dialog" aria-modal="true" aria-labelledby="moli-moments-help-title">
@@ -1186,6 +1189,12 @@ export function createPhonePanel({
   const momentsPhotoDescText = panel.querySelector('[data-moments-photo-desc-text]');
   const momentsPhotoSheet = panel.querySelector('[data-moments-photo-sheet]');
   const momentsPhotoInput = panel.querySelector('[data-moments-photo-input]');
+  const momentsMetaSheet = panel.querySelector('[data-moments-meta-sheet]');
+  const momentsMetaTitle = panel.querySelector('[data-moments-meta-title]');
+  const momentsMetaBody = panel.querySelector('[data-moments-meta-body]');
+  const momentsLocationLabel = panel.querySelector('[data-moments-location-label]');
+  const momentsMentionLabel = panel.querySelector('[data-moments-mention-label]');
+  const momentsVisibilityLabel = panel.querySelector('[data-moments-visibility-label]');
   const contactMomentsFeed = panel.querySelector('[data-contact-moments-feed]');
   const contactMomentsTitle = panel.querySelector('[data-contact-moments-title]');
   const contactMomentsNotice = panel.querySelector('[data-contact-moments-notice]');
@@ -3727,7 +3736,7 @@ export function createPhonePanel({
         ${!isUser && authorContact ? `<button class="moli-moment-avatar-jump" data-action="moment-open-chat" data-contact-id="${escapeHtml(authorContact.id)}" aria-label="进入${escapeHtml(canonicalContactName(authorContact))}聊天">${avatar}</button>` : avatar}
         <div class="moli-moment-main">
           <div class="moli-moment-author">${escapeHtml(momentActorName(item.author))}</div>
-          <div class="moli-moment-content">${escapeHtml(item.content || '')}${item.imageDescription ? `<div class="moli-moment-photo" aria-label="图片：${escapeHtml(item.imageDescription)}"><span>图片</span></div>` : ''}${!isUser && readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div>
+          <div class="moli-moment-content">${escapeHtml(item.content || '')}${item.imageDescription ? `<div class="moli-moment-photo" aria-label="图片：${escapeHtml(item.imageDescription)}"><span>${escapeHtml(item.imageDescription)}</span></div>` : ''}${item.location?`<div class="moli-moment-extra">⌖ ${escapeHtml(item.location)}</div>`:''}${item.visibility?.mode==='only'?`<div class="moli-moment-extra">仅对方可见</div>`:''}${!isUser && readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div>
           <div class="moli-moment-meta">
             <span>${escapeHtml(formatMomentTime(item.createdAt))}</span>
             ${isUser ? `<button data-action="moment-delete" data-moment-id="${escapeHtml(item.id)}">删除</button>` : ''}
@@ -3809,7 +3818,7 @@ export function createPhonePanel({
       const readByUser = Number(entry.userReadAt || 0) > 0;
       const likes = entry.likes?.length ? `<div class="moli-moment-likes">♥ ${escapeHtml(entry.likes.map(x => momentActorName(x)).join('、'))}</div>` : '';
       const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => c.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(momentActorName(c.actor))}</strong> 删除了评论${c.deletionReason ? `：${escapeHtml(c.deletionReason)}` : ''}</div>` : `<div ${String(c.actor?.id||'')==='user' ? `class="moli-user-comment-hold" data-user-comment-surface="profile" data-moment-id="${escapeHtml(entry.id)}" data-comment-id="${escapeHtml(c.id)}"` : ''}><strong>${escapeHtml(momentActorName(c.actor))}</strong>：${escapeHtml(c.content || '')}</div>`).join('')}</div>` : '';
-      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(momentActorName(entry.author) || canonicalContactName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}${entry.imageDescription ? `<div class="moli-moment-photo" aria-label="图片：${escapeHtml(entry.imageDescription)}"><span>图片</span></div>` : ''}${readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action ${readByUser ? 'is-read' : ''}" data-action="profile-moment-read" data-moment-id="${escapeHtml(entry.id)}">已阅</button><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button><button class="moli-moment-action" data-action="profile-moment-export-public" data-moment-id="${escapeHtml(entry.id)}">投入我的朋友圈</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
+      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(momentActorName(entry.author) || canonicalContactName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}${entry.imageDescription ? `<div class="moli-moment-photo" aria-label="图片：${escapeHtml(entry.imageDescription)}"><span>${escapeHtml(entry.imageDescription)}</span></div>` : ''}${entry.visibility?.mode==='only'?'<div class="moli-moment-extra">仅对方可见</div>':''}${readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action ${readByUser ? 'is-read' : ''}" data-action="profile-moment-read" data-moment-id="${escapeHtml(entry.id)}">已阅</button><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button><button class="moli-moment-action" data-action="profile-moment-export-public" data-moment-id="${escapeHtml(entry.id)}">投入我的朋友圈</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
     }).join('');
   }
 
@@ -3836,23 +3845,40 @@ export function createPhonePanel({
   }
 
   let pendingMomentImageDescription = '';
+  let pendingMomentLocation = '';
+  let pendingMomentMentionIds = [];
+  let pendingMomentVisibility = { mode:'public', contactIds:[] };
+  let momentsMetaMode = '';
+
 
   function renderPendingMomentPhoto() {
     if (!momentsPhotoDesc || !momentsPhotoDescText) return;
     momentsPhotoDesc.hidden = !pendingMomentImageDescription;
-    momentsPhotoDescText.textContent = pendingMomentImageDescription ? `图片：${pendingMomentImageDescription}` : '';
+    momentsPhotoDescText.textContent = pendingMomentImageDescription;
   }
 
+  function renderMomentComposeMeta() {
+    if(momentsLocationLabel) momentsLocationLabel.textContent=pendingMomentLocation || '';
+    if(momentsMentionLabel) momentsMentionLabel.textContent=pendingMomentMentionIds.length ? `已选${pendingMomentMentionIds.length}人` : '';
+    if(momentsVisibilityLabel) momentsVisibilityLabel.textContent=pendingMomentVisibility.mode==='only' ? (pendingMomentVisibility.contactIds.length===1?'仅对方可见':`仅${pendingMomentVisibility.contactIds.length}人可见`) : '公开';
+  }
+  function composeSelectableContacts(){ return getContacts().map(hydratedContact).filter(c=>c&&String(c.id)!=='builtin:meta'); }
+  function openMomentsMeta(mode){
+    momentsMetaMode=mode; if(!momentsMetaSheet||!momentsMetaBody)return;
+    if(mode==='location'){ momentsMetaTitle.textContent='所在位置'; momentsMetaBody.innerHTML=`<input class="moli-moments-meta-input" data-meta-location maxlength="120" placeholder="输入位置" value="${escapeHtml(pendingMomentLocation)}">`; }
+    else { const selected=new Set(mode==='mention'?pendingMomentMentionIds:pendingMomentVisibility.contactIds); momentsMetaTitle.textContent=mode==='mention'?'提醒谁看':'谁可以看'; momentsMetaBody.innerHTML=`${mode==='visibility'?`<label class="moli-moments-meta-choice"><input type="radio" name="moli-vis" value="public" ${pendingMomentVisibility.mode==='public'?'checked':''}><span>公开</span></label>`:''}<div class="moli-moments-role-picker">${composeSelectableContacts().map(c=>`<label><input type="checkbox" value="${escapeHtml(c.id)}" ${selected.has(String(c.id))?'checked':''}><span>${escapeHtml(canonicalContactName(c))}</span></label>`).join('')}</div>${mode==='visibility'?'<small>选择一人就是“仅对方可见”；也可以多选，仅这些角色可见。</small>':''}`; }
+    momentsMetaSheet.hidden=false;
+  }
   function publishMoment() {
     const scopeKey = getScopeKey?.();
     const content = String(momentsComposeText?.value || '').trim();
     if (!scopeKey) return toast('当前朋友圈不可用');
     if (!content && !pendingMomentImageDescription) return toast('写点什么或添加一张照片再发表');
     try {
-      createPublicMoment(scopeKey, { author: userMomentsActor(), content, imageDescription: pendingMomentImageDescription });
+      createPublicMoment(scopeKey, { author: userMomentsActor(), content, imageDescription: pendingMomentImageDescription, location:pendingMomentLocation, mentionContactIds:pendingMomentMentionIds, visibility:pendingMomentVisibility });
       momentsComposeText.value = '';
-      pendingMomentImageDescription = '';
-      renderPendingMomentPhoto();
+      pendingMomentImageDescription = ''; pendingMomentLocation=''; pendingMomentMentionIds=[]; pendingMomentVisibility={mode:'public',contactIds:[]};
+      renderPendingMomentPhoto(); renderMomentComposeMeta();
       show('moments');
       toast('已发表');
     } catch (error) {
@@ -6617,6 +6643,7 @@ export function createPhonePanel({
         createdMoment = createProfileMoment(scopeKey, item.id, {
           author: { id: item.id, name: actorName, type: 'contact' },
           content: result.content,
+          visibility: result.onlyUserVisible ? {mode:'only',contactIds:['user']} : {mode:'public',contactIds:[]},
           createdAt: result.createdAt,
         });
       }
@@ -6694,11 +6721,12 @@ export function createPhonePanel({
       const feedBefore = listPublicMoments(scopeKey);
       const byMoment = new Map(feedBefore.map(moment => [String(moment.id), moment]));
       let changed = 0;
+      clearProfileVisitRound(scopeKey, (result?.contacts || []).map(c=>c.id));
       for (const actorResult of result?.actors || []) {
         const actorContact = contact(actorResult.actorId);
         if (!actorContact) continue;
         const socialActor = { id: actorContact.id, name: canonicalContactName(actorContact), type: 'contact' };
-        if (actorResult.profileVisitUser) { const visit=recordProfileVisit(scopeKey,actorContact.id); if(visit) recordMomentChatEvent(scopeKey,{contactId:actorContact.id,type:'PROFILE_VISIT',content:`你本轮主动进入了 User 的朋友圈主页；累计访问 ${visit.count} 次。`}); }
+        if (Number(actorResult.profileVisitCount||0)>0) { const visit=recordProfileVisit(scopeKey,actorContact.id,actorResult.profileVisitCount); if(visit) recordMomentChatEvent(scopeKey,{contactId:actorContact.id,type:'PROFILE_VISIT',content:`从上次朋友圈刷新到现在，你主动进入了 User 的朋友圈主页 ${visit.count} 次。`}); }
         for (const viewedId of actorResult.viewedMomentIds || []) { const viewed=byMoment.get(String(viewedId)); if (viewed) { markMomentSeen(scopeKey,{surface:'public',momentId:viewedId,actorId:actorContact.id}); if(String(viewed?.author?.id||'')==='user') recordMomentChatEvent(scopeKey,{contactId:actorContact.id,type:'CONTACT_VIEWED_USER_MOMENT',momentId:viewedId,content:'你已经看到了 User 的这条朋友圈。'}); } }
         for (const post of (actorResult.posts || (actorResult.post ? [actorResult.post] : [])).slice(0, 2)) {
           if (!post?.content) continue;
@@ -6758,6 +6786,16 @@ export function createPhonePanel({
     if (momentsPhotoSheet) momentsPhotoSheet.hidden = true;
   });
   panel.querySelector('[data-action="moments-photo-remove"]')?.addEventListener('click', () => { pendingMomentImageDescription=''; renderPendingMomentPhoto(); });
+  panel.querySelector('[data-action="moments-location"]')?.addEventListener('click',()=>openMomentsMeta('location'));
+  panel.querySelector('[data-action="moments-mention"]')?.addEventListener('click',()=>openMomentsMeta('mention'));
+  panel.querySelector('[data-action="moments-visibility"]')?.addEventListener('click',()=>openMomentsMeta('visibility'));
+  panel.querySelector('[data-action="moments-meta-close"]')?.addEventListener('click',()=>{if(momentsMetaSheet)momentsMetaSheet.hidden=true;});
+  panel.querySelector('[data-action="moments-meta-confirm"]')?.addEventListener('click',()=>{
+    if(!momentsMetaSheet||!momentsMetaBody)return;
+    if(momentsMetaMode==='location') pendingMomentLocation=String(momentsMetaBody.querySelector('[data-meta-location]')?.value||'').trim();
+    else { const ids=[...momentsMetaBody.querySelectorAll('.moli-moments-role-picker input:checked')].map(x=>String(x.value)); if(momentsMetaMode==='mention') pendingMomentMentionIds=ids; else { const pub=momentsMetaBody.querySelector('input[name="moli-vis"]:checked')?.value==='public' && ids.length===0; pendingMomentVisibility=pub?{mode:'public',contactIds:[]}:{mode:'only',contactIds:ids}; } }
+    momentsMetaSheet.hidden=true; renderMomentComposeMeta();
+  });
   panel.querySelector('[data-action="moments-publish"]')?.addEventListener('click', publishMoment);
 
   momentsCover?.addEventListener('click', event => { if(event.target.closest?.('[data-moments-cross-control]'))return; momentsCoverInput?.click(); });
