@@ -501,7 +501,7 @@ export function createPhonePanel({
     <section class="moli-page" data-page="settings">
       <header class="moli-nav">
         <div class="moli-nav-side">
-          <button class="moli-icon-btn moli-back" data-action="home" aria-label="返回">‹</button>
+          <button class="moli-icon-btn moli-back" data-action="settings-home" aria-label="返回主屏幕">‹</button>
         </div>
         <div class="moli-nav-title">设置</div>
         <div class="moli-nav-side right">
@@ -543,10 +543,6 @@ export function createPhonePanel({
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-prompt-settings">
-        <label class="moli-switch-row moli-prompt-master">
-          <span><strong>启用 moli 预设</strong><small>关闭后不注入全局 / 微信 / 社区预设</small></span>
-          <input type="checkbox" data-prompt-master>
-        </label>
         <div class="moli-prompt-scope-tabs"><button data-prompt-scope="global">全局</button><button data-prompt-scope="wechat" class="is-active">微信</button><button data-prompt-scope="community">社区</button></div><div class="moli-settings-note">旧版已有预设自动归入“微信”；全局预设会与当前模块预设组合。私聊完整使用启用条目；群聊同样使用行为条目，但“输出协议”由群聊自己的 JSON / 单气泡协议接管以避免格式冲突。皮下使用独立 Fourth Wall Protocol，不注入这里。角色卡、世界书、正文等动态资料仍由上下文层实时提供。</div>
         <div class="moli-prompt-block-list" data-prompt-block-list></div>
         <button type="button" class="moli-secondary-btn" data-action="prompt-add-custom">＋ 添加自定义条目</button>
@@ -1291,7 +1287,6 @@ export function createPhonePanel({
   const apiParamsBody = panel.querySelector('[data-api-params-body]');
   const apiParamsArrow = panel.querySelector('[data-api-params-arrow]');
   const apiParamInputs = [...panel.querySelectorAll('[data-api-param]')];
-  const promptMaster = panel.querySelector('[data-prompt-master]');
   const promptBlockList = panel.querySelector('[data-prompt-block-list]');
   const promptEditorTitle = panel.querySelector('[data-prompt-editor-title]');
   const promptEditorContent = panel.querySelector('[data-prompt-editor-content]');
@@ -3926,21 +3921,18 @@ export function createPhonePanel({
     }
     momentsMetaSheet.hidden=false;
   }
-  function chooseMomentMentionContact(){
+  async function chooseMomentMentionContact(){
     const contacts=composeSelectableContacts();
     if(!contacts.length){ windowRef.alert?.('微信里还没有可 @ 的角色。'); return null; }
-    const menu=contacts.map((c,i)=>`${i+1}. ${canonicalContactName(c)}`).join('\n');
-    const picked=windowRef.prompt?.(`@ 谁？\n${menu}\n\n输入序号`, '1');
-    if(picked===null)return null;
-    const index=Number.parseInt(String(picked).trim(),10)-1;
-    return contacts[index]||null;
+    const choice=await tapPickerPromise('@ 谁？',contacts.map(item=>({label:canonicalContactName(item),item})));
+    return choice?.item||null;
   }
-  function askMomentUserComment(label='评论'){
+  async function askMomentUserComment(label='评论'){
     let content=windowRef.prompt?.(`${label}\n输入 @ 可选择微信角色`, '') ?? null;
     if(content===null)return null;
     let mentionTarget=null;
     if(String(content).includes('@')){
-      mentionTarget=chooseMomentMentionContact();
+      mentionTarget=await chooseMomentMentionContact();
       if(mentionTarget)content=String(content).replace('@',`@${canonicalContactName(mentionTarget)} `);
     }
     content=String(content).trim();
@@ -4091,7 +4083,6 @@ export function createPhonePanel({
 
   function renderPromptSettings() {
     const settings = getPromptSettings();
-    if (promptMaster) promptMaster.checked = settings.enabled !== false;
     if (!promptBlockList) return;
     promptBlockList.innerHTML = settings.blocks.filter(item => String(item.scope || 'wechat') === activePromptScope).map(item => `
       <div class="moli-prompt-block" data-prompt-block="${escapeHtml(item.id)}">
@@ -6470,6 +6461,17 @@ export function createPhonePanel({
   ).onclick =
     updateExtension;
 
+  const openTapPicker = (title, items, onPick) => {
+    const old=panel.querySelector('[data-tap-picker]'); if(old)old.remove();
+    const layer=document.createElement('div'); layer.className='moli-tap-picker-backdrop'; layer.dataset.tapPicker='';
+    layer.innerHTML=`<div class="moli-tap-picker"><strong>${escapeHtml(title)}</strong><div>${items.map((item,i)=>`<button data-tap-index="${i}">${escapeHtml(item.label)}</button>`).join('')}</div><button class="moli-tap-cancel" data-tap-cancel>取消</button></div>`;
+    panel.appendChild(layer); layer.addEventListener('click',e=>{if(e.target===layer||e.target.closest('[data-tap-cancel]')){layer.remove();return;}const b=e.target.closest('[data-tap-index]');if(!b)return;const item=items[Number(b.dataset.tapIndex)];layer.remove();if(item)onPick(item);});
+  };
+  const tapPickerPromise = (title, items) => new Promise(resolve=>{
+    openTapPicker(title,items,choice=>resolve(choice));
+    const layer=panel.querySelector('[data-tap-picker]');
+    layer?.addEventListener('click',e=>{if(e.target===layer||e.target.closest('[data-tap-cancel]'))resolve(null);},{once:true});
+  });
   const renderCurrentWorldLabel = () => {
     const label = panel.querySelector('[data-current-world-label]');
     if (!label) return;
@@ -6481,13 +6483,7 @@ export function createPhonePanel({
     const roles = getContacts().filter(item => ['tavern','custom'].includes(String(item.kind || '')));
     if (!roles.length) { windowRef.alert?.('当前没有可选择的角色。'); return; }
     const currentId = getSelectedWorldContactId();
-    const menu = roles.map((item, index) => `${index + 1}. ${item.name || item.source?.originalName || '未命名角色'}${String(item.id)===currentId?'（当前）':''}`).join('\n');
-    const answer = windowRef.prompt?.(`选择当前角色世界（输入序号）：\n\n${menu}`, '');
-    if (answer === null) return;
-    const index = Number(String(answer).trim()) - 1;
-    if (!Number.isInteger(index) || index < 0 || index >= roles.length) { windowRef.alert?.('请输入列表中的有效序号。'); return; }
-    setSelectedWorldContactId(roles[index].id);
-    renderCurrentWorldLabel();
+    openTapPicker('选择当前角色世界',roles.map(item=>({label:`${item.name || item.source?.originalName || '未命名角色'}${String(item.id)===currentId?'（当前）':''}`,item})),choice=>{setSelectedWorldContactId(choice.item.id);renderCurrentWorldLabel();});
   });
   renderCurrentWorldLabel();
 
@@ -6527,24 +6523,16 @@ export function createPhonePanel({
   const getAnonymousAlias = postId => { try{return String(windowRef.localStorage?.getItem(anonymousAliasKey(postId))||'').trim();}catch{return '';} };
   const setAnonymousAlias = (postId,alias) => { try{windowRef.localStorage?.setItem(anonymousAliasKey(postId),String(alias||'').trim());}catch{} };
   const cleanTianyaTitle = title => String(title || '无标题').replace(/^(?:\s*[\[【][^\]】]{1,12}[\]】]\s*)+/, '').trim() || '无标题';
-  const chooseCommunityMentionContact = () => {
-    const candidates=getContacts().filter(item=>item && item.id && item.kind!=='group' && String(item.id)!=='builtin:meta');
-    if(!candidates.length){windowRef.alert?.('微信里还没有可 @ 的角色。');return null;}
-    const menu=candidates.map((item,i)=>`${i+1}. ${displayName(item)}`).join('\n');
-    const picked=windowRef.prompt?.(`@ 谁？\n${menu}\n\n输入序号`, '1');
-    if(picked===null)return null;
-    const target=candidates[Number(picked)-1];
-    if(!target)windowRef.alert?.('没有这个联系人。');
-    return target||null;
-  };
   let communityComposerState = null;
   const isUserOwnedPost = post => String(post?.author?.id||post?.author?.knownIdentityId||'')==='user' || post?.extra?.userOwned===true;
   const openCommunityComposer = ({postId, replyToCommentId='', zhihuAnswerId='', replyLabel=''}) => {
     const post=getPublicWebPost(getScopeKey?.(),postId); if(!post)return;
     communityComposerState={postId:String(postId),replyToCommentId:String(replyToCommentId||''),zhihuAnswerId:String(zhihuAnswerId||''),replyLabel:String(replyLabel||'')};
-    const modal=panel.querySelector('[data-community-composer]'); const identity=modal?.querySelector('[data-community-identity]');
-    if(identity){ identity.innerHTML=`<option value="real">本名</option><option value="anonymous">匿名</option>${isUserOwnedPost(post)?'<option value="owner">我是楼主</option>':''}`; identity.value='real'; }
-    const alias=modal?.querySelector('[data-community-alias]'); if(alias){alias.value=getAnonymousAlias(postId)||'匿名用户';alias.hidden=true;}
+    const modal=panel.querySelector('[data-community-composer]'); communityComposerState.identityMode='real';
+    const identityButton=modal?.querySelector('[data-community-identity-button]'); if(identityButton)identityButton.textContent='本名⌄';
+    const alias=modal?.querySelector('[data-community-alias]'); if(alias)alias.value=getAnonymousAlias(postId)||'匿名用户';
+    const aliasRow=modal?.querySelector('[data-community-alias-row]'); if(aliasRow)aliasRow.hidden=true;
+    modal?.querySelectorAll('[data-community-identity-menu],[data-community-at-menu]').forEach(x=>x.hidden=true);
     const target=modal?.querySelector('[data-community-reply-target]'); if(target){target.textContent=replyLabel?`回复 ${replyLabel}`:'';target.hidden=!replyLabel;}
     const input=modal?.querySelector('[data-community-content]'); if(input){input.value='';input.focus();}
     modal?.classList.add('is-open');
@@ -6784,9 +6772,8 @@ export function createPhonePanel({
       const post=getPublicWebPost(getScopeKey?.(),communityInvite.dataset.postId); if(!post)return;
       const candidates=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta');
       if(!candidates.length){windowRef.alert?.('微信里还没有可邀请的角色。');return;}
-      const menu=candidates.map((item,i)=>`${i+1}. ${displayName(item)}`).join('\n');
-      const picked=windowRef.prompt?.(`邀请谁来评论？\n${menu}\n\n输入序号`,'1'); if(picked===null)return;
-      const target=candidates[Number(picked)-1]; if(!target){windowRef.alert?.('没有这个联系人。');return;}
+      const choice=await tapPickerPromise('邀请谁来评论？',candidates.map(item=>({label:displayName(item),item}))); if(!choice)return;
+      const target=choice.item;
       const scopeKey=getScopeKey?.(); const conversationKey=privateConversationKeyFor(scopeKey,target.id);
       recordWorldEvent(scopeKey,{source:`community.${post.section}`,actorId:'user',action:'INVITE_COMMENT',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 邀请你参与社区帖子：${post.title||'无标题'}`,metadata:{postId:String(post.id||'')},awareness:'known'});
       const busyKey=`community-invite:${target.id}:${post.id}`; if(publicWebGenerating.has(busyKey))return; publicWebGenerating.add(busyKey); toast(`已邀请${displayName(target)}，等待他的决定…`);
@@ -6805,9 +6792,8 @@ export function createPhonePanel({
       const post=getPublicWebPost(getScopeKey?.(),zhihuInvite.dataset.postId); if(!post)return;
       const candidates=getContacts().filter(item=>item && item.id && item.kind!=='group' && String(item.id)!=='builtin:meta');
       if(!candidates.length){windowRef.alert?.('微信里还没有可邀请的角色。');return;}
-      const menu=candidates.map((item,i)=>`${i+1}. ${displayName(item)}`).join('\n');
-      const picked=windowRef.prompt?.(`邀请谁回答？\n${menu}\n\n输入序号`, '1'); if(picked===null)return;
-      const target=candidates[Number(picked)-1]; if(!target){windowRef.alert?.('没有这个联系人。');return;}
+      const choice=await tapPickerPromise('邀请谁回答？',candidates.map(item=>({label:displayName(item),item}))); if(!choice)return;
+      const target=choice.item;
       const note=windowRef.prompt?.('邀请文本（可以留空）','')??null; if(note===null)return;
       const scopeKey=getScopeKey?.(); const conversationKey=privateConversationKeyFor(scopeKey,target.id);
       recordWorldEvent(scopeKey,{source:'community.zhihu',actorId:'user',action:'INVITE_ANSWER',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 邀请你回答知乎问题：${post.title}${String(note).trim()?`；邀请语：${String(note).trim()}`:''}`,metadata:{postId:String(post.id||'')},awareness:'known'});
@@ -6833,9 +6819,8 @@ export function createPhonePanel({
       const groups=getScopeConversations(getScopeKey?.()).filter(item=>item?.type==='group').map(item=>({kind:'group',id:String(item.conversationKey||item.id||''),label:String(item.name||'群聊'),target:item}));
       const candidates=[...people,...groups];
       if(!candidates.length){windowRef.alert?.('微信里还没有可以转发的联系人或群聊。');return;}
-      const menu=candidates.map((item,i)=>`${i+1}. ${item.kind==='group'?'[群聊] ':'[联系人] '}${item.label}`).join('\n');
-      const picked=windowRef.prompt?.(`转发给谁？\n${menu}\n\n输入序号`,'1');if(picked===null)return;
-      const choice=candidates[Number(picked)-1];if(!choice){windowRef.alert?.('没有这个联系人或群聊。');return;}
+      const pickedChoice=await tapPickerPromise('转发给谁？',candidates.map(item=>({label:`${item.kind==='group'?'[群聊] ':'[联系人] '}${item.label}`,item})));if(!pickedChoice)return;
+      const choice=pickedChoice.item;
       const target=choice.target; const scopeKey=getScopeKey?.();const conversationKey=choice.kind==='group'?choice.id:privateConversationKeyFor(scopeKey,target.id);
       const platform=sourceLabel(post);
       const forwardSnapshot={postId:String(post.id||''),section:String(post.section||''),platform,customCommunityId:String(post.extra?.customCommunityId||''),customCommunityName:String(post.extra?.customCommunityName||''),authorName:String(post.author?.name||post.authorName||'匿名网友'),title:String(post.title||'无标题'),content:String(post.content||''),snapshotAt:Date.now()};
@@ -6854,13 +6839,15 @@ export function createPhonePanel({
 
   const communityComposer=document.createElement('div');
   communityComposer.className='moli-community-composer-backdrop'; communityComposer.dataset.communityComposer='';
-  communityComposer.innerHTML=`<div class="moli-community-composer-panel"><div class="moli-community-composer-tools"><select data-community-identity><option value="real">本名</option><option value="anonymous">匿名</option></select><button type="button" data-community-at>@</button><span data-community-reply-target hidden></span><button type="button" data-community-close>×</button></div><input class="moli-community-alias" data-community-alias hidden placeholder="匿名网名"><textarea data-community-content placeholder="说点什么……"></textarea><button type="button" class="moli-community-send" data-community-send>发送</button></div>`;
+  communityComposer.innerHTML=`<div class="moli-community-composer-shell"><div class="moli-community-composer-top"><button type="button" class="moli-community-pill" data-community-identity-button>本名⌄</button><button type="button" class="moli-community-pill moli-community-at-pill" data-community-at-button>@⌄</button></div><div class="moli-community-picker" data-community-identity-menu hidden><button data-community-mode="real">本名</button><button data-community-mode="anonymous">匿名</button><button data-community-mode="owner">楼主</button></div><div class="moli-community-picker moli-community-at-menu" data-community-at-menu hidden></div><div class="moli-community-composer-panel"><div class="moli-community-alias-row" data-community-alias-row hidden>匿名：<input data-community-alias placeholder="匿名名"></div><span data-community-reply-target hidden></span><textarea data-community-content placeholder="说点什么……"></textarea><button type="button" class="moli-community-send" data-community-send>发送</button></div></div>`;
   panel.appendChild(communityComposer);
   communityComposer.querySelector('[data-community-close]')?.addEventListener('click',closeCommunityComposer);
   communityComposer.addEventListener('click',e=>{if(e.target===communityComposer)closeCommunityComposer();});
-  communityComposer.querySelector('[data-community-identity]')?.addEventListener('change',e=>{const alias=communityComposer.querySelector('[data-community-alias]');if(alias)alias.hidden=e.target.value!=='anonymous';});
-  communityComposer.querySelector('[data-community-at]')?.addEventListener('click',()=>{const target=chooseCommunityMentionContact();if(!target)return;if(communityComposerState)communityComposerState.mentionTarget=target;const input=communityComposer.querySelector('[data-community-content]');if(input&&!input.value.includes(`@${displayName(target)}`))input.value=`@${displayName(target)} ${input.value}`;input?.focus();});
-  communityComposer.querySelector('[data-community-send]')?.addEventListener('click',()=>{const state=communityComposerState;if(!state)return;const post=getPublicWebPost(getScopeKey?.(),state.postId);if(!post)return;const content=String(communityComposer.querySelector('[data-community-content]')?.value||'').trim();if(!content)return;const mode=communityComposer.querySelector('[data-community-identity]')?.value||'real';let author;if(mode==='anonymous'){const alias=String(communityComposer.querySelector('[data-community-alias]')?.value||'').trim()||'匿名用户';setAnonymousAlias(state.postId,alias);author={type:'user',id:'user',name:alias,anonymous:true,knownIdentityId:'user',identityKnownBy:['user']};}else if(mode==='owner'&&isUserOwnedPost(post)){author={...(post.author||{}),type:'user',id:'user',uiName:`${post.author?.name||'楼主'}（楼主）`,knownIdentityId:'user'};}else author={type:'user',id:'user',name:getTavernUserContext()?.name||'User',anonymous:false};const entry={id:`userc_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,author,content,replyToCommentId:state.replyToCommentId};let saved;if(post.section==='zhihu'&&state.zhihuAnswerId){saved={...entry};addZhihuAnswerComments(getScopeKey?.(),post.id,state.zhihuAnswerId,[saved]);}else saved=addPublicWebComment(getScopeKey?.(),post.id,entry);const mention=state.mentionTarget;const answerId=state.zhihuAnswerId;closeCommunityComposer();renderPublicWeb();if(saved&&mention)void runCommunityMention({post:getPublicWebPost(getScopeKey?.(),post.id),userEntry:saved,mentionTarget:mention,replyToCommentId:saved.id,zhihuAnswerId:answerId});});
+  communityComposer.querySelector('[data-community-identity-button]')?.addEventListener('click',()=>{const m=communityComposer.querySelector('[data-community-identity-menu]');if(m)m.hidden=!m.hidden;const a=communityComposer.querySelector('[data-community-at-menu]');if(a)a.hidden=true;});
+  communityComposer.querySelector('[data-community-identity-menu]')?.addEventListener('click',e=>{const b=e.target.closest('[data-community-mode]');if(!b)return;const mode=b.dataset.communityMode;communityComposerState.identityMode=mode;communityComposer.querySelector('[data-community-identity-button]').textContent=({real:'本名⌄',anonymous:'匿名⌄',owner:'楼主⌄'})[mode];communityComposer.querySelector('[data-community-alias-row]').hidden=mode!=='anonymous';e.currentTarget.hidden=true;});
+  communityComposer.querySelector('[data-community-at-button]')?.addEventListener('click',()=>{const menu=communityComposer.querySelector('[data-community-at-menu]');const candidates=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta');menu.innerHTML=candidates.map(item=>`<button data-community-at-id="${escapeHtml(item.id)}">${escapeHtml(displayName(item))}</button>`).join('')||'<span>暂无角色</span>';menu.hidden=!menu.hidden;const i=communityComposer.querySelector('[data-community-identity-menu]');if(i)i.hidden=true;});
+  communityComposer.querySelector('[data-community-at-menu]')?.addEventListener('click',e=>{const b=e.target.closest('[data-community-at-id]');if(!b)return;const target=getContacts().find(x=>String(x.id)===String(b.dataset.communityAtId));if(!target)return;communityComposerState.mentionTarget=target;communityComposer.querySelector('[data-community-at-button]').textContent=`@${displayName(target)}⌄`;e.currentTarget.hidden=true;});
+  communityComposer.querySelector('[data-community-send]')?.addEventListener('click',()=>{const state=communityComposerState;if(!state)return;const post=getPublicWebPost(getScopeKey?.(),state.postId);if(!post)return;const content=String(communityComposer.querySelector('[data-community-content]')?.value||'').trim();if(!content)return;const mode=state.identityMode||'real';let author;if(mode==='anonymous'){const alias=String(communityComposer.querySelector('[data-community-alias]')?.value||'').trim()||'匿名用户';setAnonymousAlias(state.postId,alias);author={type:'user',id:'user',name:alias,anonymous:true,knownIdentityId:'user',identityKnownBy:['user']};}else if(mode==='owner'){author={type:'user',id:'user',name:'楼主',uiName:'楼主',anonymous:false,knownIdentityId:'user'};}else author={type:'user',id:'user',name:getTavernUserContext()?.name||'User',anonymous:false};const entry={id:`userc_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,author,content,replyToCommentId:state.replyToCommentId};let saved;if(post.section==='zhihu'&&state.zhihuAnswerId){saved={...entry};addZhihuAnswerComments(getScopeKey?.(),post.id,state.zhihuAnswerId,[saved]);}else saved=addPublicWebComment(getScopeKey?.(),post.id,entry);const mention=state.mentionTarget;const answerId=state.zhihuAnswerId;closeCommunityComposer();renderPublicWeb();if(saved&&mention)void runCommunityMention({post:getPublicWebPost(getScopeKey?.(),post.id),userEntry:saved,mentionTarget:mention,replyToCommentId:saved.id,zhihuAnswerId:answerId});});
 
   panel.querySelectorAll('[data-action="app-home-back"]').forEach(button => {
     button.onclick = () => show('phone-home');
@@ -7150,7 +7137,7 @@ export function createPhonePanel({
       renderContactMoments(); toast('评论已删除'); return;
     }
     if (button.dataset.action === 'profile-moment-comment') {
-      const entry = askMomentUserComment('评论');
+      const entry = await askMomentUserComment('评论');
       if (!entry) return;
       const targetMoment=listProfileMoments(scopeKey,item.id).find(moment=>String(moment.id)===momentId);
       const beforeIds=new Set((targetMoment?.comments||[]).map(c=>String(c.id)));
@@ -7249,7 +7236,7 @@ export function createPhonePanel({
       return;
     }
     if (action === 'moment-comment') {
-      const entry = askMomentUserComment('评论');
+      const entry = await askMomentUserComment('评论');
       if (!entry) return;
       const targetMomentBefore = listPublicMoments(scopeKey).find(x => String(x.id) === momentId);
       const beforeIds=new Set((targetMomentBefore?.comments||[]).map(c=>String(c.id)));
@@ -7281,6 +7268,7 @@ export function createPhonePanel({
   // 非阻塞后台检查；失败不影响手机初始化。
   checkExtensionUpdateAvailability();
 
+  panel.querySelector('[data-action="settings-home"]')?.addEventListener('click', () => show('phone-home'));
   panel.querySelector('[data-action="prompt-settings"]')?.addEventListener('click', () => show('prompt-settings'));
   panel.querySelector('[data-action="prompt-settings-back"]')?.addEventListener('click', () => show('settings'));
   panel.querySelector('[data-action="prompt-editor-back"]')?.addEventListener('click', () => show('prompt-settings'));
@@ -7296,11 +7284,6 @@ export function createPhonePanel({
   });
   panel.querySelectorAll('[data-prompt-scope]').forEach(button=>button.addEventListener('click',()=>{ activePromptScope=String(button.dataset.promptScope||'wechat'); panel.querySelectorAll('[data-prompt-scope]').forEach(x=>x.classList.toggle('is-active',x===button)); renderPromptSettings(); }));
 
-  promptMaster?.addEventListener('change', () => {
-    const settings = getPromptSettings();
-    settings.enabled = promptMaster.checked;
-    savePromptSettings(settings);
-  });
   promptBlockList?.addEventListener('change', event => {
     const input = event.target.closest?.('[data-prompt-block-enabled]');
     if (!input) return;
