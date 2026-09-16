@@ -1819,3 +1819,18 @@
 #moli-phone-panel .moli-moments-visibility-public.is-selected b,
 #moli-phone-panel .moli-moments-visibility-person.is-selected b{visibility:visible}
 #moli-phone-panel .moli-moments-role-picker{max-height:300px;overflow-y:auto;margin:0;-webkit-overflow-scrolling:touch}
+
+/* moli139 · chat glass controls + Moments visibility picker */
+#moli-phone-panel .moli-message-menu{background:rgba(226,235,239,.38)!important;border:1px solid rgba(255,255,255,.72)!important;border-radius:18px!important;padding:6px!important;-webkit-backdrop-filter:blur(26px) saturate(155%);backdrop-filter:blur(26px) saturate(155%)}
+#moli-phone-panel .moli-message-menu button{background:transparent!important;border-radius:12px!important;border-bottom:1px solid rgba(255,255,255,.28)!important}
+#moli-phone-panel .moli-message-menu button:last-child{border-bottom:0!important}
+#moli-phone-panel .moli-message-menu button:active{background:rgba(255,255,255,.24)!important}
+#moli-phone-panel .moli-multi-bar{margin:0 10px 10px;padding:7px 9px;border:1px solid rgba(255,255,255,.78);border-radius:28px;background:rgba(235,242,245,.48);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%);box-shadow:inset 0 1px 0 rgba(255,255,255,.92),0 6px 18px rgba(0,0,0,.10)}
+#moli-phone-panel .moli-multi-bar button{min-height:40px;border:0!important;border-radius:20px!important;background:rgba(255,255,255,.28)!important;box-shadow:none!important}
+#moli-phone-panel .moli-multi-bar .moli-danger-btn{background:rgba(214,65,65,.82)!important;color:#fff!important}
+#moli-phone-panel .moli-multi-count{font-size:13px;color:#555}
+#moli-phone-panel [data-moments-meta-sheet]{z-index:240!important;pointer-events:auto!important}
+#moli-phone-panel .moli-moments-meta-card{background:rgba(250,250,250,.88)!important;border:1px solid rgba(255,255,255,.86);-webkit-backdrop-filter:blur(24px) saturate(145%);backdrop-filter:blur(24px) saturate(145%)}
+#moli-phone-panel .moli-moments-visibility-public,#moli-phone-panel .moli-moments-visibility-person{width:100%;min-height:48px;border:0;border-bottom:1px solid rgba(0,0,0,.07);background:transparent;display:flex;align-items:center;justify-content:space-between;padding:0 8px;font:inherit;color:#222;text-align:left;cursor:pointer}
+#moli-phone-panel .moli-moments-visibility-public b,#moli-phone-panel .moli-moments-visibility-person b{visibility:hidden;color:#16a765;font-size:18px}
+#moli-phone-panel .moli-moments-visibility-public.is-selected b,#moli-phone-panel .moli-moments-visibility-person.is-selected b{visibility:visible}
