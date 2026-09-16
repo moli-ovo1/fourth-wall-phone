@@ -1823,12 +1823,38 @@
   margin:0!important;
   z-index:82!important;
 }
-#moli-phone-panel [data-page="chat"].moli-chat-tools-open .moli-compose{
-  transform:translateY(-96px);
-  transition:transform .16s ease;
-}
 #moli-phone-panel [data-page="chat"] .moli-compose{
   transform:translateY(0);
   transition:transform .16s ease;
   z-index:83!important;
+}
+
+/* moli130 · one coordinate system for chat footer/tools. Do not move the composer when + opens. */
+#moli-phone-panel [data-page="chat"]{
+  display:flex!important;
+  flex-direction:column!important;
+  min-height:0!important;
+}
+#moli-phone-panel [data-page="chat"] .moli-chat-body{
+  flex:1 1 auto!important;
+  min-height:0!important;
+}
+#moli-phone-panel [data-page="chat"] .moli-compose,
+#moli-phone-panel [data-page="chat"].moli-chat-tools-open .moli-compose{
+  transform:none!important;
+  transition:none!important;
+}
+/* Accessory panel is an overlay. It never enters flex flow and therefore cannot move/resize chat content. */
+#moli-phone-panel [data-page="chat"] .moli-chat-tools-menu{
+  position:absolute!important;
+  left:12px!important;
+  right:12px!important;
+  bottom:10px!important;
+  margin:0!important;
+  width:auto!important;
+  z-index:84!important;
+}
+/* While tools are open, place them immediately below the unchanged composer anchor. */
+#moli-phone-panel [data-page="chat"].moli-chat-tools-open .moli-chat-tools-menu{
+  bottom:10px!important;
 }
