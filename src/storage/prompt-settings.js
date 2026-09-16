@@ -546,7 +546,7 @@ export function getPromptSettings() {
 
   return {
     schemaVersion: 2,
-    enabled: saved?.enabled !== false,
+    enabled: true,
     blocks: ordered,
   };
 }
@@ -556,7 +556,7 @@ export function savePromptSettings(next) {
   const blocks = Array.isArray(next?.blocks) ? next.blocks : current.blocks;
   const value = {
     schemaVersion: 2,
-    enabled: next?.enabled !== false,
+    enabled: true,
     blocks: blocks.map((item, index) => {
       const defaultItem = DEFAULT_ONLINE_PROMPT_BLOCKS.find(block => block.id === item?.id);
       if (defaultItem) {
@@ -617,7 +617,6 @@ export function restoreDefaultPromptSettings() {
 }
 
 export function buildPresetPrompt(scope = 'wechat', settings = getPromptSettings(), { excludeIds = [] } = {}) {
-  if (settings?.enabled === false) return '';
   const excluded = new Set((Array.isArray(excludeIds) ? excludeIds : []).map(String));
   const wanted = String(scope || 'wechat');
   return (settings?.blocks || [])
