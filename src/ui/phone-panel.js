@@ -423,7 +423,7 @@ export function createPhonePanel({
       <input type="file" accept="image/*" data-chat-wallpaper-input hidden>
       <footer class="moli-compose">
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
-        <button class="moli-send" data-action="send" aria-label="发送">♥</button>
+        <button class="moli-send" data-action="send" aria-label="发送">♡</button>
         <button class="moli-compose-plus" data-action="chat-tools" aria-label="更多">＋</button>
       </footer>
     </section>
