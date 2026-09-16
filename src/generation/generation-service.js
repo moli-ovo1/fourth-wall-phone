@@ -23,7 +23,7 @@ import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getTavernUserContext, replaceUserPlaceholder } from '../core/tavern-user.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
-import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, markMomentChatEventsDelivered } from '../storage/moments-store.js';
+import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, markMomentChatEventsDelivered , markProfileMomentsMemoryOrganized} from '../storage/moments-store.js';
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 
 function findContact(contactId) {
@@ -964,12 +964,14 @@ function parsePublicMomentsBatch(rawText = '', validIds = []) {
  * A refresh asks whether this contact has a believable recent post; SKIP is a first-class result.
  */
 
-export async function summarizeProfileMomentsMemory({ scopeKey, contactId, signal } = {}) {
+export async function summarizeProfileMomentsMemory({ scopeKey, contactId, momentIds = [], signal } = {}) {
   const id = String(contactId || '');
   if (!scopeKey || !id) throw new Error('当前角色朋友圈不可用');
   const contact = hydratedContact(findContact(id));
   assertContactReady(contact);
-  const items = listProfileMoments(scopeKey, id);
+  const allItems = listProfileMoments(scopeKey, id);
+  const requested = new Set((momentIds || []).map(String).filter(Boolean));
+  const items = allItems.filter(item => !Number(item.memoryOrganizedAt || 0) && (!requested.size || requested.has(String(item.id))));
   if (!items.length) return { summary: getProfileMomentMemory(scopeKey, id)?.summary || '', changed: false };
   let rawConfig = getApiSettings();
   if (contact?.apiOverride?.enabled === true) {
@@ -994,7 +996,8 @@ export async function summarizeProfileMomentsMemory({ scopeKey, contactId, signa
   }
   if (!text) throw new Error('朋友圈记忆整理返回为空');
   setProfileMomentMemory(scopeKey,id,text);
-  return { summary:text, changed:true };
+  markProfileMomentsMemoryOrganized(scopeKey,id,items.map(item=>item.id));
+  return { summary:text, changed:true, organizedIds:items.map(item=>item.id) };
 }
 
 export async function generateContactMoment({ scopeKey, contactId, signal } = {}) {
