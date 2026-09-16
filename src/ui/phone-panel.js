@@ -3953,7 +3953,7 @@ export function createPhonePanel({
       recordMomentChatEvent(scopeKey,{contactId:mentionTarget.id,type:'USER_MENTIONED_YOU_IN_MOMENT',momentId:moment.id,content:`User 在朋友圈评论区 @了你：${userComment.content}`});
       const ownerName=surface==='profile' ? canonicalContactName(contact(ownerContactId)) : momentActorName(moment.author);
       const instruction=`【moli朋友圈事件｜@提及】\nUser 在朋友圈评论区 @了你。\n动态作者：${ownerName||'未知'}\n动态正文：${moment.content||'无'}\nUser 的评论：${userComment.content}\n你已经收到这次 @，但绝不要求你回应。请按人物性格、关系和当前状态决定：REPLY（只在评论区公开回复）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。\n严格追加机器可读块：<moment_action>REPLY|MESSAGE|BOTH|SKIP</moment_action>；若公开回复，再追加 <moment_reply>回复正文</moment_reply>；若私聊，再用正常 <msg>私聊内容</msg>。`;
-      const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction});
+      const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction,allowNoPendingUser:true});
       const raw=String(result?.text||'');
       const action=(raw.match(/<moment_action>\s*(REPLY|MESSAGE|BOTH|SKIP)\s*<\/moment_action>/i)?.[1]||'SKIP').toUpperCase();
       const publicReply=String(raw.match(/<moment_reply>([\s\S]*?)<\/moment_reply>/i)?.[1]||'').trim();
@@ -6505,6 +6505,16 @@ export function createPhonePanel({
   const publicWebGenerating = new Set();
   const expandedXhsThreads = new Set();
   const sourceLabel = post => post?.section==='custom' ? String(post?.extra?.customCommunityName||'自创') : ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post?.section] || '社区');
+  const communityDiscussionContext = post => {
+    const rows=(post?.comments||[]).slice(-20).map((item,index)=>`${index+1}. ${item?.author?.name||'网友'}：${item?.content||''}`).filter(Boolean);
+    if(post?.section==='zhihu'){
+      for(const answer of (post?.extra?.answers||[]).slice(-8)){
+        rows.push(`回答｜${answer?.author?.name||'匿名用户'}：${answer?.content||''}`);
+        for(const comment of (answer?.comments||[]).slice(-6)) rows.push(`  评论｜${comment?.author?.name||'网友'}：${comment?.content||''}`);
+      }
+    }
+    return rows.length?rows.join('\n'):'（暂无评论）';
+  };
   const privateConversationKeyFor = (scopeKey, contactId) => {
     const existing=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(contactId)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
     if(existing) return String(existing.conversationKey||existing.contactId||contactId);
@@ -6552,7 +6562,7 @@ export function createPhonePanel({
     const busyKey=`community-mention:${mentionTarget.id}:${post.id}:${Date.now()}`; publicWebGenerating.add(busyKey);
     try{
       const platform=sourceLabel(post); const instruction=`【moli社区事件｜${platform} @提及】\nUser 在${platform}的一条内容下 @了你。\n帖子/问题：${post.title||'无标题'}\n正文：${post.content||'无'}\nUser 的评论：${userEntry.content}\n你可以完全按自己的性格决定：REPLY（只公开回复）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。不要因为被 @ 就必须回应。\n严格追加机器可读块：<community_action>REPLY|MESSAGE|BOTH|SKIP</community_action>；若公开回复，再追加 <community_reply>公开回复正文</community_reply>；若私聊，再用正常 <msg>私聊内容</msg>。公开回复只能以你自己的身份发言，绝不能代替 User。`;
-      const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction});
+      const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction,allowNoPendingUser:true});
       const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(REPLY|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
       const publicReply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim();
       const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
@@ -6785,12 +6795,12 @@ export function createPhonePanel({
       recordWorldEvent(scopeKey,{source:`community.${post.section}`,actorId:'user',action:'INVITE_COMMENT',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 邀请你参与社区帖子：${post.title||'无标题'}`,metadata:{postId:String(post.id||'')},awareness:'known'});
       const busyKey=`community-invite:${target.id}:${post.id}`; if(publicWebGenerating.has(busyKey))return; publicWebGenerating.add(busyKey); toast(`已邀请${displayName(target)}，等待他的决定…`);
       try{
-        const instruction=`【moli社区事件｜邀请评论】\nUser 邀请你参与一条${sourceLabel(post)}内容。\n标题：${post.title||'无标题'}\n正文：${post.content||'无'}\n你可以 COMMENT（公开评论）、MESSAGE（只私聊 User）、BOTH 或 SKIP。若公开参与，还要自行决定 REAL（本名）或 ANONYMOUS（匿名）；匿名发表时帖子里的其他人不能凭空知道是你；若选择匿名，请自己取一个适合当前帖子的匿名网名。\n严格追加：<community_action>COMMENT|MESSAGE|BOTH|SKIP</community_action>；公开评论时追加 <community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias><community_reply>评论正文</community_reply>；私聊用正常 <msg>内容</msg>。`;
+        const instruction=`【moli社区事件｜邀请评论】\nUser 邀请你参与一条${sourceLabel(post)}内容。\n标题：${post.title||'无标题'}\n正文：${post.content||'无'}\n【当前帖子已有讨论】\n${communityDiscussionContext(post)}\n\n请把主帖和已有讨论视为这次邀请本身的上下文；这次社区邀请不要求微信私聊里存在一条等待回复的新消息。\n你可以 COMMENT（公开评论）、MESSAGE（只私聊 User）、BOTH 或 SKIP。若公开参与，还要自行决定 REAL（本名）或 ANONYMOUS（匿名）；匿名发表时帖子里的其他人不能凭空知道是你；若选择匿名，请自己取一个适合当前帖子的匿名网名。\n严格追加：<community_action>COMMENT|MESSAGE|BOTH|SKIP</community_action>；公开评论时追加 <community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias><community_reply>评论正文</community_reply>；私聊用正常 <msg>内容</msg>。`;
         const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction});
         const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(COMMENT|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
         const identity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase();
         const reply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim(); const alias=String(raw.match(/<community_alias>([\s\S]*?)<\/community_alias>/i)?.[1]||'').trim()||'匿名用户'; const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
-        if((action==='COMMENT'||action==='BOTH')&&reply)addPublicWebComment(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:alias,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:reply});
+        if((action==='COMMENT'||action==='BOTH')&&reply)addPublicWebComment(scopeKey,post.id,{author:identity==='ANONYMOUS'?{type:'contact',id:target.id,name:answerAlias,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false},content:reply});
         if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-invite',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});
         renderPublicWeb(); toast(action==='SKIP'?`${displayName(target)}没有回应这次邀请`:`${displayName(target)}已处理邀请`);
       }catch(error){console.error('[moli小手机] community invite failed:',error);windowRef.alert?.(`邀请处理失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);} return;
@@ -6807,7 +6817,7 @@ export function createPhonePanel({
       recordWorldEvent(scopeKey,{source:'community.zhihu',actorId:'user',action:'INVITE_ANSWER',targetContactIds:[target.id],objectId:String(post.id||''),content:`User 邀请你回答知乎问题：${post.title}${String(note).trim()?`；邀请语：${String(note).trim()}`:''}`,metadata:{postId:String(post.id||'')},awareness:'known'});
       const busyKey=`community-role:${target.id}:${post.id}`; if(publicWebGenerating.has(busyKey))return; publicWebGenerating.add(busyKey); toast(`已邀请${displayName(target)}，等待他的决定…`);
       try{
-        const instruction=`【moli社区事件｜知乎邀请回答】\nUser 邀请你回答知乎问题。\n问题：${post.title}\n补充：${post.content||'无'}\n邀请语：${String(note).trim()||'无'}\n你可以完全按自己的性格决定：ANSWER（只公开回答）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。不要因为被邀请就必须回答。\n请在正常角色口吻之外严格追加机器可读块：<community_action>ANSWER|MESSAGE|BOTH|SKIP</community_action>；如果包含公开回答，还要自行决定 REAL（本名）或 ANONYMOUS（匿名），追加 <community_identity>REAL|ANONYMOUS</community_identity><community_answer>你的知乎回答正文</community_answer>；如果包含私聊，再用正常 <msg>私聊内容</msg>。匿名回答时，帖子里的其他人不能凭空知道真实身份。`;
+        const instruction=`【moli社区事件｜知乎邀请回答】\nUser 邀请你回答知乎问题。\n问题：${post.title}\n补充：${post.content||'无'}\n邀请语：${String(note).trim()||'无'}\n【当前问题已有讨论】\n${communityDiscussionContext(post)}\n\n请把问题和已有回答/评论视为这次邀请本身的上下文；这次社区邀请不要求微信私聊里存在一条等待回复的新消息。\n你可以完全按自己的性格决定：ANSWER（只公开回答）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。不要因为被邀请就必须回答。\n请在正常角色口吻之外严格追加机器可读块：<community_action>ANSWER|MESSAGE|BOTH|SKIP</community_action>；如果包含公开回答，还要自行决定 REAL（本名）或 ANONYMOUS（匿名），追加 <community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias><community_answer>你的知乎回答正文</community_answer>；如果包含私聊，再用正常 <msg>私聊内容</msg>。匿名回答时，帖子里的其他人不能凭空知道真实身份。`;
         const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction});
         const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(ANSWER|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
         const answer=String(raw.match(/<community_answer>([\s\S]*?)<\/community_answer>/i)?.[1]||'').trim(); const answerAlias=String(raw.match(/<community_alias>([\s\S]*?)<\/community_alias>/i)?.[1]||'').trim()||'匿名用户'; const identity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase();
