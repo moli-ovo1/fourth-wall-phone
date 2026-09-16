@@ -7110,7 +7110,7 @@ export function createPhonePanel({
   contactMomentsPeekEnabled?.addEventListener('change',()=>{ if(contactMomentsPeekCount) contactMomentsPeekCount.disabled=!contactMomentsPeekEnabled.checked; saveContactMomentPeek(); });
   contactMomentsPeekCount?.addEventListener('blur',saveContactMomentPeek);
 
-  contactMomentsFeed?.addEventListener('click', event => {
+  contactMomentsFeed?.addEventListener('click', async event => {
     const button = event.target.closest?.('[data-action]');
     if (!button) return;
     const scopeKey = getScopeKey?.();
@@ -7192,7 +7192,7 @@ export function createPhonePanel({
   bindCommentLongPress(momentsFeed);
   bindCommentLongPress(contactMomentsFeed);
 
-  momentsFeed?.addEventListener('click', event => {
+  momentsFeed?.addEventListener('click', async event => {
     const actionButton = event.target.closest?.('[data-action]');
     if (!actionButton) return;
     const scopeKey = getScopeKey?.();
