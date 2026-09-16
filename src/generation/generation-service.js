@@ -1200,8 +1200,7 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
   const contacts = allContacts.filter(item => item && String(item.id || '') !== 'builtin:meta');
   if (!contacts.length) return { actors: [], consideredMomentIds: [], contacts: [] };
 
-  const allPublicMoments = listPublicMoments(scopeKey);
-  const feed = allPublicMoments.filter(item=>item?.visibility?.mode!=='only').slice(0, 10);
+  const feed = listPublicMoments(scopeKey).filter(item=>momentVisibleToContact(item,contact.id)).slice(0, 10);
   const feedText = feed.map(item => {
     const comments = (item.comments || []).map(comment => comment.deletedAt ? `${comment.actor?.name || '未知'} 删除了评论${comment.deletionReason ? `：${comment.deletionReason}` : ''}` : `${comment.actor?.name || '未知'}：${comment.content}`).join('；');
     return `momentId=${item.id}｜作者=${item.author?.name || '未知'}(id=${item.author?.id || ''})｜${new Date(Number(item.createdAt || Date.now())).toLocaleString()}\n${item.content}${comments ? `\n评论：${comments}` : ''}`;
@@ -1212,7 +1211,7 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
     const worldBook = item?.kind === 'custom'
       ? await getActivatedCustomWorldBook({ contact: item, scanText })
       : await getActivatedTavernWorldBook({ contact: item, scanText });
-    const privateVisibleFeed=allPublicMoments.filter(moment=>moment?.visibility?.mode==='only'&&momentVisibleToContact(moment,item.id)).slice(0,10).map(moment=>`momentId=${moment.id}｜作者=${moment.author?.name||'未知'}(id=${moment.author?.id||''})｜${new Date(Number(moment.createdAt||Date.now())).toLocaleString()}\n${moment.content}`).join('\n\n');
+    const privateVisibleFeed=feed.filter(moment=>moment?.visibility?.mode==='only'&&momentVisibleToContact(moment,item.id)).map(moment=>`momentId=${moment.id}｜作者=${moment.author?.name||'未知'}(id=${moment.author?.id||''})｜${new Date(Number(moment.createdAt||Date.now())).toLocaleString()}\n${moment.content}`).join('\n\n');
     actorBlocks.push(`===== CONTACT id=${item.id}｜${contactLabel(item)} =====\n【身份】\n${batchRoleProfile(item, scanText)}\n\n【仅此联系人被允许看到的朋友圈】\n${privateVisibleFeed||'无'}\n\n【本人的世界书】\n${clipBatchText(worldBook?.text || '', 4500) || '本轮无激活条目'}\n\n【本人的手机连续性】\n${formatPhoneBridge(scopeKey, item)}\n===== END =====`);
   }
 
@@ -1278,11 +1277,11 @@ function parsePublicWebBatch(text, userName = 'User') {
         return {id:ids[i],author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now(),replyToCommentId};
       }).filter(c=>c.content);
     })(),
-    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), customCommunityId:String(item?.customCommunityId || ''), customCommunityName:String(item?.customCommunityName || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), imageText:String(item?.imageText || ''), answer:String(item?.answer || ''), answers:Array.isArray(item?.answers)?item.answers.slice(0,6).map((a,ai)=>({id:String(a?.id||`ans_${Date.now()}_${ai}`),author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author, userName, '匿名用户')},content:String(a?.content||a?.answer||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:Array.isArray(a?.comments)?a.comments.slice(0,15).map((c,ci)=>({id:String(c?.id||`zac_${Date.now()}_${ai}_${ci}`),author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:String(c?.replyToCommentId||'')})).filter(c=>c.content):[]})).filter(a=>a.content):[] }
+    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), imageText:String(item?.imageText || ''), answer:String(item?.answer || ''), customCommunityId:String(item?.customCommunityId||''), customCommunityName:String(item?.customCommunityName||''), answers:Array.isArray(item?.answers)?item.answers.slice(0,6).map((a,ai)=>({id:String(a?.id||`ans_${Date.now()}_${ai}`),author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author, userName, '匿名用户')},content:String(a?.content||a?.answer||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:Array.isArray(a?.comments)?a.comments.slice(0,15).map((c,ci)=>({id:String(c?.id||`zac_${Date.now()}_${ai}_${ci}`),author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:String(c?.replyToCommentId||'')})).filter(c=>c.content):[]})).filter(a=>a.content):[] }
   })).filter(item => item.title && (item.section !== 'xiaohongshu' || (item.extra?.imagePrompt && item.extra?.imageText)));
 }
 
-export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled = false, section = 'tianya', customCommunities = [], signal } = {}) {
+export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled = false, section = 'tianya', signal, recommendSources = null, recommendCount = 0, customCommunities = [] } = {}) {
   if (!scopeKey) throw new Error('当前公共网络不可用');
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
@@ -1364,11 +1363,9 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
 
 只输出严格 JSON，不要解释。`;
   const genericSystem = section === 'xiaohongshu' ? xiaohongshuSystem : zhihuSystem;
-  const enabledCustomCommunities=(Array.isArray(customCommunities)?customCommunities:[]).filter(x=>x&&x.enabled!==false&&String(x.name||'').trim()&&String(x.description||'').trim()).slice(0,12);
-  const customCommunityPrompt=enabledCustomCommunities.length ? `\n\n【User 自创社区候选】\n这些不是固定平台换皮，而是 User 定义的故事世界信息环境。你可以在推荐页自然选择其中值得出现的频道，不要求每个频道每次都出。若生成自创内容，section 必须为 custom，并准确填写 customCommunityId / customCommunityName。内容必须服从该频道自己的描述，不要强行写成天涯、小红书或知乎。\n${enabledCustomCommunities.map(x=>`- ${String(x.name).trim()}（id=${String(x.id)}）：${String(x.description).trim()}`).join('\n')}` : '';
   const recommendSystem = `# moli社区 · 社区推荐生成器
 
-你正在刷新同一个故事世界中的公共互联网首页。这里不是第四种社区，也没有独立的“推荐文风”。你必须在天涯社区、小红书、知乎，以及 User 已启用的自创社区候选之间，自行选择并混合生成一批全新的内容。生成后，这些内容会永久归档进各自社区，因此每一条都必须从一开始就像它所属社区的原生内容。
+你正在刷新同一个故事世界中的公共互联网首页。这里不是第四种社区，也没有独立的“推荐文风”。你必须在天涯社区、小红书、知乎三种真实社区语法之间自行选择并混合生成一批全新的内容。生成后，这些内容会永久归档进各自社区，因此每一条都必须从一开始就像它所属社区的原生内容。
 
 【共同世界】
 三种社区共享同一个故事世界。可以从当前角色、人物关系、职业环境、社会背景、地点、时代、近期事件和正文剧情自然发散。故事世界应当成为推荐内容的重要来源，而不是偶尔出现的彩蛋；可以直接谈角色或 User，也可以只出现他们留下的社会痕迹。不要机械复述正文，也不要让整页只围绕主角，仍保留一部分普通互联网内容。运行环境中的 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、调试信息都不是故事世界事实，除非正文明确证明其存在。
@@ -1382,15 +1379,12 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
 【知乎候选】
 使用问答社区语法。title 是一个值得回答的问题，content 是问题补充或背景，answer 是一条有明确个人立场/知识来源的初始回答。问题可以来自世界中的职业、关系、社会现象、历史、生活经验、公共事件等。不要把所有回答写成百科全书，也不要整齐列点。评论围绕回答继续质疑、补充或讨论。
 
-${customCommunityPrompt}
-
-【推荐页要求】
-一次只生成 4~6 条，把更多注意力留给每条内容本身。平台数量不要固定配额，由内容自然决定，但一页必须至少出现两种平台，通常三种都应出现。题材必须明显多样，不要整页围绕同一关键词。每条 section 必须准确标记 tianya / xiaohongshu / zhihu / custom；custom 条目必须带 customCommunityId 与 customCommunityName，并且 id 必须来自上方启用列表。只输出严格 JSON，不要解释。`;
+【自创信息环境】\nUser 还可以定义自己的信息环境。只有本次提供的自创条目可以参与生成；它们不是天涯、小红书或知乎的换皮，必须遵循 User 对该条目的描述。\n${(customCommunities||[]).map(x=>`- ${x.name}：${x.description||'按名称自然理解'}`).join('\n')||'本次没有自创条目。'}\n\n【本次来源限制】\n只允许从：${(Array.isArray(recommendSources)&&recommendSources.length?recommendSources:['tianya','xiaohongshu','zhihu','custom']).join('、')} 中生成。若包含 custom，自创内容 section=custom，并在 customCommunityId/customCommunityName 标明所属条目。\n\n【推荐页要求】\n一次生成 ${recommendCount>0?recommendCount+' 条':'4~6 条'}，把更多注意力留给每条内容本身。不要固定平台配额，由内容自然决定。题材必须明显多样，不要整页围绕同一关键词。每条 section 必须准确标记 tianya / xiaohongshu / zhihu / custom。只输出严格 JSON，不要解释。`;
   const system = section === 'tianya' ? tianyaSystem : section === 'recommend' ? recommendSystem : genericSystem;
   const schema = section === 'tianya'
     ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复","replyTo":"可选；回复已有楼层时填写被回复楼层序号，只能指向本条评论之前的楼层"}]}]}。生成 6~10 条；每帖初始回复最多 15 条，并按冷帖 0~3、普通帖 4~8、热帖 9~15 自然分布。回复某楼时不要把 @用户名 #楼层号 重复写进 content，由界面根据 replyTo 展示。不要 markdown。`
     : section === 'recommend'
-      ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu|custom","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","customCommunityId":"仅自创社区使用，必须来自启用列表","customCommunityName":"仅自创社区使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 4~6 条；每条只带 0~4 条自然的初始互动，不要为了凑数塞满评论。不要 markdown。`
+      ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu|custom","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","customCommunityId":"仅自创使用","customCommunityName":"仅自创使用","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 ${recommendCount>0?recommendCount+" 条":"4~6 条"}；每条只带 0~4 条自然的初始互动，不要为了凑数塞满评论。不要 markdown。`
       : section === 'xiaohongshu'
         ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~10 条；每篇笔记的主评论与子回复合计最多 15 条，并按冷帖 0~3、普通帖 4~8、热帖 9~15 自然分布。不要 markdown。`
         : `返回：{"posts":[{"section":"zhihu","type":"question","author":"题主昵称","authorId":"可选","title":"问题标题","content":"问题补充，可为空","answers":[{"author":"回答者昵称","authorId":"可选","content":"回答正文","upvotes":0,"comments":[{"author":"评论者","content":"评论"}]}]}]}。生成 6~10 个问题；每题生成 1~4 条风格明显不同的初始回答；每条回答评论最多 15 条，按冷回答 0~3、普通回答 4~8、热回答 9~15 自然分布。不要 markdown。`;
@@ -1406,24 +1400,8 @@ ${customCommunityPrompt}
     text=String(result?.text||'').trim();
   }
   let posts=parsePublicWebBatch(text, userName).filter(p=>section==='recommend' || p.section===section);
-  if(section==='recommend'){const byId=new Map(enabledCustomCommunities.map(x=>[String(x.id),x]));posts=posts.filter(p=>p.section!=='custom'||byId.has(String(p.extra?.customCommunityId||''))).map(p=>{if(p.section!=='custom')return p;const def=byId.get(String(p.extra?.customCommunityId||''));return {...p,extra:{...(p.extra||{}),customCommunityName:String(def?.name||p.extra?.customCommunityName||'自创社区'),customCommunityDescription:String(def?.description||'')}};});}
   if (!ghostStoriesEnabled) posts=posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
   return posts;
-}
-
-export async function generateCustomCommunityCommentRefresh({ scopeKey, post, signal } = {}) {
-  if(!scopeKey||!post)throw new Error('当前自创社区内容不可用');
-  const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
-  const name=String(post?.extra?.customCommunityName||'自创社区');
-  const description=String(post?.extra?.customCommunityDescription||'User 自定义的信息社区');
-  const existing=(post.comments||[]).slice(-20).map((c,i)=>`${i+1}. ${c.author?.name||'网友'}：${c.content||''}`).join('\n');
-  const system=`你正在继续故事世界中的 User 自创社区“${name}”的一条内容。社区定义：${description}\n只新增自然评论，不改写原内容。评论者必须像这个社区里真实存在的人，身份、口吻、知识和立场可以不同；不要自动套成天涯、小红书或知乎。一次新增 1~6 条。只输出严格 JSON：{"comments":[{"author":"昵称或身份","content":"评论"}]}`;
-  const user=`标题：${post.title||''}\n正文：${post.content||''}\n已有评论：\n${existing||'暂无'}`;
-  let text='';
-  if(config.source==='tavern'){const generateRaw=getTavernContext?.()?.generateRaw;if(typeof generateRaw!=='function')throw new Error('当前 SillyTavern 未提供 generateRaw 接口');text=String(await generateRaw({prompt:`User: ${user}`,systemPrompt:system})||'').trim();}
-  else {const result=await generateProviderText(config,{system,messages:[{role:'user',content:user}]},{signal,timeoutMs:120000});text=String(result?.text||'').trim();}
-  let data;try{data=JSON.parse(text.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}catch{const m=text.match(/\{[\s\S]*\}/);if(!m)throw new Error('自创社区评论没有返回可解析 JSON');data=JSON.parse(m[0]);}
-  return (Array.isArray(data?.comments)?data.comments:[]).slice(0,6).map((c,i)=>({id:`customc_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,getTavernUserContext().name||'User','网友')},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now(),replyToCommentId:''})).filter(c=>c.content);
 }
 
 export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}) {
