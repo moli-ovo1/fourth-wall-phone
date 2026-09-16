@@ -34,11 +34,25 @@ function momentForwardText(message) {
   return lines.filter(Boolean).join('\n');
 }
 
+function communityForwardText(message) {
+  const post = message?.communityForward;
+  if (!post) return '';
+  return [
+    `[moli社区转发｜${clean(post.platform) || '社区'}]`,
+    `标题：${clean(post.title) || '无标题'}`,
+    post.authorName ? `作者：${clean(post.authorName)}` : '',
+    clean(post.content),
+    '这是 User 转发给你的社区帖子，不是普通聊天文本。你知道 User 把这篇帖子分享给了你。',
+  ].filter(Boolean).join('\n');
+}
+
 function messageText(message) {
   if (!message) return '';
 
   const semanticMoment = momentForwardText(message);
   if (semanticMoment) return semanticMoment;
+  const semanticCommunity = communityForwardText(message);
+  if (semanticCommunity) return semanticCommunity;
 
   if (message.forward?.mode === 'merged' && Array.isArray(message.forward.items)) {
     const forwarded = message.forward.items

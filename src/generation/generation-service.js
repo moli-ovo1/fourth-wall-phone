@@ -479,9 +479,21 @@ function momentForwardSemanticText(message, participantIds = new Set()) {
   ].filter(Boolean).join('\n');
 }
 
+function communityForwardSemanticText(message) {
+  const post = message?.communityForward;
+  if (!post) return '';
+  return [
+    `[moli社区转发｜${String(post.platform || '社区')}]`,
+    `标题：${String(post.title || '无标题')}`,
+    post.authorName ? `作者：${String(post.authorName)}` : '',
+    String(post.content || '').trim(),
+    '这是 User 转发来的社区帖子。',
+  ].filter(Boolean).join('\n');
+}
+
 function groupMessageText(message, membersById) {
   const participantIds = new Set([...membersById.keys()]);
-  const semanticForward = momentForwardSemanticText(message, participantIds);
+  const semanticForward = momentForwardSemanticText(message, participantIds) || communityForwardSemanticText(message);
   const content = semanticForward || String(message?.content || '').trim();
   if (!content) return '';
   if (message?.role === 'user') return content;
