@@ -199,6 +199,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         const result = await generatePrivateReply({
           scopeKey,
           conversationKey: key,
+          allowNoPendingUser: true,
           automationInstruction: instruction,
           fourthWallCommentary: isFourthWall && mode === 'commentary' ? commentaryEvent : null,
         });
