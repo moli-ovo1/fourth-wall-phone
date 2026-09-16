@@ -417,15 +417,15 @@ export function createPhonePanel({
         <button class="moli-secondary-btn" data-action="multi-forward">转发</button>
         <button class="moli-primary-btn moli-danger-btn" data-action="multi-delete">删除</button>
       </div>
-      <div class="moli-chat-tools-menu" data-chat-tools-menu hidden>
-        <button type="button" data-action="chat-wallpaper"><span>▧</span><small>壁纸</small></button>
-      </div>
       <input type="file" accept="image/*" data-chat-wallpaper-input hidden>
       <footer class="moli-compose">
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
         <button class="moli-send" data-action="send" aria-label="发送">♡</button>
         <button class="moli-compose-plus" data-action="chat-tools" aria-label="更多">＋</button>
       </footer>
+      <div class="moli-chat-tools-menu" data-chat-tools-menu hidden>
+        <button type="button" data-action="chat-wallpaper"><span>▧</span><small>壁纸</small></button>
+      </div>
     </section>
 
     <section class="moli-page" data-page="injection-composer">
