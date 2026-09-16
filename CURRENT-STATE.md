@@ -71,3 +71,8 @@
 - 修复 moli154/155 后仍然出现的 `Unexpected reserved word`：真正的浏览器模块解析错误位于 `src/ui/phone-panel.js` 的两个朋友圈 click handler。它们在调用异步 `askMomentUserComment()` 时使用了 `await`，但 handler 本身不是 `async`。
 - 修复 `contactMomentsFeed` 与 `momentsFeed` 两个 handler 为 `async event =>`；不改社区/朋友圈业务语义。
 - 启动验证规则升级：发布前除普通 `node --check` 外，必须把浏览器加载的 JS 按 ES module 语法解析（`node --input-type=module --check`）。普通检查曾漏掉本次错误，不能再作为唯一启动判据。
+
+## moli157 / v0.4.97 — 知乎「增加回答」接入
+- 知乎「增加回答」现在打开统一 Community Composer，不再显示开发期占位提示。
+- 该入口写入 `extra.answers`，语义为“回答问题主楼”，与回答下方的“评论” (`answer.comments`) 和评论间回复 (`replyToCommentId`) 分层保存。
+- 回复框身份仍支持本名 / 匿名 / 楼主；本轮只接通“增加回答”数据链，不改此前待办的刷新批量结算等机制。
