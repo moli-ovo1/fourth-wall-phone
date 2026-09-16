@@ -764,13 +764,11 @@ export function createPhonePanel({
     <section class="moli-page" data-page="contact-moments">
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="contact-moments-back" aria-label="返回">‹</button></div>
-        <div class="moli-nav-title" data-contact-moments-title>朋友圈</div>
-        <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="contact-moments-refresh" aria-label="刷新角色朋友圈">↻</button></div>
+        <div class="moli-nav-title" data-contact-moments-title></div>
+        <div class="moli-nav-side right moli-contact-moments-tools"><button class="moli-text-btn" data-action="contact-moments-organize">整理</button><button class="moli-text-btn" data-action="contact-moments-help">说明书</button><button class="moli-icon-btn" data-action="contact-moments-refresh" aria-label="刷新角色朋友圈">↻</button></div>
       </header>
-      <div class="moli-profile-moments-notice" data-contact-moments-notice></div>
       <div class="moli-profile-moments-status" data-contact-moments-status hidden></div>
-      <main class="moli-moments-feed" data-contact-moments-feed></main>
-      <footer class="moli-sync-footer"><button class="moli-secondary-btn" data-action="contact-moments-clear">清空本页朋友圈</button></footer>
+      <main class="moli-moments-feed moli-profile-moments-feed" data-contact-moments-feed></main>
     </section>
 
     <section class="moli-page" data-page="contact-user-settings">
@@ -3754,21 +3752,21 @@ export function createPhonePanel({
     const conversation = currentConversation();
     const item = conversation?.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
     if (!scopeKey || !item) { contactMomentsFeed.innerHTML = '<div class="moli-empty">联系人朋友圈不可用</div>'; return; }
-    if (contactMomentsTitle) contactMomentsTitle.textContent = `${displayName(item)}的朋友圈`;
+    if (contactMomentsTitle) contactMomentsTitle.textContent = '';
     const items = listProfileMoments(scopeKey, item.id);
     const status = getProfileMomentStatus(scopeKey, item.id);
-    if (contactMomentsNotice) contactMomentsNotice.textContent = items.length >= 5 ? `已有 ${items.length} 条 · 已达到 5 条整理提醒，可继续玩或手动清空` : `角色专属朋友圈 · ${items.length}/5 条整理提醒` ;
     if (contactMomentsStatus) {
       const hasStatus = Boolean(status?.message || status?.note);
       contactMomentsStatus.hidden = !hasStatus;
       contactMomentsStatus.innerHTML = hasStatus ? `<strong>${escapeHtml(status.message || '')}</strong>${status.note ? `<small>${escapeHtml(status.note)}</small>` : ''}` : '';
     }
-    if (!items.length) { contactMomentsFeed.innerHTML = '<div class="moli-empty">这里还没有角色专属朋友圈。点右上角刷新，看看他最近有没有发过什么。</div>'; return; }
+    if (!items.length) { contactMomentsFeed.innerHTML = ''; return; }
     contactMomentsFeed.innerHTML = items.map(entry => {
       const likedByUser = (entry.likes || []).some(x => String(x?.id || '') === 'user');
+      const readByUser = Number(entry.userReadAt || 0) > 0;
       const likes = entry.likes?.length ? `<div class="moli-moment-likes">♥ ${escapeHtml(entry.likes.map(x => momentActorName(x)).join('、'))}</div>` : '';
       const comments = entry.comments?.length ? `<div class="moli-moment-comments">${entry.comments.map(c => c.deletedAt ? `<div class="moli-comment-deleted"><strong>${escapeHtml(momentActorName(c.actor))}</strong> 删除了评论${c.deletionReason ? `：${escapeHtml(c.deletionReason)}` : ''}</div>` : `<div ${String(c.actor?.id||'')==='user' ? `class="moli-user-comment-hold" data-user-comment-surface="profile" data-moment-id="${escapeHtml(entry.id)}" data-comment-id="${escapeHtml(c.id)}"` : ''}><strong>${escapeHtml(momentActorName(c.actor))}</strong>：${escapeHtml(c.content || '')}</div>`).join('')}</div>` : '';
-      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(momentActorName(entry.author) || canonicalContactName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button><button class="moli-moment-action" data-action="profile-moment-export-public" data-moment-id="${escapeHtml(entry.id)}">投入我的朋友圈</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
+      return `<article class="moli-moment" data-profile-moment-id="${escapeHtml(entry.id)}"><div class="moli-moment-main"><div class="moli-moment-author">${escapeHtml(momentActorName(entry.author) || canonicalContactName(item))}</div><div class="moli-moment-content">${escapeHtml(entry.content || '')}${readByUser ? '<span class="moli-moment-read-stamp">已阅</span>' : ''}</div><div class="moli-moment-meta"><span>${escapeHtml(formatMomentTime(entry.createdAt))}</span><button class="moli-moment-action ${readByUser ? 'is-read' : ''}" data-action="profile-moment-read" data-moment-id="${escapeHtml(entry.id)}">已阅</button><button class="moli-moment-action" data-action="profile-moment-like" data-moment-id="${escapeHtml(entry.id)}">${likedByUser ? '取消赞' : '赞'}</button><button class="moli-moment-action" data-action="profile-moment-comment" data-moment-id="${escapeHtml(entry.id)}">评论</button><button class="moli-moment-action" data-action="profile-moment-forward" data-moment-id="${escapeHtml(entry.id)}">转发</button><button class="moli-moment-action" data-action="profile-moment-export-public" data-moment-id="${escapeHtml(entry.id)}">投入我的朋友圈</button></div>${(likes||comments)?`<div class="moli-moment-social">${likes}${comments}</div>`:''}</div></article>`;
     }).join('');
   }
 
@@ -6617,19 +6615,19 @@ export function createPhonePanel({
     }
   });
 
-  panel.querySelector('[data-action="contact-moments-clear"]')?.addEventListener('click', async () => {
+  panel.querySelector('[data-action="contact-moments-organize"]')?.addEventListener('click', async event => {
     const scopeKey=getScopeKey?.(); const conversation=currentConversation(); const item=conversation?.type==='private'?contact(conversation.contactId||currentContactId):null;
     if(!scopeKey||!item)return;
-    const items=listProfileMoments(scopeKey,item.id); if(!items.length)return toast('这里还没有可清理的朋友圈');
-    if(!(windowRef.confirm?.(`清空 ${canonicalContactName(item)} 的角色专属朋友圈？原始动态会被删除。`) ?? false))return;
-    const preserve=windowRef.confirm?.('清空前是否先把值得延续的关系变化和重要互动整理成朋友圈长期记忆？\n\n确定＝先整理记忆再清空\n取消＝直接清空');
-    if(preserve){
-      toast('正在整理朋友圈记忆…');
-      try{ await summarizeProfileMomentsMemory({scopeKey,contactId:item.id}); }
-      catch(error){ toast(error?.message||'朋友圈记忆整理失败，已取消清空'); return; }
-    }
-    clearProfileMoments(scopeKey,item.id); renderContactMoments(); toast(preserve?'朋友圈已整理进记忆并清空':'角色朋友圈已清空');
+    const pending=listProfileMoments(scopeKey,item.id).filter(moment=>!Number(moment.memoryOrganizedAt||0));
+    if(!pending.length)return toast('当前朋友圈没有尚未整理的新内容');
+    const button=event.currentTarget; button.disabled=true; toast('正在整理朋友圈记忆…');
+    try{ const result=await summarizeProfileMomentsMemory({scopeKey,contactId:item.id,momentIds:pending.map(moment=>moment.id)}); toast(result?.changed?'朋友圈长期记忆已整理':'没有需要新增的朋友圈记忆'); renderContactMoments(); }
+    catch(error){ toast(error?.message||'朋友圈记忆整理失败'); } finally{ button.disabled=false; }
   });
+  panel.querySelector('[data-action="contact-moments-help"]')?.addEventListener('click', () => {
+    windowRef.alert?.(`朋友圈说明书\n\n① 朋友圈可见上限 6 条，6 条后最老的一条消失。\n\n② 每刷新一次，角色更新朋友圈可能是 0 条，也可能是 3 条，依角色性格而定；更新 0 条则注释角色心情状态。\n\n③ 若朋友圈里有值得延续的关系变化、重要互动、反复态度、未解决关系线索，请点击「整理」，AI 会提炼进该角色的朋友圈长期记忆；已经成功整理过的动态不会重复提炼。\n\n④ 点击「投入我的朋友圈」，将此条动态投入 User 的朋友圈中；打开「所有角色互动」后，有几率看到他们互动，也可能不会互动，依角色性格而定。\n\n⑤ 私聊中也有几率收到当前私聊角色的朋友圈动态更新提醒。`);
+  });
+
   panel.querySelector('[data-action="moments-refresh"]')?.addEventListener('click', async event => {
     const scopeKey = getScopeKey?.();
     if (!scopeKey) return toast('当前朋友圈不可用');
@@ -6738,6 +6736,11 @@ export function createPhonePanel({
     const item = conversation?.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
     const momentId = String(button.dataset.momentId || '');
     if (!scopeKey || !item || !momentId) return;
+    if (button.dataset.action === 'profile-moment-read') {
+      const target=listProfileMoments(scopeKey,item.id).find(moment=>String(moment.id)===momentId); if(!target)return;
+      if(Number(target.userReadAt||0)>0){ toast('这条朋友圈已经批阅过了'); return; }
+      setMomentUserRead(scopeKey,{surface:'profile',ownerContactId:item.id,momentId,read:true}); recordMomentChatEvent(scopeKey,{contactId:item.id,type:'USER_READ',momentId,content:'User 已阅这条角色专属朋友圈。'}); renderContactMoments(); toast('已阅'); return;
+    }
     if (button.dataset.action === 'profile-moment-like') {
       const liked = toggleMomentLike(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor() });
       try { notifyBehaviorContextEvent({ scopeKey, contactId:item.id, momentId, eventType: liked ? 'user-like' : 'user-unlike' }); }
