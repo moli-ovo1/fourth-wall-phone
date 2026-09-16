@@ -1920,3 +1920,34 @@
 #moli-phone-panel .moli-web-detail-right .moli-community-detail-actions{margin:0;}
 #moli-phone-panel .moli-xhs-detail>.moli-community-detail-actions{margin-top:4px;}
 #moli-phone-panel .moli-zhihu-question-actions>.moli-community-detail-actions{margin:0 auto 0 0;}
+
+/* moli147 · 自创社区月档案视觉 */
+@import url("https://fontsapi.zeoseven.com/256/main/result.css");
+#moli-phone-panel .moli-custom-home{
+  min-height:100%; padding:22px 18px 34px; box-sizing:border-box;
+  background:linear-gradient(rgba(255,255,255,.08),rgba(255,255,255,.08)),url("./assets/community/custom-home-bg.jpg") center/cover fixed;
+  color:#514b43;
+}
+#moli-phone-panel .moli-custom-library{margin:0;border:1px solid rgba(255,255,255,.48);border-radius:18px;background:rgba(255,255,255,.30);box-shadow:0 12px 34px rgba(78,70,58,.08);-webkit-backdrop-filter:blur(14px) saturate(120%);backdrop-filter:blur(14px) saturate(120%);overflow:hidden}
+#moli-phone-panel .moli-custom-library-body{background:rgba(255,255,255,.06);border-top:1px solid rgba(255,255,255,.42)}
+#moli-phone-panel .moli-custom-manage-row{justify-content:flex-start;gap:24px;border-bottom:1px solid rgba(91,78,63,.10)}
+#moli-phone-panel .moli-custom-manage-row .moli-custom-new{width:auto;padding:8px 4px;color:#5c554d}
+#moli-phone-panel .moli-custom-manage-row button{font-size:13px}
+#moli-phone-panel .moli-custom-posts{padding:13px 14px;margin-top:18px;border:1px solid rgba(255,255,255,.48);border-radius:18px;background:rgba(255,255,255,.30);box-shadow:0 12px 34px rgba(78,70,58,.07);-webkit-backdrop-filter:blur(14px) saturate(120%);backdrop-filter:blur(14px) saturate(120%)}
+#moli-phone-panel .moli-custom-posts h3{font-size:14px;letter-spacing:.12em;color:#655d54}
+#moli-phone-panel .moli-custom-post-row{border-top:1px solid rgba(91,78,63,.10)}
+#moli-phone-panel .moli-custom-pinned{margin-bottom:20px}
+#moli-phone-panel .moli-custom-letter-detail{min-height:100%;box-sizing:border-box;padding:18px 16px 28px;background:url("./assets/community/custom-post-bg.jpg") center top/cover fixed;color:#3e3933;font-family:"Huiwen-mincho","Songti SC","SimSun",serif}
+#moli-phone-panel .moli-custom-letter-back{border:0;background:transparent;color:#6b6259;font:12px/1.4 inherit;padding:4px 0 16px}
+#moli-phone-panel .moli-custom-letter-paper{min-height:calc(100% - 40px);padding:26px 24px 18px;box-sizing:border-box;background:transparent}
+#moli-phone-panel .moli-custom-letter-paper header{padding-bottom:16px;border-bottom:1px solid rgba(83,72,60,.18)}
+#moli-phone-panel .moli-custom-letter-paper header small{display:block;letter-spacing:.22em;color:#8b7f72;margin-bottom:8px}
+#moli-phone-panel .moli-custom-letter-paper h2{margin:0 0 10px;font-size:23px;font-weight:normal;line-height:1.45;letter-spacing:.04em}
+#moli-phone-panel .moli-custom-letter-paper header div{font-size:11px;color:#968b80;letter-spacing:.08em}
+#moli-phone-panel .moli-custom-letter-body{padding:24px 0 34px;font-size:16px;line-height:2.05;letter-spacing:.035em;white-space:normal}
+#moli-phone-panel .moli-custom-letter-actions{display:flex;justify-content:flex-end;align-items:center;gap:14px;padding-top:12px;border-top:1px solid rgba(83,72,60,.15)}
+#moli-phone-panel .moli-custom-letter-actions button{border:0;background:transparent;color:#655d54;font:14px/1.2 inherit;padding:5px}
+#moli-phone-panel .moli-custom-letter-actions .moli-community-symbol{font-family:"SimSun","宋体",serif;font-size:20px}
+#moli-phone-panel .moli-recommend-default-note{font-size:10px;color:#aaa096}
+/* 修复：简化后的天涯列表只有一个标题单元，不能再占 18px 的旧图标列。 */
+#moli-phone-panel .moli-tianya-topic-row.moli-simple-topic{grid-template-columns:minmax(0,1fr)!important}
