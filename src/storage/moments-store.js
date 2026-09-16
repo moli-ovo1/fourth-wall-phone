@@ -1,7 +1,7 @@
 import { readJson, writeJson } from './storage-adapter.js';
 
 const PREFIX = 'moli-phone:moments:v2:';
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 function key(scopeKey) { return PREFIX + encodeURIComponent(String(scopeKey || '')); }
 function id(prefix) { return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`; }
@@ -42,6 +42,7 @@ function normalize(value) {
     settings: { crossContactInteraction: source?.settings?.crossContactInteraction !== false, coverImage: String(source?.settings?.coverImage || '') },
     chatEvents: Array.isArray(source.chatEvents) ? source.chatEvents.map(entry=>({id:String(entry?.id||id('moment-event')),contactId:String(entry?.contactId||''),type:String(entry?.type||''),momentId:String(entry?.momentId||''),content:String(entry?.content||''),createdAt:Number(entry?.createdAt||Date.now()),deliveredAt:Number(entry?.deliveredAt||0)})).filter(entry=>entry.contactId&&entry.type).slice(-300) : [],
     profileVisits: source?.profileVisits && typeof source.profileVisits === 'object' ? Object.fromEntries(Object.entries(source.profileVisits).map(([contactId, value]) => [String(contactId), { count:Math.max(0,Number(value?.count||0)), firstAt:Number(value?.firstAt||0), lastAt:Number(value?.lastAt||0) }])) : {},
+    profilePeeks: source?.profilePeeks && typeof source.profilePeeks === 'object' ? Object.fromEntries(Object.entries(source.profilePeeks).map(([contactId, value]) => [String(contactId), { enabled:Boolean(value?.enabled), count:Math.max(0,Math.floor(Number(value?.count||0))), updatedAt:Number(value?.updatedAt||0) }])) : {},
     publicFeed: Array.isArray(source.publicFeed) ? source.publicFeed.map(x => moment(x, 'public')).filter(x => x.content) : [],
     profileFeeds: profiles,
     profileMemory: source.profileMemory && typeof source.profileMemory === 'object' ? Object.fromEntries(Object.entries(source.profileMemory).map(([contactId, value]) => [String(contactId), { summary: String(value?.summary || '').trim(), updatedAt: Number(value?.updatedAt || 0) }])) : {},
@@ -114,6 +115,17 @@ export function recordProfileVisit(scopeKey, contactId, at=Date.now()) {
   state.profileVisits[id]={count:Number(old.count||0)+1,firstAt:Number(old.firstAt||at)||at,lastAt:Number(at||Date.now())}; save(scopeKey,state); return {...state.profileVisits[id]};
 }
 export function getProfileVisits(scopeKey) { return {...(getMomentsState(scopeKey).profileVisits || {})}; }
+
+export function getProfilePeek(scopeKey, contactId) {
+  const value=getMomentsState(scopeKey).profilePeeks?.[String(contactId||'')] || {enabled:false,count:0,updatedAt:0};
+  return {...value};
+}
+export function setProfilePeek(scopeKey, contactId, {enabled=false,count=0} = {}) {
+  const owner=String(contactId||''); if(!scopeKey||!owner)return null;
+  const state=getMomentsState(scopeKey); state.profilePeeks ||= {};
+  state.profilePeeks[owner]={enabled:Boolean(enabled),count:Math.max(0,Math.floor(Number(count||0))),updatedAt:Date.now()};
+  save(scopeKey,state); return {...state.profilePeeks[owner]};
+}
 
 export function exportProfileMomentToPublic(scopeKey, ownerContactId, momentId) {
   const state=getMomentsState(scopeKey); const owner=String(ownerContactId||'');
