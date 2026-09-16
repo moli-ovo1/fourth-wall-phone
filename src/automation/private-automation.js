@@ -129,7 +129,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       const pendingBatch = pendingSocialEvents.slice(-10);
       const hasPostOpportunity = wakeEvents.some(event => event?.eventType === 'chat-progress' || event?.allowPost === true);
       const hasPrivateOpportunity = wakeEvents.some(event => event?.allowPrivate === true)
-        && eligibleAutoChatContact(contact) && a.autoChatEnabled && Number(a.autoChatProbability ?? 0) > 0;
+        && eligibleAutoChatContact(contact) && a.autoChatEnabled;
       if (
         socialEventReady
         && eligibleAutoChatContact(contact)
@@ -163,6 +163,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         eligibleAutoChatContact(contact)
         && opportunity
         && a.autoChatEnabled
+        && Number(a.autoChatProbability ?? 0) > 0
         && now - Number(a.lastAutoChatAt || 0) >= autoChatEvaluationInterval(a.autoChatProbability)
       ) {
         mode = 'chat';
@@ -189,7 +190,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           ? recentBehaviorActions.map(entry => `- ${Math.max(0, Math.round((now - Number(entry.at || 0)) / 60000))} 分钟前：${String(entry.action || 'SKIP')}`).join('\n')
           : '（最近没有刚执行过的主动行为）';
         const allowPost = !isFourthWall && mode !== 'commentary' && (mode !== 'social-event' || hasPostOpportunity);
-        const allowPrivate = mode === 'commentary' || Boolean(a.autoChatEnabled && Number(a.autoChatProbability ?? 0) > 0);
+        const allowPrivate = mode === 'commentary' || Boolean(a.autoChatEnabled);
         const instruction = mode === 'commentary'
           ? (isFourthWall
             ? '这是正文刚发生后的场外私聊反应机会。你就是正文中的你本人，不是分析员。只有此刻真的会想联系用户时才回复；若不想说，严格只输出 [SKIP]。若回复，像手机私聊一样简短自然。'
