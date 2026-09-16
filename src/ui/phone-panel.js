@@ -144,6 +144,10 @@ export function createPhonePanel({
             <span class="moli-app-icon-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.wall}" alt="" /></span>
             <small>我们的墙</small>
           </button>
+          <button class="moli-app-icon" data-action="settings" aria-label="打开设置">
+            <span class="moli-app-icon-tile moli-settings-app-tile"><span class="moli-settings-app-glyph">⚙</span></span>
+            <small>设置</small>
+          </button>
         </div>
       </main>
     </section>
@@ -178,7 +182,7 @@ export function createPhonePanel({
             <button type="button" data-action="public-web-compose">[发表]</button>
             
           </div>
-          <div class="moli-tianya-moderators">[斑竹] <span data-tianya-moderators>moli User</span></div>
+          <div class="moli-tianya-moderators">[斑竹] <span data-tianya-moderators>{{user}}，{{char}}</span></div>
           <section class="moli-public-web-feed" data-public-web-feed></section>
         </main>
       </div>
@@ -196,17 +200,17 @@ export function createPhonePanel({
     <section class="moli-page" data-page="home">
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="phone-home" aria-label="返回手机主屏幕">‹</button></div>
-        <div class="moli-nav-title">moli小手机</div>
+        <div class="moli-nav-title">微信</div>
         <div class="moli-nav-side right">
-          <button class="moli-icon-btn" data-action="add" aria-label="添加">＋</button>
+          <button class="moli-icon-btn moli-wechat-add" data-action="add" aria-label="添加">＋</button>
         </div>
       </header>
+      <div class="moli-chat-search-wrap"><span>⌕</span><input type="search" data-chat-list-search placeholder="搜索" autocomplete="off" /></div>
       <main class="moli-chat-list"></main>
       <nav class="moli-phone-tabs" aria-label="小手机主导航">
-        <button class="active" data-action="tab-home"><span>💬</span><small>微信</small></button>
-        <button data-action="tab-contacts"><span>👥</span><small>通讯录</small></button>
-        <button data-action="tab-discover"><span>◉</span><small>发现</small></button>
-        <button data-action="tab-me"><span>👤</span><small>我</small></button>
+        <button class="active" data-action="tab-home"><span class="moli-tab-glyph">●</span><small>微信</small></button>
+        <button data-action="tab-contacts"><span class="moli-tab-glyph">♙</span><small>通讯录</small></button>
+        <button data-action="tab-discover"><span class="moli-tab-glyph">◈</span><small>发现</small></button>
       </nav>
       <div class="moli-add-menu" data-add-menu hidden>
         <button data-action="sync-tavern">同步酒馆角色</button>
@@ -224,10 +228,9 @@ export function createPhonePanel({
       </header>
       <main class="moli-tab-list" data-contacts-tab-list></main>
       <nav class="moli-phone-tabs" aria-label="小手机主导航">
-        <button data-action="tab-home"><span>💬</span><small>微信</small></button>
-        <button class="active" data-action="tab-contacts"><span>👥</span><small>通讯录</small></button>
-        <button data-action="tab-discover"><span>◉</span><small>发现</small></button>
-        <button data-action="tab-me"><span>👤</span><small>我</small></button>
+        <button data-action="tab-home"><span class="moli-tab-glyph">●</span><small>微信</small></button>
+        <button class="active" data-action="tab-contacts"><span class="moli-tab-glyph">♙</span><small>通讯录</small></button>
+        <button data-action="tab-discover"><span class="moli-tab-glyph">◈</span><small>发现</small></button>
       </nav>
     </section>
 
@@ -245,31 +248,9 @@ export function createPhonePanel({
         </button>
       </main>
       <nav class="moli-phone-tabs" aria-label="小手机主导航">
-        <button data-action="tab-home"><span>💬</span><small>微信</small></button>
-        <button data-action="tab-contacts"><span>👥</span><small>通讯录</small></button>
-        <button class="active" data-action="tab-discover"><span>◉</span><small>发现</small></button>
-        <button data-action="tab-me"><span>👤</span><small>我</small></button>
-      </nav>
-    </section>
-
-    <section class="moli-page" data-page="me-home">
-      <header class="moli-nav">
-        <div class="moli-nav-side"></div>
-        <div class="moli-nav-title">我</div>
-        <div class="moli-nav-side right"></div>
-      </header>
-      <main class="moli-tab-list">
-        <button class="moli-phone-cell" data-action="settings">
-          <span class="moli-phone-cell-icon">⚙</span>
-          <span class="moli-phone-cell-label">设置</span>
-          <span class="moli-phone-cell-arrow">›</span>
-        </button>
-      </main>
-      <nav class="moli-phone-tabs" aria-label="小手机主导航">
-        <button data-action="tab-home"><span>💬</span><small>微信</small></button>
-        <button data-action="tab-contacts"><span>👥</span><small>通讯录</small></button>
-        <button data-action="tab-discover"><span>◉</span><small>发现</small></button>
-        <button class="active" data-action="tab-me"><span>👤</span><small>我</small></button>
+        <button data-action="tab-home"><span class="moli-tab-glyph">●</span><small>微信</small></button>
+        <button data-action="tab-contacts"><span class="moli-tab-glyph">♙</span><small>通讯录</small></button>
+        <button class="active" data-action="tab-discover"><span class="moli-tab-glyph">◈</span><small>发现</small></button>
       </nav>
     </section>
 
@@ -4341,6 +4322,7 @@ export function createPhonePanel({
     deleteConfirmArmed = false;
   }
 
+  let chatListSearchQuery = '';
   function renderChatList() {
     refreshTavernSources();
 
@@ -4364,6 +4346,14 @@ export function createPhonePanel({
         return item ? { conversation, item } : null;
       })
       .filter(Boolean)
+      .filter(({ item, conversation }) => {
+        if (!chatListSearchQuery) return true;
+        const identity = conversation.type === 'group'
+          ? { name: conversation.name || '未命名群聊' }
+          : privateConversationListIdentity(conversation, item);
+        const last = (conversation.messages || []).at(-1)?.content || '';
+        return `${identity.name || ''} ${last}`.toLowerCase().includes(chatListSearchQuery);
+      })
       .sort((a, b) => {
         const aPinned = a.conversation?.pinned ? 1 : 0;
         const bPinned = b.conversation?.pinned ? 1 : 0;
@@ -6515,7 +6505,10 @@ export function createPhonePanel({
   panel.querySelectorAll('[data-action="tab-home"]').forEach(button => button.onclick = () => show('home'));
   panel.querySelectorAll('[data-action="tab-contacts"]').forEach(button => button.onclick = () => show('contacts-tab'));
   panel.querySelectorAll('[data-action="tab-discover"]').forEach(button => button.onclick = () => show('discover'));
-  panel.querySelectorAll('[data-action="tab-me"]').forEach(button => button.onclick = () => show('me-home'));
+  panel.querySelector('[data-chat-list-search]')?.addEventListener('input', event => {
+    chatListSearchQuery = String(event.target?.value || '').trim().toLowerCase();
+    renderChatList();
+  });
   panel.querySelector('[data-action="open-moments"]')?.addEventListener('click', () => show('moments'));
   panel.querySelector('[data-action="moments-back"]')?.addEventListener('click', () => show('discover'));
   panel.querySelector('[data-action="contact-moments-back"]')?.addEventListener('click', () => show('info'));
