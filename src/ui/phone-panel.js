@@ -71,7 +71,6 @@ import {
   generateTianyaReplyRefresh,
   generateXiaohongshuCommentRefresh,
   generateZhihuAnswerCommentRefresh,
-  generateCustomCommunityCommentRefresh,
   summarizeProfileMomentsMemory,
 } from '../generation/generation-service.js';
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
@@ -90,9 +89,9 @@ import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBe
 import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
-import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings, togglePublicWebFavorite, togglePublicWebPinned, replacePublicWebSectionPosts, trimPublicWebSectionPosts, forceDeletePublicWebPost, addZhihuAnswerComments, addZhihuAnswer, listCustomCommunities, saveCustomCommunity, deleteCustomCommunity, toggleCustomCommunity } from '../storage/public-web-store.js';
+import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings, togglePublicWebFavorite, togglePublicWebPinned, replacePublicWebSectionPosts, trimPublicWebSectionPosts, forceDeletePublicWebPost, addZhihuAnswerComments, addZhihuAnswer, listCustomCommunities, saveCustomCommunity, deleteCustomCommunity } from '../storage/public-web-store.js';
 import { getSelectedWorldContactId, setSelectedWorldContactId } from '../storage/world-context-store.js';
-import { recordWorldEvent, markWorldEventsKnown, summarizeWorldEventsForContext, getWorldEventContextSource } from '../storage/world-event-store.js';
+import { recordWorldEvent, markWorldEventsKnown, summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 
 const APP_ICON_URLS = Object.freeze({
   wechat: new URL('../../assets/apps/wechat.jpg', import.meta.url).href,
@@ -186,7 +185,7 @@ export function createPhonePanel({
             <button type="button" data-action="public-web-compose">[发表]</button>
             
           </div>
-          <div class="moli-tianya-moderators">[斑竹] <span data-tianya-moderators>{{user}}，{{char}}</span></div>
+          <div class="moli-tianya-moderators">[斑竹] <span data-tianya-moderators>{{user}} ♡ {{char}}</span></div>
           <section class="moli-public-web-feed" data-public-web-feed></section>
         </main>
       </div>
@@ -278,7 +277,7 @@ export function createPhonePanel({
       </header>
       <main class="moli-moments-compose-page">
         <textarea data-moments-compose-text maxlength="4000" placeholder="这一刻的想法…"></textarea><div class="moli-moments-compose-media"><button type="button" class="moli-moments-add-photo" data-action="moments-add-photo" aria-label="添加照片">＋</button><div class="moli-moments-photo-desc" data-moments-photo-desc hidden><span data-moments-photo-desc-text></span><button type="button" data-action="moments-photo-remove">×</button></div></div>
-        <div class="moli-moments-compose-options"><button type="button" data-action="moments-location"><span class="moli-moments-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z"/><circle cx="12" cy="10" r="2.2"/></svg></span><b>所在位置</b><em data-moments-location-label></em><i>›</i></button><div class="moli-moments-visibility-static-head"><span class="moli-moments-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M5.5 19c.5-4.2 2.7-6.3 6.5-6.3s6 2.1 6.5 6.3"/></svg></span><b>谁可以看</b><em data-moments-visibility-label>公开</em></div></div><div class="moli-moments-visibility-inline" data-moments-visibility-inline><div class="moli-moments-visibility-inline-list" data-moments-visibility-inline-list></div></div>
+        <div class="moli-moments-compose-options"><button type="button" data-action="moments-location"><span class="moli-moments-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z"/><circle cx="12" cy="10" r="2.2"/></svg></span><b>所在位置</b><em data-moments-location-label></em><i>›</i></button><div class="moli-moments-visibility-title"><span class="moli-moments-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M5.5 19c.5-4.2 2.7-6.3 6.5-6.3s6 2.1 6.5 6.3"/></svg></span><b>谁可以看</b><em data-moments-visibility-label>公开</em></div></div><div class="moli-moments-visibility-inline" data-moments-visibility-inline><div class="moli-moments-visibility-inline-list" data-moments-visibility-inline-list></div></div>
       </main>
     </section>
 
@@ -1752,8 +1751,6 @@ export function createPhonePanel({
         sources.push({id:`moment:profile:${cid}:${moment.id}`,app:'wechat',section:'moments',owner,group:`微信 · 朋友圈 · ${owner}`,kind:'moment',label:`${author}：${preview}${String(moment.content||'').length>72?'…':''}`,build:()=>`【微信角色朋友圈 · ${owner}】\n知识归属：这是该角色的一对一朋友圈世界线；公共娱乐池里的其他角色互动不因此自动成为该角色已知事实。\n${injectionMomentText(moment)}`});
       });
     });
-    const worldSource=getWorldEventContextSource(scopeKey,{awareness:'known',limit:50});
-    (worldSource.events||[]).slice(-50).reverse().forEach(event=>{const text=String(event.content||'').trim();if(!text)return;const source=String(event.source||'phone');sources.push({id:`world-event:${event.id}`,app:'world',section:'events',owner:'手机世界事件',group:'手机世界 · 已知事件',kind:'world-event',label:`${source}：${text.replace(/\s+/g,' ').slice(0,72)}${text.length>72?'…':''}`,build:()=>`【手机世界事件】\n来源：${source}\n${text}`});});
     return sources;
   }
 
@@ -1830,8 +1827,8 @@ export function createPhonePanel({
     const scopeKey = getScopeKey?.();
     const catalog = injectionSourceCatalog();
     if (injectionSources) {
-      const sectionLabel = { private:'私聊', group:'群聊', moments:'朋友圈', events:'世界事件' };
-      const sections = ['private','group','moments','events'];
+      const sectionLabel = { private:'私聊', group:'群聊', moments:'朋友圈' };
+      const sections = ['private','group','moments'];
       const sectionHtml = sections.map(section => {
         const items = catalog.filter(source => source.section === section);
         if (!items.length) return '';
@@ -1849,7 +1846,7 @@ export function createPhonePanel({
         }).join('');
         return `<details class="moli-injection-source-section"><summary>${sectionLabel[section]} <small>${items.length} 项</small></summary>${ownerHtml}</details>`;
       }).join('');
-      injectionSources.innerHTML = catalog.length ? `<details class="moli-injection-source-app" open><summary>手机内容 <small>${catalog.length} 项</small></summary>${sectionHtml}</details>` : '<div class="moli-empty">手机里还没有可选素材。你仍可以直接在下方编辑框输入内容。</div>';
+      injectionSources.innerHTML = catalog.length ? `<details class="moli-injection-source-app"><summary>微信 <small>${catalog.length} 项</small></summary>${sectionHtml}</details>` : '<div class="moli-empty">手机里还没有可选素材。你仍可以直接在下方编辑框输入内容。</div>';
     }
     const workspace = getInjectionWorkspace(scopeKey);
     const wanted = new Set(workspace.sourceIds || []);
@@ -3878,7 +3875,7 @@ export function createPhonePanel({
 
   function renderMomentComposeMeta() {
     if(momentsLocationLabel) momentsLocationLabel.textContent=pendingMomentLocation || '';
-    if(momentsVisibilityLabel) momentsVisibilityLabel.textContent=pendingMomentVisibility.mode==='only' ? (pendingMomentVisibility.contactIds.length===1?'仅对方可见':`仅${pendingMomentVisibility.contactIds.length}人可见`) : '公开';
+    if(momentsVisibilityLabel) momentsVisibilityLabel.textContent=pendingMomentVisibility.mode==='only' ? `仅${pendingMomentVisibility.contactIds.length}人可见` : '公开'; renderMomentsVisibilityInline();
   }
   function composeSelectableContacts(){ return getContacts().map(hydratedContact).filter(c=>c&&String(c.id)!=='builtin:meta'); }
   function visibilityContactLabel(item){
@@ -3971,7 +3968,7 @@ export function createPhonePanel({
     try {
       createPublicMoment(scopeKey, { author: userMomentsActor(), content, imageDescription: pendingMomentImageDescription, location:pendingMomentLocation, mentionContactIds:pendingMomentMentionIds, visibility:pendingMomentVisibility });
       momentsComposeText.value = '';
-      pendingMomentImageDescription = ''; pendingMomentLocation=''; pendingMomentMentionIds=[]; pendingMomentVisibility={mode:'public',contactIds:[]}; renderMomentsVisibilityInline();
+      pendingMomentImageDescription = ''; pendingMomentLocation=''; pendingMomentMentionIds=[]; pendingMomentVisibility={mode:'public',contactIds:[]};
       renderPendingMomentPhoto(); renderMomentComposeMeta();
       show('moments');
       toast('已发表');
@@ -4015,7 +4012,6 @@ export function createPhonePanel({
 
     if (name === 'contacts-tab') renderContactsTab();
     if (name === 'moments') renderMoments();
-    if (name === 'moments-compose') { renderPendingMomentPhoto(); renderMomentComposeMeta(); renderMomentsVisibilityInline(); }
     if (name === 'contact-moments') renderContactMoments();
     if (name === 'injection-composer') renderInjectionComposer();
 
@@ -6490,12 +6486,12 @@ export function createPhonePanel({
 
   let currentPublicWebTab = 'recommend';
   const publicWebNames = { recommend:'社区推荐', tianya:'天涯社区', xiaohongshu:'小红书', zhihu:'知乎', custom:'自创' };
-  const publicWebTypeNames = { tianya:'帖子', xiaohongshu:'笔记', zhihu:'问题', custom:'内容' };
+  const publicWebTypeNames = { tianya:'帖子', xiaohongshu:'笔记', zhihu:'问题', custom:'帖子' };
   const tianyaSubtitles = ['天涯杂谈','情感天地','娱乐八卦','煮酒论史','生活那点事'];
   let openedPublicWebPostId = '';
   const publicWebGenerating = new Set();
   const expandedXhsThreads = new Set();
-  const sourceLabel = post => post?.section==='custom' ? (post?.extra?.customCommunityName||'自创社区') : ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post?.section] || '社区');
+  const sourceLabel = post => ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post?.section] || '天涯');
   const cleanTianyaTitle = title => String(title || '无标题').replace(/^(?:\s*[\[【][^\]】]{1,12}[\]】]\s*)+/, '').trim() || '无标题';
   const chooseCommunityMentionContact = () => {
     const candidates=getContacts().filter(item=>item && item.id && item.kind!=='group' && String(item.id)!=='builtin:meta');
@@ -6554,7 +6550,7 @@ export function createPhonePanel({
     const favorited = (post.extra?.favorites || []).includes('user');
     const comments = Array.isArray(post.comments) ? post.comments : [];
     const author = escapeHtml(post.author?.name || '匿名网友');
-    const tianyaBusy=publicWebGenerating.has(`tianya-comments:${post.id}`); const customBusy=publicWebGenerating.has(`custom-comments:${post.id}`); const commonTop = `<div class="moli-web-detail-nav"><button data-action="public-web-detail-back">← 返回</button>${post.section==='tianya'?`<button class="moli-comment-refresh${tianyaBusy?' is-spinning':''}" data-action="tianya-replies-refresh" data-post-id="${escapeHtml(post.id)}" aria-label="新增回复" ${tianyaBusy?'disabled':''}>↻</button>`:post.section==='custom'?`<button class="moli-comment-refresh${customBusy?' is-spinning':''}" data-action="custom-comments-refresh" data-post-id="${escapeHtml(post.id)}" aria-label="新增评论" ${customBusy?'disabled':''}>↻</button>`:''}</div>`;
+    const tianyaBusy=publicWebGenerating.has(`tianya-comments:${post.id}`); const commonTop = `<div class="moli-web-detail-nav"><button data-action="public-web-detail-back">← 返回</button>${post.section==='tianya'?`<button class="moli-comment-refresh${tianyaBusy?' is-spinning':''}" data-action="tianya-replies-refresh" data-post-id="${escapeHtml(post.id)}" aria-label="新增回复" ${tianyaBusy?'disabled':''}>↻</button>`:''}</div>`;
     if (post.section === 'xiaohongshu') {
       const byId=new Map(comments.map(c=>[String(c.id),c]));
       const rootOf=comment=>{let cur=comment,guard=0;while(cur?.replyToCommentId&&guard++<50){const parent=byId.get(String(cur.replyToCommentId));if(!parent)break;cur=parent;}return cur;};
@@ -6574,16 +6570,18 @@ export function createPhonePanel({
       const answerHtml=answers.map((answer,index)=>{const ac=Array.isArray(answer.comments)?answer.comments:[];const busy=publicWebGenerating.has(`zhihu-comments:${post.id}:${answer.id}`);return `<section class="moli-zhihu-answer"><div class="moli-zhihu-answer-author"><b>${escapeHtml(answer.author?.name||'匿名用户')}</b><span>回答</span></div><p>${escapeHtml(answer.content||'')}</p><div class="moli-zhihu-answer-meta moli-comment-head"><span>赞同 ${Number(answer.upvotes||0)} · ${ac.length} 条评论　<button class="moli-zhihu-user-comment" data-action="zhihu-user-comment" data-post-id="${escapeHtml(post.id)}" data-answer-id="${escapeHtml(answer.id)}">评论</button></span><button class="moli-comment-refresh${busy?' is-spinning':''}" data-action="zhihu-comments-add" data-post-id="${escapeHtml(post.id)}" data-answer-id="${escapeHtml(answer.id)}" aria-label="新增评论" ${busy?'disabled':''}>↻</button></div>${ac.length?`<div class="moli-zhihu-answer-comments">${ac.slice(0,3).map(c=>`<div class="moli-zhihu-comment"><b>${escapeHtml(c.author?.name||'网友')}</b>：${escapeHtml(c.content||'')}</div>`).join('')}<button data-action="zhihu-comments-open" data-post-id="${escapeHtml(post.id)}" data-answer-index="${index}">查看全部 ${ac.length} 条评论</button></div>`:''}</section>`;}).join('');
       feed.innerHTML = `<article class="moli-zhihu-detail"><div class="moli-zhihu-backrow"><button data-action="public-web-detail-back" aria-label="返回">‹</button></div><h2>${escapeHtml(post.title)}</h2>${post.content?`<p class="moli-zhihu-question-body">${escapeHtml(post.content)}</p>`:''}<div class="moli-zhihu-question-actions"><button data-action="zhihu-follow-question" data-post-id="${escapeHtml(post.id)}">${favorited?'已关注':'＋关注问题'}</button><button data-action="zhihu-invite-answer" data-post-id="${escapeHtml(post.id)}">邀请回答</button><button data-action="zhihu-write-answer" data-post-id="${escapeHtml(post.id)}">增加回答</button></div><div class="moli-zhihu-answer-count">${answers.length} 个回答</div>${answerHtml||'<div class="moli-web-muted">还没有回答</div>'}</article>`;
     } else {
-      feed.innerHTML = `${commonTop}<article class="moli-tianya-detail"><h2>${post.section==='custom'?`[${escapeHtml(post.extra?.customCommunityName||'自创社区')}] `:`[${escapeHtml(post.extra?.subtitle||'天涯杂谈')}] `}${escapeHtml(cleanTianyaTitle(post.title))}</h2><div class="moli-tianya-detail-meta">楼主：<a>${author}</a>　发表于：${new Date(Number(post.createdAt||Date.now())).toLocaleString()}</div><section class="moli-tianya-floor"><div class="moli-tianya-floor-head"><b>楼主</b>　${author}</div><p>${escapeHtml(post.content)}</p></section>${comments.map((c,i)=>{const targetIndex=comments.findIndex(x=>String(x.id)===String(c.replyToCommentId||''));const target=targetIndex>=0?comments[targetIndex]:null;return `<section class="moli-tianya-floor"><div class="moli-tianya-floor-head"><b>${i+1}楼</b>　<a>${escapeHtml(c.author?.name||'网友')}</a></div>${target?`<div class="moli-tianya-reply-ref">@${escapeHtml(target.author?.name||'网友')} #${targetIndex+1}</div>`:''}<p>${escapeHtml(c.content||'')}</p><button class="moli-tianya-floor-reply" data-action="tianya-floor-reply" data-post-id="${escapeHtml(post.id)}" data-comment-id="${escapeHtml(c.id)}" data-floor="${i+1}" data-comment-author="${escapeHtml(c.author?.name||'网友')}">回复</button></section>`;}).join('')}<div class="moli-tianya-reply-tail"><button data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">[回复本帖]</button></div></article>`;
+      feed.innerHTML = `${commonTop}<article class="moli-tianya-detail"><h2>[${escapeHtml(post.extra?.subtitle||'天涯杂谈')}] ${escapeHtml(cleanTianyaTitle(post.title))}</h2><div class="moli-tianya-detail-meta">楼主：<a>${author}</a>　发表于：${new Date(Number(post.createdAt||Date.now())).toLocaleString()}</div><section class="moli-tianya-floor"><div class="moli-tianya-floor-head"><b>楼主</b>　${author}</div><p>${escapeHtml(post.content)}</p></section>${comments.map((c,i)=>{const targetIndex=comments.findIndex(x=>String(x.id)===String(c.replyToCommentId||''));const target=targetIndex>=0?comments[targetIndex]:null;return `<section class="moli-tianya-floor"><div class="moli-tianya-floor-head"><b>${i+1}楼</b>　<a>${escapeHtml(c.author?.name||'网友')}</a></div>${target?`<div class="moli-tianya-reply-ref">@${escapeHtml(target.author?.name||'网友')} #${targetIndex+1}</div>`:''}<p>${escapeHtml(c.content||'')}</p><button class="moli-tianya-floor-reply" data-action="tianya-floor-reply" data-post-id="${escapeHtml(post.id)}" data-comment-id="${escapeHtml(c.id)}" data-floor="${i+1}" data-comment-author="${escapeHtml(c.author?.name||'网友')}">回复</button></section>`;}).join('')}<div class="moli-tianya-reply-tail"><button data-action="public-web-comment" data-post-id="${escapeHtml(post.id)}">[回复本帖]</button></div></article>`;
     }
   };
+  let recommendFilterOpen=false;
+  const renderRecommendFilter=(settings)=>{ const sources=Array.isArray(settings.recommendSources)&&settings.recommendSources.length?settings.recommendSources:['tianya','xiaohongshu','zhihu','custom']; const defs=listCustomCommunities(getScopeKey?.()); const customIds=Array.isArray(settings.recommendCustomIds)?settings.recommendCustomIds:defs.map(x=>x.id); const checked=k=>sources.includes(k)?'checked':''; return `<div class="moli-recommend-filter-panel" ${recommendFilterOpen?'':'hidden'}><label><input type="checkbox" data-recommend-all ${sources.length===4?'checked':''}> 全选</label><label>帖子条数 <input class="moli-recommend-count" type="number" min="1" max="20" data-recommend-count value="${escapeHtml(String(settings.recommendCount||''))}" placeholder="默认"></label><label><input type="checkbox" data-recommend-source="tianya" ${checked('tianya')}> 天涯</label><label><input type="checkbox" data-recommend-source="xiaohongshu" ${checked('xiaohongshu')}> 小红书</label><label><input type="checkbox" data-recommend-source="zhihu" ${checked('zhihu')}> 知乎</label><label><input type="checkbox" data-recommend-source="custom" ${checked('custom')}> 自创 ›</label><div class="moli-recommend-custom-choices">${defs.map(d=>`<label><input type="checkbox" data-recommend-custom="${escapeHtml(d.id)}" ${customIds.includes(d.id)?'checked':''}> ${escapeHtml(d.name)}</label>`).join('')||'<small>还没有保存自创条目</small>'}</div></div>`; };
   const renderPublicWeb = () => {
     const feed = panel.querySelector('[data-public-web-feed]'); if (!feed) return;
     if (openedPublicWebPostId) { const post=getPublicWebPost(getScopeKey?.(),openedPublicWebPostId); if(post){renderPublicWebDetail(post);return;} openedPublicWebPostId=''; }
     const settings = getPublicWebSettings(getScopeKey?.());
     let posts = publicWebPostsForTab();
     if (!settings.ghostStoriesEnabled) posts = posts.filter(post => post?.extra?.subtitle !== '莲蓬鬼话');
-    const moderator = panel.querySelector('[data-tianya-moderators]'); if (moderator) moderator.textContent = `moli ${getTavernUserContext()?.name || 'User'}`;
+    const moderator = panel.querySelector('[data-tianya-moderators]'); if (moderator) { const u=getTavernUserContext()?.name||'User'; const cid=getSelectedWorldContactId(); const c=getContacts().find(x=>String(x.id||'')===String(cid||'')); moderator.textContent = `${u} ♡ ${c?.name||c?.source?.originalName||'Char'}`; }
     const sitebar = panel.querySelector('.moli-tianya-sitebar strong'); if(sitebar) sitebar.textContent=`[${publicWebNames[currentPublicWebTab]}]`;
     const tianyaChrome = currentPublicWebTab === 'tianya';
     const recommendChrome = currentPublicWebTab === 'recommend';
@@ -6607,9 +6605,14 @@ export function createPhonePanel({
       const customItems = posts.filter(p=>p.section==='custom').slice(0,6);
       const tianya = tianyaItems.map(post=>`<button class="moli-recommend-tianya-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span>[${escapeHtml(post.extra?.subtitle || '天涯杂谈')}]</span>${escapeHtml(cleanTianyaTitle(post.title))}</button>`).join('');
       const xhs = xhsItems.map(post=>`<button class="moli-recommend-xhs-card" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span class="moli-recommend-xhs-image"><em>${escapeHtml(post.extra?.imageText||'')}</em></span><strong>${escapeHtml(post.title||'无标题')}</strong></button>`).join('');
-      const custom = customItems.map(post=>`<button class="moli-recommend-custom-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span>${escapeHtml(post.extra?.customCommunityName||'自创社区')}</span><strong>${escapeHtml(post.title||'无标题')}</strong></button>`).join('');
       const zhihu = zhihuItems.map(post=>`<button class="moli-recommend-zhihu-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><strong>${escapeHtml(post.title||'无标题')}</strong><span>${escapeHtml(String(post.content||post.extra?.answer||'').slice(0,72))}</span></button>`).join('');
-      feed.innerHTML = `<div class="moli-recommend-home"><header class="moli-recommend-today"><button type="button" class="moli-recommend-refresh${publicWebGenerating.has('recommend')?' is-spinning':''}" data-action="public-web-refresh-recommend" aria-label="刷新社区推荐">↻</button><span>今天的社区发生了什么……</span><button type="button" class="moli-recommend-ghost-toggle" data-action="toggle-ghost-stories">莲蓬鬼话 ${settings.ghostStoriesEnabled?'开':'关'}</button></header><div class="moli-recommend-doodle">⌁　✧　⌁</div>${tianya?`<section class="moli-recommend-sketch-section moli-recommend-tianya">${tianya}</section>`:''}${xhs?`<section class="moli-recommend-sketch-section moli-recommend-xhs-grid">${xhs}</section>`:''}${zhihu?`<section class="moli-recommend-sketch-section moli-recommend-zhihu">${zhihu}</section>`:''}${custom?`<section class="moli-recommend-sketch-section moli-recommend-custom">${custom}</section>`:''}${posts.length?'':'<div class="moli-recommend-empty">轻轻点一下 ↻，看看今天的社区。</div>'}</div>`;
+      const custom = customItems.map(post=>`<button class="moli-recommend-zhihu-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><small>${escapeHtml(post.extra?.customCommunityName||'自创')}</small><strong>${escapeHtml(post.title||'无标题')}</strong><span>${escapeHtml(String(post.content||'').slice(0,72))}</span></button>`).join('');
+      feed.innerHTML = `<div class="moli-recommend-home"><header class="moli-recommend-today"><button type="button" class="moli-recommend-refresh${publicWebGenerating.has('recommend')?' is-spinning':''}" data-action="public-web-refresh-recommend" aria-label="刷新社区推荐">↻</button><span>今天的社区发生了什么……</span><button type="button" class="moli-recommend-filter" data-action="recommend-filter-toggle">我只想看 ›</button><button type="button" class="moli-recommend-ghost-toggle" data-action="toggle-ghost-stories">莲蓬鬼话 ${settings.ghostStoriesEnabled?'开':'关'}</button></header>${renderRecommendFilter(settings)}<div class="moli-recommend-doodle">⌁　✧　⌁</div>${tianya?`<section class="moli-recommend-sketch-section moli-recommend-tianya">${tianya}</section>`:''}${xhs?`<section class="moli-recommend-sketch-section moli-recommend-xhs-grid">${xhs}</section>`:''}${zhihu?`<section class="moli-recommend-sketch-section moli-recommend-zhihu">${zhihu}</section>`:''}${custom?`<section class="moli-recommend-sketch-section moli-recommend-zhihu">${custom}</section>`:''}${posts.length?'':'<div class="moli-recommend-empty">轻轻点一下 ↻，看看今天的社区。</div>'}</div>`;
+    } else if (currentPublicWebTab === 'custom') {
+      const userName=getTavernUserContext()?.name||'User'; const charId=getSelectedWorldContactId(); const char=getContacts().find(x=>String(x.id||'')===String(charId||'')); const charName=char?.name||char?.source?.originalName||'Char';
+      let defs=listCustomCommunities(getScopeKey?.());
+      if(!defs.length){ defs=[{id:'sample_blackfan',name:`${charName}黑粉匿名楼`,description:''},{id:'sample_school',name:'学校论坛',description:''},{id:'sample_work',name:'同事八卦',description:''},{id:'sample_past',name:'如果回到以前',description:''},{id:'sample_death',name:'当u去世',description:''}]; }
+      feed.innerHTML=`<div class="moli-custom-home"><h2>${escapeHtml(userName)}小窝</h2><p>写下你想在这个世界里看到的内容；启用后会和天涯、小红书、知乎一起参与“社区推荐”刷新。</p><div class="moli-custom-layout"><aside><button data-action="custom-new">＋ 新增</button>${defs.map(d=>`<button data-action="custom-edit" data-custom-id="${escapeHtml(d.id)}">${escapeHtml(d.name)}</button>`).join('')}</aside><section data-custom-editor><div class="moli-web-muted">选择左侧条目进行编辑。</div></section></div></div>`;
     } else if (currentPublicWebTab === 'xiaohongshu') {
       const xhsCard=post=>`<article class="moli-xhs-waterfall-card"><button class="moli-card-pin${post.extra?.pinned?' is-pinned':''}" data-action="public-web-pin" data-post-id="${escapeHtml(post.id)}">${post.extra?.pinned?'★':'☆'}</button><button class="moli-xhs-card-open" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span class="moli-xhs-card-image"><em>${escapeHtml(post.extra?.imageText||'')}</em><small>${escapeHtml(post.extra?.imagePrompt||'')}</small></span><strong>${escapeHtml(post.title||'无标题')}</strong><span class="moli-xhs-card-author">${escapeHtml(post.author?.name||'网友')}</span></button></article>`;
       const cards=ordinaryPosts.map(xhsCard).join(''); const pinnedCards=pinnedPosts.map(xhsCard).join('');
@@ -6617,16 +6620,13 @@ export function createPhonePanel({
     } else if (currentPublicWebTab === 'zhihu') {
       const zhihuCard=post=>{const answers=Array.isArray(post.extra?.answers)?post.extra.answers:[];const first=answers[0];return `<article class="moli-zhihu-feed-card"><button class="moli-card-pin${post.extra?.pinned?' is-pinned':''}" data-action="public-web-pin" data-post-id="${escapeHtml(post.id)}">${post.extra?.pinned?'★':'☆'}</button><button data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><h3>${escapeHtml(post.title||'无标题')}</h3>${first?`<b>${escapeHtml(first.author?.name||'匿名用户')}</b><p>${escapeHtml(String(first.content||'').slice(0,150))}${String(first.content||'').length>150?'…':''}</p><small>赞同 ${Number(first.upvotes||0)} · ${(first.comments||[]).length} 条评论</small>`:(post.content?`<p>${escapeHtml(String(post.content).slice(0,150))}</p>`:'')}</button></article>`};
       feed.innerHTML=`<div class="moli-zhihu-feed">${ordinaryPosts.map(zhihuCard).join('')||'<div class="moli-recommend-empty">这里还没有问题。</div>'}${pinnedPosts.length?`<section class="moli-public-pinned-tail"><div class="moli-public-pinned-title">常驻</div>${pinnedPosts.map(zhihuCard).join('')}</section>`:''}</div>`;
-    } else if (currentPublicWebTab === 'custom') {
-      const defs=listCustomCommunities(getScopeKey?.());
-      const cards=defs.map(def=>{const count=posts.filter(p=>String(p.extra?.customCommunityId||'')===String(def.id)).length;return `<article class="moli-custom-community-card"><div><strong>${escapeHtml(def.name)}</strong><small>${def.enabled?'参与社区推荐':'已停用'} · ${count} 条内容</small><p>${escapeHtml(def.description)}</p></div><div class="moli-custom-community-actions"><button data-action="custom-community-toggle" data-custom-id="${escapeHtml(def.id)}">${def.enabled?'停用':'启用'}</button><button data-action="custom-community-edit" data-custom-id="${escapeHtml(def.id)}">编辑</button><button data-action="custom-community-delete" data-custom-id="${escapeHtml(def.id)}">删除</button></div></article>`;}).join('');
-      const postRows=posts.map(post=>`<button class="moli-custom-post-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span>${escapeHtml(post.extra?.customCommunityName||'自创社区')}</span><strong>${escapeHtml(post.title||'无标题')}</strong></button>`).join('');
-      feed.innerHTML=`<div class="moli-custom-community-home"><header><div><strong>自创社区</strong><small>写下你想在这个世界里看到的信息环境；启用后会和天涯、小红书、知乎一起参与“社区推荐”刷新。</small></div><button data-action="custom-community-add">＋ 新增</button></header>${cards||'<div class="moli-recommend-empty">还没有自创社区。</div>'}${postRows?`<section class="moli-custom-generated"><h3>已经生成的内容</h3>${postRows}</section>`:''}</div>`;
     } else {
       feed.innerHTML = `<div class="moli-tianya-topic-list">${rows||'<div class="moli-tianya-no-topics">这里还没有内容。</div>'}${pinnedTail}</div>`;
     }
   };
   panel.querySelectorAll('[data-public-web-tab]').forEach(button => button.addEventListener('click', () => { openedPublicWebPostId=''; panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item===button)); currentPublicWebTab=String(button.dataset.publicWebTab||'recommend'); renderPublicWeb(); }));
+  panel.querySelector('[data-public-web-feed]')?.addEventListener('click', event=>{ const scope=getScopeKey?.(); const filter=event.target.closest('[data-action="recommend-filter-toggle"]'); if(filter){recommendFilterOpen=!recommendFilterOpen;renderPublicWeb();return;} const all=event.target.closest('[data-recommend-all]'); if(all){panel.querySelectorAll('[data-recommend-source]').forEach(x=>x.checked=all.checked);return;} const add=event.target.closest('[data-action="custom-new"]'); const edit=event.target.closest('[data-action="custom-edit"]'); if(!add&&!edit)return; const defs=listCustomCommunities(scope); const found=edit?defs.find(x=>String(x.id)===String(edit.dataset.customId||'')):null; const preset=found||(!add?{id:edit?.dataset.customId,name:edit?.textContent||'',description:''}:null); const name=windowRef.prompt?.('自创板块名称',preset?.name||''); if(name===null||!String(name).trim())return; const description=windowRef.prompt?.('写下你想在这个世界里看到的内容',preset?.description||''); if(description===null)return; saveCustomCommunity(scope,{id:preset?.id,name,description}); renderPublicWeb(); });
+  panel.querySelector('[data-public-web-feed]')?.addEventListener('change', event=>{ if(!event.target.matches('[data-recommend-source],[data-recommend-custom],[data-recommend-count]'))return; const sources=[...panel.querySelectorAll('[data-recommend-source]:checked')].map(x=>x.dataset.recommendSource); const customIds=[...panel.querySelectorAll('[data-recommend-custom]:checked')].map(x=>x.dataset.recommendCustom); const count=Number(panel.querySelector('[data-recommend-count]')?.value||0)||0; updatePublicWebSettings(getScopeKey?.(),{recommendSources:sources,recommendCustomIds:customIds,recommendCount:count}); });
   panel.querySelector('[data-action="public-web-refresh"]')?.addEventListener('click', async event => {
     const button=event.currentTarget; const refreshSection=currentPublicWebTab; if(publicWebGenerating.has(refreshSection))return; publicWebGenerating.add(refreshSection); button.disabled=true; const old=button.textContent; button.textContent='[刷新中…]';
     try {
@@ -6634,8 +6634,8 @@ export function createPhonePanel({
       const settings=getPublicWebSettings(getScopeKey?.());
       if (currentPublicWebTab === 'recommend') {
         const batchId=`recommend_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
-        const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:'recommend',customCommunities:listCustomCommunities(getScopeKey?.())});
-        const created=addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } }))); created.filter(p=>p.section==='custom').forEach(p=>recordWorldEvent(getScopeKey?.(),{source:'community.custom',actorId:String(p.author?.id||'internet'),action:'POST_CREATED',objectId:String(p.id||''),content:`自创社区“${p.extra?.customCommunityName||'自创社区'}”出现新内容：${p.title}`,metadata:{postId:String(p.id||''),customCommunityId:String(p.extra?.customCommunityId||'')}}));
+        const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:'recommend',recommendSources:settings.recommendSources,recommendCount:settings.recommendCount,customCommunities:listCustomCommunities(getScopeKey?.()).filter(x=>!Array.isArray(settings.recommendCustomIds)||!settings.recommendCustomIds.length||settings.recommendCustomIds.includes(x.id))});
+        addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } })));
         updatePublicWebSettings(getScopeKey?.(),{ recommendationBatchId:batchId });
       } else {
         const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:currentPublicWebTab});
@@ -6654,10 +6654,6 @@ export function createPhonePanel({
   });
   panel.querySelector('[data-public-web-feed]')?.addEventListener('contextmenu', event => { const target=event.target?.closest?.('[data-post-id]'); const postId=String(target?.dataset?.postId||''); if(!postId)return; event.preventDefault(); const post=getPublicWebPost(getScopeKey?.(),postId); if(!post)return; if(windowRef.confirm?.(`删除这条${publicWebTypeNames[post.section]||'内容'}？`)){forceDeletePublicWebPost(getScopeKey?.(),postId);if(openedPublicWebPostId===postId)openedPublicWebPostId='';renderPublicWeb();} });
   panel.querySelector('[data-public-web-feed]')?.addEventListener('click', async event => {
-    const customAdd=event.target?.closest?.('[data-action="custom-community-add"]'); if(customAdd){const name=windowRef.prompt?.('自创社区名称，例如：学校论坛','')??null;if(name===null)return;const description=windowRef.prompt?.('你想在这里看到什么？请描述这个社区的世界范围、常见话题、参与者和气质。','')??null;if(description===null)return;const saved=saveCustomCommunity(getScopeKey?.(),{name,description,enabled:true});if(!saved)windowRef.alert?.('名称和描述都需要填写。');renderPublicWeb();return;}
-    const customEdit=event.target?.closest?.('[data-action="custom-community-edit"]'); if(customEdit){const def=listCustomCommunities(getScopeKey?.()).find(x=>String(x.id)===String(customEdit.dataset.customId));if(!def)return;const name=windowRef.prompt?.('自创社区名称',def.name)??null;if(name===null)return;const description=windowRef.prompt?.('你想在这里看到什么？',def.description)??null;if(description===null)return;saveCustomCommunity(getScopeKey?.(),{...def,name,description});renderPublicWeb();return;}
-    const customToggle=event.target?.closest?.('[data-action="custom-community-toggle"]'); if(customToggle){toggleCustomCommunity(getScopeKey?.(),customToggle.dataset.customId);renderPublicWeb();return;}
-    const customDelete=event.target?.closest?.('[data-action="custom-community-delete"]'); if(customDelete){const def=listCustomCommunities(getScopeKey?.()).find(x=>String(x.id)===String(customDelete.dataset.customId));if(def&&(windowRef.confirm?.(`删除自创社区“${def.name}”及其已生成内容？`)??true))deleteCustomCommunity(getScopeKey?.(),def.id);renderPublicWeb();return;}
     const ghostToggle=event.target?.closest?.('[data-action="toggle-ghost-stories"]'); if(ghostToggle){const current=getPublicWebSettings(getScopeKey?.()).ghostStoriesEnabled;updatePublicWebSettings(getScopeKey?.(),{ghostStoriesEnabled:!current});renderPublicWeb();return;}
     const recommendRefresh=event.target?.closest?.('[data-action="public-web-refresh-recommend"]');
     if(recommendRefresh){
@@ -6665,8 +6661,8 @@ export function createPhonePanel({
       try{
         const settings=getPublicWebSettings(getScopeKey?.());
         const batchId=`recommend_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
-        const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:'recommend',customCommunities:listCustomCommunities(getScopeKey?.())});
-        const created=addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } }))); created.filter(p=>p.section==='custom').forEach(p=>recordWorldEvent(getScopeKey?.(),{source:'community.custom',actorId:String(p.author?.id||'internet'),action:'POST_CREATED',objectId:String(p.id||''),content:`自创社区“${p.extra?.customCommunityName||'自创社区'}”出现新内容：${p.title}`,metadata:{postId:String(p.id||''),customCommunityId:String(p.extra?.customCommunityId||'')}}));
+        const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:'recommend',recommendSources:settings.recommendSources,recommendCount:settings.recommendCount,customCommunities:listCustomCommunities(getScopeKey?.()).filter(x=>!Array.isArray(settings.recommendCustomIds)||!settings.recommendCustomIds.length||settings.recommendCustomIds.includes(x.id))});
+        addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } })));
         updatePublicWebSettings(getScopeKey?.(),{ recommendationBatchId:batchId }); ['tianya','xiaohongshu','zhihu'].forEach(section=>trimPublicWebSectionPosts(getScopeKey?.(),section,10)); openedPublicWebPostId=''; renderPublicWeb();
       }catch(error){console.error('[moli小手机] community recommend refresh failed:',error);windowRef.alert?.(`刷新失败：${error?.message||error}`);}
       finally{publicWebGenerating.delete('recommend');renderPublicWeb();}
@@ -6715,9 +6711,8 @@ export function createPhonePanel({
     const zhihuAdd=event.target?.closest?.('[data-action="zhihu-comments-add"]'); if(zhihuAdd){const postId=String(zhihuAdd.dataset.postId||'');const answerId=String(zhihuAdd.dataset.answerId||'');const busyKey=`zhihu-comments:${postId}:${answerId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const answer=(post?.extra?.answers||[]).find(a=>String(a.id)===answerId);const additions=await generateZhihuAnswerCommentRefresh({scopeKey:getScopeKey?.(),post,answer});addZhihuAnswerComments(getScopeKey?.(),postId,answerId,additions);renderPublicWeb();}catch(error){console.error('[moli小手机] zhihu add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const favorite=event.target?.closest?.('[data-action="public-web-favorite"]'); if(favorite){togglePublicWebFavorite(getScopeKey?.(),favorite.dataset.postId,'user');renderPublicWeb();return;}
     const pin=event.target?.closest?.('[data-action="public-web-pin"]'); if(pin){togglePublicWebPinned(getScopeKey?.(),pin.dataset.postId);renderPublicWeb();return;}
-    const customCommentRefresh=event.target?.closest?.('[data-action="custom-comments-refresh"]'); if(customCommentRefresh){const postId=String(customCommentRefresh.dataset.postId||'');const busyKey=`custom-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const replies=await generateCustomCommunityCommentRefresh({scopeKey:getScopeKey?.(),post});for(const reply of replies)addPublicWebComment(getScopeKey?.(),post.id,reply);renderPublicWeb();}catch(error){console.error('[moli小手机] custom community comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const replyRefresh=event.target?.closest?.('[data-action="tianya-replies-refresh"]'); if(replyRefresh){const postId=String(replyRefresh.dataset.postId||'');const busyKey=`tianya-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const replies=await generateTianyaReplyRefresh({scopeKey:getScopeKey?.(),post});for(const reply of replies)addPublicWebComment(getScopeKey?.(),post.id,reply);renderPublicWeb();}catch(error){console.error('[moli小手机] tianya replies refresh failed:',error);windowRef.alert?.(`新增回复失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
-    const comment=event.target?.closest?.('[data-action="public-web-comment"]'); if(comment){const entry=askPublicWebUserComment('回复内容');if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),comment.dataset.postId,stored);const post=getPublicWebPost(getScopeKey?.(),comment.dataset.postId);if(saved&&post?.section==='custom')recordWorldEvent(getScopeKey?.(),{source:'community.custom',actorId:'user',action:'COMMENT',objectId:String(saved.id||post.id||''),content:`User 在自创社区“${post.extra?.customCommunityName||'自创社区'}”评论：${saved.content}`,metadata:{postId:String(post.id||''),customCommunityId:String(post.extra?.customCommunityId||'')}});if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
+    const comment=event.target?.closest?.('[data-action="public-web-comment"]'); if(comment){const entry=askPublicWebUserComment('回复内容');if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),comment.dataset.postId,stored);const post=getPublicWebPost(getScopeKey?.(),comment.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
   });
   renderPublicWeb();
 
@@ -6913,6 +6908,7 @@ export function createPhonePanel({
   });
   panel.querySelector('[data-action="moments-photo-remove"]')?.addEventListener('click', () => { pendingMomentImageDescription=''; renderPendingMomentPhoto(); });
   panel.querySelector('[data-action="moments-location"]')?.addEventListener('click',()=>openMomentsMeta('location'));
+  panel.querySelector('[data-action="moments-visibility"]')?.addEventListener('click',(event)=>{ event.preventDefault(); event.stopPropagation(); toggleMomentsVisibilityInline(); });
   momentsVisibilityInlineList?.addEventListener('click',(event)=>{
     const row=event.target?.closest?.('[data-visibility-inline-contact]'); if(!row)return;
     row.classList.toggle('is-selected');
