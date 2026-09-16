@@ -2110,3 +2110,30 @@
   background:transparent!important;
   box-shadow:none!important;
 }
+
+/* moli163 — community readability, stable glass shell, help sheet, quote contrast */
+#moli-phone-panel .moli-retro-browser.is-community-mode .moli-public-web-feed:has(.moli-recommend-home){overflow:hidden!important;min-height:0}
+#moli-phone-panel .moli-recommend-home{height:100%;min-height:0!important;overflow-y:auto!important;overscroll-behavior:contain;background:rgba(255,255,255,.44)!important;color:#2f2d2a!important}
+#moli-phone-panel .moli-recommend-home .moli-recommend-subtools button{color:#774f4c!important;opacity:1!important}
+#moli-phone-panel .moli-recommend-home .moli-recommend-sketch-section,
+#moli-phone-panel .moli-recommend-home .moli-recommend-sketch-section *{opacity:1}
+#moli-phone-panel .moli-recommend-home .moli-recommend-sketch-section{color:#34312d}
+#moli-phone-panel .moli-recommend-home .moli-recommend-sketch-section p,
+#moli-phone-panel .moli-recommend-home .moli-recommend-sketch-section small{color:#5f5a54!important}
+#moli-phone-panel .moli-recommend-filter-panel{background:rgba(255,255,255,.62)!important;color:#292929!important}
+#moli-phone-panel .moli-community-share{display:grid!important;place-items:center;width:28px;height:28px;padding:3px!important}
+#moli-phone-panel .moli-community-share-icon{display:block;width:20px;height:20px}
+#moli-phone-panel .moli-community-help-backdrop{position:absolute;inset:0;z-index:180;display:flex;align-items:center;justify-content:center;padding:22px;background:rgba(20,20,20,.14);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+#moli-phone-panel .moli-community-help-sheet{position:relative;width:min(92%,560px);max-height:82%;box-sizing:border-box;padding:22px 18px 18px;border:1px solid rgba(255,255,255,.72);border-radius:25px;background:rgba(255,255,255,.64);box-shadow:0 22px 55px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.8);backdrop-filter:blur(28px) saturate(1.2);-webkit-backdrop-filter:blur(28px) saturate(1.2);color:#292929}
+#moli-phone-panel .moli-community-help-sheet h2{text-align:center;margin:0 30px 14px;font-size:18px}
+#moli-phone-panel .moli-community-help-sheet h3{margin:16px 0 7px;font-size:14px}
+#moli-phone-panel .moli-community-help-sheet p{margin:6px 0;font-size:12px;line-height:1.7;color:#3e3e3e}
+#moli-phone-panel .moli-community-help-close{position:absolute;right:13px;top:12px;width:31px;height:31px;border:1px solid rgba(255,255,255,.65);border-radius:50%;background:rgba(255,255,255,.42);font-size:20px;color:#333}
+#moli-phone-panel .moli-community-help-scroll{max-height:calc(82vh - 90px);overflow:auto;padding:0 4px 8px}
+#moli-phone-panel .moli-help-symbols{display:grid;grid-template-columns:minmax(72px,auto) 1fr;gap:8px 10px;align-items:center;font-size:12px;line-height:1.55}
+#moli-phone-panel .moli-help-symbols b{display:flex;align-items:center;justify-content:center;min-height:24px;font-weight:600}
+#moli-phone-panel .moli-help-symbols .moli-community-share-icon{width:20px;height:20px}
+/* Quoted messages must remain legible over dark wallpapers: glass is translucent, text is not. */
+#moli-phone-panel .moli-quoted-message{background:rgba(255,255,255,.58)!important;border-left-color:rgba(55,55,55,.46)!important;color:#333!important;opacity:1!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#moli-phone-panel .moli-quoted-message *{color:inherit!important;opacity:1!important}
+#moli-phone-panel .moli-quoted-sender{color:#2c2c2c!important}
