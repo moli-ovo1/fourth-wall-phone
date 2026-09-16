@@ -6653,7 +6653,7 @@ export function createPhonePanel({
     try {
       const result = await generateContactMoment({ scopeKey, contactId: item.id });
       let createdMoment = null;
-      if (result?.action === 'POST' && result?.content) {
+      if ((result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') && result?.content) {
         createdMoment = createProfileMoment(scopeKey, item.id, {
           author: { id: item.id, name: actorName, type: 'contact' },
           content: result.content,
@@ -6689,7 +6689,24 @@ export function createPhonePanel({
           addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId: targetId, actor: socialActor, content: interaction.content, replyToId: interaction.replyToId || '' });
         }
       }
-      if (result?.action === 'POST') {
+      if ((result?.action === 'PRIVATE_CHAT' || result?.action === 'POST+PRIVATE_CHAT') && Array.isArray(result?.privateMessages) && result.privateMessages.length) {
+        const privateConversation = getScopeConversations(scopeKey)
+          .filter(entry => entry?.type === 'private' && String(entry.contactId || '') === String(item.id))
+          .sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || ensureConversation(scopeKey, item.id);
+        const conversationKey = String(privateConversation?.conversationKey || privateConversation?.id || item.id);
+        const turnId = `moment-refresh:${Date.now()}:${Math.random().toString(36).slice(2,8)}`;
+        for (const content of result.privateMessages.slice(0, 3)) {
+          appendMessage(scopeKey, conversationKey, 'assistant', content, {
+            source: 'moment-refresh-interaction',
+            generationTurnId: turnId,
+            messageType: 'message',
+          });
+        }
+        if (conversationKey !== String(currentConversation()?.conversationKey || currentConversation()?.id || '')) {
+          incrementConversationUnread(scopeKey, conversationKey, result.privateMessages.length);
+        }
+      }
+      if (result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') {
         setProfileMomentStatus(scopeKey, item.id, { message: `发现 ${actorName} 的一条近期朋友圈`, note: '', kind: 'post' });
         toast(`发现 ${actorName} 的一条近期朋友圈`);
       } else {
@@ -6877,8 +6894,7 @@ export function createPhonePanel({
     }
     if (button.dataset.action === 'profile-moment-like') {
       const liked = toggleMomentLike(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor() });
-      try { notifyBehaviorContextEvent({ scopeKey, contactId:item.id, momentId, eventType: liked ? 'user-like' : 'user-unlike' }); }
-      catch (error) { console.warn('[moli小手机] record profile moment like fact failed:', error); }
+      recordMomentChatEvent(scopeKey,{contactId:item.id,type:liked ? 'USER_LIKE' : 'USER_UNLIKE',momentId,content:liked ? 'User 给这条角色专属朋友圈点了赞。' : 'User 取消了此前对这条角色专属朋友圈的点赞。'});
       renderContactMoments();
       return;
     }
@@ -6886,8 +6902,7 @@ export function createPhonePanel({
       const reason = String(windowRef.prompt?.('删除原因（角色会看到）', '') || '').trim();
       if (!(windowRef.confirm?.('删除这条评论？删除后会保留“已删除”和原因。') ?? true)) return;
       deleteMomentComment(scopeKey, { surface:'profile', ownerContactId:item.id, momentId, commentId:String(button.dataset.commentId||''), actorId:'user', reason });
-      try { notifyBehaviorContextEvent({ scopeKey, contactId:item.id, momentId, eventType:'user-delete-comment', content:reason }); }
-      catch (error) { console.warn('[moli小手机] record profile comment deletion fact failed:', error); }
+      recordMomentChatEvent(scopeKey,{contactId:item.id,type:'USER_DELETE_COMMENT',momentId,content:`User 删除了自己在这条角色专属朋友圈下的评论${reason ? `（原因：${reason}）` : ''}。`});
       renderContactMoments(); toast('评论已删除'); return;
     }
     if (button.dataset.action === 'profile-moment-comment') {
@@ -6895,8 +6910,7 @@ export function createPhonePanel({
       if (!text) return;
       addMomentComment(scopeKey, { surface: 'profile', ownerContactId: item.id, momentId, actor: userMomentsActor(), content: text });
       renderContactMoments();
-      try { notifyMomentInteractionOpportunity({ scopeKey, contactId:item.id, momentId, eventType:'user-comment', content:text }); }
-      catch (error) { console.warn('[moli小手机] queue profile moment interaction failed:', error); }
+      recordMomentChatEvent(scopeKey,{contactId:item.id,type:'USER_COMMENT',momentId,content:`User 在这条角色专属朋友圈下评论：${text}`});
       toast('已评论。点右上角刷新看看有没有回应。');
       return;
     }
