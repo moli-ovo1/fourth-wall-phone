@@ -22,7 +22,7 @@ import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getTavernUserContext, replaceUserPlaceholder } from '../core/tavern-user.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
-import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
+import { buildOnlinePresetPrompt, buildCommunityPresetPrompt } from '../storage/prompt-settings.js';
 import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, getRecentMomentChatEvents, markMomentChatEventsDelivered , markProfileMomentsMemoryOrganized} from '../storage/moments-store.js';
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
@@ -1394,7 +1394,9 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
 使用问答社区语法。title 是一个值得回答的问题，content 是问题补充或背景，answer 是一条有明确个人立场/知识来源的初始回答。问题可以来自世界中的职业、关系、社会现象、历史、生活经验、公共事件等。不要把所有回答写成百科全书，也不要整齐列点。评论围绕回答继续质疑、补充或讨论。
 
 【自创信息环境】\nUser 还可以定义自己的信息环境。只有本次提供的自创条目可以参与生成；它们不是天涯、小红书或知乎的换皮，必须遵循 User 对该条目的描述。\n${(customCommunities||[]).map(x=>{const charName=getCurrentTavernCharacterSnapshot()?.name||'当前角色';const desc=String(x.description||'按名称自然理解').replace(/\{\{char\}\}/gi,charName).replace(/\{\{user\}\}/gi,userName);return `- [id=${x.id}] ${x.name}：${desc}`;}).join('\n')||'本次没有自创条目。'}\n\n【本次来源限制】\n只允许从：${(Array.isArray(recommendSources)&&recommendSources.length?recommendSources:['tianya','xiaohongshu','zhihu','custom']).join('、')} 中生成。若包含 custom，自创内容 section=custom，并且 customCommunityId/customCommunityName 必须从上面给出的自创条目中原样选择，不得自造条目名或 id。\n\n【推荐页要求】\n一次生成 ${recommendCount>0?recommendCount+' 条':'4~6 条'}，把更多注意力留给每条内容本身。不要固定平台配额，由内容自然决定。题材必须明显多样，不要整页围绕同一关键词。每条 section 必须准确标记 tianya / xiaohongshu / zhihu / custom。只输出严格 JSON，不要解释。`;
-  const system = section === 'tianya' ? tianyaSystem : section === 'recommend' ? recommendSystem : genericSystem;
+  const communityPreset=buildCommunityPresetPrompt();
+  const baseSystem = section === 'tianya' ? tianyaSystem : section === 'recommend' ? recommendSystem : genericSystem;
+  const system = `${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}${baseSystem}`;
   const schema = section === 'tianya'
     ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复","replyTo":"可选；回复已有楼层时填写被回复楼层序号，只能指向本条评论之前的楼层"}]}]}。生成 6~10 条；每帖初始回复最多 15 条，并按冷帖 0~3、普通帖 4~8、热帖 9~15 自然分布。回复某楼时不要把 @用户名 #楼层号 重复写进 content，由界面根据 replyTo 展示。不要 markdown。`
     : section === 'recommend'
@@ -1423,7 +1425,8 @@ export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}
   if (!scopeKey || !post) throw new Error('当前帖子不可用');
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const existing=(post.comments||[]).map((c,i)=>`${i+1}楼 ${c.author?.name||'网友'}：${c.content||''}`).join('\n');
-  const system=`你正在继续一个老式天涯论坛帖子。只生成新的后续楼层回复，不改写主楼和已有楼层。回复数量自然为 1~6。网友可以认真回答、追问、质疑、支持、反对、阴阳怪气、争论、补充经历、纠正事实、催更、马克、插眼、跑题，也可以回复某个已有楼层。天涯保持线性盖楼：回复某楼仍然产生一个新的独立楼层，不做缩进楼中楼。若回复某楼，用 replyToFloor 返回被回复楼层号；不要在 content 里重复写 @用户名 #楼层号，界面会显示。不同网友口吻、长度、立场应有差异。只输出严格 JSON。`;
+  const communityPreset=buildCommunityPresetPrompt();
+  const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续一个老式天涯论坛帖子。只生成新的后续楼层回复，不改写主楼和已有楼层。回复数量自然为 1~6。网友可以认真回答、追问、质疑、支持、反对、阴阳怪气、争论、补充经历、纠正事实、催更、马克、插眼、跑题，也可以回复某个已有楼层。如果已有楼层中最新一条来自 User，本次必须至少有一条新回复回应这条 User 评论；回应者由你根据帖子生态自由决定，可以是楼主、被回复层主、已有网友或刚进帖的新 ID，不要固定某一种。天涯保持线性盖楼：回复某楼仍然产生一个新的独立楼层，不做缩进楼中楼。若回复某楼，用 replyToFloor 返回被回复楼层号；不要在 content 里重复写 @用户名 #楼层号，界面会显示。不同网友口吻、长度、立场应有差异。只输出严格 JSON。`;
   const user=`帖子标题：${post.title}\n楼主：${post.author?.name||'匿名'}\n主楼：${post.content}\n\n已有楼层：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"网友昵称","authorId":"可选","content":"新楼层内容","replyToFloor":"可选，被回复的已有楼层号"}]}。不要 markdown。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
   const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
@@ -1438,7 +1441,8 @@ export async function generateXiaohongshuCommentRefresh({ scopeKey, post, signal
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const comments=Array.isArray(post.comments)?post.comments:[];
   const existing=comments.map((c,i)=>{const target=comments.find(x=>String(x.id)===String(c.replyToCommentId||''));return `${i+1}. id=${c.id}｜${c.author?.name||'网友'}${target?` 回复 ${target.author?.name||'网友'}(id=${target.id})`:''}：${c.content||''}`;}).join('\n');
-  const system=`你正在继续一篇小红书笔记的评论区。只新增评论，不改写笔记和已有评论。一次新增 1~6 条。新增内容可以是新的主评论，也可以回复已有的任意主评论或子回复；回复之间可以继续互相回复。数据关系可以有任意深度，但小红书界面会把同一主评论下的对话展示在一个回复区里。评论要像真实小红书用户：有人分享经历、追问、赞同、质疑、补充、提醒、玩梗，也可能作者本人回应；口吻和长度要有差异。只输出严格 JSON。`;
+  const communityPreset=buildCommunityPresetPrompt();
+  const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续一篇小红书笔记的评论区。只新增评论，不改写笔记和已有评论。一次新增 1~6 条。新增内容可以是新的主评论，也可以回复已有的任意主评论或子回复；回复之间可以继续互相回复。数据关系可以有任意深度，但小红书界面会把同一主评论下的对话展示在一个回复区里。如果已有评论中最新一条来自 User，本次必须至少有一条新评论回应这条 User 评论；回应者可由作者、被回复者、已有 ID 或新 ID 自然产生，不预先写死。评论要像真实小红书用户：有人分享经历、追问、赞同、质疑、补充、提醒、玩梗，也可能作者本人回应；口吻和长度要有差异。只输出严格 JSON。`;
   const user=`笔记作者：${post.author?.name||'网友'}\n标题：${post.title||''}\n正文：${post.content||''}\n\n已有评论（可回复其中任意 id）：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"昵称","authorId":"可选","content":"新增评论","replyToCommentId":"可选；回复已有评论时填写其 id；新主评论留空"}]}。不要 markdown。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
   const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
@@ -1462,7 +1466,8 @@ export async function generateZhihuAnswerCommentRefresh({ scopeKey, post, answer
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const comments=Array.isArray(answer.comments)?answer.comments:[];
   const existing=comments.map((c,i)=>{const target=comments.find(x=>String(x.id)===String(c.replyToCommentId||''));return `${i+1}. id=${c.id}｜${c.author?.name||'网友'}${target?` 回复 ${target.author?.name||'网友'}(id=${target.id})`:''}：${c.content||''}`;}).join('\n');
-  const system=`你正在继续一条知乎回答下面的评论区。只新增评论，不改写问题、回答和已有评论。一次新增 1~6 条。可以新增主评论，也可以回复已有任意评论；评论之间可以继续互相回复。评论要比回答更口语、更短，可以赞同、质疑、追问、补充、纠错、分享经历、抬杠或要求来源。不同网友口吻与立场要有差异。只输出严格 JSON。`;
+  const communityPreset=buildCommunityPresetPrompt();
+  const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续一条知乎回答下面的评论区。只新增评论，不改写问题、回答和已有评论。一次新增 1~6 条。可以新增主评论，也可以回复已有任意评论；评论之间可以继续互相回复。如果已有评论中最新一条来自 User，本次必须至少有一条新评论回应这条 User 评论；回应者可由回答者、被回复者、已有 ID 或新 ID 自然产生，不预先写死。评论要比回答更口语、更短，可以赞同、质疑、追问、补充、纠错、分享经历、抬杠或要求来源。不同网友口吻与立场要有差异。只输出严格 JSON。`;
   const user=`问题：${post.title||''}\n回答者：${answer.author?.name||'匿名用户'}\n回答：${answer.content||''}\n\n已有评论（可回复任意 id）：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"昵称","authorId":"可选","content":"新增评论","replyToCommentId":"可选；回复已有评论时填写其 id；新主评论留空"}]}。不要 markdown。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
   const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
