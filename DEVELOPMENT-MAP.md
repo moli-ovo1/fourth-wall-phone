@@ -3090,3 +3090,11 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 - Community forwarding picker now includes both private contacts and group conversations.
 - Prompt presets are scoped as Global / WeChat / Community. Legacy preset blocks migrate to WeChat scope; Global and Community start empty. Generation composes Global + current module scope.
 - Deprecated: community explicit interactions using proactive SKIP semantics. Explicit User invite/@ is not an Automation opportunity.
+
+
+## moli154 / v0.4.94
+- 移除“启用 moli 预设”总开关；条目自身启用状态为唯一开关，全局/微信/社区继续按作用域组合。
+- 设置 App 主返回改为手机主屏。
+- Community Composer 重做为顶部独立毛玻璃“身份 / @”胶囊 + 覆盖式下拉面板 + 融合式右下发送块；身份始终提供本名/匿名/楼主，User 选择楼主即以楼主身份发言。
+- 社区 @ 使用点击角色名列表；邀请评论、知乎邀请回答、社区转发（联系人+群聊）、当前角色世界选择改为点选列表，不再输入数字序号；朋友圈 @ 角色也改为点选列表。
+- 知乎回答评论继续统一写入 answer.comments，并由统一 Community Composer 承接用户评论/回复。
