@@ -1,7 +1,7 @@
 import { readJson, writeJson } from './storage-adapter.js';
 
 const PREFIX = 'moli-phone:moments:v2:';
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 function key(scopeKey) { return PREFIX + encodeURIComponent(String(scopeKey || '')); }
 function id(prefix) { return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`; }
@@ -22,6 +22,9 @@ function moment(value = {}, surface = 'public') {
     author: actor(value?.author),
     content: String(value?.content || '').trim(),
     imageDescription: String(value?.imageDescription || '').trim(),
+    location: String(value?.location || '').trim(),
+    mentionContactIds: Array.isArray(value?.mentionContactIds) ? [...new Set(value.mentionContactIds.map(String).filter(Boolean))] : [],
+    visibility: value?.visibility?.mode === 'only' ? {mode:'only',contactIds:[...new Set((value?.visibility?.contactIds||[]).map(String).filter(Boolean))]} : {mode:'public',contactIds:[]},
     createdAt: Number(value?.createdAt || Date.now()),
     updatedAt: Number(value?.updatedAt || value?.createdAt || Date.now()),
     likes: Array.isArray(value?.likes) ? value.likes.map(actor).filter(x => x.id) : [],
@@ -66,9 +69,9 @@ export function updateMomentsSettings(scopeKey, patch = {}) {
 }
 export function listPublicMoments(scopeKey) { return getMomentsState(scopeKey).publicFeed.slice().sort((a,b)=>b.createdAt-a.createdAt); }
 export function listProfileMoments(scopeKey, contactId) { return (getMomentsState(scopeKey).profileFeeds[String(contactId)] || []).slice().sort((a,b)=>b.createdAt-a.createdAt); }
-export function createPublicMoment(scopeKey, { author, content, imageDescription = '', createdAt } = {}) {
+export function createPublicMoment(scopeKey, { author, content, imageDescription = '', location='', mentionContactIds=[], visibility={mode:'public',contactIds:[]}, createdAt } = {}) {
   const text = String(content || '').trim(); const imageText = String(imageDescription || '').trim(); if (!scopeKey || (!text && !imageText)) throw new Error('朋友圈内容不能为空');
-  const state = getMomentsState(scopeKey); const item = moment({ author, content:text, imageDescription:imageText, createdAt: Number(createdAt || Date.now()) }, 'public'); state.publicFeed.unshift(item); save(scopeKey,state); return item;
+  const state = getMomentsState(scopeKey); const item = moment({ author, content:text, imageDescription:imageText, location, mentionContactIds, visibility, createdAt: Number(createdAt || Date.now()) }, 'public'); state.publicFeed.unshift(item); save(scopeKey,state); return item;
 }
 export function deletePublicMoment(scopeKey, momentId, authorId = '') {
   const state=getMomentsState(scopeKey); const i=state.publicFeed.findIndex(x=>x.id===String(momentId)); if(i<0)return false;
@@ -110,11 +113,13 @@ export function setMomentUserRead(scopeKey, { surface='public', ownerContactId='
   const state=getMomentsState(scopeKey); const item=findMoment(state,surface,ownerContactId,momentId); if(!item)throw new Error('朋友圈动态不存在');
   item.userReadAt = read ? (item.userReadAt || Date.now()) : 0; item.updatedAt=Date.now(); save(scopeKey,state); return item.userReadAt;
 }
-export function recordProfileVisit(scopeKey, contactId, at=Date.now()) {
+export function recordProfileVisit(scopeKey, contactId, count=1, at=Date.now()) {
   const id=String(contactId||''); if(!scopeKey||!id||id==='user') return null;
   const state=getMomentsState(scopeKey); state.profileVisits ||= {}; const old=state.profileVisits[id] || {count:0,firstAt:0,lastAt:0};
-  state.profileVisits[id]={count:Number(old.count||0)+1,firstAt:Number(old.firstAt||at)||at,lastAt:Number(at||Date.now())}; save(scopeKey,state); return {...state.profileVisits[id]};
+  const roundCount=Math.max(0,Math.floor(Number(count||0)));
+  state.profileVisits[id]={count:roundCount,firstAt:Number(old.firstAt||at)||at,lastAt:roundCount?Number(at||Date.now()):Number(old.lastAt||0)}; save(scopeKey,state); return {...state.profileVisits[id]};
 }
+export function clearProfileVisitRound(scopeKey, contactIds=[]) { const state=getMomentsState(scopeKey); state.profileVisits ||= {}; for(const raw of contactIds){const id=String(raw||''); if(!id)continue; const old=state.profileVisits[id]||{firstAt:0,lastAt:0}; state.profileVisits[id]={count:0,firstAt:Number(old.firstAt||0),lastAt:Number(old.lastAt||0)};} save(scopeKey,state); }
 export function getProfileVisits(scopeKey) { return {...(getMomentsState(scopeKey).profileVisits || {})}; }
 
 export function getProfilePeek(scopeKey, contactId) {
@@ -154,12 +159,12 @@ export function importPublicMomentToProfile(scopeKey, momentId, ownerContactId, 
 }
 export function clearProfileMoments(scopeKey, contactId) { const state=getMomentsState(scopeKey); const owner=String(contactId); state.profileFeeds[owner] = []; delete state.profileStatus[owner]; save(scopeKey,state); }
 
-export function createProfileMoment(scopeKey, ownerContactId, { author, content, createdAt } = {}) {
+export function createProfileMoment(scopeKey, ownerContactId, { author, content, visibility={mode:'public',contactIds:[]}, createdAt } = {}) {
   const owner = String(ownerContactId || '').trim();
   const text = String(content || '').trim();
   if (!scopeKey || !owner || !text) throw new Error('角色朋友圈内容不能为空');
   const state = getMomentsState(scopeKey);
-  const item = moment({ ownerContactId: owner, author, content: text, createdAt: Number(createdAt || Date.now()) }, 'profile');
+  const item = moment({ ownerContactId: owner, author, content: text, visibility, createdAt: Number(createdAt || Date.now()) }, 'profile');
   state.profileFeeds[owner] ||= [];
   state.profileFeeds[owner].unshift(item);
   state.profileFeeds[owner] = state.profileFeeds[owner].slice(0, 6);
