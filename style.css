@@ -1661,4 +1661,76 @@
 }
 #moli-phone-panel .moli-tab-chat svg path:first-child{fill:currentColor;stroke:currentColor}
 #moli-phone-panel .moli-tab-chat svg path:last-child{fill:none}
-\n\n/* moli126 · white WeChat shell + liquid chat */\n#moli-phone-panel [data-page="home"]{background:#fff}\n#moli-phone-panel [data-page="home"]>.moli-nav{height:72px;flex-basis:72px;padding:16px 15px 0;background:#fff}\n#moli-phone-panel .moli-chat-search-wrap{padding:4px 18px 13px;background:#fff}\n#moli-phone-panel .moli-chat-search-wrap input{height:40px;border-radius:22px;background:#f1f1f1}\n#moli-phone-panel .moli-chat-list{background:#fff}\n#moli-phone-panel [data-page="home"] .moli-phone-tabs{background:rgba(246,246,246,.58)}\n\n#moli-phone-panel [data-page="chat"]{background:#fff}\n#moli-phone-panel [data-page="chat"]>.moli-nav{background:rgba(255,255,255,.82);border-bottom:1px solid rgba(0,0,0,.045);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}\n#moli-phone-panel .moli-chat-body{background:#fff;background-image:none;background-size:cover;background-position:center;background-attachment:local;padding:16px 12px 18px}\n#moli-phone-panel.moli-has-chat-wallpaper .moli-chat-body{background-image:var(--moli-chat-wallpaper);background-size:cover;background-position:center;background-repeat:no-repeat}\n#moli-phone-panel .moli-bubble{position:relative;border:1px solid rgba(255,255,255,.68);border-radius:19px;background:rgba(245,245,245,.48);color:#171717;padding:9px 13px;-webkit-backdrop-filter:blur(16px) saturate(145%);backdrop-filter:blur(16px) saturate(145%);box-shadow:inset 0 1px 0 rgba(255,255,255,.72),inset 0 -1px 0 rgba(255,255,255,.18),0 3px 12px rgba(0,0,0,.055)}\n#moli-phone-panel .moli-msg.user .moli-bubble{background:rgba(180,255,145,.38);border-color:rgba(255,255,255,.72)}\n#moli-phone-panel.moli-has-chat-wallpaper .moli-bubble{background:rgba(255,255,255,.30);box-shadow:inset 0 1px 0 rgba(255,255,255,.78),0 4px 16px rgba(0,0,0,.10)}\n#moli-phone-panel.moli-has-chat-wallpaper .moli-msg.user .moli-bubble{background:rgba(210,255,190,.28)}\n#moli-phone-panel .moli-compose{position:relative;min-height:58px;display:flex;align-items:center;gap:5px;margin:0 10px 9px;padding:5px 9px 5px 14px;border:1px solid rgba(255,255,255,.72);border-radius:29px;background:rgba(242,242,242,.62);-webkit-backdrop-filter:blur(20px) saturate(150%);backdrop-filter:blur(20px) saturate(150%);box-shadow:inset 0 1px 0 rgba(255,255,255,.82),0 5px 18px rgba(0,0,0,.08)}\n#moli-phone-panel .moli-input{min-height:42px;max-height:110px;border:0;border-radius:20px;background:transparent;padding:10px 6px;box-shadow:none}\n#moli-phone-panel .moli-send,#moli-phone-panel .moli-compose-plus{flex:0 0 34px;width:34px;height:42px;border:0;border-radius:0;background:transparent;padding:0;color:#171717;font-size:25px;line-height:42px;font-weight:400;box-shadow:none}\n#moli-phone-panel .moli-send{color:#ef6f87;font-size:24px}\n#moli-phone-panel .moli-send.is-generating{color:#777;font-size:18px}\n#moli-phone-panel .moli-compose-plus{font-size:29px}\n#moli-phone-panel .moli-chat-tools-menu{position:absolute;z-index:80;right:15px;bottom:72px;width:132px;padding:10px;border:1px solid rgba(255,255,255,.75);border-radius:18px;background:rgba(248,248,248,.84);-webkit-backdrop-filter:blur(20px) saturate(145%);backdrop-filter:blur(20px) saturate(145%);box-shadow:0 10px 30px rgba(0,0,0,.14)}\n#moli-phone-panel .moli-chat-tools-menu[hidden]{display:none!important}\n#moli-phone-panel .moli-chat-tools-menu button{width:58px;height:62px;border:0;border-radius:14px;background:rgba(255,255,255,.58);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#333}\n#moli-phone-panel .moli-chat-tools-menu button span{font-size:23px;line-height:1}\n#moli-phone-panel .moli-chat-tools-menu button small{font-size:11px}\n
+
+/* moli127 · corrected white shell + liquid glass chat */
+#moli-phone-panel [data-page="home"]{background:#fff!important}
+#moli-phone-panel [data-page="home"]>.moli-nav{
+  height:78px;flex-basis:78px;padding:22px 15px 0;background:#fff!important;border-bottom:0!important;
+}
+#moli-phone-panel .moli-chat-search-wrap{padding:5px 18px 14px;background:#fff!important}
+#moli-phone-panel .moli-chat-search-wrap input{
+  height:40px;border:0;border-radius:22px;background:#f1f1f1!important;padding-left:40px;
+}
+#moli-phone-panel .moli-chat-list{background:#fff!important}
+#moli-phone-panel [data-page="home"] .moli-phone-tabs-wrap{background:#fff!important}
+#moli-phone-panel [data-page="home"] .moli-phone-tabs{
+  background:rgba(247,247,247,.62)!important;
+  -webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);
+}
+
+/* Chat canvas is white by default; wallpaper covers the complete chat page. */
+#moli-phone-panel [data-page="chat"]{
+  position:relative;background:#fff!important;background-image:none!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;
+}
+#moli-phone-panel.moli-has-chat-wallpaper [data-page="chat"]{background-image:var(--moli-chat-wallpaper)!important}
+#moli-phone-panel [data-page="chat"]>.moli-nav{
+  background:rgba(255,255,255,.72)!important;border-bottom:1px solid rgba(255,255,255,.34)!important;
+  -webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);
+}
+#moli-phone-panel .moli-chat-body{
+  background:transparent!important;background-image:none!important;padding:16px 12px 18px;
+}
+
+/* One-piece liquid-glass message bubbles. */
+#moli-phone-panel .moli-bubble{
+  position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.72)!important;border-radius:22px!important;
+  background:rgba(235,235,235,.52)!important;color:#171717;padding:9px 13px;
+  -webkit-backdrop-filter:blur(18px) saturate(155%);backdrop-filter:blur(18px) saturate(155%);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.32),0 4px 14px rgba(0,0,0,.07)!important;
+}
+#moli-phone-panel .moli-bubble::before{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(145deg,rgba(255,255,255,.46),rgba(255,255,255,.08) 44%,rgba(255,255,255,.20));mix-blend-mode:screen;
+}
+#moli-phone-panel .moli-msg.user .moli-bubble{background:rgba(214,238,210,.48)!important}
+#moli-phone-panel.moli-has-chat-wallpaper .moli-bubble{background:rgba(255,255,255,.28)!important;box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 5px 18px rgba(0,0,0,.13)!important}
+#moli-phone-panel.moli-has-chat-wallpaper .moli-msg.user .moli-bubble{background:rgba(225,242,218,.26)!important}
+
+/* One fused short liquid capsule; heart and plus have no individual frames. */
+#moli-phone-panel .moli-compose{
+  position:relative;min-height:54px;display:flex;align-items:center;gap:2px;margin:0 12px 10px;padding:4px 10px 4px 15px;
+  border:1px solid rgba(255,255,255,.74)!important;border-radius:28px!important;background:rgba(236,236,236,.48)!important;
+  -webkit-backdrop-filter:blur(22px) saturate(155%);backdrop-filter:blur(22px) saturate(155%);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.28),0 5px 18px rgba(0,0,0,.075)!important;
+}
+#moli-phone-panel.moli-has-chat-wallpaper .moli-compose{background:rgba(255,255,255,.25)!important}
+#moli-phone-panel .moli-input{flex:1;min-height:40px;max-height:110px;border:0!important;border-radius:0!important;background:transparent!important;padding:9px 5px;box-shadow:none!important;outline:none}
+#moli-phone-panel .moli-send,#moli-phone-panel .moli-compose-plus{
+  flex:0 0 34px;width:34px;height:40px;border:0!important;border-radius:0!important;background:transparent!important;padding:0!important;
+  color:#171717!important;font-weight:400;line-height:40px;box-shadow:none!important;outline:none!important;
+}
+#moli-phone-panel .moli-send{font-size:27px!important}
+#moli-phone-panel .moli-send.is-generating{font-size:18px!important;color:#777!important}
+#moli-phone-panel .moli-compose-plus{font-size:29px!important}
+
+/* Liquid glass tools and long-press menus. */
+#moli-phone-panel .moli-chat-tools-menu,#moli-phone-panel .moli-message-menu{
+  border:1px solid rgba(255,255,255,.72)!important;border-radius:20px!important;background:rgba(238,238,238,.58)!important;
+  -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.92),0 12px 34px rgba(0,0,0,.16)!important;
+}
+#moli-phone-panel .moli-message-menu button{background:transparent!important;border-radius:12px!important}
+#moli-phone-panel .moli-message-menu button:active{background:rgba(255,255,255,.36)!important}
+#moli-phone-panel .moli-chat-tools-menu{position:absolute;z-index:80;right:15px;bottom:72px;width:132px;padding:10px}
+#moli-phone-panel .moli-chat-tools-menu[hidden]{display:none!important}
+#moli-phone-panel .moli-chat-tools-menu button{width:58px;height:62px;border:0;border-radius:14px;background:rgba(255,255,255,.34);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#333}
