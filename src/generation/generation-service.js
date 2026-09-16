@@ -907,6 +907,7 @@ function parseMomentRefreshDecision(rawText = '') {
     const content = String(value?.content || '').trim();
     const ageMinutes = Math.max(0, Math.min(2880, Number(value?.ageMinutes) || 0));
     const statusNote = String(value?.statusNote || '').trim().slice(0, 160);
+    const onlyUserVisible = Boolean(value?.onlyUserVisible);
     const interactions = Array.isArray(value?.interactions) ? value.interactions.map(item => ({
       targetMomentId: String(item?.targetMomentId || '').trim(),
       actorType: String(item?.actorType || '').trim().toLowerCase(),
@@ -918,8 +919,8 @@ function parseMomentRefreshDecision(rawText = '') {
       content: String(item?.content || '').trim().slice(0, 500),
       replyToId: String(item?.replyToId || '').trim(),
     })).filter(item => item.targetMomentId && item.action) : [];
-    if (action === 'POST' && content) return { action, content: content.slice(0, 2000), ageMinutes, statusNote, interactions };
-    return { action: 'SKIP', statusNote, interactions };
+    if (action === 'POST' && content) return { action, content: content.slice(0, 2000), ageMinutes, statusNote, onlyUserVisible, interactions };
+    return { action: 'SKIP', statusNote, onlyUserVisible:false, interactions };
   } catch {
     return fallback;
   }
@@ -951,8 +952,9 @@ function parsePublicMomentsBatch(rawText = '', validIds = []) {
         content: String(reaction?.content || '').trim().slice(0, 500),
       })).filter(reaction => reaction.momentId && reaction.action) : [];
       const viewedMomentIds = Array.isArray(item?.viewedMomentIds) ? [...new Set(item.viewedMomentIds.map(String).filter(Boolean))].slice(0, 10) : [];
-      const profileVisitUser = Boolean(item?.profileVisitUser);
-      return { actorId, post, posts, reactions, viewedMomentIds, profileVisitUser };
+      const profileVisitCount = Math.max(0, Math.min(20, Math.floor(Number(item?.profileVisitCount ?? (item?.profileVisitUser ? 1 : 0)) || 0)));
+      const profileVisitUser = profileVisitCount > 0;
+      return { actorId, post, posts, reactions, viewedMomentIds, profileVisitUser, profileVisitCount };
     }).filter(Boolean);
   } catch {
     return [];
@@ -1086,6 +1088,7 @@ ${personaParts}
 
 ` : ''}【原则】
 - 朋友圈是这个角色自己的社交表达，不是给用户的聊天回复，也不是剧情摘要。
+- 若角色只想让 User 一个人看到本条，可令 onlyUserVisible=true；这是角色自己的可见范围选择，不要求使用。
 - 可以很日常、零碎、含蓄、带角色自己的习惯；不要为了“有内容”强编重大事件。
 - 可以来自最近聊天/群聊/角色世界的余波，但不要无脑公开私聊原文或他人秘密。
 - 时间不必是现在：如果自然，可以是刚刚、数小时前、今天早些时候或昨天。
@@ -1121,7 +1124,7 @@ ${replaceUserPlaceholder(getBuiltinPersonaPrompt('builtin:writer'), getTavernUse
 ${replaceUserPlaceholder(getBuiltinPersonaPrompt('builtin:guide'), getTavernUserContext().name)}
 
 请只返回一个 JSON：
-{"action":"SKIP|POST","content":"POST 时填写朋友圈正文，否则空字符串","ageMinutes":0,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论时填写；DELETE_COMMENT 时作为 deletionReason","replyToId":"可选，回复某条评论 id"}]}。
+{"action":"SKIP|POST","content":"POST 时填写朋友圈正文，否则空字符串","ageMinutes":0,"onlyUserVisible":false,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论时填写；DELETE_COMMENT 时作为 deletionReason","replyToId":"可选，回复某条评论 id"}]}。
 ageMinutes 范围 0~2880。interactions 可以为空。`;
 
   let text = '';
@@ -1150,8 +1153,10 @@ ageMinutes 范围 0~2880。interactions 可以为空。`;
 export async function generatePublicMomentsRefresh({ scopeKey, crossContactInteraction = true, signal } = {}) {
   if (!scopeKey) throw new Error('当前朋友圈不可用');
   const allContacts = getContacts().map(hydratedContact);
-  // 公共朋友圈属于通讯录世界：不要求先建立私聊。皮下保持 Fourth Wall 独立，不进入普通朋友圈。
-  const contacts = allContacts.filter(item => item && String(item.id || '') !== 'builtin:meta');
+  // 公共朋友圈刷新只让最近实际聊得最多的一小组联系人进入本轮判断，避免整个通讯录机械轮询。
+  const recentConversations = getScopeConversations(scopeKey).filter(conv=>conv?.type==='private' && Array.isArray(conv?.messages) && conv.messages.length).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
+  const recentIds=[]; for(const conv of recentConversations){ const id=String(conv.contactId||''); if(id && id!=='builtin:meta' && !recentIds.includes(id)) recentIds.push(id); if(recentIds.length>=5)break; }
+  const contacts = recentIds.map(id=>allContacts.find(item=>String(item?.id||'')===id)).filter(Boolean);
   if (!contacts.length) return { actors: [], consideredMomentIds: [], contacts: [] };
 
   const feed = listPublicMoments(scopeKey).slice(0, 10);
@@ -1172,14 +1177,14 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
 - 每个联系人必须保持自己的性格、关系与社交习惯；无动机就什么都不做。
 - 每个联系人本次最多可发布 2 条近期朋友圈，时间可为刚刚、数小时前、今天早些时候或昨天；第二条必须有自然的时间/情绪延续动机，例如昨天发过但无人回应、今天又产生了新的表达冲动。不要为了凑数强编。
 - 本次刷新所有联系人合计最多生成 10 条新朋友圈；这是本轮生成上限，不自动删除历史朋友圈。
-- 联系人可以浏览 User 的朋友圈主页，也可以实际看到某一条动态。主页访问与具体动态阅读是两件不同的事：profileVisitUser=true 表示本轮主动进入了 User 的朋友圈主页；viewedMomentIds 只填写本轮实际看到的具体 momentId。
+- 联系人可以浏览 User 的朋友圈主页，也可以实际看到某一条动态。主页访问与具体动态阅读是两件不同的事。profileVisitCount 只填写“从上一次刷新到本次刷新之间”这个角色实际进入 User 朋友圈主页的次数，0 表示这段期间没看；不要填写历史累计总数。viewedMomentIds 只填写本轮实际看到的具体 momentId。
 - 联系人始终可以点赞/评论 user(id=user) 的朋友圈；若先前已经点赞、本轮人物真实想取消，可用 UNLIKE。
 - 联系人也可以删除自己先前写下的评论：reaction.action=DELETE_COMMENT，填写 commentId，并可在 content 中写简短删除原因；删除原因会被其他人看到。只能删除自己的评论。
 - ${crossContactInteraction ? '联系人互相互动已开启：可以对其他联系人发布的朋友圈点赞/评论。' : '联系人互相互动已关闭：严禁对其他联系人发布的朋友圈点赞/评论，只能对 user 的动态互动。'}
 - 不要机械全员轮流，不要用随机替代人物动机。一次刷新可以 0 人行动。
 - 不要把私聊秘密无脑公开到朋友圈。
 - 只输出严格 JSON，不要解释。`;
-  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","posts":[]或最多2个{"content":"朋友圈正文","ageMinutes":0},"profileVisitUser":false,"viewedMomentIds":["本轮实际看到的momentId"],"reactions":[{"momentId":"目标momentId","action":"LIKE|UNLIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论内容；DELETE_COMMENT 时作为删除原因"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
+  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","posts":[]或最多2个{"content":"朋友圈正文","ageMinutes":0},"profileVisitCount":0,"viewedMomentIds":["本轮实际看到的momentId"],"reactions":[{"momentId":"目标momentId","action":"LIKE|UNLIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论内容；DELETE_COMMENT 时作为删除原因"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
