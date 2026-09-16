@@ -106,7 +106,8 @@ export function recordMomentChatEvent(scopeKey, { contactId, type, momentId='', 
   const cid=String(contactId||''); const kind=String(type||''); if(!scopeKey||!cid||!kind)return null; const state=getMomentsState(scopeKey); state.chatEvents ||= [];
   const entry={id:id('moment-event'),contactId:cid,type:kind,momentId:String(momentId||''),content:String(content||'').trim(),createdAt:Date.now(),deliveredAt:0}; state.chatEvents.push(entry); state.chatEvents=state.chatEvents.slice(-300); save(scopeKey,state); return entry;
 }
-export function getPendingMomentChatEvents(scopeKey, contactId) { const cid=String(contactId||''); return getMomentsState(scopeKey).chatEvents.filter(entry=>entry.contactId===cid&&!entry.deliveredAt).slice(-12); }
+export function getPendingMomentChatEvents(scopeKey, contactId) { const cid=String(contactId||''); return getMomentsState(scopeKey).chatEvents.filter(entry=>entry.contactId===cid&&!entry.deliveredAt).slice(-50); }
+export function getRecentMomentChatEvents(scopeKey, contactId, limit=20) { const cid=String(contactId||''); const max=Math.max(1,Math.min(50,Number(limit)||20)); return getMomentsState(scopeKey).chatEvents.filter(entry=>entry.contactId===cid&&entry.deliveredAt).slice(-max); }
 export function markMomentChatEventsDelivered(scopeKey, contactId, eventIds=[]) { const ids=new Set(eventIds.map(String)); if(!ids.size)return; const state=getMomentsState(scopeKey); const now=Date.now(); for(const entry of state.chatEvents){if(entry.contactId===String(contactId||'')&&ids.has(entry.id)&&!entry.deliveredAt)entry.deliveredAt=now;} save(scopeKey,state); }
 
 export function setMomentUserRead(scopeKey, { surface='public', ownerContactId='', momentId, read=true } = {}) {
