@@ -420,6 +420,11 @@ export function createPhonePanel({
       <div class="moli-chat-tools-menu" data-chat-tools-menu hidden>
         <button type="button" data-action="chat-wallpaper"><span>▧</span><small>壁纸</small></button>
       </div>
+      <div class="moli-wallpaper-scope-menu" data-wallpaper-scope-menu hidden>
+        <div class="moli-wallpaper-scope-title">应用壁纸到</div>
+        <button type="button" data-action="chat-wallpaper-global">全局</button>
+        <button type="button" data-action="chat-wallpaper-current" data-wallpaper-current-label>当前聊天</button>
+      </div>
       <input type="file" accept="image/*" data-chat-wallpaper-input hidden>
       <footer class="moli-compose">
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
@@ -1169,6 +1174,9 @@ export function createPhonePanel({
   const sendButton = panel.querySelector('[data-action="send"]');
   const chatToolsMenu = panel.querySelector('[data-chat-tools-menu]');
   const chatWallpaperInput = panel.querySelector('[data-chat-wallpaper-input]');
+  const wallpaperScopeMenu = panel.querySelector('[data-wallpaper-scope-menu]');
+  const wallpaperCurrentLabel = panel.querySelector('[data-wallpaper-current-label]');
+  let pendingWallpaperScope = 'global';
   const addMenu = panel.querySelector('[data-add-menu]');
   const syncList = panel.querySelector('.moli-sync-list');
   const contactAvatarInput = panel.querySelector('[data-contact-avatar-input]');
@@ -3801,6 +3809,26 @@ export function createPhonePanel({
     }
   }
 
+  function wallpaperStorageKey(scope = 'global') {
+    if (scope === 'current' && currentContactId) return `moli.chatWallpaper.chat.${String(currentContactId)}`;
+    return 'moli.chatWallpaper';
+  }
+
+  function applyCurrentChatWallpaper() {
+    let dataUrl = '';
+    try {
+      if (currentContactId) dataUrl = localStorage.getItem(wallpaperStorageKey('current')) || '';
+      if (!dataUrl) dataUrl = localStorage.getItem(wallpaperStorageKey('global')) || '';
+    } catch {}
+    if (dataUrl) {
+      panel.style.setProperty('--moli-chat-wallpaper', `url("${dataUrl.replace(/"/g, '\\"')}")`);
+      panel.classList.add('moli-has-chat-wallpaper');
+    } else {
+      panel.style.removeProperty('--moli-chat-wallpaper');
+      panel.classList.remove('moli-has-chat-wallpaper');
+    }
+  }
+
   const show = name => {
     if (addMenu) addMenu.hidden = true;
     hideMessageMenu();
@@ -3820,6 +3848,7 @@ export function createPhonePanel({
     if (name === 'injection-composer') renderInjectionComposer();
 
     if (name === 'chat') {
+      applyCurrentChatWallpaper();
       renderChat();
     }
 
@@ -5197,9 +5226,10 @@ export function createPhonePanel({
     const isFourthWall = !isGroup && isFourthWallContact(item);
 
     chatTitle.textContent = isGroup ? conversation.name || '未命名群聊' : privateConversationTitle(conversation, item);
+    if (wallpaperCurrentLabel) wallpaperCurrentLabel.textContent = isGroup ? (conversation.name || '当前群聊') : (canonicalContactName(item) || '当前聊天');
     if (sendButton) {
       const busy = isGenerationActive(scopeKey, currentContactId);
-      sendButton.textContent = busy ? '■' : '♥';
+      sendButton.textContent = busy ? '■' : '♡';
       sendButton.classList.toggle('is-generating', busy);
     }
 
@@ -7395,8 +7425,26 @@ export function createPhonePanel({
     event.stopPropagation();
     if (chatToolsMenu) chatToolsMenu.hidden = !chatToolsMenu.hidden;
   });
-  panel.querySelector('[data-action="chat-wallpaper"]')?.addEventListener('click', () => {
+  panel.querySelector('[data-action="chat-wallpaper"]')?.addEventListener('click', event => {
+    event.stopPropagation();
     if (chatToolsMenu) chatToolsMenu.hidden = true;
+    if (wallpaperCurrentLabel) {
+      const conversation = currentConversation();
+      const item = conversation?.type === 'group' ? null : contact(conversation?.contactId || currentContactId);
+      wallpaperCurrentLabel.textContent = conversation?.type === 'group'
+        ? (conversation?.name || '当前群聊')
+        : (canonicalContactName(item) || '当前聊天');
+    }
+    if (wallpaperScopeMenu) wallpaperScopeMenu.hidden = false;
+  });
+  panel.querySelector('[data-action="chat-wallpaper-global"]')?.addEventListener('click', () => {
+    pendingWallpaperScope = 'global';
+    if (wallpaperScopeMenu) wallpaperScopeMenu.hidden = true;
+    chatWallpaperInput?.click();
+  });
+  panel.querySelector('[data-action="chat-wallpaper-current"]')?.addEventListener('click', () => {
+    pendingWallpaperScope = 'current';
+    if (wallpaperScopeMenu) wallpaperScopeMenu.hidden = true;
     chatWallpaperInput?.click();
   });
   chatWallpaperInput?.addEventListener('change', () => {
@@ -7406,20 +7454,14 @@ export function createPhonePanel({
     reader.onload = () => {
       const dataUrl = String(reader.result || '');
       if (!dataUrl) return;
-      try { localStorage.setItem('moli.chatWallpaper', dataUrl); } catch {}
-      panel.style.setProperty('--moli-chat-wallpaper', `url("${dataUrl.replace(/"/g, '\"')}")`);
-      panel.classList.add('moli-has-chat-wallpaper');
-      toast('聊天壁纸已设置');
+      try { localStorage.setItem(wallpaperStorageKey(pendingWallpaperScope), dataUrl); } catch {}
+      applyCurrentChatWallpaper();
+      toast(pendingWallpaperScope === 'current' ? '当前聊天壁纸已设置' : '全局聊天壁纸已设置');
+      chatWallpaperInput.value = '';
     };
     reader.readAsDataURL(file);
   });
-  try {
-    const savedWallpaper = localStorage.getItem('moli.chatWallpaper');
-    if (savedWallpaper) {
-      panel.style.setProperty('--moli-chat-wallpaper', `url("${savedWallpaper.replace(/"/g, '\"')}")`);
-      panel.classList.add('moli-has-chat-wallpaper');
-    }
-  } catch {}
+  applyCurrentChatWallpaper();
 
   panel.querySelector(
     '[data-action="send"]'
