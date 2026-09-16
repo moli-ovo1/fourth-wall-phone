@@ -84,7 +84,7 @@ import { getTavernWorldBookSnapshot, getTavernWorldBookCatalog } from '../core/t
 import { getBaiBaiMemoryStatus } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
-import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, exportProfileMomentToPublic, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory, setMomentUserRead, recordProfileVisit, getProfileVisits, recordMomentChatEvent } from '../storage/moments-store.js';
+import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, exportProfileMomentToPublic, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory, setMomentUserRead, recordProfileVisit, getProfileVisits, getProfilePeek, setProfilePeek, recordMomentChatEvent } from '../storage/moments-store.js';
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
 import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
@@ -98,6 +98,7 @@ const APP_ICON_URLS = Object.freeze({
   tianya: new URL('../../assets/apps/tianya.jpg', import.meta.url).href,
   weibo: new URL('../../assets/apps/weibo.jpg', import.meta.url).href,
   wall: new URL('../../assets/apps/our-wall.png', import.meta.url).href,
+  settings: new URL('../../assets/apps/settings.png', import.meta.url).href,
 });
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
@@ -145,7 +146,7 @@ export function createPhonePanel({
             <small>我们的墙</small>
           </button>
           <button class="moli-app-icon" data-action="settings" aria-label="打开设置">
-            <span class="moli-app-icon-tile moli-settings-app-tile"><span class="moli-settings-app-glyph">⚙</span></span>
+            <span class="moli-app-icon-tile moli-settings-app-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.settings}" alt="" /></span>
             <small>设置</small>
           </button>
         </div>
@@ -258,7 +259,7 @@ export function createPhonePanel({
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="moments-back" aria-label="返回">‹</button></div>
         <div class="moli-nav-title">朋友圈</div>
-        <div class="moli-nav-side right moli-moments-nav-actions"><button class="moli-icon-btn" data-action="moments-refresh" aria-label="刷新朋友圈">↻</button><button class="moli-icon-btn" data-action="moments-compose" aria-label="发朋友圈">📷</button></div>
+        <div class="moli-nav-side right moli-moments-nav-actions"><button class="moli-icon-btn" data-action="moments-refresh" aria-label="刷新朋友圈">↻</button><button class="moli-icon-btn" data-action="moments-compose" aria-label="发朋友圈">+</button></div>
       </header>
       <div class="moli-moments-cover" data-moments-cover role="button" aria-label="更换朋友圈封面">
         <div class="moli-moments-cover-shade"></div>
@@ -768,6 +769,7 @@ export function createPhonePanel({
         <div class="moli-nav-side right moli-contact-moments-tools"><button class="moli-text-btn" data-action="contact-moments-organize">整理</button><button class="moli-text-btn" data-action="contact-moments-help">说明书</button><button class="moli-icon-btn" data-action="contact-moments-refresh" aria-label="刷新角色朋友圈">↻</button></div>
       </header>
       <div class="moli-profile-moments-status" data-contact-moments-status hidden></div>
+      <label class="moli-profile-peek-control" data-contact-moments-peek><input type="checkbox" data-contact-moments-peek-enabled><span>{{user}}偷看</span><input type="number" min="0" step="1" inputmode="numeric" data-contact-moments-peek-count disabled><span>次</span></label>
       <main class="moli-moments-feed moli-profile-moments-feed" data-contact-moments-feed></main>
     </section>
 
@@ -1138,6 +1140,23 @@ export function createPhonePanel({
       </div>
     </div>
 
+    <div class="moli-help-sheet" data-contact-moments-help-sheet hidden>
+      <div class="moli-help-card" role="dialog" aria-modal="true" aria-labelledby="moli-moments-help-title">
+        <div class="moli-help-head"><strong id="moli-moments-help-title">朋友圈说明书</strong><button class="moli-icon-btn" data-action="contact-moments-help-close" aria-label="关闭">×</button></div>
+        <div class="moli-help-body">
+          <p>① 朋友圈可见上限 6 条，超过 6 条后最老的一条消失。</p>
+          <p>② 每刷新一次，角色更新朋友圈可能是 0 条，也可能是 3 条，依角色性格而定；更新 0 条时会注释角色当前心情状态。</p>
+          <p>③ 若朋友圈里有值得延续的关系变化、重要互动、反复态度、未解决关系线索，请点击「整理」，AI 会提炼进该角色的朋友圈长期记忆；已经成功整理过的动态不会重复提炼。</p>
+          <p>④ 点击「投入我的朋友圈」，可将该动态投入 {{user}} 的朋友圈；打开「允许所有角色互动」后，其他角色有几率互动，也可能不会互动，依角色性格而定。</p>
+          <p>⑤ 私聊中也有几率收到当前私聊角色的朋友圈动态更新提醒。</p>
+          <p>⑥ 「已阅」代表 {{user}} 看过此条，但不准备互动。「偷看」勾选后可编辑偷看次数。{{user}} 删除自己的评论时，可填写删除理由，例如心虚、闹别扭、生气等。</p>
+          <p>⑦ 「已阅」「偷看」「删除评论后的理由」都会在刷新后作为 {{char}} 可知的认知材料。建议 1–2 项以上组合使用，让信息更自然。</p>
+          <p><strong>朋友圈核心：</strong>这些信息只提供认知，不强制 {{char}} 做出任何行为。是否发新动态、是否追问、是否回应，以及怎样回应，都由 {{char}} 本人的性格与当前心情状态决定。</p>
+        </div>
+        <button class="moli-help-confirm" data-action="contact-moments-help-close">确定</button>
+      </div>
+    </div>
+
     <div class="moli-toast" aria-live="polite"></div>
   `;
 
@@ -1158,6 +1177,10 @@ export function createPhonePanel({
   const contactMomentsTitle = panel.querySelector('[data-contact-moments-title]');
   const contactMomentsNotice = panel.querySelector('[data-contact-moments-notice]');
   const contactMomentsStatus = panel.querySelector('[data-contact-moments-status]');
+  const contactMomentsPeek = panel.querySelector('[data-contact-moments-peek]');
+  const contactMomentsPeekEnabled = panel.querySelector('[data-contact-moments-peek-enabled]');
+  const contactMomentsPeekCount = panel.querySelector('[data-contact-moments-peek-count]');
+  const contactMomentsHelpSheet = panel.querySelector('[data-contact-moments-help-sheet]');
   const chatBody = panel.querySelector('.moli-chat-body');
   const chatTitle = panel.querySelector('[data-chat-title]');
   const chatError = panel.querySelector('[data-chat-error]');
@@ -3671,7 +3694,7 @@ export function createPhonePanel({
     }
     const items = listPublicMoments(scopeKey);
     if (!items.length) {
-      momentsFeed.innerHTML = '<div class="moli-empty">还没有朋友圈动态。点右上角相机发表第一条。</div>';
+      momentsFeed.innerHTML = '<div class="moli-empty">还没有朋友圈动态。点右上角 + 发表第一条。</div>';
       return;
     }
     momentsFeed.innerHTML = items.map(item => {
@@ -3759,6 +3782,12 @@ export function createPhonePanel({
       const hasStatus = Boolean(status?.message || status?.note);
       contactMomentsStatus.hidden = !hasStatus;
       contactMomentsStatus.innerHTML = hasStatus ? `<strong>${escapeHtml(status.message || '')}</strong>${status.note ? `<small>${escapeHtml(status.note)}</small>` : ''}` : '';
+    }
+    if (contactMomentsPeek && contactMomentsPeekEnabled && contactMomentsPeekCount) {
+      const peek=getProfilePeek(scopeKey,item.id);
+      contactMomentsPeekEnabled.checked=Boolean(peek.enabled);
+      contactMomentsPeekCount.disabled=!peek.enabled;
+      contactMomentsPeekCount.value=String(Math.max(0,Number(peek.count||0)));
     }
     if (!items.length) { contactMomentsFeed.innerHTML = ''; return; }
     contactMomentsFeed.innerHTML = items.map(entry => {
@@ -6624,9 +6653,9 @@ export function createPhonePanel({
     try{ const result=await summarizeProfileMomentsMemory({scopeKey,contactId:item.id,momentIds:pending.map(moment=>moment.id)}); toast(result?.changed?'朋友圈长期记忆已整理':'没有需要新增的朋友圈记忆'); renderContactMoments(); }
     catch(error){ toast(error?.message||'朋友圈记忆整理失败'); } finally{ button.disabled=false; }
   });
-  panel.querySelector('[data-action="contact-moments-help"]')?.addEventListener('click', () => {
-    windowRef.alert?.(`朋友圈说明书\n\n① 朋友圈可见上限 6 条，6 条后最老的一条消失。\n\n② 每刷新一次，角色更新朋友圈可能是 0 条，也可能是 3 条，依角色性格而定；更新 0 条则注释角色心情状态。\n\n③ 若朋友圈里有值得延续的关系变化、重要互动、反复态度、未解决关系线索，请点击「整理」，AI 会提炼进该角色的朋友圈长期记忆；已经成功整理过的动态不会重复提炼。\n\n④ 点击「投入我的朋友圈」，将此条动态投入 User 的朋友圈中；打开「所有角色互动」后，有几率看到他们互动，也可能不会互动，依角色性格而定。\n\n⑤ 私聊中也有几率收到当前私聊角色的朋友圈动态更新提醒。`);
-  });
+  panel.querySelector('[data-action="contact-moments-help"]')?.addEventListener('click', () => { if(contactMomentsHelpSheet) contactMomentsHelpSheet.hidden=false; });
+  panel.querySelectorAll('[data-action="contact-moments-help-close"]').forEach(button=>button.addEventListener('click',()=>{ if(contactMomentsHelpSheet) contactMomentsHelpSheet.hidden=true; }));
+  contactMomentsHelpSheet?.addEventListener('click',event=>{ if(event.target===contactMomentsHelpSheet) contactMomentsHelpSheet.hidden=true; });
 
   panel.querySelector('[data-action="moments-refresh"]')?.addEventListener('click', async event => {
     const scopeKey = getScopeKey?.();
@@ -6727,6 +6756,18 @@ export function createPhonePanel({
     infoEntrySource = 'contacts';
     show('info');
   });
+
+  const saveContactMomentPeek = () => {
+    const scopeKey=getScopeKey?.(); const conversation=currentConversation(); const item=conversation?.type==='private'?contact(conversation.contactId||currentContactId):null;
+    if(!scopeKey||!item||!contactMomentsPeekEnabled||!contactMomentsPeekCount)return;
+    const old=getProfilePeek(scopeKey,item.id); const enabled=Boolean(contactMomentsPeekEnabled.checked); const count=Math.max(0,Math.floor(Number(contactMomentsPeekCount.value||0)));
+    contactMomentsPeekCount.disabled=!enabled;
+    if(Boolean(old.enabled)===enabled && Number(old.count||0)===count)return;
+    setProfilePeek(scopeKey,item.id,{enabled,count});
+    recordMomentChatEvent(scopeKey,{contactId:item.id,type:'USER_PROFILE_PEEK',content:enabled?`{{user}}主动说明自己已经偷看你的朋友圈 ${count} 次。你知道这件事，但是否询问、回应或保持沉默由你自己的性格与当前状态决定。`:'{{user}}取消了此前设置的朋友圈偷看次数提示。'});
+  };
+  contactMomentsPeekEnabled?.addEventListener('change',()=>{ if(contactMomentsPeekCount) contactMomentsPeekCount.disabled=!contactMomentsPeekEnabled.checked; saveContactMomentPeek(); });
+  contactMomentsPeekCount?.addEventListener('blur',saveContactMomentPeek);
 
   contactMomentsFeed?.addEventListener('click', event => {
     const button = event.target.closest?.('[data-action]');
