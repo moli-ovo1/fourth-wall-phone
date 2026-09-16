@@ -3099,11 +3099,11 @@ World/Social Event Pipeline 已有可运行纵切：事件事实→pending/known
 - 社区 @ 使用点击角色名列表；邀请评论、知乎邀请回答、社区转发（联系人+群聊）、当前角色世界选择改为点选列表，不再输入数字序号；朋友圈 @ 角色也改为点选列表。
 - 知乎回答评论继续统一写入 answer.comments，并由统一 Community Composer 承接用户评论/回复。
 
-
-## moli156 / v0.4.96 — startup parser blocker
-- 修复 moli154/155 后仍然出现的 `Unexpected reserved word`：真正的浏览器模块解析错误位于 `src/ui/phone-panel.js` 的两个朋友圈 click handler。它们在调用异步 `askMomentUserComment()` 时使用了 `await`，但 handler 本身不是 `async`。
-- 修复 `contactMomentsFeed` 与 `momentsFeed` 两个 handler 为 `async event =>`；不改社区/朋友圈业务语义。
-- 启动验证规则升级：发布前除普通 `node --check` 外，必须把浏览器加载的 JS 按 ES module 语法解析（`node --input-type=module --check`）。普通检查曾漏掉本次错误，不能再作为唯一启动判据。
-
-### moli157：知乎回答层已接通
-知乎互动层级明确为：问题主楼 → 回答 (`extra.answers`) → 回答评论 (`answer.comments`) → 评论回复 (`replyToCommentId`)。`增加回答` 已从占位提示改为真实写入回答层。后续 Community Runtime 批量结算必须保持这四层语义，禁止把“增加回答”误当成回答评论。
+### moli158 — Community Interaction Queue / Refresh Settlement
+- [x] 邀请不即时生成，写入 pending queue，刷新后处理。
+- [x] @ 支持多人点选并即时写入编辑框；发送时排队，刷新后处理。
+- [x] User 普通评论/楼中回复登记 pending，刷新评论区后由社区生成继续讨论。
+- [x] 明确邀请与 @ 在结算时必须公开回应；普通 User 评论不预设回应者。
+- [x] 知乎邀请回答由问题回答区刷新结算；回答下“评论”仍只属于该回答；评论“回复”保持 parent comment 关系。
+- [x] 清理预设页开发期长注释。
+- [ ] 后续闭环验收：多角色同帖 pending 的失败重试/部分成功可视化、重开持久化、去重、常驻/收藏/转发联动最终检查。

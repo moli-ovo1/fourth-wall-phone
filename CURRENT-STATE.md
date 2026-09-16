@@ -66,13 +66,11 @@
 - 社区 @ 使用点击角色名列表；邀请评论、知乎邀请回答、社区转发（联系人+群聊）、当前角色世界选择改为点选列表，不再输入数字序号；朋友圈 @ 角色也改为点选列表。
 - 知乎回答评论继续统一写入 answer.comments，并由统一 Community Composer 承接用户评论/回复。
 
-
-## moli156 / v0.4.96 — startup parser blocker
-- 修复 moli154/155 后仍然出现的 `Unexpected reserved word`：真正的浏览器模块解析错误位于 `src/ui/phone-panel.js` 的两个朋友圈 click handler。它们在调用异步 `askMomentUserComment()` 时使用了 `await`，但 handler 本身不是 `async`。
-- 修复 `contactMomentsFeed` 与 `momentsFeed` 两个 handler 为 `async event =>`；不改社区/朋友圈业务语义。
-- 启动验证规则升级：发布前除普通 `node --check` 外，必须把浏览器加载的 JS 按 ES module 语法解析（`node --input-type=module --check`）。普通检查曾漏掉本次错误，不能再作为唯一启动判据。
-
-## moli157 / v0.4.97 — 知乎「增加回答」接入
-- 知乎「增加回答」现在打开统一 Community Composer，不再显示开发期占位提示。
-- 该入口写入 `extra.answers`，语义为“回答问题主楼”，与回答下方的“评论” (`answer.comments`) 和评论间回复 (`replyToCommentId`) 分层保存。
-- 回复框身份仍支持本名 / 匿名 / 楼主；本轮只接通“增加回答”数据链，不改此前待办的刷新批量结算等机制。
+## moli158 / v0.4.98 — Community refresh settlement
+- 社区明确互动改为“先积累、后刷新结算”：邀请评论/邀请回答不再点击后立即调用生成；进入当前 scope 的 pending community queue，等对应帖子/回答评论区刷新时结算。
+- 评论编辑器 @ 改为多选累加：每点一个角色，`@名字` 立即写进编辑框，可继续点选多人；发送后这些 @ 进入 pending queue，不立即生成。
+- User 普通评论/回复同样登记为待结算事实；天涯/自创、小红书、知乎回答评论区刷新后才生成后续社区回应，并在成功后消费对应 pending comment。
+- 明确邀请/@ 的刷新结算保持“必须公开回应”；角色匿名时 UI 仍以 `匿名名（角色名）` 给 User 标识真实角色，但社区世界不据此获得匿名身份。
+- 知乎层级继续严格区分：问题 -> 回答 -> 回答下评论 -> 评论间回复；问题回答区增加刷新入口用于结算“邀请回答”。
+- 删除设置预设页顶部关于旧版迁移/协议的长开发注释。
+- 本轮的“统一结算”指同一次用户刷新动作统一处理当前帖子积累的 pending interactions；为保留每个角色自己的角色卡/手机上下文，多个被明确 @/邀请的不同角色仍分别走各自角色生成上下文，不把多角色人格压成一个公共 Prompt。
