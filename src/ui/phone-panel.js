@@ -6298,12 +6298,48 @@ export function createPhonePanel({
   const expandedXhsThreads = new Set();
   const sourceLabel = post => ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post?.section] || '天涯');
   const cleanTianyaTitle = title => String(title || '无标题').replace(/^(?:\s*[\[【][^\]】]{1,12}[\]】]\s*)+/, '').trim() || '无标题';
+  const chooseCommunityMentionContact = () => {
+    const candidates=getContacts().filter(item=>item && item.id && item.kind!=='group' && String(item.id)!=='builtin:meta');
+    if(!candidates.length){windowRef.alert?.('微信里还没有可 @ 的角色。');return null;}
+    const menu=candidates.map((item,i)=>`${i+1}. ${displayName(item)}`).join('\n');
+    const picked=windowRef.prompt?.(`@ 谁？\n${menu}\n\n输入序号`, '1');
+    if(picked===null)return null;
+    const target=candidates[Number(picked)-1];
+    if(!target)windowRef.alert?.('没有这个联系人。');
+    return target||null;
+  };
   const askPublicWebUserComment = (label='评论') => {
     const anonymous = windowRef.confirm?.(`${label}是否匿名？\n确定＝匿名；取消＝使用当前 User 名称`) ?? false;
-    const content = windowRef.prompt?.(label, '') ?? null;
+    let content = windowRef.prompt?.(`${label}\n输入 @ 可选择微信角色`, '') ?? null;
     if (!content || !String(content).trim()) return null;
-    return { content:String(content).trim(), author: anonymous ? {type:'user',id:'user',name:'匿名用户',anonymous:true} : {type:'user',id:'user',name:getTavernUserContext()?.name||'User'} };
+    let mentionTarget=null;
+    if(String(content).includes('@')){
+      mentionTarget=chooseCommunityMentionContact();
+      if(mentionTarget)content=String(content).replace('@',`@${displayName(mentionTarget)} `);
+    }
+    return { content:String(content).trim(), author: anonymous ? {type:'user',id:'user',name:'匿名用户',anonymous:true} : {type:'user',id:'user',name:getTavernUserContext()?.name||'User'}, mentionTarget };
   };
+  const runCommunityMention = async ({post,userEntry,mentionTarget,replyToCommentId='',zhihuAnswerId=''}) => {
+    if(!post||!mentionTarget||!userEntry)return;
+    const scopeKey=getScopeKey?.();
+    const conv=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(mentionTarget.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0]||ensureConversation(scopeKey,mentionTarget.id);
+    const busyKey=`community-mention:${mentionTarget.id}:${post.id}:${Date.now()}`; publicWebGenerating.add(busyKey);
+    try{
+      const platform=sourceLabel(post); const instruction=`【moli社区事件｜${platform} @提及】\nUser 在${platform}的一条内容下 @了你。\n帖子/问题：${post.title||'无标题'}\n正文：${post.content||'无'}\nUser 的评论：${userEntry.content}\n你可以完全按自己的性格决定：REPLY（只公开回复）、MESSAGE（只私聊 User）、BOTH（两者都做）、SKIP（都不做）。不要因为被 @ 就必须回应。\n严格追加机器可读块：<community_action>REPLY|MESSAGE|BOTH|SKIP</community_action>；若公开回复，再追加 <community_reply>公开回复正文</community_reply>；若私聊，再用正常 <msg>私聊内容</msg>。公开回复只能以你自己的身份发言，绝不能代替 User。`;
+      const result=await generatePrivateReply({scopeKey,conversationKey:conv.id||mentionTarget.id,automationInstruction:instruction});
+      const raw=String(result?.text||''); const action=(raw.match(/<community_action>\s*(REPLY|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'SKIP').toUpperCase();
+      const publicReply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim();
+      const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean);
+      const roleAuthor={type:'contact',id:mentionTarget.id,name:displayName(mentionTarget)};
+      if((action==='REPLY'||action==='BOTH')&&publicReply){
+        if(post.section==='zhihu'&&zhihuAnswerId)addZhihuAnswerComments(scopeKey,post.id,zhihuAnswerId,[{id:`zac_role_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,author:roleAuthor,content:publicReply,replyToCommentId:String(replyToCommentId||'')}]);
+        else addPublicWebComment(scopeKey,post.id,{author:roleAuthor,content:publicReply,replyToCommentId:String(replyToCommentId||'')});
+      }
+      if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conv.id||mentionTarget.id,'assistant',text,{source:'community-mention',senderId:mentionTarget.id,senderSnapshot:{name:displayName(mentionTarget),avatar:avatarUrl(mentionTarget)}});
+      renderPublicWeb();
+    }catch(error){console.error('[moli小手机] community mention bridge failed:',error);windowRef.alert?.(`@角色联动失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);}
+  };
+
   const publicWebPostsForTab = () => {
     if (currentPublicWebTab === 'recommend') {
       const settings = getPublicWebSettings(getScopeKey?.());
@@ -6434,9 +6470,9 @@ export function createPhonePanel({
     const xhsAdd=event.target?.closest?.('[data-action="xhs-comments-add"]');
     if(xhsAdd){const postId=String(xhsAdd.dataset.postId||'');const busyKey=`xhs-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const additions=await generateXiaohongshuCommentRefresh({scopeKey:getScopeKey?.(),post});for(const item of additions)addPublicWebComment(getScopeKey?.(),postId,item);renderPublicWeb();}catch(error){console.error('[moli小手机] xhs add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const tianyaFloorReply=event.target?.closest?.('[data-action="tianya-floor-reply"]');
-    if(tianyaFloorReply){const who=tianyaFloorReply.dataset.commentAuthor||'网友';const floor=tianyaFloorReply.dataset.floor||'';const entry=askPublicWebUserComment(`回复 @${who} #${floor}`);if(entry)addPublicWebComment(getScopeKey?.(),tianyaFloorReply.dataset.postId,{...entry,replyToCommentId:tianyaFloorReply.dataset.commentId});renderPublicWeb();return;}
+    if(tianyaFloorReply){const who=tianyaFloorReply.dataset.commentAuthor||'网友';const floor=tianyaFloorReply.dataset.floor||'';const entry=askPublicWebUserComment(`回复 @${who} #${floor}`);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),tianyaFloorReply.dataset.postId,{...stored,replyToCommentId:tianyaFloorReply.dataset.commentId});const post=getPublicWebPost(getScopeKey?.(),tianyaFloorReply.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
     const xhsReply=event.target?.closest?.('[data-action="xhs-comment-reply"]');
-    if(xhsReply){const who=xhsReply.dataset.commentAuthor||'网友';const entry=askPublicWebUserComment(`回复 @${who}`);if(entry)addPublicWebComment(getScopeKey?.(),xhsReply.dataset.postId,{...entry,replyToCommentId:xhsReply.dataset.commentId});renderPublicWeb();return;}
+    if(xhsReply){const who=xhsReply.dataset.commentAuthor||'网友';const entry=askPublicWebUserComment(`回复 @${who}`);if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),xhsReply.dataset.postId,{...stored,replyToCommentId:xhsReply.dataset.commentId});const post=getPublicWebPost(getScopeKey?.(),xhsReply.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
     const jump=event.target?.closest?.('[data-public-web-jump]'); if(jump){const target=String(jump.dataset.publicWebJump||'');const tab=panel.querySelector(`[data-public-web-tab="${target}"]`);tab?.click();return;}
     const open=event.target?.closest?.('[data-action="public-web-open"]'); if(open){openedPublicWebPostId=open.dataset.postId;renderPublicWeb();return;}
     if(event.target?.closest?.('[data-action="public-web-detail-back"]')){openedPublicWebPostId='';renderPublicWeb();return;}
@@ -6463,12 +6499,12 @@ export function createPhonePanel({
       }catch(error){console.error('[moli小手机] zhihu invite bridge failed:',error);windowRef.alert?.(`邀请处理失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);} return;
     }
     const zhihuWrite=event.target?.closest?.('[data-action="zhihu-write-answer"]'); if(zhihuWrite){windowRef.alert?.('“增加回答”交互将在知乎联动阶段接入，本轮先完成问题、多回答与评论数据结构。');return;}
-    const zhihuUserComment=event.target?.closest?.('[data-action="zhihu-user-comment"]'); if(zhihuUserComment){const entry=askPublicWebUserComment('写评论');if(entry)addZhihuAnswerComments(getScopeKey?.(),zhihuUserComment.dataset.postId,zhihuUserComment.dataset.answerId,[{id:`zac_user_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,...entry,replyToCommentId:''}]);renderPublicWeb();return;}
+    const zhihuUserComment=event.target?.closest?.('[data-action="zhihu-user-comment"]'); if(zhihuUserComment){const entry=askPublicWebUserComment('写评论');if(entry){const {mentionTarget,...stored}=entry;const saved={id:`zac_user_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,...stored,replyToCommentId:''};addZhihuAnswerComments(getScopeKey?.(),zhihuUserComment.dataset.postId,zhihuUserComment.dataset.answerId,[saved]);const post=getPublicWebPost(getScopeKey?.(),zhihuUserComment.dataset.postId);if(mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id,zhihuAnswerId:zhihuUserComment.dataset.answerId});}renderPublicWeb();return;}
     const zhihuAdd=event.target?.closest?.('[data-action="zhihu-comments-add"]'); if(zhihuAdd){const postId=String(zhihuAdd.dataset.postId||'');const answerId=String(zhihuAdd.dataset.answerId||'');const busyKey=`zhihu-comments:${postId}:${answerId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const answer=(post?.extra?.answers||[]).find(a=>String(a.id)===answerId);const additions=await generateZhihuAnswerCommentRefresh({scopeKey:getScopeKey?.(),post,answer});addZhihuAnswerComments(getScopeKey?.(),postId,answerId,additions);renderPublicWeb();}catch(error){console.error('[moli小手机] zhihu add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const favorite=event.target?.closest?.('[data-action="public-web-favorite"]'); if(favorite){togglePublicWebFavorite(getScopeKey?.(),favorite.dataset.postId,'user');renderPublicWeb();return;}
     const pin=event.target?.closest?.('[data-action="public-web-pin"]'); if(pin){togglePublicWebPinned(getScopeKey?.(),pin.dataset.postId);renderPublicWeb();return;}
     const replyRefresh=event.target?.closest?.('[data-action="tianya-replies-refresh"]'); if(replyRefresh){const postId=String(replyRefresh.dataset.postId||'');const busyKey=`tianya-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const replies=await generateTianyaReplyRefresh({scopeKey:getScopeKey?.(),post});for(const reply of replies)addPublicWebComment(getScopeKey?.(),post.id,reply);renderPublicWeb();}catch(error){console.error('[moli小手机] tianya replies refresh failed:',error);windowRef.alert?.(`新增回复失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
-    const comment=event.target?.closest?.('[data-action="public-web-comment"]'); if(comment){const entry=askPublicWebUserComment('回复内容');if(entry)addPublicWebComment(getScopeKey?.(),comment.dataset.postId,entry);renderPublicWeb();return;}
+    const comment=event.target?.closest?.('[data-action="public-web-comment"]'); if(comment){const entry=askPublicWebUserComment('回复内容');if(entry){const {mentionTarget,...stored}=entry;const saved=addPublicWebComment(getScopeKey?.(),comment.dataset.postId,stored);const post=getPublicWebPost(getScopeKey?.(),comment.dataset.postId);if(saved&&mentionTarget)void runCommunityMention({post,userEntry:saved,mentionTarget,replyToCommentId:saved.id});}renderPublicWeb();return;}
   });
   renderPublicWeb();
 
