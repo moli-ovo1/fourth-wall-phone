@@ -1793,3 +1793,20 @@
 #moli-phone-panel .moli-wall-app-tile .moli-app-icon-image,#moli-phone-panel .moli-settings-app-tile .moli-app-icon-image{object-fit:cover;width:100%;height:100%}
 #moli-phone-panel .moli-app-icon-tile{overflow:hidden}
 #moli-phone-panel .moli-app-icon[data-action="open-wall"] .moli-app-icon-image,#moli-phone-panel .moli-settings-app-tile .moli-app-icon-image{transform:scale(1.14);transform-origin:center}
+
+/* moli136 · 通讯录 / 主屏幕图标修正 */
+#moli-phone-panel .moli-contacts-blank-nav{min-height:14px;height:14px;padding:0;border:0;background:#f3f3f3}
+#moli-phone-panel .moli-contacts-directory{background:#f3f3f3;padding:0}
+#moli-phone-panel .moli-contact-groups{background:#fff;margin:0 0 8px;border-radius:10px;overflow:hidden}
+#moli-phone-panel .moli-contact-groups-toggle{width:100%;height:56px;border:0;background:#fff;display:grid;grid-template-columns:38px 1fr 18px;align-items:center;text-align:left;padding:0 14px;color:#222;font:inherit}
+#moli-phone-panel .moli-contact-groups-toggle b{font-size:16px;font-weight:500}
+#moli-phone-panel .moli-contact-groups-toggle i{font-style:normal;font-size:22px;color:#aaa;transition:transform .15s}
+#moli-phone-panel .moli-contact-groups-toggle.expanded i{transform:rotate(90deg)}
+#moli-phone-panel .moli-contact-groups-icon{width:30px;height:30px;border-radius:7px;background:#22b573;color:#fff;display:flex;align-items:center;justify-content:center}
+#moli-phone-panel .moli-contact-groups-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#moli-phone-panel .moli-contact-group-list{border-top:1px solid #eee}
+#moli-phone-panel .moli-contact-group-row{width:100%;min-height:42px;border:0;border-bottom:1px solid #f0f0f0;background:#fff;padding:8px 18px 8px 52px;text-align:left;color:#555;font:inherit;font-size:13px}
+#moli-phone-panel .moli-contact-group-empty{padding:12px 18px 12px 52px;color:#aaa;font-size:12px}
+#moli-phone-panel .moli-contact-tab-row{border-radius:10px;margin:0 0 7px;border-bottom:0;box-shadow:0 1px 0 rgba(0,0,0,.04)}
+#moli-phone-panel .moli-app-icon[data-action="open-wall"] .moli-app-icon-image,
+#moli-phone-panel .moli-settings-app-tile .moli-app-icon-image{transform:none!important;object-fit:cover!important;width:100%!important;height:100%!important}
