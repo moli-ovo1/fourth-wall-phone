@@ -1153,10 +1153,9 @@ ageMinutes 范围 0~2880。interactions 可以为空。`;
 export async function generatePublicMomentsRefresh({ scopeKey, crossContactInteraction = true, signal } = {}) {
   if (!scopeKey) throw new Error('当前朋友圈不可用');
   const allContacts = getContacts().map(hydratedContact);
-  // 公共朋友圈刷新只让最近实际聊得最多的一小组联系人进入本轮判断，避免整个通讯录机械轮询。
-  const recentConversations = getScopeConversations(scopeKey).filter(conv=>conv?.type==='private' && Array.isArray(conv?.messages) && conv.messages.length).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
-  const recentIds=[]; for(const conv of recentConversations){ const id=String(conv.contactId||''); if(id && id!=='builtin:meta' && !recentIds.includes(id)) recentIds.push(id); if(recentIds.length>=5)break; }
-  const contacts = recentIds.map(id=>allContacts.find(item=>String(item?.id||'')===id)).filter(Boolean);
+  // 公共朋友圈刷新恢复为“整个通讯录都是候选人”。每个角色仍可选择 0 次浏览、0 条动态、0 个互动；
+  // 浏览痕迹 UI 只展示本轮真正留下痕迹的最多 3 个角色。皮下不是普通通讯录社交联系人，不参与公共朋友圈轮询。
+  const contacts = allContacts.filter(item => item && String(item.id || '') !== 'builtin:meta');
   if (!contacts.length) return { actors: [], consideredMomentIds: [], contacts: [] };
 
   const feed = listPublicMoments(scopeKey).slice(0, 10);
