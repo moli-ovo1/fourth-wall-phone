@@ -169,7 +169,7 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
       ? conversation.automation
       : {};
     conversation.automation = {
-      autoChatEnabled: Boolean(automation.autoChatEnabled),
+      autoChatEnabled: typeof automation.autoChatEnabled === 'boolean' ? automation.autoChatEnabled : true,
       autoChatProbability: Math.max(0, Math.min(100, Number.isFinite(Number(automation.autoChatProbability)) ? Math.round(Number(automation.autoChatProbability)) : 30)),
       commentaryEnabled: Boolean(automation.commentaryEnabled),
       commentaryProbability: Math.max(0, Math.min(100, Number.isFinite(Number(automation.commentaryProbability)) ? Math.round(Number(automation.commentaryProbability)) : 30)),
