@@ -417,9 +417,14 @@ export function createPhonePanel({
         <button class="moli-secondary-btn" data-action="multi-forward">转发</button>
         <button class="moli-primary-btn moli-danger-btn" data-action="multi-delete">删除</button>
       </div>
+      <div class="moli-chat-tools-menu" data-chat-tools-menu hidden>
+        <button type="button" data-action="chat-wallpaper"><span>▧</span><small>壁纸</small></button>
+      </div>
+      <input type="file" accept="image/*" data-chat-wallpaper-input hidden>
       <footer class="moli-compose">
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
-        <button class="moli-send" data-action="send">发送</button>
+        <button class="moli-send" data-action="send" aria-label="发送">♥</button>
+        <button class="moli-compose-plus" data-action="chat-tools" aria-label="更多">＋</button>
       </footer>
     </section>
 
@@ -1162,6 +1167,8 @@ export function createPhonePanel({
   const injectionHistory = panel.querySelector('[data-injection-history]');
   const input = panel.querySelector('.moli-input');
   const sendButton = panel.querySelector('[data-action="send"]');
+  const chatToolsMenu = panel.querySelector('[data-chat-tools-menu]');
+  const chatWallpaperInput = panel.querySelector('[data-chat-wallpaper-input]');
   const addMenu = panel.querySelector('[data-add-menu]');
   const syncList = panel.querySelector('.moli-sync-list');
   const contactAvatarInput = panel.querySelector('[data-contact-avatar-input]');
@@ -5192,7 +5199,7 @@ export function createPhonePanel({
     chatTitle.textContent = isGroup ? conversation.name || '未命名群聊' : privateConversationTitle(conversation, item);
     if (sendButton) {
       const busy = isGenerationActive(scopeKey, currentContactId);
-      sendButton.textContent = busy ? '停止' : '发送';
+      sendButton.textContent = busy ? '■' : '♥';
       sendButton.classList.toggle('is-generating', busy);
     }
 
@@ -5662,7 +5669,7 @@ export function createPhonePanel({
       : (conversation.type === 'group' ? (conversation.name || '未命名群聊') : privateConversationTitle(conversation, contact(conversation.contactId || currentContactId)));
     chatTitle?.classList.toggle('moli-generation-title', Boolean(busy));
     if (!sendButton) return;
-    sendButton.textContent = busy ? '停止' : '发送';
+    sendButton.textContent = busy ? '■' : '♥';
     sendButton.classList.toggle('is-generating', Boolean(busy));
   }
 
@@ -7383,6 +7390,36 @@ export function createPhonePanel({
   });
   panel.querySelector('[data-action="injection-arm"]')?.addEventListener('click', armInjectionForNextGeneration);
   panel.querySelector('[data-action="injection-insert-ai"]')?.addEventListener('click', insertInjectionAsAssistantBody);
+
+  panel.querySelector('[data-action="chat-tools"]')?.addEventListener('click', event => {
+    event.stopPropagation();
+    if (chatToolsMenu) chatToolsMenu.hidden = !chatToolsMenu.hidden;
+  });
+  panel.querySelector('[data-action="chat-wallpaper"]')?.addEventListener('click', () => {
+    if (chatToolsMenu) chatToolsMenu.hidden = true;
+    chatWallpaperInput?.click();
+  });
+  chatWallpaperInput?.addEventListener('change', () => {
+    const file = chatWallpaperInput.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      if (!dataUrl) return;
+      try { localStorage.setItem('moli.chatWallpaper', dataUrl); } catch {}
+      panel.style.setProperty('--moli-chat-wallpaper', `url("${dataUrl.replace(/"/g, '\"')}")`);
+      panel.classList.add('moli-has-chat-wallpaper');
+      toast('聊天壁纸已设置');
+    };
+    reader.readAsDataURL(file);
+  });
+  try {
+    const savedWallpaper = localStorage.getItem('moli.chatWallpaper');
+    if (savedWallpaper) {
+      panel.style.setProperty('--moli-chat-wallpaper', `url("${savedWallpaper.replace(/"/g, '\"')}")`);
+      panel.classList.add('moli-has-chat-wallpaper');
+    }
+  } catch {}
 
   panel.querySelector(
     '[data-action="send"]'
