@@ -766,7 +766,7 @@ export function createPhonePanel({
         <div class="moli-nav-side right moli-contact-moments-tools"><button class="moli-text-btn" data-action="contact-moments-organize">整理</button><button class="moli-text-btn" data-action="contact-moments-help">说明书</button><button class="moli-icon-btn" data-action="contact-moments-refresh" aria-label="刷新角色朋友圈">↻</button></div>
       </header>
       <div class="moli-profile-moments-status" data-contact-moments-status hidden></div>
-      <label class="moli-profile-peek-control" data-contact-moments-peek><input type="checkbox" data-contact-moments-peek-enabled><span>{{user}}偷看</span><input type="number" min="0" step="1" inputmode="numeric" data-contact-moments-peek-count disabled><span>次</span></label>
+      <label class="moli-profile-peek-control" data-contact-moments-peek><input type="checkbox" data-contact-moments-peek-enabled><span data-contact-moments-peek-label>User偷看</span><input type="number" min="0" step="1" inputmode="numeric" data-contact-moments-peek-count disabled><span>次</span></label>
       <main class="moli-moments-feed moli-profile-moments-feed" data-contact-moments-feed></main>
     </section>
 
@@ -1189,6 +1189,7 @@ export function createPhonePanel({
   const momentsMetaBody = panel.querySelector('[data-moments-meta-body]');
   const momentsLocationLabel = panel.querySelector('[data-moments-location-label]');
   const momentsVisibilityLabel = panel.querySelector('[data-moments-visibility-label]');
+  const contactMomentsPeekLabel = panel.querySelector('[data-contact-moments-peek-label]');
   const contactMomentsFeed = panel.querySelector('[data-contact-moments-feed]');
   const contactMomentsTitle = panel.querySelector('[data-contact-moments-title]');
   const contactMomentsNotice = panel.querySelector('[data-contact-moments-notice]');
@@ -3804,6 +3805,7 @@ export function createPhonePanel({
       contactMomentsStatus.innerHTML = hasStatus ? `<strong>${escapeHtml(status.message || '')}</strong>${status.note ? `<small>${escapeHtml(status.note)}</small>` : ''}` : '';
     }
     if (contactMomentsPeek && contactMomentsPeekEnabled && contactMomentsPeekCount) {
+      if (contactMomentsPeekLabel) contactMomentsPeekLabel.textContent = `${getTavernUserContext()?.name || 'User'}偷看`;
       const peek=getProfilePeek(scopeKey,item.id);
       contactMomentsPeekEnabled.checked=Boolean(peek.enabled);
       contactMomentsPeekCount.disabled=!peek.enabled;
@@ -3861,8 +3863,24 @@ export function createPhonePanel({
   function composeSelectableContacts(){ return getContacts().map(hydratedContact).filter(c=>c&&String(c.id)!=='builtin:meta'); }
   function openMomentsMeta(mode){
     momentsMetaMode=mode; if(!momentsMetaSheet||!momentsMetaBody)return;
-    if(mode==='location'){ momentsMetaTitle.textContent='所在位置'; momentsMetaBody.innerHTML=`<input class="moli-moments-meta-input" data-meta-location maxlength="120" placeholder="输入位置" value="${escapeHtml(pendingMomentLocation)}">`; }
-    else { const selected=new Set(pendingMomentVisibility.contactIds); momentsMetaTitle.textContent='谁可以看'; momentsMetaBody.innerHTML=`<label class="moli-moments-meta-choice"><input type="radio" name="moli-vis" value="public" ${pendingMomentVisibility.mode==='public'?'checked':''}><span>公开</span></label><div class="moli-moments-role-picker">${composeSelectableContacts().map(c=>`<label><input type="checkbox" value="${escapeHtml(c.id)}" ${selected.has(String(c.id))?'checked':''}><span>${escapeHtml(canonicalContactName(c))}</span></label>`).join('')}</div><small>选择一人就是“仅对方可见”；也可以多选，仅这些角色可见。</small>`; }
+    if(mode==='location'){
+      momentsMetaTitle.textContent='所在位置';
+      momentsMetaBody.innerHTML=`<input class="moli-moments-meta-input" data-meta-location maxlength="120" placeholder="输入位置" value="${escapeHtml(pendingMomentLocation)}">`;
+    } else {
+      const selected=new Set((pendingMomentVisibility.contactIds||[]).map(String));
+      const contacts=composeSelectableContacts();
+      momentsMetaTitle.textContent='谁可以看';
+      momentsMetaBody.innerHTML=`<button type="button" class="moli-moments-visibility-public ${pendingMomentVisibility.mode==='public'?'is-selected':''}" data-vis-public><span>公开</span><b>✓</b></button><div class="moli-moments-role-picker">${contacts.map(c=>{const id=String(c.id);return `<button type="button" class="moli-moments-visibility-person ${selected.has(id)?'is-selected':''}" data-vis-contact="${escapeHtml(id)}"><span>${escapeHtml(canonicalContactName(c))}</span><b>✓</b></button>`;}).join('')}</div>`;
+      momentsMetaBody.querySelector('[data-vis-public]')?.addEventListener('click',()=>{
+        momentsMetaBody.querySelectorAll('[data-vis-contact].is-selected').forEach(el=>el.classList.remove('is-selected'));
+        momentsMetaBody.querySelector('[data-vis-public]')?.classList.add('is-selected');
+      });
+      momentsMetaBody.querySelectorAll('[data-vis-contact]').forEach(row=>row.addEventListener('click',()=>{
+        momentsMetaBody.querySelector('[data-vis-public]')?.classList.remove('is-selected');
+        row.classList.toggle('is-selected');
+        if(!momentsMetaBody.querySelector('[data-vis-contact].is-selected')) momentsMetaBody.querySelector('[data-vis-public]')?.classList.add('is-selected');
+      }));
+    }
     momentsMetaSheet.hidden=false;
   }
   function publishMoment() {
@@ -6788,7 +6806,7 @@ export function createPhonePanel({
   panel.querySelector('[data-action="moments-meta-confirm"]')?.addEventListener('click',()=>{
     if(!momentsMetaSheet||!momentsMetaBody)return;
     if(momentsMetaMode==='location') pendingMomentLocation=String(momentsMetaBody.querySelector('[data-meta-location]')?.value||'').trim();
-    else { const ids=[...momentsMetaBody.querySelectorAll('.moli-moments-role-picker input:checked')].map(x=>String(x.value)); const pub=momentsMetaBody.querySelector('input[name="moli-vis"]:checked')?.value==='public' && ids.length===0; pendingMomentVisibility=pub?{mode:'public',contactIds:[]}:{mode:'only',contactIds:ids}; }
+    else { const ids=[...momentsMetaBody.querySelectorAll('[data-vis-contact].is-selected')].map(x=>String(x.dataset.visContact||'')).filter(Boolean); pendingMomentVisibility=ids.length?{mode:'only',contactIds:ids}:{mode:'public',contactIds:[]}; }
     momentsMetaSheet.hidden=true; renderMomentComposeMeta();
   });
   panel.querySelector('[data-action="moments-publish"]')?.addEventListener('click', publishMoment);
