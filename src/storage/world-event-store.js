@@ -1,15 +1,30 @@
 const PREFIX = 'moli-phone:world-events:v1:';
-const MAX_EVENTS = 1200;
+const MAX_EVENTS = 1600;
 function key(scopeKey){ return `${PREFIX}${String(scopeKey||'global')}`; }
 function load(scopeKey){ try{ const raw=localStorage.getItem(key(scopeKey)); const data=raw?JSON.parse(raw):{}; return {events:Array.isArray(data.events)?data.events:[]}; }catch{return {events:[]};} }
 function save(scopeKey,state){ state.events=(state.events||[]).filter(Boolean).slice(-MAX_EVENTS); localStorage.setItem(key(scopeKey),JSON.stringify(state)); }
 function makeId(){ return `world:${Date.now()}:${Math.random().toString(36).slice(2,9)}`; }
-export function recordWorldEvent(scopeKey,{source='phone',actorId='',action='EVENT',targetContactIds=[],objectId='',content='',metadata={},awareness='pending'}={}){
-  if(!scopeKey||!action)return null; const state=load(scopeKey); const targets=[...new Set((Array.isArray(targetContactIds)?targetContactIds:[targetContactIds]).map(String).filter(Boolean))];
-  const entry={id:makeId(),source:String(source||'phone'),actorId:String(actorId||''),action:String(action||'EVENT'),targetContactIds:targets,objectId:String(objectId||''),content:String(content||'').trim().slice(0,1600),metadata:metadata&&typeof metadata==='object'?metadata:{},createdAt:Date.now(),awareness:Object.fromEntries(targets.map(id=>[id,{state:awareness==='known'?'known':'pending',at:awareness==='known'?Date.now():0}]))};
+function unique(values=[]){ return [...new Set((Array.isArray(values)?values:[values]).map(String).filter(Boolean))]; }
+export function recordWorldEvent(scopeKey,{source='phone',actorId='',action='EVENT',targetContactIds=[],objectId='',content='',metadata={},awareness='pending',dedupeKey=''}={}){
+  if(!scopeKey||!action)return null; const state=load(scopeKey); const targets=unique(targetContactIds); const now=Date.now(); const dk=String(dedupeKey||'');
+  if(dk){const old=[...state.events].reverse().find(e=>String(e?.dedupeKey||'')===dk&&now-Number(e?.createdAt||0)<5000);if(old)return old;}
+  const entry={id:makeId(),source:String(source||'phone'),actorId:String(actorId||''),action:String(action||'EVENT'),targetContactIds:targets,objectId:String(objectId||''),content:String(content||'').trim().slice(0,1600),metadata:metadata&&typeof metadata==='object'?metadata:{},dedupeKey:dk,createdAt:now,awareness:Object.fromEntries(targets.map(id=>[id,{state:awareness==='known'?'known':'pending',at:awareness==='known'?now:0}])),consumedBy:{}};
   state.events.push(entry); save(scopeKey,state); return entry;
 }
-export function markWorldEventsKnown(scopeKey,contactId,eventIds=[]){ const ids=new Set((eventIds||[]).map(String)); if(!ids.size)return; const state=load(scopeKey),now=Date.now(); for(const event of state.events){if(ids.has(String(event.id))&&event.targetContactIds?.includes(String(contactId))){event.awareness ||= {}; event.awareness[String(contactId)]={state:'known',at:now};}} save(scopeKey,state); }
-export function markWorldEventsKnownByObject(scopeKey,contactId,objectIds=[]){ const ids=new Set((objectIds||[]).map(String).filter(Boolean)); if(!ids.size)return; const state=load(scopeKey),now=Date.now(); for(const event of state.events){if(ids.has(String(event.objectId||''))&&event.targetContactIds?.includes(String(contactId))){event.awareness ||= {}; event.awareness[String(contactId)]={state:'known',at:now};}} save(scopeKey,state); }
-export function listWorldEvents(scopeKey,{contactId='',awareness='',limit=100}={}){ const cid=String(contactId||''); return load(scopeKey).events.filter(e=>!cid||e.targetContactIds?.includes(cid)).filter(e=>!awareness||e.awareness?.[cid]?.state===awareness).slice(-Math.max(1,Number(limit)||100)); }
-export function summarizeWorldEventsForContext(scopeKey,{contactId='',limit=30}={}){ return listWorldEvents(scopeKey,{contactId,awareness:'known',limit}).map(e=>`[${e.source}] ${e.content||e.action}`).join('\n'); }
+export function markWorldEventsKnown(scopeKey,contactId,eventIds=[]){ const ids=new Set(unique(eventIds)); if(!ids.size)return; const state=load(scopeKey),now=Date.now(),cid=String(contactId||''); for(const event of state.events){if(ids.has(String(event.id))&&event.targetContactIds?.includes(cid)){event.awareness ||= {}; event.awareness[cid]={state:'known',at:now};}} save(scopeKey,state); }
+export function markWorldEventsKnownByObject(scopeKey,contactId,objectIds=[]){ const ids=new Set(unique(objectIds)); if(!ids.size)return; const state=load(scopeKey),now=Date.now(),cid=String(contactId||''); for(const event of state.events){if(ids.has(String(event.objectId||''))&&event.targetContactIds?.includes(cid)){event.awareness ||= {}; event.awareness[cid]={state:'known',at:now};}} save(scopeKey,state); }
+export function markWorldEventsConsumed(scopeKey,contactId,eventIds=[],consumer='character-decision'){const ids=new Set(unique(eventIds));if(!ids.size)return;const state=load(scopeKey),now=Date.now(),cid=String(contactId||'');for(const event of state.events){if(ids.has(String(event.id))){event.consumedBy ||= {};event.consumedBy[`${cid}:${consumer}`]=now;}}save(scopeKey,state);}
+export function listWorldEvents(scopeKey,{contactId='',awareness='',source='',actions=[],limit=100,unconsumedBy=''}={}){ const cid=String(contactId||''),wanted=new Set(unique(actions)); return load(scopeKey).events.filter(e=>!cid||e.targetContactIds?.includes(cid)).filter(e=>!awareness||e.awareness?.[cid]?.state===awareness).filter(e=>!source||String(e.source||'').startsWith(String(source))).filter(e=>!wanted.size||wanted.has(String(e.action||''))).filter(e=>!unconsumedBy||!e.consumedBy?.[`${cid}:${unconsumedBy}`]).slice(-Math.max(1,Number(limit)||100)); }
+function aggregate(events=[]){
+  const result=[]; const peekGroups=new Map(); const readGroups=new Map();
+  for(const e of events){const action=String(e.action||''); const momentId=String(e.metadata?.momentId||e.objectId||'');
+    if(/PEEK|VISIT/.test(action)){const k=momentId||'profile';peekGroups.set(k,(peekGroups.get(k)||0)+Math.max(1,Number(e.metadata?.count||1)));continue;}
+    if(/READ|SEEN/.test(action)){const k=momentId||'moment';readGroups.set(k,(readGroups.get(k)||0)+1);continue;}
+    result.push(e.content||`[${e.source}] ${action}`);
+  }
+  for(const [k,n] of peekGroups) result.unshift(`User 反复查看了你的朋友圈${k==='profile'?'':`（momentId=${k}）`}，累计 ${n} 次。`);
+  for(const [k,n] of readGroups) result.push(`User 对你的朋友圈进行了 ${n} 次已阅确认${k==='moment'?'':`（momentId=${k}）`}。`);
+  return result.filter(Boolean);
+}
+export function summarizeWorldEventsForContext(scopeKey,{contactId='',awareness='known',limit=30,aggregateEvents=true}={}){ const events=listWorldEvents(scopeKey,{contactId,awareness,limit}); const lines=aggregateEvents?aggregate(events):events.map(e=>e.content||`[${e.source}] ${e.action}`); return lines.map(x=>`- ${x}`).join('\n'); }
+export function getWorldEventContextSource(scopeKey,{contactId='',awareness='known',limit=50}={}){const events=listWorldEvents(scopeKey,{contactId,awareness,limit});return{sourceType:'phone.world-events',scopeKey:String(scopeKey||''),contactId:String(contactId||''),awareness,eventIds:events.map(e=>e.id),text:summarizeWorldEventsForContext(scopeKey,{contactId,awareness,limit}),events};}
