@@ -1736,3 +1736,22 @@
 #moli-phone-panel .moli-contact-moments-tools .moli-text-btn{border:0;background:transparent;padding:4px 0;color:#222;font:inherit;font-size:13px;line-height:1;white-space:nowrap}
 #moli-phone-panel .moli-contact-moments-tools .moli-icon-btn{width:28px;height:28px;font-size:20px}
 #moli-phone-panel .moli-profile-moments-feed{padding-top:0;background:#fff}
+
+/* v0.4.73 角色朋友圈认知与工具栏 */
+#moli-phone-panel [data-page="contact-moments"]>.moli-nav{position:relative}
+#moli-phone-panel [data-page="contact-moments"]>.moli-nav>.moli-nav-side:first-child{flex:0 0 40px;width:40px}
+#moli-phone-panel [data-page="contact-moments"] .moli-contact-moments-tools{margin-left:auto;width:auto;flex:0 0 auto;justify-content:flex-end;gap:12px;padding-right:2px}
+#moli-phone-panel [data-page="contact-moments"] .moli-contact-moments-tools [data-action="contact-moments-refresh"]{transform:translateY(1px)}
+#moli-phone-panel .moli-profile-peek-control{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:7px 14px;background:#f7f7f7;border-bottom:1px solid #ededed;color:#666;font-size:12px}
+#moli-phone-panel .moli-profile-peek-control input[type="checkbox"]{width:14px;height:14px;margin:0}
+#moli-phone-panel .moli-profile-peek-control input[type="number"]{width:48px;height:25px;border:1px solid #ddd;border-radius:6px;background:#fff;padding:0 6px;font:inherit;color:#333;text-align:center}
+#moli-phone-panel .moli-profile-peek-control input[type="number"]:disabled{opacity:.45;background:#eee}
+#moli-phone-panel .moli-help-sheet{position:absolute;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.34)}
+#moli-phone-panel .moli-help-sheet[hidden]{display:none!important}
+#moli-phone-panel .moli-help-card{width:min(92%,520px);max-height:82%;display:flex;flex-direction:column;background:#fff;border-radius:18px;box-shadow:0 18px 50px rgba(0,0,0,.22);overflow:hidden}
+#moli-phone-panel .moli-help-head{display:flex;align-items:center;padding:14px 16px 10px;border-bottom:1px solid #eee}
+#moli-phone-panel .moli-help-head strong{flex:1;font-size:17px}
+#moli-phone-panel .moli-help-body{overflow:auto;padding:8px 18px 4px;color:#333;font-size:13px;line-height:1.65}
+#moli-phone-panel .moli-help-body p{margin:10px 0}
+#moli-phone-panel .moli-help-confirm{align-self:flex-end;margin:6px 16px 14px;border:0;background:transparent;color:#5c79aa;font:inherit;font-weight:600;padding:8px 10px}
+#moli-phone-panel .moli-settings-app-tile{background:transparent}
