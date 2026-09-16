@@ -1843,3 +1843,11 @@
 #moli-phone-panel .moli-moments-visibility-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 #moli-phone-panel .moli-moments-visibility-row b{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;border:1.5px solid #bbb;color:transparent;font-size:14px}
 #moli-phone-panel .moli-moments-visibility-row.is-selected b{background:#07c160;border-color:#07c160;color:#fff}
+/* v0.4.82: User 朋友圈可见范围改为发表页内联名单，不再依赖 sheet/page。 */
+#moli-phone-panel .moli-moments-visibility-inline[hidden]{display:none!important}
+#moli-phone-panel .moli-moments-visibility-inline{margin:0 14px 10px;border-radius:16px;overflow:hidden;background:rgba(255,255,255,.66);border:1px solid rgba(255,255,255,.82);box-shadow:0 8px 24px rgba(35,45,60,.07);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%)}
+#moli-phone-panel .moli-moments-visibility-inline-list{max-height:220px;overflow:auto}
+#moli-phone-panel .moli-moments-visibility-inline-row{width:100%;min-height:44px;border:0;border-bottom:1px solid rgba(0,0,0,.06);background:transparent;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font:inherit;color:#222;text-align:left}
+#moli-phone-panel .moli-moments-visibility-inline-row:last-child{border-bottom:0}
+#moli-phone-panel .moli-moments-visibility-inline-row b{visibility:hidden;color:#07c160;font-size:17px}
+#moli-phone-panel .moli-moments-visibility-inline-row.is-selected b{visibility:visible}
