@@ -6740,8 +6740,10 @@ export function createPhonePanel({
   let recommendFilterOpen=false;
   let recommendCustomOpen=false;
   let customListOpen=false;
-  let customPostsOpen=true;
-  let customPinnedOpen=true;
+  let customPostsOpen=false;
+  let customPinnedOpen=false;
+  let recommendTodayOpen=false;
+  let recommendPostsOpen=false;
   const currentCustomDefs=()=>ensureCustomCommunityPresets(getScopeKey?.());
   const renderRecommendFilter=(settings)=>{
     const customized=Boolean(settings.recommendCustomized);
@@ -6790,7 +6792,10 @@ export function createPhonePanel({
       const xhs = xhsItems.map(post=>`<button class="moli-recommend-xhs-card" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span class="moli-recommend-xhs-image"><em>${escapeHtml(post.extra?.imageText||'')}</em></span><strong>${escapeHtml(post.title||'无标题')}</strong></button>`).join('');
       const zhihu = zhihuItems.map(post=>`<button class="moli-recommend-zhihu-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><strong>${escapeHtml(post.title||'无标题')}</strong><span>${escapeHtml(String(post.content||post.extra?.answer||'').slice(0,72))}</span></button>`).join('');
       const custom = customItems.map(post=>`<button class="moli-recommend-zhihu-row" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><small>${escapeHtml(post.extra?.customCommunityName||'自创')}</small><strong>${escapeHtml(post.title||'无标题')}</strong><span>${escapeHtml(String(post.content||'').slice(0,72))}</span></button>`).join('');
-      feed.innerHTML = `<div class="moli-recommend-home"><div class="moli-recommend-control-row"><div class="moli-recommend-subtools"><button type="button" class="moli-recommend-filter" data-action="recommend-filter-toggle">我只想看 ${recommendFilterOpen?'⌄':'›'}</button><button type="button" class="moli-recommend-help" data-action="recommend-help">说明书</button><button type="button" class="moli-recommend-ghost-toggle" data-action="toggle-ghost-stories">莲蓬鬼话 ${settings.ghostStoriesEnabled?'开':'关'}</button></div><header class="moli-recommend-today"><button type="button" class="moli-recommend-refresh${publicWebGenerating.has('recommend')?' is-spinning':''}" data-action="public-web-refresh-recommend" aria-label="刷新社区推荐">↻</button><span>今天的社区发生了什么……</span></header></div>${renderRecommendFilter(settings)}${tianya?`<section class="moli-recommend-sketch-section moli-recommend-tianya">${tianya}</section>`:''}${xhs?`<section class="moli-recommend-sketch-section moli-recommend-xhs-grid">${xhs}</section>`:''}${zhihu?`<section class="moli-recommend-sketch-section moli-recommend-zhihu">${zhihu}</section>`:''}${custom?`<section class="moli-recommend-sketch-section moli-recommend-zhihu">${custom}</section>`:''}${posts.length?'':'<div class="moli-recommend-empty">轻轻点一下 ↻，看看今天的社区。</div>'}</div>`;
+      feed.innerHTML = `<div class="moli-recommend-home">
+        <section class="moli-recommend-fold moli-recommend-today-fold"><button type="button" class="moli-recommend-fold-head" data-action="recommend-today-toggle"><b>今天的社区发生了什么</b><span>${recommendTodayOpen?'⌄':'›'}</span></button><div class="moli-recommend-fold-body" ${recommendTodayOpen?'':'hidden'}><div class="moli-recommend-control-row"><div class="moli-recommend-subtools"><button type="button" class="moli-recommend-filter" data-action="recommend-filter-toggle">我只想看 ${recommendFilterOpen?'⌄':'›'}</button><button type="button" class="moli-recommend-help" data-action="recommend-help">说明书</button><button type="button" class="moli-recommend-ghost-toggle" data-action="toggle-ghost-stories">莲蓬鬼话 ${settings.ghostStoriesEnabled?'开':'关'}</button></div><header class="moli-recommend-today"><button type="button" class="moli-recommend-refresh${publicWebGenerating.has('recommend')?' is-spinning':''}" data-action="public-web-refresh-recommend" aria-label="刷新社区推荐">↻</button><span>刷新今天的社区</span></header></div>${renderRecommendFilter(settings)}</div></section>
+        <section class="moli-recommend-fold moli-recommend-posts-fold"><button type="button" class="moli-recommend-fold-head" data-action="recommend-posts-toggle"><b>帖子</b><span>${recommendPostsOpen?'⌄':'›'}</span></button><div class="moli-recommend-fold-body moli-recommend-posts-body" ${recommendPostsOpen?'':'hidden'}>${tianya?`<section class="moli-recommend-sketch-section moli-recommend-tianya">${tianya}</section>`:''}${xhs?`<section class="moli-recommend-sketch-section moli-recommend-xhs-grid">${xhs}</section>`:''}${zhihu?`<section class="moli-recommend-sketch-section moli-recommend-zhihu">${zhihu}</section>`:''}${custom?`<section class="moli-recommend-sketch-section moli-recommend-zhihu">${custom}</section>`:''}${posts.length?'':'<div class="moli-recommend-empty">轻轻点一下 ↻，看看今天的社区。</div>'}</div></section>
+      </div>`;
     } else if (currentPublicWebTab === 'custom') {
       const userName=getTavernUserContext()?.name||'User';
       const defs=currentCustomDefs();
@@ -6808,7 +6813,7 @@ export function createPhonePanel({
           </div>
         </section>
         <section class="moli-custom-posts"><button type="button" class="moli-custom-section-head" data-action="custom-posts-toggle"><h3>帖子</h3><span>${customPostsOpen?'⌄':'›'}</span></button><div class="moli-custom-section-body" ${customPostsOpen?'':'hidden'}>${customRows(customOrdinary)||'<div class="moli-web-muted">社区推荐生成的自创内容会自动收进这里。</div>'}</div></section>
-        <section class="moli-custom-posts moli-custom-pinned"><button type="button" class="moli-custom-section-head" data-action="custom-pinned-toggle"><h3>常驻</h3><span>${customPinnedOpen?'⌄':'›'}</span></button><div class="moli-custom-section-body" ${customPinnedOpen?'':'hidden'}>${customRows(customPinned)||'<div class="moli-web-muted">点进帖子后用 ☺ 把它留在这里。</div>'}</div></section>
+        <section class="moli-custom-posts moli-custom-pinned"><button type="button" class="moli-custom-section-head" data-action="custom-pinned-toggle"><h3>常驻</h3><span>${customPinnedOpen?'⌄':'›'}</span></button><div class="moli-custom-section-body" ${customPinnedOpen?'':'hidden'}>${customRows(customPinned)}</div></section>
       </div>`;
     } else if (currentPublicWebTab === 'xiaohongshu') {
       const xhsCard=post=>`<article class="moli-xhs-waterfall-card"><button class="moli-xhs-card-open" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span class="moli-xhs-card-image"><em>${escapeHtml(post.extra?.imageText||'')}</em><small>${escapeHtml(post.extra?.imagePrompt||'')}</small></span><strong>${escapeHtml(post.title||'无标题')}</strong><span class="moli-xhs-card-author">${escapeHtml(post.author?.name||'网友')}</span></button></article>`;
@@ -6834,6 +6839,8 @@ export function createPhonePanel({
   };
   panel.querySelector('[data-public-web-feed]')?.addEventListener('click', event=>{
     const scope=getScopeKey?.();
+    const todayToggle=event.target.closest('[data-action="recommend-today-toggle"]'); if(todayToggle){recommendTodayOpen=!recommendTodayOpen;renderPublicWeb();return;}
+    const recommendPostsToggle=event.target.closest('[data-action="recommend-posts-toggle"]'); if(recommendPostsToggle){recommendPostsOpen=!recommendPostsOpen;renderPublicWeb();return;}
     const filter=event.target.closest('[data-action="recommend-filter-toggle"]'); if(filter){recommendFilterOpen=!recommendFilterOpen;renderPublicWeb();return;}
     const help=event.target.closest('[data-action="recommend-help"]'); if(help){
       panel.querySelector('.moli-community-help-backdrop')?.remove();
@@ -8023,19 +8030,6 @@ export function createPhonePanel({
     '[data-action="send"]'
   ).onclick =
     sendMessage;
-
-  input.addEventListener(
-    'keydown',
-    event => {
-      if (
-        event.key === 'Enter' &&
-        !event.shiftKey
-      ) {
-        event.preventDefault();
-        sendMessage();
-      }
-    }
-  );
 
 
   chatInfo.addEventListener('input', event => {
