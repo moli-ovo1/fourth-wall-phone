@@ -197,10 +197,16 @@ export async function getActivatedTavernWorldBook({ contact, scanText = '' } = {
   }
 
   activated.sort((a, b) => Number(b.order || 0) - Number(a.order || 0));
+  const contentOverrides = contact?.worldBookPolicy?.contentOverrides && typeof contact.worldBookPolicy.contentOverrides === 'object'
+    ? contact.worldBookPolicy.contentOverrides
+    : {};
+  const resolvedEntries = activated.map(entry => Object.prototype.hasOwnProperty.call(contentOverrides, String(entry.key))
+    ? { ...entry, content: String(contentOverrides[String(entry.key)] || '') }
+    : entry);
   return {
     available: true,
-    entries: activated,
-    text: activated.map(entry => entry.content).filter(Boolean).join('\n\n'),
+    entries: resolvedEntries,
+    text: resolvedEntries.map(entry => entry.content).filter(Boolean).join('\n\n'),
   };
 }
 
