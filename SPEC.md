@@ -4060,3 +4060,10 @@ NPC 虽能读取绑定世界当前正文用于即时参与，但持久认知不�
 - 修正完整角色卡主动读取：SillyTavern POST `/api/characters/get` 需要 CSRF；当宿主未暴露 `getRequestHeaders()` 时，moli 必须自行从 `/csrf-token` 取得 token 后再读取，不能因为角色从未打开过正文就只得到浅角色卡。
 - Tavern 角色快照必须保留该角色自己的 `chat` 标识。选择“正文角色”添加时，Conversation 必须绑定到**该角色自己的 sourceId + chat**，严禁把批量添加的其他角色绑定到当前屏幕上正在打开的第三方正文。
 - 如果某张角色卡尚不存在任何 Tavern chat，则不能借用当前正文作为其世界；先保留完整角色卡并以陪伴实例承载，待该角色真正产生 Tavern chat 后再解析其正文 World Instance。
+
+
+## v0.5.24 · 最终 Prompt 人设链修复
+- SillyTavern User Persona 必须提取实际文本值；若宿主暴露的是 textarea/input DOM，读取 `.value`，禁止把 DOM 对象字符串化为 `[object HTMLTextAreaElement]`。
+- 酒馆 Contact 的角色卡是 Character Identity 的必备生成上下文。私聊生成前若本地仅有浅快照，必须按该 Contact 自己的角色身份主动补取完整角色卡，再进入 Prompt Builder；Global/陪伴身份不得成为跳过角色卡的理由。
+- 验收以最终模型实际收到角色卡事实为准，不以资料页可见或本地已缓存为准。
+- User 自定义全局 Prompt 属于 User Prompt 层，世界边界/人设链修复不得擅自删除、改写或固化其内容。
