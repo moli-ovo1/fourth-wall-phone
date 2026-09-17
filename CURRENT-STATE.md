@@ -221,3 +221,11 @@
 - 通讯录新增“人物绑定”入口，集中查看自创人物的 Global/NPC 归属。旧自创人物没有显式归属字段时，若已有正文 Conversation，则兼容视作 NPC；已有 Global Conversation 则视作 Global，不强行破坏旧数据。
 - 正文内主屏幕“当前角色世界”必须整块隐藏，并在每次进入主屏幕时重新按当前 Tavern 环境计算，避免扩展初始化于正文外、之后进入正文仍残留入口。
 - 已废弃旧假设：`自创人物 = 全局人物`；自创只是人物来源，Global/NPC 才是世界归属。
+
+## moli177 / v0.5.20 — 176 实机修正
+
+- 修复 A-NPC 在 B 正文/正文外仍出现在微信列表：自创人物不再无条件可见，NPC 严格按 `boundScopeKey` 与当前具体 `:chat:` scope 匹配。
+- 新建 NPC 的完整“读取酒馆正文”默认 OFF；User 可手动开启。NPC“明确在场剧情 → 视角过滤 → 认知”留给 Unified Awareness 正式实现，避免全知和关键词泄密。
+- 固定人格聊天列表统一标注“固定人格”，不再显示上一个/当前正文 Branch 后缀。
+- “人物绑定”升级为世界结构视图：显示正文主角色、NPC、Global 与固定人格；NPC 行可改绑已有正文世界，并保留原手机 Conversation 数据。
+- 修复正文内“当前角色世界”入口未隐藏：补充 `[hidden]{display:none!important}` 与 inline display 双保险；正文环境判定只认具体 `:chat:` scope。
