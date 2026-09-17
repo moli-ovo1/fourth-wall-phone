@@ -888,6 +888,7 @@ export function refreshTavernContacts(
         originalAvatarUrl: fresh.avatarUrl || '',
         roleFidelity:
           fresh.roleFidelity && typeof fresh.roleFidelity === 'object'
+            && Object.values(fresh.roleFidelity).some(value => String(value || '').trim())
             ? { ...fresh.roleFidelity }
             : (contact.source?.roleFidelity || {}),
         status: 'available',
