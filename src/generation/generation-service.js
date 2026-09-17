@@ -11,6 +11,7 @@ import {
   getTavernCharacterSnapshot,
   getTavernCharacterForContact,
   getCurrentTavernCharacterSnapshot,
+  hydrateTavernCharacterSnapshot,
 } from '../core/tavern-contacts.js';
 import {
   getRecentTavernBody,
@@ -156,6 +157,29 @@ function hydratedContact(contact) {
   };
 }
 
+async function fullyHydratedContact(contact) {
+  const base = hydratedContact(contact);
+  if (base?.kind !== 'tavern') return base;
+  const fidelity = base?.source?.roleFidelity || {};
+  if (Object.values(fidelity).some(value => String(value || '').trim())) return base;
+
+  const fresh = getTavernCharacterForContact(base);
+  if (!fresh) return base;
+  const full = await hydrateTavernCharacterSnapshot(fresh);
+  if (!full?.roleFidelity || !Object.values(full.roleFidelity).some(value => String(value || '').trim())) return base;
+  return {
+    ...base,
+    source: {
+      ...(base.source || {}),
+      roleFidelity: { ...(base.source?.roleFidelity || {}), ...full.roleFidelity },
+      originalName: full.name || base.source?.originalName || base.name,
+      originalAvatar: full.avatar || base.source?.originalAvatar || '',
+      originalAvatarUrl: full.avatarUrl || base.source?.originalAvatarUrl || '',
+      status: 'available',
+    },
+  };
+}
+
 export async function generatePrivateReply({
   scopeKey,
   conversationKey,
@@ -193,7 +217,7 @@ export async function generatePrivateReply({
   }
 
   const storedContact = findContact(conversation.contactId);
-  const contact = hydratedContact(storedContact);
+  const contact = await fullyHydratedContact(storedContact);
   assertContactReady(contact);
   const isFourthWall = String(contact?.id || '') === 'builtin:meta';
   const currentTavernCharacter = isFourthWall ? getCurrentTavernCharacterSnapshot() : null;
