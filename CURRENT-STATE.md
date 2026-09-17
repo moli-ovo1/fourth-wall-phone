@@ -143,3 +143,9 @@
 - Private chat: Enter no longer triggers send or empty-send API generation; only the visible send button can hand the turn to generation.
 - 自创: 帖子/常驻 default collapsed; removed empty pinned hint; expanded bodies overlay the fixed wallpaper instead of pushing it.
 - 社区推荐: new dark Lunar Archive wallpaper; “今天的社区发生了什么” and “帖子” are default-collapsed overlay sections.
+
+
+## v0.5.09 · community accordion correction
+- 社区推荐恢复左上角“我只想看 / 说明书 / 莲蓬鬼话”三行入口，并放回独立方圆角半透明玻璃底板；不再藏入“今天的社区发生了什么”折叠内容。
+- “今天的社区发生了什么”恢复为独立刷新玻璃胶囊；帖子区继续作为独立折叠区。
+- 自创“帖子”展开浮层提高层级，确保覆盖“常驻”而不是落到常驻栏下一层。

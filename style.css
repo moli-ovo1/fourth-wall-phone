@@ -2216,3 +2216,18 @@
 #moli-phone-panel .moli-recommend-fold-head span{font-size:18px;color:#6e6e6e}
 #moli-phone-panel .moli-recommend-fold-body{top:calc(100% + 6px)}
 #moli-phone-panel .moli-recommend-control-row{display:block!important}
+
+/* moli · community v3.1 layout correction */
+#moli-phone-panel .moli-recommend-control-panel{
+  position:relative;z-index:45;display:inline-block;margin:0 0 10px;padding:9px 12px;border:1px solid rgba(255,255,255,.54);border-radius:16px;
+  background:rgba(246,244,240,.34);box-shadow:0 8px 24px rgba(30,34,38,.08),inset 0 1px 0 rgba(255,255,255,.58);
+  backdrop-filter:blur(16px) saturate(1.08);-webkit-backdrop-filter:blur(16px) saturate(1.08)
+}
+#moli-phone-panel .moli-recommend-control-panel .moli-recommend-subtools{display:flex!important;flex-direction:column!important;align-items:flex-start!important;gap:4px!important}
+#moli-phone-panel .moli-recommend-control-panel .moli-recommend-subtools button{padding:0!important;min-height:0!important;border:0!important;background:transparent!important;box-shadow:none!important;text-align:left!important}
+#moli-phone-panel .moli-recommend-control-panel .moli-recommend-filter-panel{position:absolute!important;left:0!important;top:calc(100% + 7px)!important;z-index:70!important}
+#moli-phone-panel .moli-recommend-home>.moli-recommend-today{position:relative;z-index:4;margin:0 0 12px!important}
+#moli-phone-panel .moli-recommend-home>.moli-recommend-posts-fold{position:relative;z-index:3;margin-top:0!important}
+#moli-phone-panel .moli-custom-posts:has(.moli-custom-section-body:not([hidden])){z-index:60!important}
+#moli-phone-panel .moli-custom-posts .moli-custom-section-body:not([hidden]){z-index:61!important}
+#moli-phone-panel .moli-custom-pinned{z-index:2!important}
