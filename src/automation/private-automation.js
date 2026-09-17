@@ -4,7 +4,7 @@ import { generatePrivateReply } from '../generation/generation-service.js';
 import { parseGeneratedMessages, parseFourthWallResponse } from '../generation/message-parser.js';
 import { beginGenerationTask, endGenerationTask, setGenerationError } from '../core/generation-runtime.js';
 import { createProfileMoment } from '../storage/moments-store.js';
-import { listWorldEvents, markWorldEventsConsumed, recordWorldEvent, summarizeWorldEventsForContext } from '../storage/world-event-store.js';
+import { listWorldEvents, markWorldEventsConsumed, recordWorldEvent, summarizeWorldEventsForContext, linkWorldEventResult } from '../storage/world-event-store.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -268,12 +268,13 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
 
         if (mode !== 'commentary') {
           if (behaviorAction !== 'SKIP') {
-            recordWorldEvent(scopeKey, {
+            const resultEvent = recordWorldEvent(scopeKey, {
               source: 'wechat.automation', actorId: contact.id, action: behaviorAction,
               targetContactIds: [contact.id], objectId: key,
               content: behaviorAction === 'POST' ? '你基于最近已知事件发布了朋友圈。' : behaviorAction === 'PRIVATE_CHAT' ? '你基于最近已知事件主动私聊了 User。' : '你基于最近已知事件既公开表达，也主动私聊了 User。',
               metadata: { decisionSource: mode, causedByEventIds: decisionWorldEventIds.slice(-30) }, awareness: 'known',
             });
+            linkWorldEventResult(scopeKey,{causeEventIds:decisionWorldEventIds,resultEventId:resultEvent?.id,decision:behaviorAction,contactId:contact.id});
           }
           if (decisionWorldEventIds.length) markWorldEventsConsumed(scopeKey, contact.id, decisionWorldEventIds, 'character-decision');
         }
