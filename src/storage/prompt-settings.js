@@ -255,6 +255,18 @@ export const DEFAULT_ONLINE_PROMPT_BLOCKS = [
 <message> 内部允许正常换行。
 换行本身不代表产生新的聊天气泡。
 
+## 角色主动撤回
+
+如果我决定“发出一句话后又撤回”，使用：
+
+<recall>
+被我发出、随后撤回的消息内容
+</recall>
+
+<recall> 表示这句话会先作为真实气泡短暂出现，随后由我撤回。它不是心理活动。
+只在我确实产生撤回动机时使用，不要为了展示功能而撤回。
+撤回后我仍记得自己发过什么以及为什么撤回。
+
 ## 数量
 
 不要固定消息条数。
@@ -279,7 +291,7 @@ export const DEFAULT_ONLINE_PROMPT_BLOCKS = [
 - 系统解释
 - 对生成过程的说明
 
-除规定的消息结构外，不要在 <message> 外输出其他正文。`,
+除规定的 <message> / <recall> 消息结构外，不要输出其他正文。`,
   },
   {
     id: 'context-assembly', title: '📚 上下文组装规则', enabled: true,
@@ -337,7 +349,7 @@ const LEGACY_DEFAULT_CONTENT_HASHES = {
   'time-gap': 'ea59e938',
   'phone-memory': '9dce85e1',
   'world-context': '0700b270',
-  'output-protocol': 'd366e96f',
+  'output-protocol': ['d366e96f', '5b0eb7be'],
   'context-assembly': 'e7f3deb9',
 };
 
@@ -353,8 +365,8 @@ function stableTextHash(value) {
 function mergeSavedDefaultBlock(defaultItem, savedItem) {
   if (!savedItem) return defaultItem;
   const legacyHash = LEGACY_DEFAULT_CONTENT_HASHES[defaultItem.id];
-  const shouldRefreshLegacyContent = legacyHash
-    && stableTextHash(savedItem.content) === legacyHash;
+  const legacyHashes = Array.isArray(legacyHash) ? legacyHash : [legacyHash].filter(Boolean);
+  const shouldRefreshLegacyContent = legacyHashes.includes(stableTextHash(savedItem.content));
   return {
     ...defaultItem,
     ...savedItem,

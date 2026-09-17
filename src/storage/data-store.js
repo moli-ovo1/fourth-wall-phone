@@ -1385,6 +1385,27 @@ export function updateMessageContent(scopeKey, conversationKey, messageId, conte
   return true;
 }
 
+export function recallMessage(scopeKey, conversationKey, messageId, options = {}) {
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation || !Array.isArray(conversation.messages)) return false;
+  const index = conversation.messages.findIndex(item => String(item?.id || '') === String(messageId || ''));
+  if (index < 0) return false;
+  const message = conversation.messages[index];
+  if (message.recalledAt) return true;
+  const laterMessages = conversation.messages.slice(index + 1);
+  const seenBeforeRecall = options.seenBeforeRecall !== undefined
+    ? Boolean(options.seenBeforeRecall)
+    : (message.role === 'user' && laterMessages.some(item => item?.role === 'assistant'));
+  message.recalledAt = Date.now();
+  message.recalledBy = String(options.recalledBy || (message.role === 'user' ? 'user' : 'contact'));
+  message.seenBeforeRecall = seenBeforeRecall;
+  message.updatedAt = Date.now();
+  conversation.updatedAt = Date.now();
+  saveLocatedConversation(scopeKey, located);
+  return true;
+}
+
 export function prepareFourthWallRegeneration(scopeKey, conversationKey) {
   const located = locateConversation(scopeKey, conversationKey);
   const conversation = located?.conversation;
@@ -1805,6 +1826,9 @@ function contextMessageForContact(message, conversation, contactId) {
     senderId,
     senderName: String(message.senderSnapshot?.name || ''),
     content: String(message.content || ''),
+    recalledAt: Number(message.recalledAt || 0),
+    recalledBy: String(message.recalledBy || ''),
+    seenBeforeRecall: Boolean(message.seenBeforeRecall),
     ts: Number(message.ts || 0),
     quote: message.quote && typeof message.quote === 'object'
       ? {
