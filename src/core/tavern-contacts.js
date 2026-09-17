@@ -91,8 +91,9 @@ function roleFidelityFor(character) {
 export function getTavernCharactersSnapshot() {
   const ctx = getContext();
   const arrays = candidateCharacterArrays(ctx);
+  const source = arrays.flat();
 
-  if (!arrays.length) {
+  if (!source.length) {
     return {
       available: false,
       characters: [],
@@ -102,7 +103,7 @@ export function getTavernCharactersSnapshot() {
   const seen = new Set();
   const characters = [];
 
-  arrays.forEach(source => source.forEach((character, index) => {
+  source.forEach((character, index) => {
     const name = String(character?.name || '').trim();
     if (!name) return;
 
@@ -123,7 +124,7 @@ export function getTavernCharactersSnapshot() {
       avatarUrl: getAvatarUrl(ctx, avatar),
       roleFidelity: roleFidelityFor(character),
     });
-  }));
+  });
 
   return {
     available: true,
@@ -153,30 +154,27 @@ export function getTavernCharacterForContact(contact) {
   const characters = getTavernCharactersSnapshot().characters;
   if (!characters.length) return null;
 
-  const sourceId = String(contact?.source?.sourceId || '').trim();
+  const normalize = value => String(value || '').trim().toLocaleLowerCase();
+  const basename = value => normalize(value).split(/[\/]/).pop() || '';
+  const sourceId = normalize(contact?.source?.sourceId);
   if (sourceId) {
-    const exact = characters.find(item => String(item.sourceId) === sourceId);
+    const exact = characters.find(item => normalize(item.sourceId) === sourceId);
     if (exact) return exact;
+    const bySourceBasename = characters.filter(item => basename(item.sourceId) === basename(sourceId));
+    if (bySourceBasename.length === 1) return bySourceBasename[0];
   }
 
-  const normalizeAvatar = value => {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    try { return decodeURIComponent(raw).replace(/^.*[\/]/, '').toLowerCase(); }
-    catch { return raw.replace(/^.*[\/]/, '').toLowerCase(); }
-  };
-  const storedAvatar = normalizeAvatar(contact?.source?.originalAvatar);
+  const storedAvatar = normalize(contact?.source?.originalAvatar);
   if (storedAvatar) {
-    const byAvatar = characters.find(item => normalizeAvatar(item.avatar) === storedAvatar);
-    if (byAvatar) return byAvatar;
+    const byAvatar = characters.filter(item => normalize(item.avatar) === storedAvatar || basename(item.avatar) === basename(storedAvatar));
+    if (byAvatar.length === 1) return byAvatar[0];
   }
 
-  const normalizeName = value => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
   const names = [contact?.source?.originalName, contact?.name, contact?.displayName]
-    .map(normalizeName)
+    .map(normalize)
     .filter(Boolean);
   for (const name of names) {
-    const matches = characters.filter(item => normalizeName(item.name) === name);
+    const matches = characters.filter(item => normalize(item.name) === name);
     if (matches.length === 1) return matches[0];
   }
   return null;
