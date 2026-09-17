@@ -849,7 +849,7 @@ async function buildBatchGroupRequest({
       `===== MEMBER PRIVATE ZONE: ${contactLabel(member)} | id=${member.id} =====\n`
       + `【身份资料】\n${batchRoleProfile(member, scanText, userContext.name)}\n\n`
       + `${String(member?.userProfile || '').trim() ? `【这个成员保存的 User 设定】\n${clipBatchText(member.userProfile, 5000)}\n\n` : ''}`
-      + `${readingMode && String(userContext.description || '').trim() ? `【当前 SillyTavern User Persona】\n${clipBatchText(userContext.description, 5000)}\n\n` : ''}`
+      + `${String(userContext.description || '').trim() ? `【当前 SillyTavern User Persona】\n${clipBatchText(userContext.description, 5000)}\n\n` : ''}`
       + `【本成员自己的世界书】\n${clipBatchText(worldBook?.text || '', 6000) || '本轮无激活条目。'}\n\n`
       + `【本成员自己的手机连续性｜仅允许 ${contactLabel(member)} 使用】\n${formatPhoneBridge(scopeKey, member, userContext.name)}\n`
       + `===== END PRIVATE ZONE =====`

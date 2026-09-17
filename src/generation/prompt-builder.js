@@ -325,7 +325,9 @@ export function buildPrivateGenerationRequest({
   if (aiInterpretationRules) {
     systemBlocks.push(`【User 自定义 AI 理解规则】\n${clip(aiInterpretationRules, 8000)}\n这些规则用于解释信息与关系，但不能改写 moli 的事实边界：旁观内容仍不是你的亲历，其他 World Instance 也不会因此变成你的世界。`);
   }
-  if ((conversation.scopeMode !== 'global' || conversation.bodyContextEnabled === true) && tavernUserDescription) {
+  // User Persona is identity context, not正文 context. Do not gate it behind body/observer access.
+  // Global/陪伴 contacts still need to know who User is even when 旁观正文 is OFF.
+  if (tavernUserDescription) {
     systemBlocks.push(`【当前 SillyTavern User Persona】\n${clip(tavernUserDescription, 8000)}`);
   }
 
