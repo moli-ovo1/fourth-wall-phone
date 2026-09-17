@@ -2,6 +2,7 @@ import {
   getContacts,
   getConversation,
   getScopeConversations,
+  getAllConversations,
   ensureConversation,
   createPrivateConversationInstance,
   getPrivateConversationsForContact,
@@ -92,7 +93,7 @@ import { getPendingInjection, setPendingInjection, clearPendingInjection, listIn
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
 import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings, togglePublicWebFavorite, togglePublicWebPinned, replacePublicWebSectionPosts, trimPublicWebSectionPosts, forceDeletePublicWebPost, addZhihuAnswerComments, addZhihuAnswer, listPublicWebFavorites, listCustomCommunities, ensureCustomCommunityPresets, deleteCustomCommunities, saveCustomCommunity, deleteCustomCommunity } from '../storage/public-web-store.js';
-import { getSelectedWorldContactId, setSelectedWorldContactId } from '../storage/world-context-store.js';
+import { getSelectedWorldContactId, getSelectedWorldTarget, setSelectedWorldTarget } from '../storage/world-context-store.js';
 import { isPersistentScopeKey } from '../storage/scope-policy.js';
 import { recordWorldEvent, markWorldEventsKnown, markWorldEventsKnownByObjectTargets, markWorldEventsConsumedByObjectTargets, summarizeWorldEventsForContext, linkWorldEventResult } from '../storage/world-event-store.js';
 import { rememberAnonymousIdentity } from '../storage/character-continuity-store.js';
@@ -1647,9 +1648,14 @@ export function createPhonePanel({
   }
 
   function currentConversation() {
-    const scopeKey = getScopeKey?.();
-    if (!scopeKey || !currentContactId) return null;
-    return getConversation(scopeKey, currentContactId);
+    if (!currentContactId) return null;
+    return getConversation(getScopeKey?.() || '', currentContactId);
+  }
+
+  function conversationRuntimeScopeKey(conversation = currentConversation()) {
+    if (!conversation) return getScopeKey?.() || '';
+    if (conversation.scopeMode === 'current') return String(conversation.boundScopeKey || conversation.storageScopeKey || getScopeKey?.() || '');
+    return String(getScopeKey?.() || conversation.storageScopeKey || `global:conversation:${conversation.contactId || conversation.conversationKey || 'phone'}`);
   }
 
 
@@ -3632,7 +3638,7 @@ export function createPhonePanel({
     if (!contactsTabList) return;
     const scopeKey = getScopeKey?.();
     const contacts = getContacts();
-    const conversations = scopeKey ? getScopeConversations(scopeKey) : [];
+    const conversations = getAllConversations();
     const rows = [];
 
     for (const item of contacts) {
@@ -4565,9 +4571,17 @@ export function createPhonePanel({
 
     const contacts = getContacts();
     const scopeKey = getScopeKey?.();
-    const conversations = scopeKey
-      ? getScopeConversations(scopeKey)
-      : [];
+    const allConversations = getAllConversations();
+    const conversations = allConversations.filter(conversation => {
+      if (conversation?.type === 'group') {
+        const currentScope = String(scopeKey || '');
+        return Boolean(currentScope) && String(conversation.storageScopeKey || conversation.boundScopeKey || '') === currentScope;
+      }
+      const contactId = String(conversation?.contactId || '');
+      if (!contactId.startsWith('builtin:')) return true;
+      if (conversation.scopeMode === 'global') return true;
+      return !allConversations.some(other => other?.type === 'private' && other?.scopeMode === 'global' && String(other.contactId || '') === contactId);
+    });
 
     const contactsById = new Map(
       contacts.map(item => [item.id, item])
@@ -4655,10 +4669,9 @@ export function createPhonePanel({
           currentContactId =
             button.dataset.conversationId;
 
-          const scopeKey = getScopeKey?.();
-          if (scopeKey && currentContactId) {
-            markConversationRead(scopeKey, currentContactId);
-          }
+          const openedConversation = getConversation(getScopeKey?.() || '', currentContactId);
+          const scopeKey = conversationRuntimeScopeKey(openedConversation);
+          if (currentContactId) markConversationRead(scopeKey, currentContactId);
 
           show('chat');
         });
@@ -6014,13 +6027,8 @@ export function createPhonePanel({
       return;
     }
 
-    const scopeKey = getScopeKey?.();
-    if (!scopeKey) {
-      toast('无法识别当前酒馆聊天档');
-      return;
-    }
-
     const conversation = currentConversation();
+    const scopeKey = conversationRuntimeScopeKey(conversation);
     if (!conversation) {
       toast('当前会话不存在');
       return;
@@ -6269,7 +6277,7 @@ export function createPhonePanel({
   function sendMessage() {
     if (!currentContactId) return;
 
-    if (generationController || isGenerationActive(getScopeKey?.(), currentContactId)) {
+    if (generationController || isGenerationActive(conversationRuntimeScopeKey(), currentContactId)) {
       stopGeneration();
       return;
     }
@@ -6281,7 +6289,7 @@ export function createPhonePanel({
       return;
     }
 
-    const scopeKey = getScopeKey?.();
+    const scopeKey = conversationRuntimeScopeKey();
 
     appendMessage(
       scopeKey,
@@ -6580,18 +6588,37 @@ export function createPhonePanel({
     const layer=panel.querySelector('[data-tap-picker]');
     layer?.addEventListener('click',e=>{if(e.target===layer||e.target.closest('[data-tap-cancel]'))resolve(null);},{once:true});
   });
+  const currentWorldChoices = () => {
+    const contacts = new Map(getContacts().map(item => [String(item.id || ''), item]));
+    return getAllConversations()
+      .filter(conversation => conversation?.type === 'private')
+      .map(conversation => {
+        const item = contacts.get(String(conversation.contactId || ''));
+        if (!item || !['tavern','custom'].includes(String(item.kind || ''))) return null;
+        const scopeMode = conversation.scopeMode === 'global' ? 'global' : 'current';
+        return { item, conversation, scopeMode, scopeKey: String(conversation.boundScopeKey || conversation.storageScopeKey || '') };
+      })
+      .filter(Boolean)
+      .sort((a,b)=>Number(b.conversation?.updatedAt||0)-Number(a.conversation?.updatedAt||0));
+  };
   const renderCurrentWorldLabel = () => {
     const label = panel.querySelector('[data-current-world-label]');
     if (!label) return;
-    const id = getSelectedWorldContactId();
-    const contact = getContacts().find(item => String(item.id || '') === id);
-    label.textContent = contact?.name || contact?.source?.originalName || '未选择';
+    const target = getSelectedWorldTarget();
+    const choice = currentWorldChoices().find(row => String(row.conversation.conversationKey || '') === String(target.conversationKey || ''));
+    if (choice) { label.textContent = `${displayName(choice.item)} · ${choice.scopeMode === 'global' ? '全局' : '正文'}`; return; }
+    const contact = getContacts().find(item => String(item.id || '') === String(target.contactId || ''));
+    label.textContent = contact ? `${displayName(contact)}${target.scopeMode ? ` · ${target.scopeMode === 'global' ? '全局' : '正文'}` : ''}` : '未选择';
   };
   panel.querySelector('[data-action="select-current-world"]')?.addEventListener('click', () => {
-    const roles = getContacts().filter(item => ['tavern','custom'].includes(String(item.kind || '')));
-    if (!roles.length) { windowRef.alert?.('当前没有可选择的角色。'); return; }
-    const currentId = getSelectedWorldContactId();
-    openTapPicker('选择当前角色世界',roles.map(item=>({label:`${item.name || item.source?.originalName || '未命名角色'}${String(item.id)===currentId?'（当前）':''}`,item})),choice=>{setSelectedWorldContactId(choice.item.id);renderCurrentWorldLabel();});
+    const roles = currentWorldChoices();
+    if (!roles.length) { windowRef.alert?.('当前没有可选择的角色世界。'); return; }
+    const current = getSelectedWorldTarget();
+    openTapPicker('选择当前角色世界',roles.map(row=>({label:`${displayName(row.item)} · ${row.scopeMode === 'global' ? '全局' : '正文'}${String(row.conversation.conversationKey||'')===String(current.conversationKey||'')?'（当前）':''}`,row})),choice=>{
+      const row=choice.row;
+      setSelectedWorldTarget({contactId:row.item.id,conversationKey:row.conversation.conversationKey,scopeMode:row.scopeMode,scopeKey:row.scopeKey});
+      renderCurrentWorldLabel();
+    });
   });
   renderCurrentWorldLabel();
 
@@ -6624,10 +6651,19 @@ export function createPhonePanel({
     return rows.length?rows.join('\n'):'（暂无评论）';
   };
   const privateConversationKeyFor = (scopeKey, contactId) => {
-    const existing=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===String(contactId)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
-    if(existing) return String(existing.conversationKey||existing.contactId||contactId);
-    ensureConversation(scopeKey,contactId);
-    return String(contactId);
+    const world = getSelectedWorldTarget();
+    const all = getAllConversations().filter(x=>x?.type==='private'&&String(x.contactId||'')===String(contactId));
+    let candidates = all;
+    if (world.scopeMode === 'global') candidates = all.filter(x=>x.scopeMode==='global');
+    else if (world.scopeMode === 'current') {
+      const targetScope = String(world.scopeKey || '');
+      candidates = all.filter(x=>x.scopeMode!=='global' && (!targetScope || String(x.boundScopeKey||x.storageScopeKey||'')===targetScope));
+    }
+    const existing=candidates.sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || all.sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
+    if (existing) return existing.conversationKey || existing.id;
+    const targetScopeKey = world.scopeMode === 'current' ? String(world.scopeKey || scopeKey || '') : String(scopeKey || world.scopeKey || '');
+    const created = createPrivateConversationInstance(targetScopeKey, contactId, { scopeMode: world.scopeMode === 'global' ? 'global' : 'current' });
+    return created?.conversationKey || created?.id || contactId;
   };
   const anonymousAliasKey = postId => `moli:community:anonymous-alias:${String(getScopeKey?.()||'')}::${String(postId||'')}`;
   const getAnonymousAlias = postId => { const scopeKey=getScopeKey?.(); if(!isPersistentScopeKey(scopeKey))return String(transientCommunityAliases.get(String(postId||''))||'').trim(); try{return String(windowRef.localStorage?.getItem(anonymousAliasKey(postId))||'').trim();}catch{return '';} };
