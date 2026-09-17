@@ -4416,8 +4416,25 @@ export function createPhonePanel({
     const hydratedCharacters = await Promise.all(pendingTavernSync.map(character => hydrateTavernCharacterSnapshot(character)));
     const syncedContacts = hydratedCharacters.map(character => createTavernContactInstance(character));
 
-    syncedContacts.forEach(item => {
-      createPrivateConversationInstance(scopeKey, item.id, { scopeMode });
+    const roleScopeKey = character => {
+      const sourceId = String(character?.sourceId || '').trim();
+      const chatId = String(character?.chat || '').trim().replace(/\.(?:jsonl?|txt)$/i, '');
+      if (!sourceId || !chatId) return '';
+      return `character:${encodeURIComponent(sourceId)}:chat:${chatId}`;
+    };
+
+    syncedContacts.forEach((item, index) => {
+      // “正文角色” must belong to that role's own Tavern chat, never whichever unrelated
+      // character page happens to be open while the User adds contacts.
+      const targetScopeKey = scopeMode === 'global' ? scopeKey : roleScopeKey(hydratedCharacters[index]);
+      if (scopeMode !== 'global' && !targetScopeKey) {
+        // No Tavern chat exists for this card yet. Do not steal the current character's world.
+        // Keep it as a companion instance until ST creates a real chat for that role; adding the
+        // contact still retains the fully hydrated card and can be resolved on a later sync.
+        createPrivateConversationInstance(scopeKey, item.id, { scopeMode: 'global' });
+        return;
+      }
+      createPrivateConversationInstance(targetScopeKey, item.id, { scopeMode });
     });
 
     pendingTavernSync = [];
