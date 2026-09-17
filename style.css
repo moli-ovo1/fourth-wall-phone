@@ -2231,3 +2231,53 @@
 #moli-phone-panel .moli-custom-posts:has(.moli-custom-section-body:not([hidden])){z-index:60!important}
 #moli-phone-panel .moli-custom-posts .moli-custom-section-body:not([hidden]){z-index:61!important}
 #moli-phone-panel .moli-custom-pinned{z-index:2!important}
+
+
+/* moli community v3.2 — glass unification + recommendation header + in-flow custom accordions */
+/* One glass recipe: mirrors the Custom “条目” panel. */
+#moli-phone-panel .moli-community-topnav,
+#moli-phone-panel .moli-recommend-control-panel,
+#moli-phone-panel .moli-recommend-fold,
+#moli-phone-panel .moli-custom-library,
+#moli-phone-panel .moli-custom-posts{
+  border:1px solid rgba(255,255,255,.48)!important;
+  background:rgba(255,255,255,.30)!important;
+  box-shadow:0 12px 34px rgba(78,70,58,.08)!important;
+  -webkit-backdrop-filter:blur(14px) saturate(120%)!important;
+  backdrop-filter:blur(14px) saturate(120%)!important;
+}
+#moli-phone-panel .moli-community-topnav{border-radius:18px!important}
+
+/* Recommendation: controls stay left, “today” occupies the free space on the same row. */
+#moli-phone-panel .moli-recommend-upper-row{position:relative;z-index:45;display:flex;align-items:flex-start;gap:12px;margin:0 0 12px}
+#moli-phone-panel .moli-recommend-control-panel{flex:0 0 auto;margin:0!important;border-radius:18px!important;padding:9px 12px!important}
+#moli-phone-panel .moli-recommend-upper-row>.moli-recommend-today{flex:1 1 auto;min-width:0;margin:0!important;align-self:center}
+#moli-phone-panel .moli-recommend-posts-fold{margin-top:0!important}
+#moli-phone-panel .moli-recommend-fold{border-radius:18px!important}
+#moli-phone-panel .moli-recommend-fold-head{height:auto!important;min-height:58px!important;padding:0 18px!important}
+#moli-phone-panel .moli-recommend-fold-head b{font-size:14px!important;font-weight:700!important;letter-spacing:.12em!important;color:#655d54!important}
+
+/* Filter must remain legible above the wallpaper and feed text. */
+#moli-phone-panel .moli-recommend-control-panel .moli-recommend-filter-panel{
+  background:rgba(247,245,241,.88)!important;
+  border:1px solid rgba(255,255,255,.72)!important;
+  box-shadow:0 14px 32px rgba(42,38,34,.18)!important;
+  -webkit-backdrop-filter:blur(24px) saturate(118%)!important;
+  backdrop-filter:blur(24px) saturate(118%)!important;
+}
+
+/* Custom: return to the previous in-flow accordion. Expanded content pushes the following section down;
+   it no longer floats over the translucent “常驻” panel. */
+#moli-phone-panel .moli-custom-home{overflow:auto!important}
+#moli-phone-panel .moli-custom-library,#moli-phone-panel .moli-custom-posts,#moli-phone-panel .moli-custom-pinned{position:relative!important;z-index:2!important;overflow:hidden!important}
+#moli-phone-panel .moli-custom-section-body{
+  position:static!important;left:auto!important;right:auto!important;top:auto!important;z-index:auto!important;
+  max-height:none!important;overflow:visible!important;box-sizing:border-box!important;
+  margin:10px -14px -13px!important;padding:8px 14px 12px!important;
+  border:0!important;border-top:1px solid rgba(255,255,255,.42)!important;border-radius:0!important;
+  background:rgba(255,255,255,.06)!important;box-shadow:none!important;
+  -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+}
+#moli-phone-panel .moli-custom-posts:has(.moli-custom-section-body:not([hidden])),
+#moli-phone-panel .moli-custom-posts .moli-custom-section-body:not([hidden]),
+#moli-phone-panel .moli-custom-pinned{z-index:2!important}
