@@ -1,3 +1,10 @@
+## v0.5.15 / moli172 — special-contact singleton routing + world-book entry editor
+
+- `moli / 皮下 / 小上帝` 改为聊天列表单例入口：无论底层存在多少正文/全局 Conversation，列表每个特殊联系人只显示一次；在正文页优先路由当前正文 scope，在酒馆主页优先跟随主屏幕“当前角色世界”，没有明确世界时优先 global/default，不删除其他世界历史。
+- 普通联系人继续遵守 moli171：User 已建立的正文/全局 Conversation 永久存在，不因离开正文页面消失。
+- Tavern 角色资料卡的“世界书条目”列表增加“编辑”按钮，可查看完整条目正文；编辑保存为 moli 对该 Contact 的本地内容覆盖，不修改 SillyTavern 原世界书，“使用原文”可恢复原条目。
+- 世界书白名单保存会保留本地内容覆盖；实际触发仍遵守原有常驻/关键词/递归/概率规则，仅在条目被激活后使用覆盖正文。
+
 
 ## v0.5.14 / moli171 — Character Identity × World Instance boundary repair
 

@@ -3961,3 +3961,15 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 - World Event 增加 Result/Provenance 链接：cause event 可记录 decision 与 resultEventIds，result event 反向记录 causedByEventIds。Automation 与社区 @ 的公开/私聊结果开始写回因果链。
 - Cross-App Continuity 只读取“本人亲历”或 Awareness=known 的事实；pending 事实不会因为跨 App 检索而泄露给人物。SKIP 仍不删除事实。
 - 本阶段不修改 CLOSED 的社区 UI，不新增匿名猜测机制，不自动把手机事实注入正文；“我们的墙”继续是 User-controlled bridge。
+
+
+### 特殊联系人单例入口与世界路由（moli172）
+- `moli / 皮下 / 小上帝` 是固定系统入口。聊天列表始终每个只显示一个，不把各正文 scope 的系统 Conversation 平铺成多个同名联系人。
+- 单例仅作用于 UI/入口路由，不删除、不合并不同世界已经存在的聊天历史。
+- 当前处于正文页时，特殊入口优先进入该正文 scope 对应 Conversation；不在正文页时，若主屏幕已选择“当前角色世界”，入口跟随该世界；没有明确世界时优先 global/default。
+- 普通角色和 User 自建联系人不适用单例规则；其已建立 Conversation 必须持续存在。
+
+### 世界书条目查看/本地编辑（moli172）
+- Tavern Contact 的世界书条目必须允许 User 查看完整正文。
+- 编辑操作默认只产生 moli Contact 级本地覆盖，不反向修改 SillyTavern 原世界书，避免手机侧编辑意外污染酒馆资料。
+- 本地覆盖只替换已被原触发规则激活条目的正文；不能把未触发条目变成常驻注入。
