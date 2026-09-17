@@ -49,6 +49,12 @@ function communityForwardText(message) {
 function messageText(message) {
   if (!message) return '';
 
+  if (message.recalledAt) {
+    const who = message.role === 'user' ? 'User' : (clean(message.senderSnapshot?.name) || '角色');
+    if (message.role === 'user' && !message.seenBeforeRecall) return `[${who}撤回了一条消息；你没有看到原内容]`;
+    return `[${who}撤回了一条消息；撤回前你已看到：${clean(message.content)}]`;
+  }
+
   const semanticMoment = momentForwardText(message);
   if (semanticMoment) return semanticMoment;
   const semanticCommunity = communityForwardText(message);

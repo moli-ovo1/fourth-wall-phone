@@ -64,6 +64,21 @@ export function parseGeneratedMessages(rawText) {
   return cleaned ? [cleaned] : [];
 }
 
+export function parseGeneratedMessageActions(rawText) {
+  const raw = String(rawText || '').trim();
+  if (!raw) return [];
+  const actions = [];
+  const pattern = /<(message|msg|recall)>([\s\S]*?)<\/(?:message|msg|recall)>/gi;
+  let match;
+  while ((match = pattern.exec(raw))) {
+    const content = String(match[2] || '').trim();
+    if (!content) continue;
+    actions.push({ type: String(match[1]).toLowerCase() === 'recall' ? 'recall' : 'message', content });
+  }
+  if (actions.length) return actions;
+  return parseGeneratedMessages(raw).map(content => ({ type: 'message', content }));
+}
+
 export function previewGeneratedMessages(rawText) {
   const raw = String(rawText || '');
   if (!raw) return '';
