@@ -3973,3 +3973,11 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 - Tavern Contact 的世界书条目必须允许 User 查看完整正文。
 - 编辑操作默认只产生 moli Contact 级本地覆盖，不反向修改 SillyTavern 原世界书，避免手机侧编辑意外污染酒馆资料。
 - 本地覆盖只替换已被原触发规则激活条目的正文；不能把未触发条目变成常驻注入。
+
+### Character Identity × Tavern Chat Instance
+- 同名/同 Contact 只证明是同一个角色身份，不证明处于同一个世界。
+- 一个 Tavern Contact 可以对应多个正文 World Instance；每个具体 Tavern chat 的 `boundScopeKey`（其中包含 chatId）是正文实例边界。
+- 角色卡、人设、角色世界书属于 Character Identity，可跨该角色的正文实例共享读取；正文、手机聊天、记忆、Continuity、World Event 属于 World Instance，严禁跨 chatId 混用。
+- 添加 Tavern 角色时应直接从 SillyTavern 完整角色列表绑定角色卡并保存可用快照；“必须先点进该角色正文才能读取人设”属于缺陷，不是产品语义。
+- 当前角色世界选择器必须能区分同一角色的多个正文实例。显示优先级：用户为手机 Conversation 设置的标题（如“主线/IF线”）> Tavern chatId 可读名 > 正文 fallback；全局实例明确显示“全局”。
+- 手机已明确选择 Current World 时，它是手机侧世界路由权威；当前 Tavern 页面只负责提供环境，不得覆盖 User 已选择的 World Instance。

@@ -187,3 +187,10 @@
 - 因此在蒋郁文正文里与任煜安手机私聊，任煜安可读取任煜安自己的角色卡与正文 chat；技术可访问不等于认知传播，跨角色知识仍由 World Event / Awareness / Continuity 管理。
 - 主屏幕“当前角色世界”保留给没有天然单一联系人的公共/社区世界选择，注释调整为“（不在正文页面，无可选角色/在正文页面，但想和别的角色互动）”。它不再承担微信联系人身份绑定职责。
 - 本包融合 v0.5.11：全局 Tavern 角色卡稳定解析 + 开发阶段内置 moli Prompt 可编辑，无需先安装 v0.5.11。
+
+## v0.5.16 / moli173 — Character Identity × Tavern Chat Instance
+- 同一 Tavern 角色可以拥有多个正文世界；角色卡身份共享，但每个具体 Tavern chat scope 的正文、手机会话、记忆、Continuity 与事件必须隔离。
+- `getCurrentScopeKey()` 已经包含具体 `chatId`，因此正文实例的稳定边界是 `Contact Identity + boundScopeKey`，不是“角色名 + 正文”。
+- 当前角色世界选择器现在用私聊标题优先、否则用 scope 中的 Tavern chatId 显示正文实例，避免多个“蒋郁文 · 正文”无法区分。用户可在资料卡直接给聊天命名为主线/IF线等。
+- 明确选择的“当前角色世界”优先于当前打开的 Tavern 页面，用于 moli/皮下/小上帝的单例入口路由；当前 Tavern 页面仅在没有手机世界选择时作为 fallback。
+- Tavern 角色枚举补充读取 `SillyTavern.characters` / parent `SillyTavern.characters`，添加角色后应直接绑定完整角色身份/角色卡，不要求先进入该角色正文。同步时仍保存 roleFidelity 快照作 fallback。
