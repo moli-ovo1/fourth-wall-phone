@@ -26,6 +26,7 @@ import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildOnlinePresetPrompt, buildCommunityPresetPrompt } from '../storage/prompt-settings.js';
 import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, getRecentMomentChatEvents, markMomentChatEventsDelivered , markProfileMomentsMemoryOrganized} from '../storage/moments-store.js';
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
+import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
 
@@ -236,12 +237,20 @@ export async function generatePrivateReply({
     .filter(source => source.messages.length)
     .slice(-2);
 
+  // World Boundary: dynamic Tavern body belongs to the exact bound正文 instance.
+  // Never substitute whatever Tavern page happens to be open for another Conversation.
+  const currentTavernScopeKey = String(getCurrentScopeKey() || '');
+  const boundBodyScopeKey = String(conversation.boundScopeKey || conversation.storageScopeKey || '');
+  const isBoundCurrentWorld = conversation.scopeMode !== 'global'
+    && boundBodyScopeKey
+    && currentTavernScopeKey === boundBodyScopeKey
+    && currentTavernScopeKey.includes(':chat:');
   const recentBody = isFourthWall
     ? getRecentTavernBody({
         messageLimit: Math.max(1, Math.min(9999, Number((contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.maxChatLayers) || 20)),
         charLimit: 1000000,
       })
-    : (conversation.bodyContextEnabled === false
+    : (conversation.bodyContextEnabled === false || !isBoundCurrentWorld
         ? null
         : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 }));
 
@@ -263,6 +272,7 @@ export async function generatePrivateReply({
   const baiBaiMemory = (
     !isFourthWall
     && conversation.bodyContextEnabled !== false
+    && isBoundCurrentWorld
     && (
       contact?.kind === 'builtin'
       || (contact?.kind === 'tavern' && contact?.roleSources?.longTermMemory !== false)
