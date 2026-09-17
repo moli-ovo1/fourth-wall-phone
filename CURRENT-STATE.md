@@ -237,3 +237,9 @@
 - 正文角色、固定人格、NPC 不再显示普通“读取酒馆正文”开关；非 Global Conversation 强制保持正文可读。NPC 持久认知的在场过滤留给 Unified Awareness。
 - 通讯录移除“人物绑定”工程视图。聊天列表不再显示“固定人格”工程后缀；皮下恢复“入戏…”标志。
 - SPEC 已写明 NPC 在场剧情的 AI 视角事实投影要求，供后续 Unified Character Cognition & Decision / Awareness 主线直接实现。
+
+
+## moli179 — Tavern Character Card source-of-truth closure
+- 酒馆角色的 Character Identity 不依赖当前打开的 Tavern Page。同步添加时，即使角色从未进入过正文，也必须按角色 avatar/source identity 主动读取 `/api/characters/get` 的完整角色卡，再保存 roleFidelity。
+- SillyTavern 开启 lazy/shallow character list 时，列表快照可能没有 description/personality/scenario 等；浅快照不得覆盖 moli 已保存的完整角色卡快照。
+- 用户可见后缀：普通 Global 人物统一显示「陪伴」；皮下显示「我在这边，你呢？」。底层 scopeMode/global 与固定人格分类不因此改变。

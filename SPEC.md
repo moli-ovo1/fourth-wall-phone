@@ -4048,3 +4048,9 @@ NPC 虽能读取绑定世界当前正文用于即时参与，但持久认知不�
 ## UI 收口
 - 通讯录删除“人物绑定”栏；World/scope 归属属于后台结构，不直接向普通 User 展示。
 - 正文内 Current World 入口已由 moli177 实机验证隐藏；正文外保留。
+
+
+## moli179 — Tavern Character Card source-of-truth closure
+- 酒馆角色的 Character Identity 不依赖当前打开的 Tavern Page。同步添加时，即使角色从未进入过正文，也必须按角色 avatar/source identity 主动读取 `/api/characters/get` 的完整角色卡，再保存 roleFidelity。
+- SillyTavern 开启 lazy/shallow character list 时，列表快照可能没有 description/personality/scenario 等；浅快照不得覆盖 moli 已保存的完整角色卡快照。
+- 用户可见后缀：普通 Global 人物统一显示「陪伴」；皮下显示「我在这边，你呢？」。底层 scopeMode/global 与固定人格分类不因此改变。
