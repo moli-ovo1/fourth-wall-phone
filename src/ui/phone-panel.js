@@ -3115,6 +3115,8 @@ export function createPhonePanel({
     return String(item?.source?.roleFidelity?.[key] || '').trim();
   }
 
+  const pendingRoleCardHydration = new Set();
+
   function renderTavernRoleSources(item) {
     if (!contactRoleSources) return;
     const roleSources = item?.roleSources && typeof item.roleSources === 'object'
@@ -3129,7 +3131,27 @@ export function createPhonePanel({
     const cardProfileEnabled = roleSources.cardProfile !== false;
     const cardStatus = providedCount
       ? `${sourceMissing ? '使用最近同步快照' : '自动跟随当前角色卡'} · 已检测到 ${providedCount} 项资料`
-      : '当前角色卡没有可读取的人设资料';
+      : (freshCharacter ? '正在读取完整角色卡…' : '当前角色卡暂时无法读取');
+
+    // The UI must use the same Character Identity -> full card path as generation.
+    // ST may expose a shallow list row until the card is explicitly fetched; do not let
+    // the settings page falsely report "no persona" while generation already has the card.
+    if (!providedCount && freshCharacter) {
+      const hydrationKey = String(item?.source?.sourceId || freshCharacter.sourceId || item?.id || '');
+      if (hydrationKey && !pendingRoleCardHydration.has(hydrationKey)) {
+        pendingRoleCardHydration.add(hydrationKey);
+        Promise.resolve(hydrateTavernCharacterSnapshot(freshCharacter))
+          .then(full => {
+            if (full?.roleFidelity && Object.values(full.roleFidelity).some(value => String(value || '').trim())) {
+              refreshTavernContacts([full], { markMissing: false });
+              const active = currentPrivateContact();
+              if (active && String(active.id) === String(item.id)) renderTavernRoleSources(active);
+            }
+          })
+          .catch(error => console.warn('[moli小手机] 角色设定页读取完整角色卡失败', error))
+          .finally(() => pendingRoleCardHydration.delete(hydrationKey));
+      }
+    }
 
     contactRoleSources.innerHTML = `
       <div class="moli-source-section">
