@@ -11,6 +11,7 @@ import {
   findTavernContact,
   refreshTavernContacts,
   syncTavernContacts,
+  createTavernContactInstance,
   createCustomContact,
   updateContact,
   deleteContact,
@@ -36,6 +37,7 @@ import {
   getFourthWallSessionState,
   updateFourthWallSessionState,
 } from '../storage/data-store.js';
+import { purgeContactPhoneFootprint } from '../storage/contact-purge.js';
 import {
   getTavernCharactersSnapshot,
   getCurrentTavernCharacterSnapshot,
@@ -4320,7 +4322,6 @@ export function createPhonePanel({
 
     syncList.innerHTML = syncSnapshot
       .map(character => {
-        const existing = findTavernContact(character.sourceId);
         return `
           <label class="moli-sync-item">
             <input
@@ -4334,7 +4335,6 @@ export function createPhonePanel({
             </div>
             <div class="moli-sync-main">
               <div class="moli-sync-name">${escapeHtml(character.name)}</div>
-              ${existing ? '<div class="moli-sync-status">已添加</div>' : ''}
             </div>
           </label>
         `;
@@ -4376,7 +4376,7 @@ export function createPhonePanel({
     const scopeMode = panel.querySelector('input[name="moli-sync-scope-mode"]:checked')?.value === 'global'
       ? 'global'
       : 'current';
-    const syncedContacts = syncTavernContacts(pendingTavernSync);
+    const syncedContacts = pendingTavernSync.map(character => createTavernContactInstance(character));
 
     syncedContacts.forEach(item => {
       createPrivateConversationInstance(scopeKey, item.id, { scopeMode });
@@ -4630,6 +4630,7 @@ export function createPhonePanel({
 
   let chatListSearchQuery = '';
   const isConcreteTavernWorldScope = value => String(value || '').includes(':chat:');
+  const isTavernBodyEnvironment = value => { const v=String(value||''); return v.includes(':chat:') || (v.startsWith('character:') && !v.includes(':fallback:unknown')); };
   function renderChatList() {
     refreshTavernSources();
 
@@ -6672,7 +6673,7 @@ export function createPhonePanel({
       .filter(conversation => conversation?.type === 'private' && conversation.scopeMode === 'global')
       .map(conversation => {
         const item = contacts.get(String(conversation.contactId || ''));
-        if (!item || String(item.kind || '') !== 'tavern') return null;
+        if (!item || !['tavern','custom'].includes(String(item.kind || ''))) return null;
         const scopeMode = 'global';
         return { item, conversation, scopeMode, scopeKey: String(conversation.boundScopeKey || conversation.storageScopeKey || '') };
       })
@@ -6700,7 +6701,7 @@ export function createPhonePanel({
   });
   renderCurrentWorldLabel();
   const currentWorldEntry = panel.querySelector('[data-action="select-current-world"]');
-  if (currentWorldEntry) currentWorldEntry.hidden = isConcreteTavernWorldScope(getScopeKey?.());
+  if (currentWorldEntry) currentWorldEntry.hidden = isTavernBodyEnvironment(getScopeKey?.());
 
   panel.querySelector('[data-action="open-wechat"]')?.addEventListener('click', () => show('home'));
   panel.querySelector('[data-action="phone-home"]')?.addEventListener('click', () => show('phone-home'));
@@ -7856,7 +7857,8 @@ export function createPhonePanel({
     }
     if (action === 'delete-contact') {
       const conversation=currentConversation(); const item=conversation?.type==='private'?contact(conversation.contactId||currentContactId):null; if(!item)return;
-      if (!(windowRef.confirm?.(`删除「${displayName(item)}」？将同时删除该联系人在所有存档中的场外私聊记录，无法恢复。群聊旧消息会保留。`) ?? false)) return;
+      if (!(windowRef.confirm?.(`删除「${displayName(item)}」？将彻底清空这个人物在 moli 小手机中的微信、记忆、朋友圈、社区、世界事件与“我们的墙”相关世界数据，无法恢复。`) ?? false)) return;
+      purgeContactPhoneFootprint(item.id);
       deleteContact(item.id); currentContactId=null; show('contacts-tab'); toast('联系人已删除'); return;
     }
     if (action === 'search-messages') {
