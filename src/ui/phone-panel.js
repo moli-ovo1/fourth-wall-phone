@@ -41,6 +41,7 @@ import {
 import { purgeContactPhoneFootprint } from '../storage/contact-purge.js';
 import {
   getTavernCharactersSnapshot,
+  hydrateTavernCharacterSnapshot,
   getCurrentTavernCharacterSnapshot,
   getTavernCharacterForContact,
 } from '../core/tavern-contacts.js';
@@ -2916,7 +2917,7 @@ export function createPhonePanel({
             ${avatarMarkup(item, 'moli-info-avatar')}
             ${isFourthWallContact(item) ? '' : `<button type="button" class="moli-info-avatar-edit" data-action="change-contact-avatar" aria-label="更换头像" title="更换头像"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" fill="currentColor"/><path d="M6.5 16l4-4 2.7 2.7 2-2 2.3 3.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`}
           </div>
-          <div class="moli-info-private-name">${escapeHtml(canonicalName)}${isFourthWallContact(item) ? '<small class="moli-fourth-wall-subtitle">入戏…</small>' : `<small class="moli-contact-scope-tag">${escapeHtml(scopeTag)}</small>`}</div>
+          <div class="moli-info-private-name">${escapeHtml(canonicalName)}${isFourthWallContact(item) ? '<small class="moli-fourth-wall-subtitle">我在这边，你呢？</small>' : `<small class="moli-contact-scope-tag">${escapeHtml(scopeTag)}</small>`}</div>
           ${isFourthWallContact(item) ? '' : (item.kind === 'custom'
             ? `<input class="moli-profile-inline-edit" type="text" maxlength="80" data-info-contact-name value="${escapeHtml(item.name || '')}" placeholder="点击编辑名称">`
             : `<input class="moli-profile-inline-edit" type="text" maxlength="80" data-info-contact-remark value="${escapeHtml(item.remark || '')}" placeholder="点击编辑备注名">`)}
@@ -3749,7 +3750,7 @@ export function createPhonePanel({
         if (!target) continue;
         rows.push(`<button class="moli-contact-tab-row" data-contact-tab-id="${escapeHtml(item.id)}" data-contact-tab-conversation="${escapeHtml(target?.conversationKey || '')}">
           ${avatarMarkup(item, 'moli-contact-tab-avatar')}
-          <span>${escapeHtml(displayName(item))}<small class="moli-contact-scope-tag">${scope === 'global' ? '全局' : '正文'}</small></span>
+          <span>${escapeHtml(displayName(item))}<small class="moli-contact-scope-tag">${scope === 'global' ? '陪伴' : '正文'}</small></span>
         </button>`);
       }
     }
@@ -3757,37 +3758,6 @@ export function createPhonePanel({
     const groups = conversations.filter(conversation => conversation?.type === 'group').sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
     const groupRows = groups.map(group => `<button class="moli-contact-group-row" data-contact-group-conversation="${escapeHtml(group.conversationKey || group.id || '')}"><span>${escapeHtml(group.name || '群聊')}</span></button>`).join('');
     const groupSection = `<section class="moli-contact-groups"><button type="button" class="moli-contact-groups-toggle" data-action="contacts-groups-toggle"><span class="moli-contact-groups-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.8 19c.4-4 2.2-6 5.7-6s5.3 2 5.7 6M13.5 14c3.4-.3 5.5 1.4 5.9 4.5"/></svg></span><b>群聊</b><i>›</i></button><div class="moli-contact-group-list" data-contact-group-list hidden>${groupRows || '<div class="moli-contact-group-empty">暂无群聊</div>'}</div></section>`;
-    const bindingWorldRows = [];
-    const worldConversations = conversations
-      .filter(conversation => conversation?.type === 'private' && conversation.scopeMode !== 'global' && !specialPersonaIds.has(String(conversation.contactId || '')))
-      .sort((a,b)=>String(a.boundScopeKey||'').localeCompare(String(b.boundScopeKey||'')));
-    const worldGroups = new Map();
-    for (const conversation of worldConversations) {
-      const scope = String(conversation.boundScopeKey || conversation.storageScopeKey || '');
-      if (!scope) continue;
-      if (!worldGroups.has(scope)) worldGroups.set(scope, []);
-      worldGroups.get(scope).push(conversation);
-    }
-    for (const [scope, rowsInWorld] of worldGroups.entries()) {
-      const label = scopeChatLabel(scope) || '正文世界';
-      bindingWorldRows.push(`<div class="moli-contact-group-row moli-binding-world-title"><span>${escapeHtml(label)}</span><small class="moli-contact-scope-tag">正文世界</small></div>`);
-      for (const conversation of rowsInWorld) {
-        const item = contacts.find(row => String(row.id || '') === String(conversation.contactId || ''));
-        if (!item) continue;
-        const isNpc = item.kind === 'custom' && item.customRoleMode === 'npc';
-        bindingWorldRows.push(`<button type="button" class="moli-contact-group-row" ${isNpc ? `data-binding-contact-id="${escapeHtml(item.id)}"` : 'disabled'}><span>${escapeHtml(displayName(item))}</span><small class="moli-contact-scope-tag">${isNpc ? 'NPC · 可改绑' : '正文角色'}</small></button>`);
-      }
-    }
-    const globalRows = contacts.filter(item => {
-      if (specialPersonaIds.has(String(item.id || ''))) return true;
-      if (item.kind === 'custom') return item.customRoleMode !== 'npc';
-      return conversations.some(conversation => conversation?.type === 'private' && conversation.scopeMode === 'global' && String(conversation.contactId || '') === String(item.id || ''));
-    }).map(item => `<div class="moli-contact-group-row"><span>${escapeHtml(displayName(item))}</span><small class="moli-contact-scope-tag">${specialPersonaIds.has(String(item.id||'')) ? '固定人格' : 'Global'}</small></div>`);
-    const bindingContent = [
-      ...bindingWorldRows,
-      ...(globalRows.length ? [`<div class="moli-contact-group-row moli-binding-world-title"><span>Global / 固定陪伴</span><small class="moli-contact-scope-tag">正文外</small></div>`, ...globalRows] : []),
-    ].join('');
-    const bindingSection = `<section class="moli-contact-groups"><button type="button" class="moli-contact-groups-toggle" data-action="contacts-bindings-toggle"><span class="moli-contact-groups-icon" aria-hidden="true">⌁</span><b>人物绑定</b><i>›</i></button><div class="moli-contact-group-list" data-contact-binding-list hidden>${bindingContent || '<div class="moli-contact-group-empty">暂无人物绑定</div>'}</div></section>`;
     contactsTabList.innerHTML = groupSection + (rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>');
   }
 
@@ -4331,7 +4301,7 @@ export function createPhonePanel({
   function privateConversationScopeAnnotation(conversation, ownTitle = '') {
     if (conversation?.scopeMode === 'global') {
       const title = String(ownTitle || conversation?.title || '').trim();
-      return title ? `全局•${title}` : '全局';
+      return title ? `陪伴•${title}` : '陪伴';
     }
     const title = String(ownTitle || conversation?.title || '').trim();
     const chatLabel = scopeChatLabel(conversation?.boundScopeKey || conversation?.storageScopeKey || '');
@@ -4345,7 +4315,7 @@ export function createPhonePanel({
   }
 
   function privateConversationListIdentity(conversation, item) {
-    if (isFourthWallContact(item)) return { name: '皮下', annotation: '入戏…' };
+    if (isFourthWallContact(item)) return { name: '皮下', annotation: '我在这边，你呢？' };
     if (specialPersonaIds.has(String(item?.id || ''))) return { name: displayName(item), annotation: '' };
     return { name: displayName(item), annotation: privateConversationScopeAnnotation(conversation) };
   }
@@ -4428,7 +4398,7 @@ export function createPhonePanel({
     show('sync-tavern-scope');
   }
 
-  function confirmTavernSyncScope() {
+  async function confirmTavernSyncScope() {
     if (!pendingTavernSync.length) {
       show('sync-tavern');
       return;
@@ -4443,7 +4413,8 @@ export function createPhonePanel({
     const scopeMode = panel.querySelector('input[name="moli-sync-scope-mode"]:checked')?.value === 'global'
       ? 'global'
       : 'current';
-    const syncedContacts = pendingTavernSync.map(character => createTavernContactInstance(character));
+    const hydratedCharacters = await Promise.all(pendingTavernSync.map(character => hydrateTavernCharacterSnapshot(character)));
+    const syncedContacts = hydratedCharacters.map(character => createTavernContactInstance(character));
 
     syncedContacts.forEach(item => {
       createPrivateConversationInstance(scopeKey, item.id, { scopeMode });
@@ -7441,25 +7412,6 @@ export function createPhonePanel({
   contactsTabList?.addEventListener('click', event => {
     const groupToggle = event.target.closest?.('[data-action="contacts-groups-toggle"]');
     if (groupToggle) { const list=contactsTabList.querySelector('[data-contact-group-list]'); if(list){list.hidden=!list.hidden;groupToggle.classList.toggle('expanded',!list.hidden);} return; }
-    const bindingToggle = event.target.closest?.('[data-action="contacts-bindings-toggle"]');
-    if (bindingToggle) { const list=contactsTabList.querySelector('[data-contact-binding-list]'); if(list){list.hidden=!list.hidden;bindingToggle.classList.toggle('expanded',!list.hidden);} return; }
-    const bindingRow = event.target.closest?.('[data-binding-contact-id]');
-    if (bindingRow) {
-      const item = contact(String(bindingRow.dataset.bindingContactId || ''));
-      if (!item || item.kind !== 'custom' || item.customRoleMode !== 'npc') return;
-      const own = getAllConversations().find(row => row?.type === 'private' && row.scopeMode !== 'global' && String(row.contactId || '') === String(item.id || ''));
-      const worlds = getAllConversations().filter(row => row?.type === 'private' && row.scopeMode !== 'global' && !specialPersonaIds.has(String(row.contactId || '')))
-        .map(row => ({ scopeKey:String(row.boundScopeKey || row.storageScopeKey || ''), label:scopeChatLabel(row.boundScopeKey || row.storageScopeKey || '') || '正文世界' }))
-        .filter((row,index,all)=>row.scopeKey && all.findIndex(x=>x.scopeKey===row.scopeKey)===index);
-      if (!own || !worlds.length) { toast('当前没有可改绑的正文世界'); return; }
-      openTapPicker('修改 NPC 绑定', worlds.map(row=>({label:`${row.label}${row.scopeKey===String(item.boundScopeKey||'')?'（当前）':''}`,row})), choice=>{
-        const nextScope=String(choice.row.scopeKey||''); if(!nextScope || nextScope===String(item.boundScopeKey||'')) return;
-        rebindPrivateConversationInstance(String(own.boundScopeKey || own.storageScopeKey || ''), String(own.conversationKey || ''), nextScope);
-        updateContact(item.id,{customRoleMode:'npc',boundScopeKey:nextScope});
-        toast('NPC 已改绑'); renderContactsTab();
-      });
-      return;
-    }
     const groupRow = event.target.closest?.('[data-contact-group-conversation]');
     if (groupRow) { const scopeKey=getScopeKey?.(); const conversationKey=String(groupRow.dataset.contactGroupConversation||''); if(!scopeKey||!conversationKey)return; currentContactId=conversationKey; markConversationRead(scopeKey,conversationKey); show('chat'); return; }
     const row = event.target.closest?.('[data-contact-tab-id]');
