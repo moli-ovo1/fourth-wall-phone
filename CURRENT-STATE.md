@@ -256,3 +256,11 @@
 - 酒馆 Contact 的角色卡是 Character Identity 的必备生成上下文。私聊生成前若本地仅有浅快照，必须按该 Contact 自己的角色身份主动补取完整角色卡，再进入 Prompt Builder；Global/陪伴身份不得成为跳过角色卡的理由。
 - 验收以最终模型实际收到角色卡事实为准，不以资料页可见或本地已缓存为准。
 - User 自定义全局 Prompt 属于 User Prompt 层，世界边界/人设链修复不得擅自删除、改写或固化其内容。
+
+
+## v0.5.25 / moli182 — Identity Context 与角色卡 UI 同源
+- User Persona 属于 User Identity Context，不属于“正文读取/旁观正文”的附属资料。私聊与群聊均不得因为 Global/陪伴角色关闭「旁观正文」而删除 User Persona。
+- 「旁观正文」只控制最近十楼 Observed Context；不得顺带控制 User Persona。
+- 角色设定页与生成链必须共用 Character Identity → 完整 Tavern 角色卡的解析路径。SillyTavern 前端若仅提供 shallow row，角色设定页应主动补取完整角色卡并刷新联系人快照，不得出现“模型已拿到角色卡但 UI 仍称无资料”的分裂状态。
+- Current Tavern Page 只描述 User 当前站在哪个页面，不得决定另一个 Contact 有没有角色卡。
+- 当前阶段 User Persona 读取 SillyTavern 当前激活 Persona 的实际文本；后续若实现每 World/Contact 独立 Persona 锁定，应把 Persona 快照纳入 Identity Context，而不是重新绑定到正文读取开关。
