@@ -816,8 +816,14 @@ export function createPhonePanel({
       <main class="moli-settings-list moli-contact-subpage">
         <div class="moli-settings-note" data-contact-user-owner></div>
         <label class="moli-form-field">
-          <textarea rows="10" data-contact-user-profile></textarea>
+          <span>用户人设</span>
+          <textarea rows="8" data-contact-user-profile></textarea>
         </label>
+        <label class="moli-form-field">
+          <span>AI理解规则</span>
+          <textarea rows="6" data-contact-ai-rules placeholder="这里可以写给这个联系人看的自由指令，例如：正文内容是用户在拍电影。"></textarea>
+        </label>
+        <div class="moli-settings-note">这里的规则用于告诉当前联系人“怎样理解”User与旁观信息；它不会把别人的正文改写成这个联系人的亲历。</div>
         <div class="moli-settings-note" data-contact-user-guide hidden></div>
       </main>
       <footer class="moli-sync-footer">
@@ -1343,6 +1349,7 @@ export function createPhonePanel({
   const promptEditorDelete = panel.querySelector('[data-action="prompt-editor-delete"]');
   const contactUserOwner = panel.querySelector('[data-contact-user-owner]');
   const contactUserProfile = panel.querySelector('[data-contact-user-profile]');
+  const contactAiRules = panel.querySelector('[data-contact-ai-rules]');
   const contactUserGuide = panel.querySelector('[data-contact-user-guide]');
   const contactPromptOwner = panel.querySelector('[data-contact-prompt-owner]');
   const contactPromptPageTitle = panel.querySelector('[data-contact-prompt-page-title]');
@@ -1675,7 +1682,7 @@ export function createPhonePanel({
       const createdConversation = createPrivateConversationInstance(scopeKey, newContact.id, { scopeMode: customRoleMode === 'npc' ? 'current' : 'global' });
       // NPC belongs to this world, but belonging is not omniscience. Full正文 reading is opt-in.
       if (customRoleMode === 'npc') {
-        updatePrivateConversationSettings(scopeKey, createdConversation.conversationKey, { bodyContextEnabled: false });
+        updatePrivateConversationSettings(scopeKey, createdConversation.conversationKey, { bodyContextEnabled: true });
       }
       currentContactId = newContact.id;
       resetAddContactForm();
@@ -2924,7 +2931,7 @@ export function createPhonePanel({
         ${['builtin:writer', 'builtin:guide'].includes(String(item.id || '')) ? '' : `<button type="button" class="moli-info-setting-row" data-action="contact-prompt-settings"><span>角色设定</span><strong>›</strong></button>`}`}
         ${isFourthWallContact(item) ? '' : `
         <div class="moli-info-form moli-unified-chat-settings">
-          <label class="moli-switch-row moli-setting-line"><span>读取酒馆正文</span><input type="checkbox" data-info-body-context ${conversation.bodyContextEnabled !== false ? 'checked' : ''}></label>
+          ${conversation.scopeMode === 'global' && !specialPersonaIds.has(String(item.id || '')) ? `<label class="moli-switch-row moli-setting-line moli-observe-body-row"><span>旁观正文 <button type="button" class="moli-inline-help" data-action="observe-body-help" aria-label="旁观正文说明">!</button></span><input type="checkbox" data-info-body-context ${conversation.bodyContextEnabled === true ? 'checked' : ''}></label>` : ''}
           <label class="moli-compact-select-row moli-setting-line"><span>时间模式</span><select data-info-time-mode><option value="body" ${quickTimeMode==='body'?'selected':''}>跟随正文时间</option><option value="real" ${quickTimeMode==='real'?'selected':''}>现实世界时间</option></select></label>
           <label class="moli-compact-number-row moli-setting-line"><span>角色读取轮数</span><input type="number" min="10" max="9999" value="${quickRecentLimit}" data-info-recent-limit></label>
           <div class="moli-compact-range-row moli-setting-line"><span>回复气泡条数</span><label><input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.min)||1)}" data-info-bubble-min> — <input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.max)||3)}" data-info-bubble-max></label></div>
@@ -3017,7 +3024,7 @@ export function createPhonePanel({
     const autoChatProbability=Math.max(0,Math.min(100,Number(chatInfo.querySelector('[data-auto-chat-probability]')?.value)||0));
     const commentaryProbability=Math.max(0,Math.min(100,Number(chatInfo.querySelector('[data-commentary-probability]')?.value)||0));
     updatePrivateConversationSettings(scopeKey,currentContactId,{
-      bodyContextEnabled:Boolean(chatInfo.querySelector('[data-info-body-context]')?.checked),
+      bodyContextEnabled: conversation.scopeMode === 'global' && !specialPersonaIds.has(String(item.id || '')) ? Boolean(chatInfo.querySelector('[data-info-body-context]')?.checked) : true,
       timeMode:chatInfo.querySelector('[data-info-time-mode]')?.value==='real'?'real':'body',
       recentChatLimit:Math.max(10,Math.min(9999,Number(chatInfo.querySelector('[data-info-recent-limit]')?.value)||100)),
       replyBubbleRange:{min,max},
@@ -3315,6 +3322,7 @@ export function createPhonePanel({
     if (contactUserProfile) {
       contactUserProfile.value = String(item.userProfile || '').trim() || '姓名：\n年龄：\n性格：';
     }
+    if (contactAiRules) contactAiRules.value = String(item.aiInterpretationRules || '').trim();
     if (contactUserGuide) {
       const isMeta = String(item.id || '') === 'builtin:meta';
       contactUserGuide.hidden = !isMeta;
@@ -3327,7 +3335,7 @@ export function createPhonePanel({
   function saveContactUserSettings() {
     const item = currentPrivateContact();
     if (!item) return;
-    updateContact(item.id, { userProfile: contactUserProfile?.value || '' });
+    updateContact(item.id, { userProfile: contactUserProfile?.value || '', aiInterpretationRules: contactAiRules?.value || '' });
     toast('用户设定已保存');
     show('info');
   }
@@ -3780,7 +3788,7 @@ export function createPhonePanel({
       ...(globalRows.length ? [`<div class="moli-contact-group-row moli-binding-world-title"><span>Global / 固定陪伴</span><small class="moli-contact-scope-tag">正文外</small></div>`, ...globalRows] : []),
     ].join('');
     const bindingSection = `<section class="moli-contact-groups"><button type="button" class="moli-contact-groups-toggle" data-action="contacts-bindings-toggle"><span class="moli-contact-groups-icon" aria-hidden="true">⌁</span><b>人物绑定</b><i>›</i></button><div class="moli-contact-group-list" data-contact-binding-list hidden>${bindingContent || '<div class="moli-contact-group-empty">暂无人物绑定</div>'}</div></section>`;
-    contactsTabList.innerHTML = groupSection + bindingSection + (rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>');
+    contactsTabList.innerHTML = groupSection + (rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>');
   }
 
   function openMomentForward(item, { surface = 'public', ownerContactId = '' } = {}) {
@@ -4337,8 +4345,8 @@ export function createPhonePanel({
   }
 
   function privateConversationListIdentity(conversation, item) {
-    if (isFourthWallContact(item)) return { name: '皮下', annotation: '固定人格' };
-    if (specialPersonaIds.has(String(item?.id || ''))) return { name: displayName(item), annotation: '固定人格' };
+    if (isFourthWallContact(item)) return { name: '皮下', annotation: '入戏…' };
+    if (specialPersonaIds.has(String(item?.id || ''))) return { name: displayName(item), annotation: '' };
     return { name: displayName(item), annotation: privateConversationScopeAnnotation(conversation) };
   }
 
@@ -8021,6 +8029,8 @@ export function createPhonePanel({
       infoAvatarInput.click();
     } else if (action === 'restore-source-avatar') {
       restoreCurrentContactAvatar();
+    } else if (action === 'observe-body-help') {
+      windowRef.alert?.('避免正文污染陪伴型角色认知，后台设立了此类角色与正文角色的认知隔离，并将此开关默认关闭；旁观正文只能看到最近十楼正文，为的是不让他全知，而是让他产生疑惑：你在干吗？\n\n可走此种玩法：点开上方「用户设定」，在「AI理解规则」中写你的指令，如：正文内容是用户在拍电影 / 正文内容是用户在出轨 / 正文内容是平行时空。');
     } else if (action === 'save-all-private-settings') {
       saveAllPrivateSettings();
     } else if (action === 'save-quick-chat-settings') {
@@ -8029,7 +8039,7 @@ export function createPhonePanel({
         const min = Math.max(1, Math.min(12, Number(chatInfo.querySelector('[data-info-bubble-min]')?.value)||1));
         const max = Math.max(min, Math.min(12, Number(chatInfo.querySelector('[data-info-bubble-max]')?.value)||3));
         updatePrivateConversationSettings(scopeKey, currentContactId, {
-          bodyContextEnabled: Boolean(chatInfo.querySelector('[data-info-body-context]')?.checked),
+          bodyContextEnabled: conversation.scopeMode === 'global' && !specialPersonaIds.has(String(item?.id || '')) ? Boolean(chatInfo.querySelector('[data-info-body-context]')?.checked) : true,
           timeMode: chatInfo.querySelector('[data-info-time-mode]')?.value === 'real' ? 'real' : 'body',
           recentChatLimit: Math.max(10, Math.min(9999, Number(chatInfo.querySelector('[data-info-recent-limit]')?.value)||100)),
           replyBubbleRange: { min, max },
