@@ -551,6 +551,28 @@ function loadGlobalConversationStore() {
   };
 }
 
+function storedScopeKeys() {
+  return listKeys(SCOPE_PREFIX)
+    .map(storageKey => {
+      try { return decodeURIComponent(storageKey.slice(SCOPE_PREFIX.length)); }
+      catch { return ''; }
+    })
+    .filter(Boolean);
+}
+
+function locateStoredScopeConversation(conversationKey) {
+  const target = String(conversationKey || '');
+  if (!target) return null;
+  for (const storedScopeKey of storedScopeKeys()) {
+    const data = loadStoredScope(storedScopeKey);
+    if (!data?.conversations?.[target]) continue;
+    const conversation = applyConversationDefaults(data.conversations[target], { scopeKey: storedScopeKey });
+    conversation.conversationKey = target;
+    return { storage: 'scope', data, conversation, conversationKey: target, scopeKey: storedScopeKey };
+  }
+  return null;
+}
+
 function saveGlobalConversationStore(data) {
   writeJson(GLOBAL_CONVERSATIONS_KEY, {
     schemaVersion: 1,
@@ -562,32 +584,26 @@ function saveGlobalConversationStore(data) {
 }
 
 function locateConversation(scopeKey, conversationKey) {
-  const current = ensureBuiltins(scopeKey);
-  if (current.conversations?.[conversationKey]) {
-    const conversation = applyConversationDefaults(
-      current.conversations[conversationKey],
-      { scopeKey }
-    );
-    return {
-      storage: 'scope',
-      data: current,
-      conversation,
-      conversationKey,
-    };
+  const target = String(conversationKey || '');
+  if (!target) return null;
+
+  if (scopeKey) {
+    const current = ensureBuiltins(scopeKey);
+    if (current.conversations?.[target]) {
+      const conversation = applyConversationDefaults(current.conversations[target], { scopeKey });
+      conversation.conversationKey = target;
+      return { storage: 'scope', data: current, conversation, conversationKey: target, scopeKey: String(scopeKey) };
+    }
   }
 
   const global = loadGlobalConversationStore();
-  if (global.conversations?.[conversationKey]) {
-    const conversation = applyConversationDefaults(global.conversations[conversationKey]);
-    return {
-      storage: 'global',
-      data: global,
-      conversation,
-      conversationKey,
-    };
+  if (global.conversations?.[target]) {
+    const conversation = applyConversationDefaults(global.conversations[target]);
+    conversation.conversationKey = target;
+    return { storage: 'global', data: global, conversation, conversationKey: target, scopeKey: '' };
   }
 
-  return null;
+  return locateStoredScopeConversation(target);
 }
 
 function saveLocatedConversation(scopeKey, located) {
@@ -595,7 +611,7 @@ function saveLocatedConversation(scopeKey, located) {
   if (located.storage === 'global') {
     saveGlobalConversationStore(located.data);
   } else {
-    saveScope(scopeKey, located.data);
+    saveScope(located.scopeKey || scopeKey, located.data);
   }
 }
 
@@ -673,6 +689,37 @@ export function ensureBuiltins(scopeKey) {
   saveScope(scopeKey, data);
 
   return data;
+}
+
+export function getAllConversations() {
+  const rows = [];
+  const seen = new Set();
+
+  for (const storedScopeKey of storedScopeKeys()) {
+    const data = loadStoredScope(storedScopeKey);
+    for (const [conversationKey, raw] of Object.entries(data?.conversations || {})) {
+      const uniqueKey = `scope:${storedScopeKey}:${conversationKey}`;
+      if (seen.has(uniqueKey)) continue;
+      seen.add(uniqueKey);
+      const conversation = applyConversationDefaults(raw, { scopeKey: storedScopeKey });
+      conversation.conversationKey = conversationKey;
+      conversation.storageScopeKey = storedScopeKey;
+      rows.push(conversation);
+    }
+  }
+
+  const global = loadGlobalConversationStore();
+  for (const [conversationKey, raw] of Object.entries(global.conversations || {})) {
+    const uniqueKey = `global:${conversationKey}`;
+    if (seen.has(uniqueKey)) continue;
+    seen.add(uniqueKey);
+    const conversation = applyConversationDefaults(raw);
+    conversation.conversationKey = conversationKey;
+    conversation.storageScopeKey = '';
+    rows.push(conversation);
+  }
+
+  return rows;
 }
 
 export function getScopeConversations(scopeKey) {
@@ -761,7 +808,7 @@ export function deleteConversationInstance(scopeKey, conversationKey) {
   if (protectedPrivate || protectedReading) throw new Error('moli 默认聊天不能删除');
   delete located.data.conversations[conversationKey];
   if (located.storage === 'global') saveGlobalConversationStore(located.data);
-  else saveScope(scopeKey, located.data);
+  else saveScope(located.scopeKey || scopeKey, located.data);
   return true;
 }
 
@@ -773,7 +820,7 @@ export function deletePrivateConversationInstance(scopeKey, conversationKey) {
   }
   delete located.data.conversations[conversationKey];
   if (located.storage === 'global') saveGlobalConversationStore(located.data);
-  else saveScope(scopeKey, located.data);
+  else saveScope(located.scopeKey || scopeKey, located.data);
   return true;
 }
 
@@ -1558,7 +1605,7 @@ export function updatePrivateConversationSettings(
       if (located.storage === 'global') {
         saveGlobalConversationStore(located.data);
       } else {
-        saveScope(scopeKey, located.data);
+        saveScope(located.scopeKey || scopeKey, located.data);
       }
 
       conversation.scopeMode = normalizedScopeMode;
