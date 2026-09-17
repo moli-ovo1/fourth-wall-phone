@@ -890,6 +890,16 @@ export function createPhonePanel({
       </footer>
     </section>
 
+    <div class="moli-worldbook-editor-sheet" data-worldbook-editor-sheet hidden>
+      <div class="moli-worldbook-editor-card" role="dialog" aria-modal="true">
+        <div class="moli-worldbook-editor-head"><strong data-worldbook-editor-title>世界书条目</strong><button type="button" class="moli-icon-btn" data-action="worldbook-editor-close" aria-label="关闭">×</button></div>
+        <div class="moli-worldbook-editor-meta" data-worldbook-editor-meta></div>
+        <textarea data-worldbook-editor-content rows="14" placeholder="条目内容"></textarea>
+        <div class="moli-worldbook-editor-note">这里编辑的是 moli 对该角色使用的本地覆盖文本，不会修改 SillyTavern 原世界书；清空并保存可恢复使用原条目内容。</div>
+        <div class="moli-worldbook-editor-actions"><button type="button" class="moli-secondary-btn" data-action="worldbook-editor-reset">使用原文</button><button type="button" class="moli-primary-btn" data-action="worldbook-editor-save">保存</button></div>
+      </div>
+    </div>
+
     <section class="moli-page" data-page="contact-api-settings">
       <header class="moli-nav">
         <div class="moli-nav-side">
@@ -1330,6 +1340,10 @@ export function createPhonePanel({
   const contactSourceDetailText = panel.querySelector('[data-contact-source-detail-text]');
   const worldBookSummary = panel.querySelector('[data-worldbook-summary]');
   const worldBookList = panel.querySelector('[data-worldbook-list]');
+  const worldBookEditorSheet = panel.querySelector('[data-worldbook-editor-sheet]');
+  const worldBookEditorTitle = panel.querySelector('[data-worldbook-editor-title]');
+  const worldBookEditorMeta = panel.querySelector('[data-worldbook-editor-meta]');
+  const worldBookEditorContent = panel.querySelector('[data-worldbook-editor-content]');
   const contactProfileIntro = panel.querySelector('[data-contact-profile-intro]');
   const contactProfilePrompt = panel.querySelector('[data-contact-profile-prompt]');
   const contactPromptField = panel.querySelector('[data-contact-prompt-field]');
@@ -3108,6 +3122,7 @@ export function createPhonePanel({
 
 
   let currentWorldBookSnapshot = null;
+  let activeWorldBookEntryKey = '';
 
   function worldBookEntryKey(entry) {
     return String(entry?.key || '');
@@ -3151,7 +3166,7 @@ export function createPhonePanel({
             const key = worldBookEntryKey(entry);
             const enabled = disabled[key] !== true;
             const keys = Array.isArray(entry.keys) && entry.keys.length ? entry.keys.join('、') : (entry.constant ? '常驻条目' : '无关键词');
-            return `<label class="moli-worldbook-entry"><span><strong>${escapeHtml(entry.title || `条目 ${entry.uid}`)}</strong><small>${escapeHtml(keys)}</small></span><input type="checkbox" data-worldbook-entry="${escapeHtml(key)}" ${enabled ? 'checked' : ''}></label>`;
+            return `<div class="moli-worldbook-entry"><span><strong>${escapeHtml(entry.title || `条目 ${entry.uid}`)}</strong><small>${escapeHtml(keys)}</small></span><div class="moli-worldbook-entry-actions"><button type="button" data-worldbook-edit="${escapeHtml(key)}">编辑</button><input type="checkbox" data-worldbook-entry="${escapeHtml(key)}" ${enabled ? 'checked' : ''}></div></div>`;
           }).join('')}
         </section>`;
       }).join('');
@@ -3163,6 +3178,38 @@ export function createPhonePanel({
     }
   }
 
+  function openWorldBookEditor(entryKey) {
+    const item = currentPrivateContact();
+    const entry = currentWorldBookSnapshot?.entries?.find(row => worldBookEntryKey(row) === String(entryKey || ''));
+    if (!item || !entry || !worldBookEditorSheet) return;
+    activeWorldBookEntryKey = worldBookEntryKey(entry);
+    const overrides = item.worldBookPolicy?.contentOverrides && typeof item.worldBookPolicy.contentOverrides === 'object' ? item.worldBookPolicy.contentOverrides : {};
+    const override = Object.prototype.hasOwnProperty.call(overrides, activeWorldBookEntryKey) ? String(overrides[activeWorldBookEntryKey] || '') : '';
+    if (worldBookEditorTitle) worldBookEditorTitle.textContent = entry.title || `条目 ${entry.uid}`;
+    if (worldBookEditorMeta) worldBookEditorMeta.textContent = `${entry.constant ? '常驻' : '触发'} · ${entry.keys?.length ? entry.keys.join('、') : '无关键词'}`;
+    if (worldBookEditorContent) worldBookEditorContent.value = override || String(entry.content || '');
+    worldBookEditorSheet.hidden = false;
+  }
+
+  function closeWorldBookEditor() {
+    if (worldBookEditorSheet) worldBookEditorSheet.hidden = true;
+    activeWorldBookEntryKey = '';
+  }
+
+  function saveWorldBookEditor() {
+    const item = currentPrivateContact();
+    const entry = currentWorldBookSnapshot?.entries?.find(row => worldBookEntryKey(row) === activeWorldBookEntryKey);
+    if (!item || !entry || !activeWorldBookEntryKey) return;
+    const policy = item.worldBookPolicy && typeof item.worldBookPolicy === 'object' ? item.worldBookPolicy : {};
+    const contentOverrides = { ...(policy.contentOverrides && typeof policy.contentOverrides === 'object' ? policy.contentOverrides : {}) };
+    const value = String(worldBookEditorContent?.value || '');
+    if (!value || value === String(entry.content || '')) delete contentOverrides[activeWorldBookEntryKey];
+    else contentOverrides[activeWorldBookEntryKey] = value;
+    updateContact(item.id, { worldBookPolicy: { ...policy, contentOverrides } });
+    closeWorldBookEditor();
+    toast('世界书条目已保存');
+  }
+
   function saveContactWorldBookPolicy() {
     const item = currentPrivateContact();
     if (!item || item.kind !== 'tavern' || !currentWorldBookSnapshot) return;
@@ -3172,7 +3219,7 @@ export function createPhonePanel({
       const input = [...(worldBookList?.querySelectorAll('[data-worldbook-entry]') || [])].find(node => node.dataset.worldbookEntry === key);
       if (input && input.checked === false) disabledEntries[key] = true;
     }
-    updateContact(item.id, { worldBookPolicy: { disabledEntries, updatedAt: Date.now() } });
+    updateContact(item.id, { worldBookPolicy: { ...(item.worldBookPolicy && typeof item.worldBookPolicy === 'object' ? item.worldBookPolicy : {}), disabledEntries, updatedAt: Date.now() } });
     toast('世界书白名单已保存');
     show('contact-prompt-settings');
   }
@@ -4572,15 +4619,28 @@ export function createPhonePanel({
     const contacts = getContacts();
     const scopeKey = getScopeKey?.();
     const allConversations = getAllConversations();
+    const specialIds = new Set(['builtin:meta', 'builtin:writer', 'builtin:guide']);
+    const selectedWorld = getSelectedWorldTarget();
+    const activeScope = String(scopeKey || '');
+    const preferredSpecialScope = activeScope || (selectedWorld.scopeMode === 'current' ? String(selectedWorld.scopeKey || '') : '');
+    const specialChoice = new Map();
+    for (const specialId of specialIds) {
+      const candidates = allConversations.filter(row => row?.type === 'private' && String(row.contactId || '') === specialId);
+      let chosen = null;
+      if (preferredSpecialScope) chosen = candidates.find(row => row.scopeMode !== 'global' && String(row.boundScopeKey || row.storageScopeKey || '') === preferredSpecialScope) || null;
+      if (!chosen && !activeScope && selectedWorld.scopeMode === 'global') chosen = candidates.find(row => row.scopeMode === 'global') || null;
+      if (!chosen && !activeScope && !selectedWorld.scopeMode) chosen = candidates.find(row => row.scopeMode === 'global') || null;
+      if (!chosen) chosen = candidates.sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || null;
+      if (chosen) specialChoice.set(specialId, chosen);
+    }
     const conversations = allConversations.filter(conversation => {
       if (conversation?.type === 'group') {
         const currentScope = String(scopeKey || '');
         return Boolean(currentScope) && String(conversation.storageScopeKey || conversation.boundScopeKey || '') === currentScope;
       }
       const contactId = String(conversation?.contactId || '');
-      if (!contactId.startsWith('builtin:')) return true;
-      if (conversation.scopeMode === 'global') return true;
-      return !allConversations.some(other => other?.type === 'private' && other?.scopeMode === 'global' && String(other.contactId || '') === contactId);
+      if (!specialIds.has(contactId)) return true;
+      return specialChoice.get(contactId) === conversation;
     });
 
     const contactsById = new Map(
@@ -7731,6 +7791,11 @@ export function createPhonePanel({
   panel.querySelector('[data-action="contact-worldbook-back"]')?.addEventListener('click', () => show('contact-prompt-settings'));
   panel.querySelector('[data-action="contact-worldbook-cancel"]')?.addEventListener('click', () => show('contact-prompt-settings'));
   panel.querySelector('[data-action="contact-worldbook-save"]')?.addEventListener('click', saveContactWorldBookPolicy);
+  worldBookList?.addEventListener('click', event => { const button = event.target?.closest?.('[data-worldbook-edit]'); if (button) openWorldBookEditor(button.dataset.worldbookEdit); });
+  panel.querySelector('[data-action="worldbook-editor-close"]')?.addEventListener('click', closeWorldBookEditor);
+  panel.querySelector('[data-action="worldbook-editor-save"]')?.addEventListener('click', saveWorldBookEditor);
+  panel.querySelector('[data-action="worldbook-editor-reset"]')?.addEventListener('click', () => { const entry=currentWorldBookSnapshot?.entries?.find(row=>worldBookEntryKey(row)===activeWorldBookEntryKey); if(entry&&worldBookEditorContent) worldBookEditorContent.value=String(entry.content||''); });
+  worldBookEditorSheet?.addEventListener('click', event => { if (event.target === worldBookEditorSheet) closeWorldBookEditor(); });
   contactRoleSources?.addEventListener('click', event => {
     const view = event.target.closest?.('[data-role-source-view]');
     if (view) openContactSourceDetail(view.dataset.roleSourceView);
