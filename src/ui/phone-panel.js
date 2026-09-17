@@ -77,7 +77,7 @@ import {
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
 import { parseGeneratedMessages, parseGeneratedMessageActions, previewGeneratedMessages, parseFourthWallResponse, previewFourthWallResponse } from '../generation/message-parser.js';
-import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
+import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings, listPromptPresets, getActivePromptPresetId, selectPromptPreset, createPromptPreset, renamePromptPreset, deletePromptPreset } from '../storage/prompt-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
 import { user_avatar } from '../../../../../personas.js';
 import { getThumbnailUrl } from '../../../../../../script.js';
@@ -549,6 +549,12 @@ export function createPhonePanel({
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-prompt-settings">
+        <div class="moli-prompt-preset-bar">
+          <span>当前预设</span>
+          <select data-prompt-preset-select></select>
+          <button type="button" data-action="prompt-preset-new">新建</button>
+          <button type="button" data-action="prompt-preset-manage">管理</button>
+        </div>
         <div class="moli-prompt-scope-tabs"><button data-prompt-scope="global">全局</button><button data-prompt-scope="wechat" class="is-active">微信</button><button data-prompt-scope="community">社区</button></div>
         <div class="moli-prompt-block-list" data-prompt-block-list></div>
         <button type="button" class="moli-secondary-btn" data-action="prompt-add-custom">＋ 添加自定义条目</button>
@@ -1303,6 +1309,8 @@ export function createPhonePanel({
   const apiParamsArrow = panel.querySelector('[data-api-params-arrow]');
   const apiParamInputs = [...panel.querySelectorAll('[data-api-param]')];
   const promptBlockList = panel.querySelector('[data-prompt-block-list]');
+  const promptPresetSelect = panel.querySelector('[data-prompt-preset-select]');
+  const promptRestoreButton = panel.querySelector('[data-action="prompt-restore"]');
   const promptEditorTitle = panel.querySelector('[data-prompt-editor-title]');
   const promptEditorContent = panel.querySelector('[data-prompt-editor-content]');
   const promptEditorNameWrap = panel.querySelector('[data-prompt-editor-name-wrap]');
@@ -4100,6 +4108,11 @@ export function createPhonePanel({
 
   function renderPromptSettings() {
     const settings = getPromptSettings();
+    if (promptPresetSelect) {
+      const activeId=getActivePromptPresetId();
+      promptPresetSelect.innerHTML=listPromptPresets().map(item=>`<option value="${escapeHtml(item.id)}" ${item.id===activeId?'selected':''}>${escapeHtml(item.name)}</option>`).join('');
+    }
+    if (promptRestoreButton) promptRestoreButton.textContent = getActivePromptPresetId()==='moli-default' ? '恢复默认预设' : '清空当前预设';
     if (!promptBlockList) return;
     promptBlockList.innerHTML = settings.blocks.filter(item => String(item.scope || 'wechat') === activePromptScope).map(item => `
       <div class="moli-prompt-block" data-prompt-block="${escapeHtml(item.id)}">
@@ -7397,11 +7410,25 @@ export function createPhonePanel({
   panel.querySelector('[data-action="prompt-editor-delete"]')?.addEventListener('click', deleteActivePromptBlock);
   panel.querySelector('[data-action="prompt-add-custom"]')?.addEventListener('click', addCustomPromptBlock);
   panel.querySelector('[data-action="prompt-restore"]')?.addEventListener('click', () => {
-    if (!windowRef.confirm('恢复 moli 默认线上聊天预设？当前修改会被覆盖。')) return;
+    const isDefault=getActivePromptPresetId()==='moli-default';
+    if (!windowRef.confirm(isDefault?'恢复 moli 默认预设？当前对默认预设的修改会被覆盖。':'清空当前预设的全部条目？')) return;
     restoreDefaultPromptSettings();
     renderPromptSettings();
-    toast('已恢复默认预设');
+    toast(isDefault?'已恢复默认预设':'当前预设已清空');
   });
+  promptPresetSelect?.addEventListener('change',()=>{ if(selectPromptPreset(promptPresetSelect.value)){ renderPromptSettings(); toast('已切换预设'); } });
+  panel.querySelector('[data-action="prompt-preset-new"]')?.addEventListener('click',()=>{
+    const name=String(windowRef.prompt?.('新预设名称','我的预设')||'').trim(); if(!name)return;
+    createPromptPreset(name); renderPromptSettings(); toast('已新建空白预设，请逐条添加');
+  });
+  panel.querySelector('[data-action="prompt-preset-manage"]')?.addEventListener('click',()=>{
+    const id=getActivePromptPresetId(); const current=listPromptPresets().find(x=>x.id===id);
+    if(!current||current.builtIn){ toast('moli 默认预设不可改名或删除'); return; }
+    const action=String(windowRef.prompt?.(`管理“${current.name}”：输入新名称可改名；输入 DELETE 删除`,current.name)||'').trim(); if(!action)return;
+    if(action==='DELETE'){ if(windowRef.confirm?.(`删除预设“${current.name}”？`)){ deletePromptPreset(id); renderPromptSettings(); toast('预设已删除'); } return; }
+    if(renamePromptPreset(id,action)){ renderPromptSettings(); toast('预设已改名'); }
+  });
+
   panel.querySelectorAll('[data-prompt-scope]').forEach(button=>button.addEventListener('click',()=>{ activePromptScope=String(button.dataset.promptScope||'wechat'); panel.querySelectorAll('[data-prompt-scope]').forEach(x=>x.classList.toggle('is-active',x===button)); renderPromptSettings(); }));
 
   promptBlockList?.addEventListener('change', event => {
