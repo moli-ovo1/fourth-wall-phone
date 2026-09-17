@@ -194,3 +194,11 @@
 - 当前角色世界选择器现在用私聊标题优先、否则用 scope 中的 Tavern chatId 显示正文实例，避免多个“蒋郁文 · 正文”无法区分。用户可在资料卡直接给聊天命名为主线/IF线等。
 - 明确选择的“当前角色世界”优先于当前打开的 Tavern 页面，用于 moli/皮下/小上帝的单例入口路由；当前 Tavern 页面仅在没有手机世界选择时作为 fallback。
 - Tavern 角色枚举补充读取 `SillyTavern.characters` / parent `SillyTavern.characters`，添加角色后应直接绑定完整角色身份/角色卡，不要求先进入该角色正文。同步时仍保存 roleFidelity 快照作 fallback。
+
+## v0.5.17 / moli174 — World Boundary
+- 已将 A/B/Global 世界隔离落到实际生成链与聊天列表，而非仅做 UI 隐藏。
+- 私聊动态正文与柏宝书现在要求 Conversation 的 boundScopeKey 与当前具体 Tavern chat scope 精确一致；Global 与其他支线不再借用当前页面正文。
+- 微信列表：正文内仅当前正文实例 + Global + custom + 当前正文三人格；正文外仅 Global + custom + Global三人格。
+- 正文内隐藏“当前角色世界”；正文外候选仅全局 Tavern 人物。
+- 社区私聊目标解析：正文内强制当前正文 scope，正文外强制 global，不再受残留 selectedWorld 跨线覆盖。
+- 尚未实现：联系人删除全链路遗忘；同步酒馆角色允许同卡无限次添加。这两项已进入下一节点。
