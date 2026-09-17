@@ -243,3 +243,9 @@
 - 酒馆角色的 Character Identity 不依赖当前打开的 Tavern Page。同步添加时，即使角色从未进入过正文，也必须按角色 avatar/source identity 主动读取 `/api/characters/get` 的完整角色卡，再保存 roleFidelity。
 - SillyTavern 开启 lazy/shallow character list 时，列表快照可能没有 description/personality/scenario 等；浅快照不得覆盖 moli 已保存的完整角色卡快照。
 - 用户可见后缀：普通 Global 人物统一显示「陪伴」；皮下显示「我在这边，你呢？」。底层 scopeMode/global 与固定人格分类不因此改变。
+
+
+## v0.5.23 / moli180 酒馆角色卡与正文归属修正
+- 修正完整角色卡主动读取：SillyTavern POST `/api/characters/get` 需要 CSRF；当宿主未暴露 `getRequestHeaders()` 时，moli 必须自行从 `/csrf-token` 取得 token 后再读取，不能因为角色从未打开过正文就只得到浅角色卡。
+- Tavern 角色快照必须保留该角色自己的 `chat` 标识。选择“正文角色”添加时，Conversation 必须绑定到**该角色自己的 sourceId + chat**，严禁把批量添加的其他角色绑定到当前屏幕上正在打开的第三方正文。
+- 如果某张角色卡尚不存在任何 Tavern chat，则不能借用当前正文作为其世界；先保留完整角色卡并以陪伴实例承载，待该角色真正产生 Tavern chat 后再解析其正文 World Instance。
