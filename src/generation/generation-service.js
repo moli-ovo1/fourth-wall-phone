@@ -26,6 +26,7 @@ import { buildOnlinePresetPrompt, buildCommunityPresetPrompt } from '../storage/
 import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, getRecentMomentChatEvents, markMomentChatEventsDelivered , markProfileMomentsMemoryOrganized} from '../storage/moments-store.js';
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
+import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -68,6 +69,8 @@ function getContactMomentsContinuity(scopeKey, contactId) {
   const authoredPublic = listPublicMoments(scopeKey).filter(item => String(item?.author?.id || '') === id).slice(0, 8);
 
   const blocks = [];
+  const continuity = buildCharacterContinuity(scopeKey,id,{limit:30});
+  if (continuity.text) blocks.push(`【这个角色的跨 App 手机经历】\n这是同一个人物在不同 App 中亲历或已经知道的事实。App 只是发生场所；不要把匿名系统真相当成公开知识。\n${continuity.text}`);
   const knownWorldEvents = summarizeWorldEventsForContext(scopeKey,{contactId:id,awareness:'known',limit:24});
   if (knownWorldEvents) blocks.push(`【这个角色已经知道的手机世界事件】\n这些是已经真正进入角色认知的事实；SKIP 只代表当时没有行动，不代表遗忘。\n${knownWorldEvents}`);
   const knownMomentEvents = getRecentMomentChatEvents(scopeKey, id, 20);
