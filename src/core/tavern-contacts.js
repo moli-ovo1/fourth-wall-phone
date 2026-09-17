@@ -95,13 +95,23 @@ function roleFidelityFor(character) {
 }
 
 
-function requestHeaders(ctx) {
+async function requestHeaders(ctx) {
   try {
     if (typeof ctx?.getRequestHeaders === 'function') return ctx.getRequestHeaders();
   } catch {}
   try {
     const st = window.SillyTavern || window.parent?.SillyTavern;
     if (typeof st?.getRequestHeaders === 'function') return st.getRequestHeaders();
+  } catch {}
+
+  // SillyTavern's POST APIs require CSRF even when the extension runs same-origin.
+  // getRequestHeaders is not exposed by every ST build/context, so obtain the token directly.
+  try {
+    const tokenResponse = await fetch('/csrf-token', { credentials: 'same-origin' });
+    if (tokenResponse.ok) {
+      const { token } = await tokenResponse.json();
+      if (token) return { 'Content-Type': 'application/json', 'X-CSRF-Token': token };
+    }
   } catch {}
   return { 'Content-Type': 'application/json' };
 }
@@ -122,7 +132,8 @@ export async function hydrateTavernCharacterSnapshot(character) {
   try {
     const response = await fetch('/api/characters/get', {
       method: 'POST',
-      headers: requestHeaders(ctx),
+      headers: await requestHeaders(ctx),
+      credentials: 'same-origin',
       body: JSON.stringify({ avatar_url: avatar }),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -132,6 +143,7 @@ export async function hydrateTavernCharacterSnapshot(character) {
       name: String(full?.name || full?.data?.name || character.name || '').trim(),
       avatar: String(full?.avatar || avatar),
       avatarUrl: getAvatarUrl(ctx, full?.avatar || avatar),
+      chat: String(full?.chat || full?.chat_file || full?.chatFile || character.chat || '').trim(),
       roleFidelity: roleFidelityFor(full),
     };
   } catch (error) {
@@ -174,6 +186,7 @@ export function getTavernCharactersSnapshot() {
       name,
       avatar,
       avatarUrl: getAvatarUrl(ctx, avatar),
+      chat: String(character?.chat || character?.chat_file || character?.chatFile || '').trim(),
       roleFidelity: roleFidelityFor(character),
     });
   });
