@@ -1005,6 +1005,26 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
   return contact;
 }
 
+
+export function createTavernContactInstance(character) {
+  if (!character || !String(character.sourceId || '').trim()) throw new Error('酒馆角色数据无效');
+  const sourceId = String(character.sourceId);
+  const list = getContacts();
+  const contact = {
+    id: `tavern:${sourceId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+    kind: 'tavern',
+    name: String(character.name || '未命名角色'),
+    source: {
+      type: 'sillytavern', sourceId, originalName: String(character.name || ''),
+      originalAvatar: character.avatar || '', originalAvatarUrl: character.avatarUrl || '',
+      roleFidelity: character.roleFidelity && typeof character.roleFidelity === 'object' ? { ...character.roleFidelity } : {},
+      status: 'available', lastSyncedAt: Date.now(),
+    },
+    createdAt: Date.now(), updatedAt: Date.now(),
+  };
+  list.push(contact); saveContacts(list); return contact;
+}
+
 export function syncTavernContacts(characters) {
   const list = getContacts();
   const bySource = new Map(
