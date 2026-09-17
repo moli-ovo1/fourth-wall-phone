@@ -245,14 +245,20 @@ export async function generatePrivateReply({
     && boundBodyScopeKey
     && currentTavernScopeKey === boundBodyScopeKey
     && currentTavernScopeKey.includes(':chat:');
+  const isGlobalObserver = !isFourthWall
+    && conversation.scopeMode === 'global'
+    && conversation.bodyContextEnabled === true
+    && currentTavernScopeKey.includes(':chat:');
   const recentBody = isFourthWall
     ? getRecentTavernBody({
         messageLimit: Math.max(1, Math.min(9999, Number((contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.maxChatLayers) || 20)),
         charLimit: 1000000,
       })
-    : (conversation.bodyContextEnabled === false || !isBoundCurrentWorld
-        ? null
-        : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 }));
+    : isGlobalObserver
+      ? getRecentTavernBody({ messageLimit: 10, charLimit: 14000 })
+      : (!isBoundCurrentWorld
+          ? null
+          : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 }));
 
   const worldBookScanParts = (requestConversation.messages || [])
     .slice(-Math.max(1, Number(conversation.recentChatLimit) || 100))
@@ -303,6 +309,7 @@ export async function generatePrivateReply({
       allowNoPendingUser,
       fourthWallDisableAssistantPrefill: fourthWallPrefillCompatibility?.disableAssistantPrefill,
       userContext,
+      observedBody: isGlobalObserver,
     });
   };
 

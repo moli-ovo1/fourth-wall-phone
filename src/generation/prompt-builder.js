@@ -170,7 +170,7 @@ function roleFidelityBlocks(contact) {
   return blocks;
 }
 
-function recentBodyBlock(recentBody, { fourthWall = false, userName = 'User' } = {}) {
+function recentBodyBlock(recentBody, { fourthWall = false, userName = 'User', observed = false } = {}) {
   const messages = Array.isArray(recentBody?.messages)
     ? recentBody.messages
     : [];
@@ -196,6 +196,14 @@ function recentBodyBlock(recentBody, { fourthWall = false, userName = 'User' } =
     .filter(Boolean);
 
   if (!lines.length) return '';
+
+  if (observed) {
+    return (
+      '【旁观正文｜最近十楼】\n'
+      + '以下只是 User 当前正在更新的另一个正文环境的最近内容。你是旁观者，不是这段正文里的当事人；这些事情不得被当成发生在你本人身上的亲历。你只能看到这里提供的最近内容，不知道更早的正文，也没有柏宝书长期剧情。正文究竟代表拍戏、真实关系、平行时空或其他含义，不由系统替 User 定义；优先按照该联系人保存的「AI理解规则」理解。允许你因为信息有限而疑惑、误解、吃醋、揶揄、追问或不作反应，但不要凭空补全你没有看到的过去。\n\n'
+      + lines.join('\n')
+    );
+  }
 
   return (
     '【当前 SillyTavern 存档最近正文】\n'
@@ -234,6 +242,7 @@ export function buildPrivateGenerationRequest({
   allowNoPendingUser = false,
   fourthWallDisableAssistantPrefill = null,
   userContext = null,
+  observedBody = false,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
     throw new Error('当前只支持私聊生成');
@@ -244,6 +253,7 @@ export function buildPrivateGenerationRequest({
   const tavernUserName = clean(userContext?.name) || 'User';
   const tavernUserDescription = clean(userContext?.description);
   const contactUserProfile = clean(contact?.userProfile);
+  const aiInterpretationRules = clean(contact?.aiInterpretationRules);
   const intro = clean(contact.intro);
   const builtinDefaultPrompt = contact.kind === 'builtin' ? replaceUserPlaceholder(getBuiltinPersonaPrompt(contact.id), tavernUserName) : '';
   const prompt = contact.kind === 'builtin'
@@ -305,14 +315,17 @@ export function buildPrivateGenerationRequest({
       ? '\n时间规则：不要主动推断当前日期、时刻或现实经过时长，除非用户消息明确提供。'
       : '\n时间规则：以当前正文里能够确认的剧情时间为准；如果正文没有明确时间，不要自行编造精确日期或时刻。';
   systemBlocks.push(
-    `【当前聊天实例】\n归属：${scopeLabel}\n时间模式：${timeLabel}\n读取当前正文：${conversation.bodyContextEnabled === false ? '否' : '是'}${timeDetails}`
+    `【当前聊天实例】\n归属：${scopeLabel}\n时间模式：${timeLabel}\n读取当前正文：${conversation.scopeMode === 'global' ? (conversation.bodyContextEnabled === true ? '旁观最近十楼' : '否') : '是'}${timeDetails}`
   );
 
   systemBlocks.push(`【当前聊天对象】\n姓名：${tavernUserName}`);
   if (contactUserProfile) {
     systemBlocks.push(`【这个联系人保存的 User 设定】\n${clip(contactUserProfile, 8000)}`);
   }
-  if (conversation.bodyContextEnabled !== false && tavernUserDescription) {
+  if (aiInterpretationRules) {
+    systemBlocks.push(`【User 自定义 AI 理解规则】\n${clip(aiInterpretationRules, 8000)}\n这些规则用于解释信息与关系，但不能改写 moli 的事实边界：旁观内容仍不是你的亲历，其他 World Instance 也不会因此变成你的世界。`);
+  }
+  if ((conversation.scopeMode !== 'global' || conversation.bodyContextEnabled === true) && tavernUserDescription) {
     systemBlocks.push(`【当前 SillyTavern User Persona】\n${clip(tavernUserDescription, 8000)}`);
   }
 
@@ -385,7 +398,7 @@ export function buildPrivateGenerationRequest({
     );
   }
 
-  const bodyBlock = recentBodyBlock(recentBody, { fourthWall: isFourthWall, userName: tavernUserName });
+  const bodyBlock = recentBodyBlock(recentBody, { fourthWall: isFourthWall, userName: tavernUserName, observed: observedBody });
   if (bodyBlock) {
     systemBlocks.push(bodyBlock);
   }
