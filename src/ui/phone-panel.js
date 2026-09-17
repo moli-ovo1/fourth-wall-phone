@@ -4103,11 +4103,12 @@ export function createPhonePanel({
     if (!promptBlockList) return;
     promptBlockList.innerHTML = settings.blocks.filter(item => String(item.scope || 'wechat') === activePromptScope).map(item => `
       <div class="moli-prompt-block" data-prompt-block="${escapeHtml(item.id)}">
+        <button type="button" class="moli-prompt-drag" data-prompt-drag="${escapeHtml(item.id)}" aria-label="长按拖动">☰</button>
         <label class="moli-prompt-block-toggle">
           <input type="checkbox" data-prompt-block-enabled="${escapeHtml(item.id)}" ${item.enabled !== false ? 'checked' : ''}>
-          <span><strong>${escapeHtml(item.title)}</strong><small>${item.custom ? '用户自定义 · ' : ''}${escapeHtml(String(item.content || '').split('\n').find(line => line.trim() && !line.startsWith('#')) || '完整 Prompt')}</small></span>
+          <span><strong>${escapeHtml(item.title)}</strong>${item.custom ? '<small>用户自定义</small>' : ''}</span>
         </label>
-        <button type="button" class="moli-prompt-edit-btn" data-prompt-edit="${escapeHtml(item.id)}">编辑</button>
+        ${item.custom ? `<button type="button" class="moli-prompt-edit-btn" data-prompt-edit="${escapeHtml(item.id)}">编辑</button>` : ''}
       </div>`).join('');
   }
 
@@ -4710,9 +4711,11 @@ export function createPhonePanel({
     const editButton = messageMenu.querySelector('[data-message-action="edit"]');
     const regenerateButton = messageMenu.querySelector('[data-message-action="regenerate"]');
     const retryButton = messageMenu.querySelector('[data-message-action="retry"]');
+    const recallButton = messageMenu.querySelector('[data-message-action="recall"]');
 
     if (editButton) editButton.hidden = !selected;
     if (regenerateButton) regenerateButton.hidden = !canRegenerate;
+    if (recallButton) recallButton.hidden = selected?.role !== 'user';
     if (retryButton) retryButton.hidden = !(
       Boolean(error?.message)
       && selected?.role === 'user'
@@ -4954,7 +4957,7 @@ export function createPhonePanel({
     }
   }
 
-  function handleMessageMenuAction(action) {
+  async function handleMessageMenuAction(action) {
     const scopeKey = getScopeKey?.();
     const messageId = activeMessageId;
     if (!scopeKey || !currentContactId || !messageId) {
@@ -5029,8 +5032,15 @@ export function createPhonePanel({
 
     if (action === 'recall') {
       hideMessageMenu();
-      if (message.recalledAt) return;
-      const confirmed = windowRef.confirm?.('撤回这条消息？') ?? true;
+      if (message.recalledAt || message.role !== 'user') return;
+      const confirmed = await new Promise(resolve => {
+        panel.querySelector('[data-recall-confirm-sheet]')?.remove();
+        const sheet = document.createElement('div'); sheet.className='moli-recall-confirm-sheet'; sheet.dataset.recallConfirmSheet='1';
+        sheet.innerHTML='<div class="moli-recall-confirm-card"><div>撤回这条消息？</div><div class="moli-recall-confirm-actions"><button type="button" data-recall-confirm="cancel">取消</button><button type="button" data-recall-confirm="ok">撤回</button></div></div>';
+        panel.appendChild(sheet);
+        const finish=value=>{sheet.remove();resolve(value);};
+        sheet.addEventListener('click',e=>{const b=e.target.closest('[data-recall-confirm]');if(b)finish(b.dataset.recallConfirm==='ok');else if(e.target===sheet)finish(false);});
+      });
       if (!confirmed) return;
       const conversation = getConversation(scopeKey, currentContactId);
       markPhoneMemoryReviewForMutation(scopeKey, currentContactId, conversation, messageId, '撤回消息');
@@ -6801,13 +6811,13 @@ export function createPhonePanel({
   panel.querySelectorAll('[data-public-web-tab]').forEach(button => button.addEventListener('click', () => { openedPublicWebPostId=''; panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item===button)); currentPublicWebTab=String(button.dataset.publicWebTab||'recommend'); renderPublicWeb(); }));
   const openCustomEditorDialog=(item=null)=>{
     const scope=getScopeKey?.();
-    const existing=item||{id:'',name:'',description:''};
+    const existing=item||{id:'',name:'',description:'',needsComments:true};
     const overlay=document.createElement('div'); overlay.className='moli-custom-editor-overlay';
-    overlay.innerHTML=`<div class="moli-custom-editor-dialog"><div class="moli-custom-editor-head"><b>${existing.id?'编辑条目':'新增条目'}</b><button type="button" data-custom-dialog-close>×</button></div><input type="text" data-custom-dialog-name placeholder="条目名称，例如：学校论坛" value="${escapeHtml(existing.name||'')}"><textarea data-custom-dialog-content rows="12" placeholder="一次写下你想在这个世界里看到的内容。可以直接写完整要求，不需要逐项填写。">${escapeHtml(existing.description||'')}</textarea><div class="moli-custom-editor-actions"><button type="button" data-custom-dialog-cancel>取消</button><button type="button" data-custom-dialog-save>保存</button></div></div>`;
+    overlay.innerHTML=`<div class="moli-custom-editor-dialog"><div class="moli-custom-editor-head"><label class="moli-custom-comments-toggle"><input type="checkbox" data-custom-dialog-comments ${existing.needsComments!==false?'checked':''}><span>○ 需要评论区</span></label><button type="button" data-custom-dialog-close>×</button></div><input type="text" data-custom-dialog-name placeholder="条目名称，例如：学校论坛" value="${escapeHtml(existing.name||'')}"><textarea data-custom-dialog-content rows="12" placeholder="一次写下你想在这个世界里看到的内容。可以直接写完整要求，不需要逐项填写。">${escapeHtml(existing.description||'')}</textarea><div class="moli-custom-editor-actions"><button type="button" data-custom-dialog-cancel>取消</button><button type="button" data-custom-dialog-save>保存</button></div></div>`;
     panel.appendChild(overlay);
     const close=()=>overlay.remove(); overlay.querySelector('[data-custom-dialog-close]').onclick=close; overlay.querySelector('[data-custom-dialog-cancel]').onclick=close;
     overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
-    overlay.querySelector('[data-custom-dialog-save]').onclick=()=>{const name=String(overlay.querySelector('[data-custom-dialog-name]')?.value||'').trim();const description=String(overlay.querySelector('[data-custom-dialog-content]')?.value||'').trim();if(!name){windowRef.alert?.('请写一个条目名称。');return;}saveCustomCommunity(scope,{id:existing.id||undefined,name,description});close();renderPublicWeb();};
+    overlay.querySelector('[data-custom-dialog-save]').onclick=()=>{const name=String(overlay.querySelector('[data-custom-dialog-name]')?.value||'').trim();const description=String(overlay.querySelector('[data-custom-dialog-content]')?.value||'').trim();if(!name){windowRef.alert?.('请写一个条目名称。');return;}const needsComments=Boolean(overlay.querySelector('[data-custom-dialog-comments]')?.checked);saveCustomCommunity(scope,{id:existing.id||undefined,name,description,needsComments});close();renderPublicWeb();};
   };
   panel.querySelector('[data-public-web-feed]')?.addEventListener('click', event=>{
     const scope=getScopeKey?.();
@@ -7408,6 +7418,27 @@ export function createPhonePanel({
     if (!button) return;
     openPromptEditor(button.dataset.promptEdit);
   });
+
+  let promptDragState = null;
+  promptBlockList?.addEventListener('pointerdown', event => {
+    const handle=event.target.closest?.('[data-prompt-drag]'); if(!handle)return;
+    const row=handle.closest('.moli-prompt-block'); if(!row)return;
+    event.preventDefault(); handle.setPointerCapture?.(event.pointerId);
+    promptDragState={row,pointerId:event.pointerId,active:false,timer:setTimeout(()=>{if(promptDragState?.row===row){promptDragState.active=true;row.classList.add('is-dragging');}},280)};
+  });
+  promptBlockList?.addEventListener('pointermove', event => {
+    if(!promptDragState||promptDragState.pointerId!==event.pointerId||!promptDragState.active)return;
+    const target=document.elementFromPoint(event.clientX,event.clientY)?.closest?.('.moli-prompt-block');
+    if(!target||target===promptDragState.row||target.parentElement!==promptBlockList)return;
+    const rect=target.getBoundingClientRect(); promptBlockList.insertBefore(promptDragState.row,event.clientY<rect.top+rect.height/2?target:target.nextSibling);
+  });
+  const finishPromptDrag=event=>{
+    if(!promptDragState||promptDragState.pointerId!==event.pointerId)return; clearTimeout(promptDragState.timer); promptDragState.row.classList.remove('is-dragging');
+    const ids=[...promptBlockList.querySelectorAll('[data-prompt-block]')].map(x=>x.dataset.promptBlock);
+    const settings=getPromptSettings(); const scoped=settings.blocks.filter(x=>String(x.scope||'wechat')===activePromptScope); const map=new Map(scoped.map(x=>[x.id,x])); const ordered=ids.map(id=>map.get(id)).filter(Boolean);
+    let i=0; settings.blocks=settings.blocks.map(x=>String(x.scope||'wechat')===activePromptScope?ordered[i++]||x:x); savePromptSettings(settings); promptDragState=null;
+  };
+  promptBlockList?.addEventListener('pointerup',finishPromptDrag); promptBlockList?.addEventListener('pointercancel',finishPromptDrag);
 
   panel.querySelector(
     '[data-action="api-settings"]'
