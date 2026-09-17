@@ -94,6 +94,52 @@ function roleFidelityFor(character) {
   };
 }
 
+
+function requestHeaders(ctx) {
+  try {
+    if (typeof ctx?.getRequestHeaders === 'function') return ctx.getRequestHeaders();
+  } catch {}
+  try {
+    const st = window.SillyTavern || window.parent?.SillyTavern;
+    if (typeof st?.getRequestHeaders === 'function') return st.getRequestHeaders();
+  } catch {}
+  return { 'Content-Type': 'application/json' };
+}
+
+function hasRoleFidelity(fidelity) {
+  return fidelity && typeof fidelity === 'object'
+    && Object.values(fidelity).some(value => String(value || '').trim());
+}
+
+// SillyTavern may expose only shallow character rows until a character has been opened.
+// Fetch the selected card directly by avatar so adding a contact never depends on visiting its chat first.
+export async function hydrateTavernCharacterSnapshot(character) {
+  if (!character) return null;
+  if (hasRoleFidelity(character.roleFidelity)) return character;
+  const avatar = String(character.avatar || '').trim();
+  if (!avatar) return character;
+  const ctx = getContext();
+  try {
+    const response = await fetch('/api/characters/get', {
+      method: 'POST',
+      headers: requestHeaders(ctx),
+      body: JSON.stringify({ avatar_url: avatar }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const full = await response.json();
+    return {
+      ...character,
+      name: String(full?.name || full?.data?.name || character.name || '').trim(),
+      avatar: String(full?.avatar || avatar),
+      avatarUrl: getAvatarUrl(ctx, full?.avatar || avatar),
+      roleFidelity: roleFidelityFor(full),
+    };
+  } catch (error) {
+    console.warn('[moli小手机] 无法主动读取完整酒馆角色卡，保留当前角色快照', avatar, error);
+    return character;
+  }
+}
+
 export function getTavernCharactersSnapshot() {
   const ctx = getContext();
   const arrays = candidateCharacterArrays(ctx);
