@@ -146,6 +146,36 @@ export function getTavernCharacterSnapshot(sourceId) {
     || null;
 }
 
+// Resolve a stored moli Tavern contact against the full SillyTavern character list.
+// Global conversations must not depend on whichever character/chat is currently open.
+// sourceId is preferred; avatar/name fallbacks repair older contacts whose ST identity changed.
+export function getTavernCharacterForContact(contact) {
+  if (!contact || contact.kind !== 'tavern') return null;
+  const characters = getTavernCharactersSnapshot().characters;
+  if (!characters.length) return null;
+
+  const sourceId = String(contact?.source?.sourceId || '').trim();
+  if (sourceId) {
+    const exact = characters.find(item => String(item.sourceId) === sourceId);
+    if (exact) return exact;
+  }
+
+  const storedAvatar = String(contact?.source?.originalAvatar || '').trim();
+  if (storedAvatar) {
+    const byAvatar = characters.find(item => String(item.avatar || '').trim() === storedAvatar);
+    if (byAvatar) return byAvatar;
+  }
+
+  const names = [contact?.source?.originalName, contact?.name, contact?.displayName]
+    .map(value => String(value || '').trim())
+    .filter(Boolean);
+  for (const name of names) {
+    const matches = characters.filter(item => String(item.name || '').trim() === name);
+    if (matches.length === 1) return matches[0];
+  }
+  return null;
+}
+
 
 export function getCurrentTavernCharacterSnapshot() {
   const ctx = getContext();
@@ -182,6 +212,7 @@ export function getCurrentTavernCharacterSnapshot() {
     name: String(character?.name || ctx?.name2 || '').trim(),
     avatar,
     avatarUrl: getAvatarUrl(ctx, avatar),
+    chat: String(character?.chat || character?.chat_file || character?.chatFile || '').trim(),
     roleFidelity: roleFidelityFor(character),
   };
 }
