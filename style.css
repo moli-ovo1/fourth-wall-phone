@@ -2299,3 +2299,6 @@
 #moli-phone-panel .moli-world-context-entry[hidden]{display:none!important}
 #moli-phone-panel .moli-binding-world-title{font-weight:600;background:rgba(245,247,249,.72)}
 #moli-phone-panel button.moli-contact-group-row:disabled{opacity:1;color:inherit;cursor:default}
+
+/* moli178: Global 旁观正文说明按钮 */
+.moli-inline-help{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:5px;padding:0;border:1px solid currentColor;border-radius:50%;background:transparent;color:inherit;font-size:12px;line-height:1;vertical-align:middle;opacity:.72}

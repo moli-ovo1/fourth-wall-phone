@@ -229,3 +229,11 @@
 - 固定人格聊天列表统一标注“固定人格”，不再显示上一个/当前正文 Branch 后缀。
 - “人物绑定”升级为世界结构视图：显示正文主角色、NPC、Global 与固定人格；NPC 行可改绑已有正文世界，并保留原手机 Conversation 数据。
 - 修复正文内“当前角色世界”入口未隐藏：补充 `[hidden]{display:none!important}` 与 inline display 双保险；正文环境判定只认具体 `:chat:` scope。
+
+
+## v0.5.21 / moli178
+- Global 人物新增“旁观正文”：默认关闭，只读当前正在更新正文最近 10 楼，作为 Observed Context；不读柏宝书、不补旧正文。
+- 每 Contact 用户设定新增“AI理解规则”，允许 User 自定义旁观正文的解释方式，同时保持 World Instance 事实边界不可被规则改写。
+- 正文角色、固定人格、NPC 不再显示普通“读取酒馆正文”开关；非 Global Conversation 强制保持正文可读。NPC 持久认知的在场过滤留给 Unified Awareness。
+- 通讯录移除“人物绑定”工程视图。聊天列表不再显示“固定人格”工程后缀；皮下恢复“入戏…”标志。
+- SPEC 已写明 NPC 在场剧情的 AI 视角事实投影要求，供后续 Unified Character Cognition & Decision / Awareness 主线直接实现。
