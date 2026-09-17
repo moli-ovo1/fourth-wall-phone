@@ -900,6 +900,8 @@ export function createCustomContact({
   intro = '',
   prompt = '',
   customWorldBook = null,
+  customRoleMode = 'global',
+  boundScopeKey = '',
 }) {
   const trimmedName = String(name || '').trim();
 
@@ -919,6 +921,8 @@ export function createCustomContact({
     intro: String(intro || '').trim(),
     prompt: String(prompt || '').trim(),
     customWorldBook: customWorldBook && typeof customWorldBook === 'object' ? { bookName: String(customWorldBook.bookName || '').trim(), mainEntryKey: String(customWorldBook.mainEntryKey || '') } : { bookName: '', mainEntryKey: '' },
+    customRoleMode: customRoleMode === 'npc' ? 'npc' : 'global',
+    boundScopeKey: customRoleMode === 'npc' ? String(boundScopeKey || '').trim() : '',
     profileEntries: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -931,7 +935,7 @@ export function createCustomContact({
 }
 
 
-export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, userProfile, profileEntries, roleSources, worldBookPolicy, customWorldBook, replyBubbleRange, apiOverride, fourthWallGlobalSettings, fourthWallChatSettings, fourthWallActiveConversationKey } = {}) {
+export function updateContact(contactId, { name, remark, customAvatar, intro, prompt, userProfile, profileEntries, roleSources, worldBookPolicy, customWorldBook, customRoleMode, boundScopeKey, replyBubbleRange, apiOverride, fourthWallGlobalSettings, fourthWallChatSettings, fourthWallActiveConversationKey } = {}) {
   const list = getContacts();
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
@@ -958,6 +962,8 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
       ? { bookName: String(customWorldBook.bookName || '').trim(), mainEntryKey: String(customWorldBook.mainEntryKey || '') }
       : { bookName: '', mainEntryKey: '' };
   }
+  if (customRoleMode !== undefined && contact.kind === 'custom') contact.customRoleMode = customRoleMode === 'npc' ? 'npc' : 'global';
+  if (boundScopeKey !== undefined && contact.kind === 'custom') contact.boundScopeKey = contact.customRoleMode === 'npc' ? String(boundScopeKey || '').trim() : '';
   if (roleSources !== undefined && contact.kind === 'tavern') {
     contact.roleSources = normalizeTavernRoleSources(roleSources);
   }
