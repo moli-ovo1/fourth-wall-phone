@@ -1396,14 +1396,14 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
 【知乎候选】
 使用问答社区语法。title 是一个值得回答的问题，content 是问题补充或背景，answer 是一条有明确个人立场/知识来源的初始回答。问题可以来自世界中的职业、关系、社会现象、历史、生活经验、公共事件等。不要把所有回答写成百科全书，也不要整齐列点。评论围绕回答继续质疑、补充或讨论。
 
-【自创信息环境】\nUser 还可以定义自己的信息环境。只有本次提供的自创条目可以参与生成；它们不是天涯、小红书或知乎的换皮，必须遵循 User 对该条目的描述。\n${(customCommunities||[]).map(x=>{const charName=getCurrentTavernCharacterSnapshot()?.name||'当前角色';const desc=String(x.description||'按名称自然理解').replace(/\{\{char\}\}/gi,charName).replace(/\{\{user\}\}/gi,userName);return `- [id=${x.id}] ${x.name}：${desc}`;}).join('\n')||'本次没有自创条目。'}\n\n【本次来源限制】\n只允许从：${(Array.isArray(recommendSources)&&recommendSources.length?recommendSources:['tianya','xiaohongshu','zhihu','custom']).join('、')} 中生成。若包含 custom，自创内容 section=custom，并且 customCommunityId/customCommunityName 必须从上面给出的自创条目中原样选择，不得自造条目名或 id。\n\n【推荐页要求】\n一次生成 ${recommendCount>0?recommendCount+' 条':'4~6 条'}，把更多注意力留给每条内容本身。不要固定平台配额，由内容自然决定。题材必须明显多样，不要整页围绕同一关键词。每条 section 必须准确标记 tianya / xiaohongshu / zhihu / custom。只输出严格 JSON，不要解释。`;
+【自创信息环境】\nUser 还可以定义自己的信息环境。只有本次提供的自创条目可以参与生成；它们不是天涯、小红书或知乎的换皮，必须遵循 User 对该条目的描述。\n${(customCommunities||[]).map(x=>{const charName=getCurrentTavernCharacterSnapshot()?.name||'当前角色';const desc=String(x.description||'按名称自然理解').replace(/\{\{char\}\}/gi,charName).replace(/\{\{user\}\}/gi,userName);return `- [id=${x.id}] ${x.name}｜${x.needsComments===false?'不需要评论区':'需要评论区'}：${desc}`;}).join('\n')||'本次没有自创条目。'}\n\n【本次来源限制】\n只允许从：${(Array.isArray(recommendSources)&&recommendSources.length?recommendSources:['tianya','xiaohongshu','zhihu','custom']).join('、')} 中生成。若包含 custom，自创内容 section=custom，并且 customCommunityId/customCommunityName 必须从上面给出的自创条目中原样选择，不得自造条目名或 id。\n\n【推荐页要求】\n一次生成 ${recommendCount>0?recommendCount+' 条':'4~6 条'}，把更多注意力留给每条内容本身。不要固定平台配额，由内容自然决定。题材必须明显多样，不要整页围绕同一关键词。每条 section 必须准确标记 tianya / xiaohongshu / zhihu / custom。只输出严格 JSON，不要解释。`;
   const communityPreset=buildCommunityPresetPrompt();
   const baseSystem = section === 'tianya' ? tianyaSystem : section === 'recommend' ? recommendSystem : genericSystem;
   const system = `${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}${baseSystem}`;
   const schema = section === 'tianya'
     ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复","replyTo":"可选；回复已有楼层时填写被回复楼层序号，只能指向本条评论之前的楼层"}]}]}。生成 6~10 条；每帖初始回复最多 15 条，并按冷帖 0~3、普通帖 4~8、热帖 9~15 自然分布。回复某楼时不要把 @用户名 #楼层号 重复写进 content，由界面根据 replyTo 展示。不要 markdown。`
     : section === 'recommend'
-      ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu|custom","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","customCommunityId":"仅自创使用","customCommunityName":"仅自创使用","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 ${recommendCount>0?recommendCount+" 条":"4~6 条"}；每条只带 0~4 条自然的初始互动，不要为了凑数塞满评论。不要 markdown。`
+      ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu|custom","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","customCommunityId":"仅自创使用","customCommunityName":"仅自创使用","needsComments":"仅自创使用；true|false，严格按条目设置","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 ${recommendCount>0?recommendCount+" 条":"4~6 条"}；每条只带 0~4 条自然的初始互动，不要为了凑数塞满评论。不要 markdown。`
       : section === 'xiaohongshu'
         ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~10 条；每篇笔记的主评论与子回复合计最多 15 条，并按冷帖 0~3、普通帖 4~8、热帖 9~15 自然分布。不要 markdown。`
         : `返回：{"posts":[{"section":"zhihu","type":"question","author":"题主昵称","authorId":"可选","title":"问题标题","content":"问题补充，可为空","answers":[{"author":"回答者昵称","authorId":"可选","content":"回答正文","upvotes":0,"comments":[{"author":"评论者","content":"评论"}]}]}]}。生成 6~10 个问题；每题生成 1~4 条风格明显不同的初始回答；每条回答评论最多 15 条，按冷回答 0~3、普通回答 4~8、热回答 9~15 自然分布。不要 markdown。`;
@@ -1419,6 +1419,8 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
     text=String(result?.text||'').trim();
   }
   let posts=parsePublicWebBatch(text, userName).filter(p=>section==='recommend' || p.section===section);
+  const customById=new Map((customCommunities||[]).map(item=>[String(item.id||''),item]));
+  posts=posts.map(post=>{if(post.section!=='custom')return post;const def=customById.get(String(post.extra?.customCommunityId||''));if(def?.needsComments===false)return{...post,comments:[]};return post;});
   if (!ghostStoriesEnabled) posts=posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
   return posts;
 }
