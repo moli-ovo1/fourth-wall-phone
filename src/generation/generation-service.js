@@ -14,7 +14,6 @@ import {
 } from '../core/tavern-contacts.js';
 import {
   getRecentTavernBody,
-  getRecentTavernBodyForCharacter,
 } from '../core/tavern-context.js';
 import { buildPrivateGenerationRequest } from './prompt-builder.js';
 import { prepareFourthWallContext, getFourthWallContextStats } from './fourth-wall-context-service.js';
@@ -237,9 +236,6 @@ export async function generatePrivateReply({
     .filter(source => source.messages.length)
     .slice(-2);
 
-  const contactTavernCharacter = contact?.kind === 'tavern'
-    ? getTavernCharacterForContact(contact)
-    : null;
   const recentBody = isFourthWall
     ? getRecentTavernBody({
         messageLimit: Math.max(1, Math.min(9999, Number((contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.maxChatLayers) || 20)),
@@ -247,9 +243,7 @@ export async function generatePrivateReply({
       })
     : (conversation.bodyContextEnabled === false
         ? null
-        : (contactTavernCharacter
-            ? await getRecentTavernBodyForCharacter(contactTavernCharacter, { messageLimit: 24, charLimit: 24000 })
-            : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 })));
+        : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 }));
 
   const worldBookScanParts = (requestConversation.messages || [])
     .slice(-Math.max(1, Number(conversation.recentChatLimit) || 100))
