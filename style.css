@@ -2173,3 +2173,20 @@
 #moli-phone-panel .moli-recall-confirm-actions{display:flex;justify-content:center;gap:10px;margin-top:18px}
 #moli-phone-panel .moli-recall-confirm-actions button{min-width:74px;border:1px solid rgba(255,255,255,.35);border-radius:11px;padding:8px 13px;background:rgba(100,108,118,.20);color:#40464d;font:13px/1.2 system-ui,sans-serif}
 #moli-phone-panel .moli-recall-confirm-actions button:last-child{background:rgba(78,91,108,.36);color:#fff}
+
+/* moli · community glass readability + prompt preset schemes */
+#moli-phone-panel .moli-recommend-home{
+  background:rgba(255,255,255,.20)!important;
+  backdrop-filter:blur(10px) saturate(1.06)!important;
+  -webkit-backdrop-filter:blur(10px) saturate(1.06)!important;
+}
+#moli-phone-panel .moli-community-topnav{
+  background:rgba(250,248,244,.44)!important;
+  border-color:rgba(255,255,255,.72)!important;
+  box-shadow:0 12px 34px rgba(45,42,38,.10),inset 0 1px 0 rgba(255,255,255,.76)!important;
+}
+#moli-phone-panel .moli-community-topnav button{color:#5f5a54!important;text-shadow:0 1px 0 rgba(255,255,255,.35)}
+#moli-phone-panel .moli-prompt-preset-bar{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:7px;margin:0 0 10px;padding:10px;border-radius:12px;background:rgba(255,255,255,.72);box-shadow:0 1px 4px rgba(0,0,0,.05)}
+#moli-phone-panel .moli-prompt-preset-bar>span{font-size:12px;color:#555;white-space:nowrap}
+#moli-phone-panel .moli-prompt-preset-bar select{min-width:0;height:34px;border:1px solid #ddd;border-radius:9px;background:#fff;padding:0 8px;font-size:12px;color:#222}
+#moli-phone-panel .moli-prompt-preset-bar button{height:34px;border:0;border-radius:9px;background:#e9e9e9;padding:0 10px;font-size:12px;color:#333;font-weight:600}
