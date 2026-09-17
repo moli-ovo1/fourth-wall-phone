@@ -375,6 +375,16 @@ export function createPhonePanel({
           <textarea data-contact-prompt rows="7" placeholder="描述这个人的身份、性格、说话方式等"></textarea>
         </label>
 
+        <div class="moli-settings-note">人物归属决定这个自创人物是否属于某条正文世界。Global 是跨正文陪伴人物；NPC 会绑定创建时所在的当前正文，并成为该世界的原生人物。</div>
+        <label class="moli-choice-card">
+          <input type="radio" name="moli-custom-role-mode" value="global" checked>
+          <span><strong>Global</strong><small>跨正文持续存在；正文外也可使用，不自动成为任何正文社区的原生人物。</small></span>
+        </label>
+        <label class="moli-choice-card">
+          <input type="radio" name="moli-custom-role-mode" value="npc">
+          <span><strong>NPC</strong><small>绑定当前正文世界；与该正文角色一样，可被这个世界的社区自然提及和参与。</small></span>
+        </label>
+
         <label class="moli-form-field">
           <span>角色世界书（可选）</span>
           <select data-contact-worldbook><option value="">不绑定世界书</option></select>
@@ -1529,6 +1539,8 @@ export function createPhonePanel({
     contactNameInput.value = '';
     contactIntroInput.value = '';
     contactPromptInput.value = '';
+    const customGlobalRadio = panel.querySelector('input[name="moli-custom-role-mode"][value="global"]');
+    if (customGlobalRadio) customGlobalRadio.checked = true;
     if (contactWorldBookSelect) contactWorldBookSelect.innerHTML = '<option value="">不绑定世界书</option>';
     if (contactMainEntrySelect) contactMainEntrySelect.innerHTML = '<option value="">请选择主条目</option>';
     if (contactMainEntryField) contactMainEntryField.hidden = true;
@@ -1633,6 +1645,11 @@ export function createPhonePanel({
       toast('无法识别当前酒馆聊天档');
       return;
     }
+    const customRoleMode = panel.querySelector('input[name="moli-custom-role-mode"]:checked')?.value === 'npc' ? 'npc' : 'global';
+    if (customRoleMode === 'npc' && !isTavernBodyEnvironment(scopeKey)) {
+      toast('NPC 需要在要绑定的正文页面中创建');
+      return;
+    }
 
     if (contactWorldBookSelect?.value && !contactMainEntrySelect?.value) {
       toast('请选择这个 NPC 的角色主条目');
@@ -1650,9 +1667,11 @@ export function createPhonePanel({
           bookName: contactWorldBookSelect?.value || '',
           mainEntryKey: contactMainEntrySelect?.value || '',
         },
+        customRoleMode,
+        boundScopeKey: customRoleMode === 'npc' ? scopeKey : '',
       });
 
-      ensureConversation(scopeKey, newContact.id);
+      createPrivateConversationInstance(scopeKey, newContact.id, { scopeMode: customRoleMode === 'npc' ? 'current' : 'global' });
       currentContactId = newContact.id;
       resetAddContactForm();
       toast('联系人已创建');
@@ -3725,7 +3744,17 @@ export function createPhonePanel({
     const groups = conversations.filter(conversation => conversation?.type === 'group').sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
     const groupRows = groups.map(group => `<button class="moli-contact-group-row" data-contact-group-conversation="${escapeHtml(group.conversationKey || group.id || '')}"><span>${escapeHtml(group.name || '群聊')}</span></button>`).join('');
     const groupSection = `<section class="moli-contact-groups"><button type="button" class="moli-contact-groups-toggle" data-action="contacts-groups-toggle"><span class="moli-contact-groups-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.8 19c.4-4 2.2-6 5.7-6s5.3 2 5.7 6M13.5 14c3.4-.3 5.5 1.4 5.9 4.5"/></svg></span><b>群聊</b><i>›</i></button><div class="moli-contact-group-list" data-contact-group-list hidden>${groupRows || '<div class="moli-contact-group-empty">暂无群聊</div>'}</div></section>`;
-    contactsTabList.innerHTML = groupSection + (rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>');
+    const customBindings = contacts.filter(item => item?.kind === 'custom').map(item => {
+      const legacyCurrent = conversationsForContact => conversationsForContact.some(conversation => conversation?.scopeMode !== 'global');
+      const ownConversations = conversations.filter(conversation => conversation?.type === 'private' && String(conversation.contactId || '') === String(item.id || ''));
+      const npcMode = item.customRoleMode === 'npc' || (!item.customRoleMode && legacyCurrent(ownConversations));
+      const mode = npcMode ? 'NPC' : 'Global';
+      const scope = npcMode ? String(item.boundScopeKey || ownConversations.find(conversation => conversation?.scopeMode !== 'global')?.boundScopeKey || '') : '';
+      const suffix = scope ? ` · ${scope.split(':chat:').pop() || '正文'}` : '';
+      return `<div class="moli-contact-group-row"><span>${escapeHtml(displayName(item))}</span><small class="moli-contact-scope-tag">${mode}${escapeHtml(suffix)}</small></div>`;
+    }).join('');
+    const bindingSection = `<section class="moli-contact-groups"><button type="button" class="moli-contact-groups-toggle" data-action="contacts-bindings-toggle"><span class="moli-contact-groups-icon" aria-hidden="true">⌁</span><b>人物绑定</b><i>›</i></button><div class="moli-contact-group-list" data-contact-binding-list hidden>${customBindings || '<div class="moli-contact-group-empty">暂无自创人物绑定</div>'}</div></section>`;
+    contactsTabList.innerHTML = groupSection + bindingSection + (rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>');
   }
 
   function openMomentForward(item, { surface = 'public', ownerContactId = '' } = {}) {
@@ -4088,6 +4117,11 @@ export function createPhonePanel({
     pages.forEach(page => {
       page.classList.toggle('active', page.dataset.page === name);
     });
+
+    if (name === 'phone-home') {
+      const worldEntry = panel.querySelector('[data-action="select-current-world"]');
+      if (worldEntry) worldEntry.hidden = isTavernBodyEnvironment(getScopeKey?.());
+    }
 
     if (name === 'home') {
       renderChatList();
@@ -6712,6 +6746,27 @@ export function createPhonePanel({
 
   let currentPublicWebTab = 'recommend';
   const publicWebNames = { recommend:'社区推荐', tianya:'天涯社区', xiaohongshu:'小红书', zhihu:'知乎', custom:'自创' };
+  const communityCallableContacts = () => {
+    const scopeKey = String(getScopeKey?.() || '');
+    const bodyWorld = isTavernBodyEnvironment(scopeKey);
+    const allConversations = getAllConversations();
+    const contacts = getContacts();
+    const allowed = new Set();
+    for (const conversation of allConversations) {
+      if (conversation?.type !== 'private') continue;
+      const contactId = String(conversation.contactId || '');
+      if (!contactId) continue;
+      if (bodyWorld) {
+        const bound = String(conversation.boundScopeKey || conversation.storageScopeKey || '');
+        if (conversation.scopeMode !== 'global' && bound === scopeKey) allowed.add(contactId);
+      } else if (conversation.scopeMode === 'global') {
+        allowed.add(contactId);
+      }
+    }
+    ['builtin:meta','builtin:writer','builtin:guide'].forEach(id => allowed.add(id));
+    return contacts.filter(item => item?.id && allowed.has(String(item.id)));
+  };
+
   const publicWebTypeNames = { tianya:'帖子', xiaohongshu:'笔记', zhihu:'问题', custom:'帖子' };
   const tianyaSubtitles = ['天涯杂谈','情感天地','娱乐八卦','煮酒论史','生活那点事'];
   let openedPublicWebPostId = '';
@@ -7042,7 +7097,7 @@ export function createPhonePanel({
     const zhihuFollow=event.target?.closest?.('[data-action="zhihu-follow-question"]'); if(zhihuFollow){const result=togglePublicWebFavorite(getScopeKey?.(),zhihuFollow.dataset.postId,'user');renderPublicWeb();if(result?.favorited)windowRef.alert?.('已投入收藏 App');return;}
     const communityInvite=event.target?.closest?.('[data-action="public-web-invite"]'); if(communityInvite){
       const post=getPublicWebPost(getScopeKey?.(),communityInvite.dataset.postId); if(!post)return;
-      const candidates=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta'); if(!candidates.length){windowRef.alert?.('微信里还没有可邀请的角色。');return;}
+      const candidates=communityCallableContacts(); if(!candidates.length){windowRef.alert?.('微信里还没有可邀请的角色。');return;}
       const choice=await tapPickerPromise('邀请谁来评论？',candidates.map(item=>({label:displayName(item),item}))); if(!choice)return;
       const queuedInvite=queueCommunityPending({type:'invite',kind:'comment',postId:String(post.id),targetId:String(choice.item.id)});
       recordWorldEvent(getScopeKey?.(),{source:`community.${post.section}`,actorId:'user',action:'INVITE_COMMENT',targetContactIds:[choice.item.id],objectId:String(queuedInvite.id),content:`User 邀请你参与社区帖子：${post.title||'无标题'}`,metadata:{postId:String(post.id||''),pendingRefresh:true},awareness:'pending'});
@@ -7050,7 +7105,7 @@ export function createPhonePanel({
     }
     const zhihuInvite=event.target?.closest?.('[data-action="zhihu-invite-answer"]'); if(zhihuInvite){
       const post=getPublicWebPost(getScopeKey?.(),zhihuInvite.dataset.postId); if(!post)return;
-      const candidates=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta'); if(!candidates.length){windowRef.alert?.('微信里还没有可邀请的角色。');return;}
+      const candidates=communityCallableContacts(); if(!candidates.length){windowRef.alert?.('微信里还没有可邀请的角色。');return;}
       const choice=await tapPickerPromise('邀请谁回答？',candidates.map(item=>({label:displayName(item),item}))); if(!choice)return;
       const queuedInvite=queueCommunityPending({type:'invite',kind:'answer',postId:String(post.id),targetId:String(choice.item.id)});
       recordWorldEvent(getScopeKey?.(),{source:'community.zhihu',actorId:'user',action:'INVITE_ANSWER',targetContactIds:[choice.item.id],objectId:String(queuedInvite.id),content:`User 邀请你回答知乎问题：${post.title}`,metadata:{postId:String(post.id||''),pendingRefresh:true},awareness:'pending'});
@@ -7063,7 +7118,7 @@ export function createPhonePanel({
     const zhihuAdd=event.target?.closest?.('[data-action="zhihu-comments-add"]'); if(zhihuAdd){const postId=String(zhihuAdd.dataset.postId||'');const answerId=String(zhihuAdd.dataset.answerId||'');const busyKey=`zhihu-comments:${postId}:${answerId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const answer=(post?.extra?.answers||[]).find(a=>String(a.id)===answerId);await settleQueuedCommunityTargets(post);const additions=await generateZhihuAnswerCommentRefresh({scopeKey:getScopeKey?.(),post,answer});addZhihuAnswerComments(getScopeKey?.(),postId,answerId,additions);consumeUserCommentPending(postId,answerId);renderPublicWeb();}catch(error){console.error('[moli小手机] zhihu add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const share=event.target?.closest?.('[data-action="public-web-share"]'); if(share){
       const post=getPublicWebPost(getScopeKey?.(),share.dataset.postId);if(!post)return;
-      const people=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta').map(item=>({kind:'private',id:item.id,label:displayName(item),target:item}));
+      const people=communityCallableContacts().map(item=>({kind:'private',id:item.id,label:displayName(item),target:item}));
       const groups=getScopeConversations(getScopeKey?.()).filter(item=>item?.type==='group').map(item=>({kind:'group',id:String(item.conversationKey||item.id||''),label:String(item.name||'群聊'),target:item}));
       const candidates=[...people,...groups];
       if(!candidates.length){windowRef.alert?.('微信里还没有可以转发的联系人或群聊。');return;}
@@ -7093,7 +7148,7 @@ export function createPhonePanel({
   communityComposer.addEventListener('click',e=>{if(e.target===communityComposer)closeCommunityComposer();});
   communityComposer.querySelector('[data-community-identity-button]')?.addEventListener('click',()=>{const m=communityComposer.querySelector('[data-community-identity-menu]');if(m)m.hidden=!m.hidden;const a=communityComposer.querySelector('[data-community-at-menu]');if(a)a.hidden=true;});
   communityComposer.querySelector('[data-community-identity-menu]')?.addEventListener('click',e=>{const b=e.target.closest('[data-community-mode]');if(!b)return;const mode=b.dataset.communityMode;communityComposerState.identityMode=mode;communityComposer.querySelector('[data-community-identity-button]').textContent=({real:'本名⌄',anonymous:'匿名⌄',owner:'楼主⌄'})[mode];communityComposer.querySelector('[data-community-alias-row]').hidden=mode!=='anonymous';e.currentTarget.hidden=true;});
-  communityComposer.querySelector('[data-community-at-button]')?.addEventListener('click',()=>{const menu=communityComposer.querySelector('[data-community-at-menu]');const candidates=getContacts().filter(item=>item&&item.id&&item.kind!=='group'&&String(item.id)!=='builtin:meta');menu.innerHTML=candidates.map(item=>`<button data-community-at-id="${escapeHtml(item.id)}">${escapeHtml(displayName(item))}</button>`).join('')||'<span>暂无角色</span>';menu.hidden=!menu.hidden;const i=communityComposer.querySelector('[data-community-identity-menu]');if(i)i.hidden=true;});
+  communityComposer.querySelector('[data-community-at-button]')?.addEventListener('click',()=>{const menu=communityComposer.querySelector('[data-community-at-menu]');const candidates=communityCallableContacts();menu.innerHTML=candidates.map(item=>`<button data-community-at-id="${escapeHtml(item.id)}">${escapeHtml(displayName(item))}</button>`).join('')||'<span>暂无角色</span>';menu.hidden=!menu.hidden;const i=communityComposer.querySelector('[data-community-identity-menu]');if(i)i.hidden=true;});
   communityComposer.querySelector('[data-community-at-menu]')?.addEventListener('click',e=>{const b=e.target.closest('[data-community-at-id]');if(!b)return;const target=getContacts().find(x=>String(x.id)===String(b.dataset.communityAtId));if(!target)return;communityComposerState.mentionTargets=Array.isArray(communityComposerState.mentionTargets)?communityComposerState.mentionTargets:[];if(!communityComposerState.mentionTargets.some(x=>String(x.id)===String(target.id)))communityComposerState.mentionTargets.push(target);const input=communityComposer.querySelector('[data-community-content]');if(input){const token=`@${displayName(target)} `;if(!input.value.includes(token.trim()))input.value=`${input.value}${input.value&&!/\s$/.test(input.value)?' ':''}${token}`;input.focus();}communityComposer.querySelector('[data-community-at-button]').textContent=`@${communityComposerState.mentionTargets.length||''}⌄`;e.currentTarget.hidden=true;});
   const communityContactIdFromAuthor = author => {
     const id=String(author?.knownIdentityId||author?.id||'');
@@ -7347,6 +7402,8 @@ export function createPhonePanel({
   contactsTabList?.addEventListener('click', event => {
     const groupToggle = event.target.closest?.('[data-action="contacts-groups-toggle"]');
     if (groupToggle) { const list=contactsTabList.querySelector('[data-contact-group-list]'); if(list){list.hidden=!list.hidden;groupToggle.classList.toggle('expanded',!list.hidden);} return; }
+    const bindingToggle = event.target.closest?.('[data-action="contacts-bindings-toggle"]');
+    if (bindingToggle) { const list=contactsTabList.querySelector('[data-contact-binding-list]'); if(list){list.hidden=!list.hidden;bindingToggle.classList.toggle('expanded',!list.hidden);} return; }
     const groupRow = event.target.closest?.('[data-contact-group-conversation]');
     if (groupRow) { const scopeKey=getScopeKey?.(); const conversationKey=String(groupRow.dataset.contactGroupConversation||''); if(!scopeKey||!conversationKey)return; currentContactId=conversationKey; markConversationRead(scopeKey,conversationKey); show('chat'); return; }
     const row = event.target.closest?.('[data-contact-tab-id]');
