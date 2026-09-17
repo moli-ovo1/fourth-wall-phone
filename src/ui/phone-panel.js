@@ -4247,10 +4247,26 @@ export function createPhonePanel({
 
   const contact = id => getContacts().find(x => x.id === id);
 
+  function scopeChatLabel(scopeKey = '') {
+    const text = String(scopeKey || '');
+    const marker = ':chat:';
+    const index = text.indexOf(marker);
+    if (index < 0) return '';
+    let raw = text.slice(index + marker.length);
+    try { raw = decodeURIComponent(raw); } catch {}
+    raw = raw.replace(/\.(?:jsonl?|txt)$/i, '').trim();
+    return raw;
+  }
+
   function privateConversationScopeAnnotation(conversation, ownTitle = '') {
-    const scope = conversation?.scopeMode === 'global' ? '日常陪伴' : '当前正文';
+    if (conversation?.scopeMode === 'global') {
+      const title = String(ownTitle || conversation?.title || '').trim();
+      return title ? `全局•${title}` : '全局';
+    }
     const title = String(ownTitle || conversation?.title || '').trim();
-    return title ? `${scope}•${title}` : scope;
+    const chatLabel = scopeChatLabel(conversation?.boundScopeKey || conversation?.storageScopeKey || '');
+    const worldLabel = title || chatLabel;
+    return worldLabel ? `正文•${worldLabel}` : '正文';
   }
 
   function privateConversationTitle(conversation, item) {
@@ -4622,14 +4638,18 @@ export function createPhonePanel({
     const specialIds = new Set(['builtin:meta', 'builtin:writer', 'builtin:guide']);
     const selectedWorld = getSelectedWorldTarget();
     const activeScope = String(scopeKey || '');
-    const preferredSpecialScope = activeScope || (selectedWorld.scopeMode === 'current' ? String(selectedWorld.scopeKey || '') : '');
+    // Explicit Current World is the phone's world authority. The currently open Tavern page
+    // is only the environment fallback when the User has not selected a phone world.
+    const preferredSpecialScope = selectedWorld.scopeMode === 'current'
+      ? String(selectedWorld.scopeKey || '')
+      : (selectedWorld.scopeMode ? '' : activeScope);
     const specialChoice = new Map();
     for (const specialId of specialIds) {
       const candidates = allConversations.filter(row => row?.type === 'private' && String(row.contactId || '') === specialId);
       let chosen = null;
       if (preferredSpecialScope) chosen = candidates.find(row => row.scopeMode !== 'global' && String(row.boundScopeKey || row.storageScopeKey || '') === preferredSpecialScope) || null;
-      if (!chosen && !activeScope && selectedWorld.scopeMode === 'global') chosen = candidates.find(row => row.scopeMode === 'global') || null;
-      if (!chosen && !activeScope && !selectedWorld.scopeMode) chosen = candidates.find(row => row.scopeMode === 'global') || null;
+      if (!chosen && selectedWorld.scopeMode === 'global') chosen = candidates.find(row => row.scopeMode === 'global') || null;
+      if (!chosen && !selectedWorld.scopeMode && !activeScope) chosen = candidates.find(row => row.scopeMode === 'global') || null;
       if (!chosen) chosen = candidates.sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || null;
       if (chosen) specialChoice.set(specialId, chosen);
     }
@@ -6666,7 +6686,7 @@ export function createPhonePanel({
     if (!label) return;
     const target = getSelectedWorldTarget();
     const choice = currentWorldChoices().find(row => String(row.conversation.conversationKey || '') === String(target.conversationKey || ''));
-    if (choice) { label.textContent = `${displayName(choice.item)} · ${choice.scopeMode === 'global' ? '全局' : '正文'}`; return; }
+    if (choice) { label.textContent = `${displayName(choice.item)} · ${privateConversationScopeAnnotation(choice.conversation)}`; return; }
     const contact = getContacts().find(item => String(item.id || '') === String(target.contactId || ''));
     label.textContent = contact ? `${displayName(contact)}${target.scopeMode ? ` · ${target.scopeMode === 'global' ? '全局' : '正文'}` : ''}` : '未选择';
   };
@@ -6674,7 +6694,7 @@ export function createPhonePanel({
     const roles = currentWorldChoices();
     if (!roles.length) { windowRef.alert?.('当前没有可选择的角色世界。'); return; }
     const current = getSelectedWorldTarget();
-    openTapPicker('选择当前角色世界',roles.map(row=>({label:`${displayName(row.item)} · ${row.scopeMode === 'global' ? '全局' : '正文'}${String(row.conversation.conversationKey||'')===String(current.conversationKey||'')?'（当前）':''}`,row})),choice=>{
+    openTapPicker('选择当前角色世界',roles.map(row=>({label:`${displayName(row.item)} · ${privateConversationScopeAnnotation(row.conversation)}${String(row.conversation.conversationKey||'')===String(current.conversationKey||'')?'（当前）':''}`,row})),choice=>{
       const row=choice.row;
       setSelectedWorldTarget({contactId:row.item.id,conversationKey:row.conversation.conversationKey,scopeMode:row.scopeMode,scopeKey:row.scopeKey});
       renderCurrentWorldLabel();
