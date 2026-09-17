@@ -137,3 +137,9 @@
 - moli 预设新增“方案选择”：内置 `moli 默认预设` 保留；User 可新建空白方案并逐条添加自己的 Prompt，方案可切换、改名、删除。自定义方案不自动注入 moli 内置条目。
 - 内置 Prompt 继续只在 UI 显示标题；只有 User 自建条目可编辑。
 - 社区推荐正文玻璃降低遮罩/模糊以显露 Lunar Archive 壁纸；顶部导航增加轻微乳白，提高深色酒馆背景上的可读性。
+
+
+## v0.5.08 · community accordion / chat send guard
+- Private chat: Enter no longer triggers send or empty-send API generation; only the visible send button can hand the turn to generation.
+- 自创: 帖子/常驻 default collapsed; removed empty pinned hint; expanded bodies overlay the fixed wallpaper instead of pushing it.
+- 社区推荐: new dark Lunar Archive wallpaper; “今天的社区发生了什么” and “帖子” are default-collapsed overlay sections.
