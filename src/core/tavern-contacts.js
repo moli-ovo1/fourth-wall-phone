@@ -8,8 +8,14 @@ function getContext() {
 }
 
 function candidateCharacterArrays(ctx) {
+  let st = null;
+  let parentSt = null;
+  try { st = window?.SillyTavern || null; } catch {}
+  try { parentSt = window?.parent?.SillyTavern || null; } catch {}
   const arrays = [
     ctx?.characters,
+    st?.characters,
+    parentSt?.characters,
     window?.characters,
     window.parent?.characters,
   ];
