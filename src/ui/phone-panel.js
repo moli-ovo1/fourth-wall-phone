@@ -4629,38 +4629,36 @@ export function createPhonePanel({
   }
 
   let chatListSearchQuery = '';
+  const isConcreteTavernWorldScope = value => String(value || '').includes(':chat:');
   function renderChatList() {
     refreshTavernSources();
 
     const contacts = getContacts();
-    const scopeKey = getScopeKey?.();
+    const rawScopeKey = String(getScopeKey?.() || '');
+    const activeScope = isConcreteTavernWorldScope(rawScopeKey) ? rawScopeKey : '';
     const allConversations = getAllConversations();
     const specialIds = new Set(['builtin:meta', 'builtin:writer', 'builtin:guide']);
-    const selectedWorld = getSelectedWorldTarget();
-    const activeScope = String(scopeKey || '');
-    // Explicit Current World is the phone's world authority. The currently open Tavern page
-    // is only the environment fallback when the User has not selected a phone world.
-    const preferredSpecialScope = selectedWorld.scopeMode === 'current'
-      ? String(selectedWorld.scopeKey || '')
-      : (selectedWorld.scopeMode ? '' : activeScope);
     const specialChoice = new Map();
     for (const specialId of specialIds) {
       const candidates = allConversations.filter(row => row?.type === 'private' && String(row.contactId || '') === specialId);
-      let chosen = null;
-      if (preferredSpecialScope) chosen = candidates.find(row => row.scopeMode !== 'global' && String(row.boundScopeKey || row.storageScopeKey || '') === preferredSpecialScope) || null;
-      if (!chosen && selectedWorld.scopeMode === 'global') chosen = candidates.find(row => row.scopeMode === 'global') || null;
-      if (!chosen && !selectedWorld.scopeMode && !activeScope) chosen = candidates.find(row => row.scopeMode === 'global') || null;
+      let chosen = activeScope
+        ? candidates.find(row => row.scopeMode !== 'global' && String(row.boundScopeKey || row.storageScopeKey || '') === activeScope) || null
+        : candidates.find(row => row.scopeMode === 'global') || null;
+      if (!chosen && activeScope) chosen = candidates.find(row => row.scopeMode === 'global') || null;
       if (!chosen) chosen = candidates.sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || null;
       if (chosen) specialChoice.set(specialId, chosen);
     }
     const conversations = allConversations.filter(conversation => {
       if (conversation?.type === 'group') {
-        const currentScope = String(scopeKey || '');
-        return Boolean(currentScope) && String(conversation.storageScopeKey || conversation.boundScopeKey || '') === currentScope;
+        return Boolean(activeScope) && String(conversation.storageScopeKey || conversation.boundScopeKey || '') === activeScope;
       }
       const contactId = String(conversation?.contactId || '');
-      if (!specialIds.has(contactId)) return true;
-      return specialChoice.get(contactId) === conversation;
+      if (specialIds.has(contactId)) return specialChoice.get(contactId) === conversation;
+      const item = contacts.find(row => String(row.id || '') === contactId);
+      if (!item) return false;
+      if (String(item.kind || '') === 'custom') return true;
+      if (conversation.scopeMode === 'global') return true;
+      return Boolean(activeScope) && String(conversation.boundScopeKey || conversation.storageScopeKey || '') === activeScope;
     });
 
     const contactsById = new Map(
@@ -6671,11 +6669,11 @@ export function createPhonePanel({
   const currentWorldChoices = () => {
     const contacts = new Map(getContacts().map(item => [String(item.id || ''), item]));
     return getAllConversations()
-      .filter(conversation => conversation?.type === 'private')
+      .filter(conversation => conversation?.type === 'private' && conversation.scopeMode === 'global')
       .map(conversation => {
         const item = contacts.get(String(conversation.contactId || ''));
-        if (!item || !['tavern','custom'].includes(String(item.kind || ''))) return null;
-        const scopeMode = conversation.scopeMode === 'global' ? 'global' : 'current';
+        if (!item || String(item.kind || '') !== 'tavern') return null;
+        const scopeMode = 'global';
         return { item, conversation, scopeMode, scopeKey: String(conversation.boundScopeKey || conversation.storageScopeKey || '') };
       })
       .filter(Boolean)
@@ -6701,6 +6699,8 @@ export function createPhonePanel({
     });
   });
   renderCurrentWorldLabel();
+  const currentWorldEntry = panel.querySelector('[data-action="select-current-world"]');
+  if (currentWorldEntry) currentWorldEntry.hidden = isConcreteTavernWorldScope(getScopeKey?.());
 
   panel.querySelector('[data-action="open-wechat"]')?.addEventListener('click', () => show('home'));
   panel.querySelector('[data-action="phone-home"]')?.addEventListener('click', () => show('phone-home'));
@@ -6731,18 +6731,21 @@ export function createPhonePanel({
     return rows.length?rows.join('\n'):'（暂无评论）';
   };
   const privateConversationKeyFor = (scopeKey, contactId) => {
-    const world = getSelectedWorldTarget();
+    const rawScope = String(scopeKey || '');
+    const inConcreteWorld = isConcreteTavernWorldScope(rawScope);
+    const selected = getSelectedWorldTarget();
+    // 社区在正文内只能属于当前正文；正文外只能路由到全局人物。
+    // A/B 正文不允许被主页上残留的 selectedWorld 覆盖。
+    const world = inConcreteWorld
+      ? { scopeMode: 'current', scopeKey: rawScope }
+      : { scopeMode: 'global', scopeKey: '', contactId: selected.contactId };
     const all = getAllConversations().filter(x=>x?.type==='private'&&String(x.contactId||'')===String(contactId));
-    let candidates = all;
-    if (world.scopeMode === 'global') candidates = all.filter(x=>x.scopeMode==='global');
-    else if (world.scopeMode === 'current') {
-      const targetScope = String(world.scopeKey || '');
-      candidates = all.filter(x=>x.scopeMode!=='global' && (!targetScope || String(x.boundScopeKey||x.storageScopeKey||'')===targetScope));
-    }
-    const existing=candidates.sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || all.sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
+    const candidates = world.scopeMode === 'current'
+      ? all.filter(x=>x.scopeMode!=='global' && String(x.boundScopeKey||x.storageScopeKey||'')===String(world.scopeKey||''))
+      : all.filter(x=>x.scopeMode==='global');
+    const existing=candidates.sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
     if (existing) return existing.conversationKey || existing.id;
-    const targetScopeKey = world.scopeMode === 'current' ? String(world.scopeKey || scopeKey || '') : String(scopeKey || world.scopeKey || '');
-    const created = createPrivateConversationInstance(targetScopeKey, contactId, { scopeMode: world.scopeMode === 'global' ? 'global' : 'current' });
+    const created = createPrivateConversationInstance(world.scopeMode === 'current' ? rawScope : '', contactId, { scopeMode: world.scopeMode });
     return created?.conversationKey || created?.id || contactId;
   };
   const anonymousAliasKey = postId => `moli:community:anonymous-alias:${String(getScopeKey?.()||'')}::${String(postId||'')}`;
