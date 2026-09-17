@@ -113,64 +113,6 @@ export function getRecentTavernBody({
   };
 }
 
-
-function requestHeaders(ctx) {
-  try {
-    if (typeof ctx?.getRequestHeaders === 'function') return ctx.getRequestHeaders();
-  } catch {}
-  return { 'Content-Type': 'application/json' };
-}
-
-function trimNormalizedChat(chat, { messageLimit = 24, charLimit = 24000 } = {}) {
-  const limit = Math.max(1, Math.min(9999, Number(messageLimit) || 24));
-  const maxChars = Math.max(1000, Math.min(2000000, Number(charLimit) || 24000));
-  const normalized = (Array.isArray(chat) ? chat : []).slice(-limit).map(normalizeChatMessage).filter(Boolean);
-  const kept = [];
-  let used = 0;
-  for (let i = normalized.length - 1; i >= 0; i -= 1) {
-    const item = normalized[i];
-    const cost = item.content.length + item.name.length + 16;
-    if (kept.length && used + cost > maxChars) break;
-    kept.push(item);
-    used += cost;
-  }
-  kept.reverse();
-  return { available: true, messages: kept, textLength: used };
-}
-
-// moli169 · Puffy-style per-character body resolver.
-// A phone contact follows its own SillyTavern character/chat, not whichever character is open now.
-export async function getRecentTavernBodyForCharacter(character, options = {}) {
-  if (!character) return { available: false, messages: [], textLength: 0 };
-  const ctx = getContext();
-  const currentId = String(ctx?.characterId ?? ctx?.character_id ?? ctx?.this_chid ?? '');
-  const sourceId = String(character?.sourceId || '');
-  const currentName = clean(ctx?.name2 ?? ctx?.character?.name);
-  const isCurrent = (sourceId && currentId && sourceId === currentId)
-    || (currentName && clean(character?.name) === currentName);
-
-  if (isCurrent) return getRecentTavernBody(options);
-
-  const chatFile = clean(character?.chat);
-  const avatar = clean(character?.avatar);
-  const name = clean(character?.name);
-  if (!chatFile || !name) return { available: false, messages: [], textLength: 0 };
-
-  try {
-    const response = await fetch('/api/chats/get', {
-      method: 'POST',
-      headers: requestHeaders(ctx),
-      body: JSON.stringify({ ch_name: name, file_name: chatFile, avatar_url: avatar }),
-    });
-    if (!response.ok) return { available: false, messages: [], textLength: 0 };
-    const raw = await response.json();
-    const chat = Array.isArray(raw) ? raw : (Array.isArray(raw?.chat) ? raw.chat : []);
-    return trimNormalizedChat(chat, options);
-  } catch {
-    return { available: false, messages: [], textLength: 0 };
-  }
-}
-
 export function getTavernAssistantTurnState() {
   const ctx = getContext();
   const chat = candidateChats(ctx)[0];

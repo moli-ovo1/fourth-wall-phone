@@ -91,9 +91,8 @@ function roleFidelityFor(character) {
 export function getTavernCharactersSnapshot() {
   const ctx = getContext();
   const arrays = candidateCharacterArrays(ctx);
-  const source = arrays[0];
 
-  if (!source) {
+  if (!arrays.length) {
     return {
       available: false,
       characters: [],
@@ -103,7 +102,7 @@ export function getTavernCharactersSnapshot() {
   const seen = new Set();
   const characters = [];
 
-  source.forEach((character, index) => {
+  arrays.forEach(source => source.forEach((character, index) => {
     const name = String(character?.name || '').trim();
     if (!name) return;
 
@@ -124,7 +123,7 @@ export function getTavernCharactersSnapshot() {
       avatarUrl: getAvatarUrl(ctx, avatar),
       roleFidelity: roleFidelityFor(character),
     });
-  });
+  }));
 
   return {
     available: true,
@@ -160,17 +159,24 @@ export function getTavernCharacterForContact(contact) {
     if (exact) return exact;
   }
 
-  const storedAvatar = String(contact?.source?.originalAvatar || '').trim();
+  const normalizeAvatar = value => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try { return decodeURIComponent(raw).replace(/^.*[\/]/, '').toLowerCase(); }
+    catch { return raw.replace(/^.*[\/]/, '').toLowerCase(); }
+  };
+  const storedAvatar = normalizeAvatar(contact?.source?.originalAvatar);
   if (storedAvatar) {
-    const byAvatar = characters.find(item => String(item.avatar || '').trim() === storedAvatar);
+    const byAvatar = characters.find(item => normalizeAvatar(item.avatar) === storedAvatar);
     if (byAvatar) return byAvatar;
   }
 
+  const normalizeName = value => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
   const names = [contact?.source?.originalName, contact?.name, contact?.displayName]
-    .map(value => String(value || '').trim())
+    .map(normalizeName)
     .filter(Boolean);
   for (const name of names) {
-    const matches = characters.filter(item => String(item.name || '').trim() === name);
+    const matches = characters.filter(item => normalizeName(item.name) === name);
     if (matches.length === 1) return matches[0];
   }
   return null;
