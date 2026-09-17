@@ -1,6 +1,9 @@
 import { readJson, writeJson } from './storage-adapter.js';
 
 const KEY = 'moli-phone:prompt-settings:v1';
+const PRESETS_KEY = 'moli-phone:prompt-presets:v1';
+const ACTIVE_PRESET_KEY = 'moli-phone:prompt-active-preset:v1';
+const DEFAULT_PRESET_ID = 'moli-default';
 
 export const DEFAULT_ONLINE_PROMPT_BLOCKS = [
   {
@@ -344,13 +347,66 @@ export const DEFAULT_ONLINE_PROMPT_BLOCKS = [
 
 
 const DEFAULT_COMMUNITY_PROMPT_BLOCKS = [
-  { id:'community-head', title:'🧭 社区生成校准', scope:'community', enabled:true, content:`[System Directive]\n当前任务不是续写正文，而是生成故事世界中真实存在的网络内容。\n\n生成前在内部快速确认：当前人物、关系、职业环境、地点、时代和近期事件；哪些内容可能自然进入互联网视野；普通网友会怎样看到、讨论、误解或猜测这些事情。\n\n不要输出分析过程。` },
-  { id:'community-world', title:'🌍 世界发散规则', scope:'community', enabled:true, content:`# 世界发散规则\n社区属于当前故事世界的一部分。\n\n可以从当前角色、人物关系、职业环境、社会背景、地点、时代、近期事件和正文剧情自然发散。无需每条都直接出现 {{char}} 或 {{user}}：可以直接相关，也可以只是生活圈、职业圈、地点或事件产生的外围涟漪，并保留普通互联网内容。\n\n角色真正私密、没有公开来源的信息，网友不能作为已知事实掌握。网友可以猜测、脑补、造谣、误解、添油加醋，甚至碰巧猜中，但这些仍只是网友的说法，不因此成为世界事实。\n\n模型知道，不等于网友知道。` },
-  { id:'community-tianya', title:'🏮 天涯社区', scope:'community', enabled:true, content:`# 天涯社区\n生成老式中文 BBS 帖子与线性楼层讨论。\n\n帖子按内容自然选择板块标签。常见板块可包括：天涯杂谈、娱乐八卦、情感天地、婆媳关系、莲蓬鬼话、职场天地、我的大学、百姓声音、生活那点事、饮食男女、旅游休闲、影视评论、亲子中心、煮酒论史、关天茶舍等。这些只是参考，不是内容限制；先有内容，再判断属于哪里。\n\n帖子可以是爆料、亲历、求助、地方见闻、职场社会议题、情感纠纷、怪谈、围观或争论。信息允许不完整、真假混杂。\n\n楼层要像不同真人：有人认真分析、质疑、跑题、抬杠、跟风，也有人造谣、添油加醋、把猜测说得像真的，或自称知情人。网友说法不等于世界事实。\n\n不要让所有网友同一种语气，也不要让每层都推动剧情。` },
-  { id:'community-xhs', title:'📕 小红书', scope:'community', enabled:true, content:`# 小红书\n生成真实的小红书图文笔记与评论区。\n\n小红书首先是一个人分享自己的体验，不是公共论坛。内容可来自日常生活、关系情绪、消费探店、地点体验、职场校园、偶遇、求助、避雷或刚经历的事情。\n\n标题、图片内容/图片文字与正文共同构成笔记，不要写成论坛长帖。作者身份、生活状态和表达习惯应有差异。\n\n评论区可共鸣、询问细节、质疑、分享类似经历、跑题或回复其他评论。网友只知道公开信息和自己合理知道的事情。不要统一营销腔，也不要写成天涯盖楼。` },
-  { id:'community-zhihu', title:'💡 知乎', scope:'community', enabled:true, content:`# 知乎\n生成真实的知乎问题、回答与回答下评论。\n\n核心结构是：问题 → 不同身份的人分别回答 → 每个回答拥有自己的评论区。\n\n问题应具有可讨论性。回答者根据职业、经历、知识、利益、性格和立场回答；允许专业解释、个人经历、短观点、长回答、反驳问题前提等不同形式。\n\n评论针对具体回答展开，可质疑、补充、追问、争论或回复其他评论。不要把多个回答写成同一个 AI 的统一口吻，也不要把知乎写成天涯式线性盖楼。` },
-  { id:'community-custom', title:'🌙 自创社区', scope:'community', enabled:true, content:`# 自创社区\n当前内容形态由 User 保存的自创条目决定。优先遵循条目的名称、生成要求和特殊设定，不要强行改写成天涯、小红书或知乎。\n\nUser 的条目决定“生成什么”；当前人物、关系、地点、时代、近期事件和世界背景决定“它如何自然存在于当前世界”。\n\n如果条目开启“需要评论区”，生成与内容自然匹配的评论互动；如果关闭，不生成评论区。` },
-  { id:'community-tail', title:'✓ 社区最后确认', scope:'community', enabled:true, content:`# 最后确认\n输出前内部确认：\n1. 这是当前平台真正会出现的内容？\n2. 不同网友拥有不同身份、立场和语言？\n3. 没有把角色私密信息当作网友已知事实？\n4. 与当前世界有联系，但互联网没有只围绕 {{char}} / {{user}} 转？\n5. 符合当前平台的输出格式？\n\n确认后直接输出结果，不输出分析过程。` },
+  { id:'community-head', title:'🧭 社区生成校准', scope:'community', enabled:true, content:`[System Directive]
+当前任务不是续写正文，而是生成属于当前正文世界、真实存在的网络内容。
+
+生成前在内部快速确认：当前剧情发生了什么；{{char}}、{{user}}、重要人物与周围环境处于什么状态；哪些痕迹可能进入互联网；不同网友会怎样看到、误解、猜测或讨论。
+
+不是围着主角转的互联网，而是属于这个正文世界的互联网。不要输出分析过程。` },
+  { id:'community-world', title:'🌍 世界发散规则', scope:'community', enabled:true, content:`# 世界内容来源
+社区是当前正文世界向互联网延伸的一部分。
+
+生成内容优先围绕当前正文剧情、{{char}}、{{user}}、重要人物、近期事件，以及他们所在的地点、组织、职业、学校、作品和生活环境自然发散。
+
+大部分内容应与当前正文世界存在可追溯联系：可以直接讨论人物或事件，也可以从穿搭、消费、地点、物品、职业、社会现象、偶遇、传闻等侧面切入，或表现剧情在周围世界产生的间接涟漪。允许少量与主线无直接关系的普通个人动态作为生活背景，但不要让通用互联网内容淹没当前世界。
+
+角色真正私密、没有公开来源的信息，网友不能作为已知事实掌握。网友可以猜测、脑补、造谣、误解、添油加醋，甚至碰巧猜中，但这些仍只是网友的说法，不因此成为世界事实。模型知道，不等于网友知道。
+
+不同社区、板块和话题可以形成自己的参与人群与内部语境；网友不必每次都像从全互联网随机抽取。` },
+  { id:'community-identity', title:'👤 本人账号与楼主身份', scope:'community', enabled:true, content:`# 本人账号与楼主身份
+允许 {{char}} 或 {{user}} 本人账号、匿名身份或疑似小号自然发布帖子、回答或参与回复，语言、关注点、知识边界和行为必须符合人物状态。匿名或小号只改变公开身份，不改变人物本身。
+
+若帖子由 {{char}} 发布，则 {{char}} 是该帖楼主；之后继续参与时保持楼主身份，可回复、补充、解释、争论、装死或不回应，不得把自己当成普通围观网友。若 User 通过“我是楼主”参与，则 User 就是该帖楼主，不需要额外判断。
+
+其他网友不能仅因模型知道真实身份，就自动识破匿名或小号。` },
+  { id:'community-tianya', title:'🏮 天涯社区', scope:'community', enabled:true, content:`# 天涯社区
+生成老式中文 BBS 帖子与线性楼层讨论。
+
+帖子按内容自然选择板块标签。常见板块可包括：天涯杂谈、娱乐八卦、情感天地、婆媳关系、莲蓬鬼话、职场天地、我的大学、百姓声音、生活那点事、饮食男女、旅游休闲、影视评论、亲子中心、煮酒论史、关天茶舍等。它们只是参考，不是限制；先有内容，再判断属于哪里。
+
+帖子可为爆料、亲历、求助、地方见闻、职场社会议题、情感纠纷、怪谈、围观或争论。楼层像不同真人：有人认真分析、质疑、跑题、抬杠、跟风，也有人造谣、添油加醋、把猜测说得像真的，或自称知情人。网友说法不等于世界事实。
+
+不要让所有网友同一种语气，也不要让每层都推动剧情。` },
+  { id:'community-xhs', title:'📕 小红书', scope:'community', enabled:true, content:`# 小红书
+生成当前正文世界中的真实小红书笔记与评论。内容优先从当前剧情、人物和事件的生活侧面发散。
+
+即使围绕 {{char}} / {{user}}，也不必总直接讨论本人；可以从他们出现过的地点、穿搭、物品、消费、工作或校园环境、公开活动、偶遇、生活方式及剧情造成的外围影响切入，形成偶遇帖、求同款、探店、避雷、生活经验、情绪分享或地点讨论。允许少量普通个人动态作为信息流背景，但不要让无关日常淹没正文世界。
+
+小红书重视视觉、生活方式和个人体验，形式可为图文、短视频或纯文字。昵称应有真实网感和生活感，避免大量“{{char}}头号粉丝”“专业黑子”之类工具型 ID。
+
+评论可共鸣、问细节、分享类似经历、质疑、玩梗、跑题，也可自然出现粉丝、CP粉、唯粉、路人或黑子。不要写成天涯盖楼、知乎分析文或统一营销腔。` },
+  { id:'community-zhihu', title:'💡 知乎', scope:'community', enabled:true, content:`# 知乎
+生成真实的知乎问题、回答与回答下评论。核心结构始终是：问题 → 多个独立回答 → 每个回答自己的评论区。
+
+问题可以由当前人物或事件引出，也可以借此延伸到行业、职业、心理、社会现象、经验或专业领域。不同回答者拥有不同的信息来源、专业程度、经历和立场，因此回答可以是专业/行业分析、个人经验、业内见闻或匿名爆料、质疑问题前提、反对观点、简短独特角度或偶尔抖机灵。
+
+不要求人人像专家，也不要人人使用“谢邀”“利益相关”等刻板口头禅。评论属于具体回答，可追问、补充、质疑、争论、吃瓜或回复其他评论。问题≠帖子，回答≠评论；不要写成天涯式线性盖楼或统一口吻的百科答案。` },
+  { id:'community-custom', title:'🌙 自创社区', scope:'community', enabled:true, content:`# 自创社区
+当前内容形态由 User 保存的自创条目决定。优先遵循条目的名称、生成要求和特殊设定，不强行改写成天涯、小红书或知乎。
+
+User 的条目决定“生成什么”；当前人物、关系、地点、时代、近期事件和世界背景决定“它如何自然存在于当前世界”。
+
+如果条目开启“需要评论区”，生成自然匹配的评论互动；如果关闭，不生成评论区。` },
+  { id:'community-tail', title:'✓ 社区最后确认', scope:'community', enabled:true, content:`# 最后确认
+输出前内部确认：
+1. 这是当前平台真正会出现的内容？
+2. 大部分内容能追溯到当前正文世界，同时保留少量生活背景？
+3. 不同网友拥有不同身份、立场、信息来源和语言？
+4. 没有把私密信息、猜测或谣言误写成网友已知的世界事实？
+5. 本人账号、匿名/小号和楼主身份保持连续？
+6. 符合当前平台的输出格式？
+
+确认后直接输出结果，不输出分析过程。` },
 ];
 
 DEFAULT_ONLINE_PROMPT_BLOCKS.push(...DEFAULT_COMMUNITY_PROMPT_BLOCKS);
@@ -364,6 +420,13 @@ const LEGACY_DEFAULT_CONTENT_HASHES = {
   'world-context': '0700b270',
   'output-protocol': ['d366e96f', '5b0eb7be'],
   'context-assembly': 'e7f3deb9',
+  'community-head': 'd99b0835',
+  'community-world': '1be8c63e',
+  'community-tianya': '4f3581da',
+  'community-xhs': 'cd272828',
+  'community-zhihu': '9055f08a',
+  'community-custom': '93416089',
+  'community-tail': '784845fd',
 };
 
 function stableTextHash(value) {
@@ -419,6 +482,11 @@ function normalizeCustomBlock(item, index = 0) {
 }
 
 export function getPromptSettings() {
+  const activePresetId = getActivePromptPresetId();
+  if (activePresetId !== DEFAULT_PRESET_ID) {
+    const preset = getUserPromptPresets().find(item => item.id === activePresetId);
+    return { schemaVersion: 3, enabled: true, blocks: (preset?.blocks || []).map((item,index)=>normalizeCustomBlock({ ...item, custom:true },index)).filter(Boolean) };
+  }
   const saved = readJson(KEY, null);
   const savedBlocks = Array.isArray(saved?.blocks) ? saved.blocks : [];
   const defaults = cloneDefaults();
@@ -457,6 +525,12 @@ export function getPromptSettings() {
 }
 
 export function savePromptSettings(next) {
+  const activePresetId = getActivePromptPresetId();
+  if (activePresetId !== DEFAULT_PRESET_ID) {
+    const presets=getUserPromptPresets(); const preset=presets.find(item=>item.id===activePresetId); if(!preset)return getPromptSettings();
+    const blocks=Array.isArray(next?.blocks)?next.blocks:[]; preset.blocks=blocks.map((item,index)=>normalizeCustomBlock({ ...item, custom:true },index)).filter(Boolean);
+    writeJson(PRESETS_KEY,presets); return {schemaVersion:3,enabled:true,blocks:preset.blocks};
+  }
   const current = getPromptSettings();
   const blocks = Array.isArray(next?.blocks) ? next.blocks : current.blocks;
   const value = {
@@ -508,6 +582,8 @@ export function deleteCustomPromptBlock(blockId) {
 }
 
 export function restoreDefaultPromptSettings() {
+  const activePresetId=getActivePromptPresetId();
+  if(activePresetId!==DEFAULT_PRESET_ID){ const presets=getUserPromptPresets(); const preset=presets.find(x=>x.id===activePresetId); if(preset){preset.blocks=[];writeJson(PRESETS_KEY,presets);} return getPromptSettings(); }
   const current = getPromptSettings();
   const customBlocks = current.blocks
     .filter(item => item.custom === true)
@@ -519,6 +595,50 @@ export function restoreDefaultPromptSettings() {
   };
   writeJson(KEY, value);
   return value;
+}
+
+
+function getUserPromptPresets() {
+  const raw = readJson(PRESETS_KEY, []);
+  return Array.isArray(raw) ? raw.filter(item => item && item.id && item.name).map(item => ({
+    id: String(item.id), name: String(item.name), blocks: Array.isArray(item.blocks) ? item.blocks.map((block, index) => normalizeCustomBlock({ ...block, custom: true }, index)).filter(Boolean) : [],
+  })) : [];
+}
+
+export function listPromptPresets() {
+  return [{ id: DEFAULT_PRESET_ID, name: 'moli 默认预设', builtIn: true }, ...getUserPromptPresets().map(item => ({ id:item.id, name:item.name, builtIn:false }))];
+}
+
+export function getActivePromptPresetId() {
+  const id = String(readJson(ACTIVE_PRESET_KEY, DEFAULT_PRESET_ID) || DEFAULT_PRESET_ID);
+  return listPromptPresets().some(item => item.id === id) ? id : DEFAULT_PRESET_ID;
+}
+
+export function selectPromptPreset(presetId) {
+  const id = String(presetId || DEFAULT_PRESET_ID);
+  if (!listPromptPresets().some(item => item.id === id)) return false;
+  writeJson(ACTIVE_PRESET_KEY, id);
+  return true;
+}
+
+export function createPromptPreset(name = '新预设') {
+  const title = String(name || '').trim() || '新预设';
+  const presets = getUserPromptPresets();
+  const item = { id:`prompt-preset:${Date.now()}:${Math.random().toString(36).slice(2,8)}`, name:title, blocks:[] };
+  presets.push(item); writeJson(PRESETS_KEY, presets); writeJson(ACTIVE_PRESET_KEY, item.id); return item;
+}
+
+export function renamePromptPreset(presetId, name) {
+  const id=String(presetId||''); if(id===DEFAULT_PRESET_ID)return false;
+  const title=String(name||'').trim(); if(!title)return false;
+  const presets=getUserPromptPresets(); const item=presets.find(x=>x.id===id); if(!item)return false;
+  item.name=title; writeJson(PRESETS_KEY,presets); return true;
+}
+
+export function deletePromptPreset(presetId) {
+  const id=String(presetId||''); if(id===DEFAULT_PRESET_ID)return false;
+  const presets=getUserPromptPresets(); const next=presets.filter(x=>x.id!==id); if(next.length===presets.length)return false;
+  writeJson(PRESETS_KEY,next); if(getActivePromptPresetId()===id)writeJson(ACTIVE_PRESET_KEY,DEFAULT_PRESET_ID); return true;
 }
 
 export function buildPresetPrompt(scope = 'wechat', settings = getPromptSettings(), { excludeIds = [] } = {}) {
