@@ -21,6 +21,7 @@ import {
   incrementConversationUnread,
   getMessageById,
   updateMessageContent,
+  recallMessage,
   prepareFourthWallRegeneration,
   clearFourthWallSession,
   deleteMessage,
@@ -75,7 +76,7 @@ import {
 } from '../generation/generation-service.js';
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
-import { parseGeneratedMessages, previewGeneratedMessages, parseFourthWallResponse, previewFourthWallResponse } from '../generation/message-parser.js';
+import { parseGeneratedMessages, parseGeneratedMessageActions, previewGeneratedMessages, parseFourthWallResponse, previewFourthWallResponse } from '../generation/message-parser.js';
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings } from '../storage/prompt-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
 import { user_avatar } from '../../../../../personas.js';
@@ -1136,10 +1137,19 @@ export function createPhonePanel({
       <button data-message-action="regenerate" hidden>重答</button>
       <button data-message-action="retry" hidden>重试回复</button>
       <button data-message-action="quote">引用</button>
+      <button data-message-action="recall">撤回</button>
       <button data-message-action="copy">复制</button>
       <button data-message-action="forward">转发</button>
       <button data-message-action="multi">多选</button>
       <button data-message-action="delete" class="danger">删除</button>
+    </div>
+
+    <div class="moli-recall-peek-sheet" data-recall-peek-sheet hidden>
+      <div class="moli-recall-peek-card" role="dialog" aria-modal="true">
+        <div class="moli-recall-peek-head"><strong>撤回的消息</strong><button class="moli-icon-btn" data-action="recall-peek-close" aria-label="关闭">×</button></div>
+        <div class="moli-recall-peek-content" data-recall-peek-content></div>
+        <div class="moli-recall-peek-meta" data-recall-peek-meta></div>
+      </div>
     </div>
 
     <div class="moli-forward-sheet" data-forward-sheet hidden>
@@ -5017,6 +5027,26 @@ export function createPhonePanel({
       return;
     }
 
+    if (action === 'recall') {
+      hideMessageMenu();
+      if (message.recalledAt) return;
+      const confirmed = windowRef.confirm?.('撤回这条消息？') ?? true;
+      if (!confirmed) return;
+      const conversation = getConversation(scopeKey, currentContactId);
+      markPhoneMemoryReviewForMutation(scopeKey, currentContactId, conversation, messageId, '撤回消息');
+      if (recallMessage(scopeKey, currentContactId, messageId)) {
+        renderChat();
+        if (message.role === 'user' && input) {
+          input.value = String(message.content || '');
+          input.focus();
+          toast('已撤回，可重新编辑');
+        } else {
+          toast('已撤回');
+        }
+      }
+      return;
+    }
+
     if (action === 'quote') {
       pendingQuote = {
         messageId: String(message.id || ''),
@@ -5464,6 +5494,12 @@ export function createPhonePanel({
           return `${timeLabel ? `<div class="moli-chat-time-label">${escapeHtml(timeLabel)}</div>` : ''}<button type="button" class="moli-chat-system-event" data-moment-event-contact="${escapeHtml(message.momentEvent.contactId || '')}" data-moment-event-id="${escapeHtml(message.momentEvent.momentId || '')}">${escapeHtml(message.content || '')}</button>`;
         }
 
+        if (message.recalledAt) {
+          const recallName = isUser ? '你' : (message.senderSnapshot?.name || (isGroup && sender ? displayName(sender) : displayName(item)));
+          const actionText = isUser ? '重新编辑' : '偷看';
+          return `${timeLabel ? `<div class="moli-chat-time-label">${escapeHtml(timeLabel)}</div>` : ''}<div class="moli-recall-system" data-message-id="${escapeHtml(message.id || '')}"><span>${escapeHtml(recallName)}撤回了一条消息</span><button type="button" data-recall-action="${isUser ? 'reedit' : 'peek'}" data-recall-message-id="${escapeHtml(message.id || '')}">${actionText}</button></div>`;
+        }
+
         return `
           ${timeLabel ? `<div class="moli-chat-time-label">${escapeHtml(timeLabel)}</div>` : ''}
           <div class="moli-msg ${
@@ -5603,6 +5639,32 @@ export function createPhonePanel({
       }
       return;
     }
+  });
+
+  chatBody.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-recall-action]');
+    if (!button) return;
+    const messageId = String(button.dataset.recallMessageId || '');
+    const message = getMessageById(getScopeKey?.(), currentContactId, messageId);
+    if (!message) return;
+    if (button.dataset.recallAction === 'reedit') {
+      if (input) { input.value = String(message.content || ''); input.focus(); }
+      return;
+    }
+    const sheet = panel.querySelector('[data-recall-peek-sheet]');
+    const content = panel.querySelector('[data-recall-peek-content]');
+    const meta = panel.querySelector('[data-recall-peek-meta]');
+    if (content) content.textContent = String(message.content || '');
+    if (meta) meta.textContent = `${message.senderSnapshot?.name || chatTitle?.textContent || '角色'} · ${formatRealTimeLabel(message.ts)}`;
+    if (sheet) sheet.hidden = false;
+  });
+
+  panel.querySelector('[data-action="recall-peek-close"]')?.addEventListener('click', () => {
+    const sheet = panel.querySelector('[data-recall-peek-sheet]');
+    if (sheet) sheet.hidden = true;
+  });
+  panel.querySelector('[data-recall-peek-sheet]')?.addEventListener('click', event => {
+    if (event.target === event.currentTarget) event.currentTarget.hidden = true;
   });
 
   chatBody.addEventListener('click', event => {
@@ -6001,7 +6063,7 @@ export function createPhonePanel({
         ? result.replies
         : [{
             contact: result.contact,
-            messages: privateFourthWall ? fourthWallParsed.messages : parseGeneratedMessages(result.text),
+            messages: privateFourthWall ? fourthWallParsed.messages : parseGeneratedMessageActions(result.text),
             thinking: privateFourthWall ? fourthWallParsed.thinking : '',
           }];
 
@@ -6012,9 +6074,11 @@ export function createPhonePanel({
       const storyTime = messageStoryTimeMeta(conversation);
       const flatItems = [];
       replyBatches.forEach(batch => {
-        (batch.messages || []).forEach(content => {
+        (batch.messages || []).forEach(rawEntry => {
+          const actionEntry = rawEntry && typeof rawEntry === 'object' ? rawEntry : { type: 'message', content: rawEntry };
           flatItems.push({
-            content,
+            content: String(actionEntry.content || ''),
+            recallAfterSend: actionEntry.type === 'recall',
             contact: batch.contact,
             thinking: batch.thinking || '',
             messageType: privateFourthWall ? 'message' : '',
@@ -6098,6 +6162,15 @@ export function createPhonePanel({
               senderSnapshot: entry.senderSnapshot,
             }
           );
+          if (entry.recallAfterSend) {
+            const latestSaved = getConversation(requestScopeKey, requestConversationKey);
+            const savedMessage = [...(latestSaved?.messages || [])].reverse().find(item => item?.role === 'assistant' && String(item?.generationTurnId || '') === String(entry.generationTurnId || '') && !item.recalledAt && String(item?.content || '') === String(entry.content || ''));
+            if (savedMessage) {
+              if (getScopeKey?.() === requestScopeKey && currentContactId === requestConversationKey) renderChat();
+              await new Promise(resolve => windowRef.setTimeout(resolve, 1100));
+              recallMessage(requestScopeKey, requestConversationKey, savedMessage.id, { recalledBy: 'contact', seenBeforeRecall: true });
+            }
+          }
           savedCount += 1;
         }
       } catch (saveError) {
