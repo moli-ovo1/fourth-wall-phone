@@ -38,6 +38,7 @@ import {
 import {
   getTavernCharactersSnapshot,
   getCurrentTavernCharacterSnapshot,
+  getTavernCharacterForContact,
 } from '../core/tavern-contacts.js';
 import { getCurrentTavernStoryTimeState } from '../core/tavern-context.js';
 import {
@@ -133,7 +134,7 @@ export function createPhonePanel({
       </header>
       <main class="moli-launcher">
         <button type="button" class="moli-world-context-entry" data-action="select-current-world">
-          <span><small>（不在正文聊天框时必选）</small>当前角色世界</span><strong data-current-world-label>未选择</strong><em>›</em>
+          <span><small>（不在正文页面，无可选角色/在正文页面，但想和别的角色互动）</small>当前角色世界</span><strong data-current-world-label>未选择</strong><em>›</em>
         </button>
         <div class="moli-launcher-grid" aria-label="手机主屏幕">
           <button class="moli-app-icon" data-action="open-wechat" aria-label="打开微信">
@@ -3065,8 +3066,12 @@ export function createPhonePanel({
     const roleSources = item?.roleSources && typeof item.roleSources === 'object'
       ? item.roleSources
       : {};
-    const sourceMissing = item?.source?.status === 'missing';
-    const providedCount = TAVERN_ROLE_SOURCE_ITEMS.filter(([key]) => Boolean(tavernRoleSourceValue(item, key))).length;
+    const freshCharacter = getTavernCharacterForContact(item);
+    const displayItem = freshCharacter?.roleFidelity
+      ? { ...item, source: { ...(item?.source || {}), roleFidelity: freshCharacter.roleFidelity, status: 'available' } }
+      : item;
+    const sourceMissing = displayItem?.source?.status === 'missing';
+    const providedCount = TAVERN_ROLE_SOURCE_ITEMS.filter(([key]) => Boolean(tavernRoleSourceValue(displayItem, key))).length;
     const cardProfileEnabled = roleSources.cardProfile !== false;
     const cardStatus = providedCount
       ? `${sourceMissing ? '使用最近同步快照' : '自动跟随当前角色卡'} · 已检测到 ${providedCount} 项资料`
@@ -4121,7 +4126,7 @@ export function createPhonePanel({
           <input type="checkbox" data-prompt-block-enabled="${escapeHtml(item.id)}" ${item.enabled !== false ? 'checked' : ''}>
           <span><strong>${escapeHtml(item.title)}</strong>${item.custom ? '<small>用户自定义</small>' : ''}</span>
         </label>
-        ${item.custom ? `<button type="button" class="moli-prompt-edit-btn" data-prompt-edit="${escapeHtml(item.id)}">编辑</button>` : ''}
+        <button type="button" class="moli-prompt-edit-btn" data-prompt-edit="${escapeHtml(item.id)}">编辑</button>
       </div>`).join('');
   }
 
@@ -4130,7 +4135,7 @@ export function createPhonePanel({
     const item = settings.blocks.find(block => block.id === blockId);
     if (!item) return;
     activePromptBlockId = item.id;
-    if (promptEditorTitle) promptEditorTitle.textContent = item.custom ? '编辑自定义条目' : item.title;
+    if (promptEditorTitle) promptEditorTitle.textContent = item.custom ? '编辑自定义条目' : `编辑 · ${item.title}`;
     if (promptEditorContent) promptEditorContent.value = item.content || '';
     if (promptEditorNameWrap) promptEditorNameWrap.hidden = !item.custom;
     if (promptEditorName) promptEditorName.value = item.custom ? (item.title || '') : item.title;
