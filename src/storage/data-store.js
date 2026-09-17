@@ -824,6 +824,26 @@ export function deletePrivateConversationInstance(scopeKey, conversationKey) {
   return true;
 }
 
+export function rebindPrivateConversationInstance(scopeKey, conversationKey, nextScopeKey) {
+  const targetScope = String(nextScopeKey || '').trim();
+  if (!targetScope) throw new Error('目标正文世界不能为空');
+  const located = locateConversation(scopeKey, conversationKey);
+  const conversation = located?.conversation;
+  if (!conversation || conversation.type !== 'private' || conversation.scopeMode === 'global') throw new Error('可改绑的 NPC 私聊不存在');
+  const snapshot = JSON.parse(JSON.stringify(conversation));
+  delete located.data.conversations[conversationKey];
+  if (located.storage === 'global') saveGlobalConversationStore(located.data);
+  else saveScope(located.scopeKey || scopeKey, located.data);
+  snapshot.scopeMode = 'current';
+  snapshot.boundScopeKey = targetScope;
+  snapshot.storageScopeKey = targetScope;
+  snapshot.bodyContextEnabled = false;
+  const next = ensureBuiltins(targetScope);
+  next.conversations[conversationKey] = snapshot;
+  saveScope(targetScope, next);
+  return applyConversationDefaults(next.conversations[conversationKey], { scopeKey: targetScope });
+}
+
 export function getConversation(
   scopeKey,
   conversationKey
