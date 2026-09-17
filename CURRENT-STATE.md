@@ -1,4 +1,13 @@
 
+## v0.5.14 / moli171 — Character Identity × World Instance boundary repair
+
+- 联系人/私聊不再依赖当前 SillyTavern 正文是否打开：聊天列表会枚举已保存的正文与全局私聊；退出正文页面不会让 User 已添加的正文角色/自创联系人消失。
+- Tavern 角色卡解析继续严格属于 Contact Identity，并增强旧联系人兼容：合并可访问角色数组，按稳定 sourceId、文件/头像 basename、唯一角色名回退匹配；正文/全局 Conversation 不再决定能否读取角色卡。
+- 「当前角色世界」由单一 contactId 升级为精确 World Target：保存 contactId + conversationKey + scopeMode + scopeKey。选择器明确显示“角色 · 正文 / 角色 · 全局”，避免同名实例塌缩。旧 v1 contactId 选择会兼容读取。
+- 社区公开 UI 仍只显示自然角色名；@、邀请、转发等内部私聊路由继承当前角色世界：正文世界只命中该正文 scope 的角色实例，全局世界只命中全局实例。若目标在该世界尚无私聊实例，则在该世界创建，不再从当前页面/同名聊天中随意取最近一条。
+- 边界铁律：Contact Identity = 这个人是谁；Conversation/World Instance = 这段手机人生发生在哪里；Current Tavern Page 只提供当前环境，不能决定联系人是否存在，也不能替换社区行动目标。
+
+
 ## moli150 / v0.4.90 — 社区互动真实链路修复
 - 修复社区邀请“联系人不存在”：社区生成现在使用真实 conversationKey，而不是误把 conversation.id (`private:...`) 当存储键再创建伪会话。
 - 修复社区转发“假成功”：转发消息真正写入目标私聊，并保存 `messageType=community-forward` + `communityForward` 快照；聊天框复用朋友圈转发卡片视觉壳显示社区帖子卡片，生成上下文继续读取结构化社区转发语义。只有消息成功落库后才提示转发成功。
@@ -171,10 +180,3 @@
 - 因此在蒋郁文正文里与任煜安手机私聊，任煜安可读取任煜安自己的角色卡与正文 chat；技术可访问不等于认知传播，跨角色知识仍由 World Event / Awareness / Continuity 管理。
 - 主屏幕“当前角色世界”保留给没有天然单一联系人的公共/社区世界选择，注释调整为“（不在正文页面，无可选角色/在正文页面，但想和别的角色互动）”。它不再承担微信联系人身份绑定职责。
 - 本包融合 v0.5.11：全局 Tavern 角色卡稳定解析 + 开发阶段内置 moli Prompt 可编辑，无需先安装 v0.5.11。
-
-### v0.5.13 · moli170 · Conversation 边界回正 + 全局角色卡解析修复
-- 撤销 v0.5.12 中“联系人自动后台读取其自己的 SillyTavern chat”的 per-character Tavern chat resolver；`读取酒馆正文` 再次服从 Conversation Scope 与 `bodyContextEnabled`，避免全局 Conversation 被自动绑定到某条正文时间线。
-- 保留 Contact → SillyTavern 角色卡的独立解析：角色卡属于“这个人是谁”，不属于正文/全局 Conversation。
-- 加固全局联系人角色卡匹配：不再只取第一个可见 character array，而是合并 SillyTavern 可访问角色集合；sourceId 优先，其后以规范化头像文件名、唯一角色名兜底，修复全局联系人明明来自酒馆角色却显示“没有可读取的人设资料”的情况。
-- 保留开发阶段内置 moli Prompt 可编辑；发布前再隐藏内置条目的编辑入口。
-- 保留主屏幕“当前角色世界”现有文案；其最终公共世界/互动世界语义继续讨论，不借本次 bugfix 擅自重定义。

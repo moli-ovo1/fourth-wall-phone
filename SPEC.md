@@ -1,3 +1,12 @@
+
+### Character Identity × Conversation / World Instance 边界（v0.5.14 固化）
+
+- User 一旦添加 Contact，该人物是持久手机资产；退出/切换 SillyTavern 正文不得让联系人或已建立的私聊实例从手机消失。
+- 角色卡、人设、角色世界书等身份资料跟 Contact Identity；正文/全局只是 Conversation Scope，不能决定“有没有角色卡”。
+- 同一 Contact 可同时存在正文与全局 Conversation。任何会写入聊天、记忆、事件或行动结果的操作，不能只凭名字/contactId 猜目标，必须先解析到明确 Conversation / World Instance。
+- 「当前角色世界」是公共 App 的 World Target 选择器。选择时必须区分“正文/全局”；进入社区后 @/邀请/转发 UI 可只显示自然角色名，但底层必须继承已选 World Target，不能再次混入另一 scope 的同名角色。
+- Current Tavern Page 是环境输入，不是 Contact/Conversation 的存在性过滤器。
+
 # moli70 / v0.4.14
 
 - 自建 custom 角色「角色资料条目」升级为轻量角色世界书：每条可选「常驻」或「关键词触发」。
