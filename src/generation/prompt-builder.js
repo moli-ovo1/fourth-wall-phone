@@ -116,15 +116,8 @@ function roleFidelityBlocks(contact) {
   const fidelity = contact?.source?.roleFidelity;
   if (!fidelity || typeof fidelity !== 'object') return [];
 
-  const roleSources = contact?.roleSources && typeof contact.roleSources === 'object'
-    ? contact.roleSources
-    : {};
-  // moli73：资料页只保留一个“自动跟随角色卡”总开关。
-  // 底层仍完整兼容 SillyTavern 的各个角色卡字段；开启时只注入实际有内容的字段。
-  const cardProfileEnabled = roleSources.cardProfile !== false;
+  // 酒馆角色的角色卡属于 Character Identity 本身，必须进入 Role Fidelity；不再受旧 UI 开关影响。
   const blocks = [];
-
-  if (!cardProfileEnabled) return blocks;
 
   const identityParts = [
     fidelity.description
