@@ -10,8 +10,9 @@ function write(scopeKey,state){
   const payload=JSON.stringify(state);
   try{localStorage.setItem(storageKey,payload);}
   catch(error){
-    let moliBytes=0;try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i)||'';if(k.startsWith('moli-phone:'))moliBytes+=(k.length+(localStorage.getItem(k)||'').length)*2;}}catch{}
-    const wrapped=new Error(`社区存储写入失败：${error?.message||error}\n目标：${storageKey}\n本次社区数据约 ${(payload.length*2/1024/1024).toFixed(2)} MB；当前 moli localStorage 约 ${(moliBytes/1024/1024).toFixed(2)} MB。`);
+    let moliBytes=0;const largest=[];try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i)||'';if(!k.startsWith('moli-phone:'))continue;const raw=localStorage.getItem(k)||'';const bytes=(k.length+raw.length)*2;moliBytes+=bytes;largest.push({key:k,bytes});}largest.sort((a,b)=>b.bytes-a.bytes);}catch{}
+    const top=largest.slice(0,12).map((item,index)=>`${index+1}. ${(item.bytes/1024/1024).toFixed(2)} MB  ${item.key}`).join('\n');
+    const wrapped=new Error(`社区存储写入失败：${error?.message||error}\n目标：${storageKey}\n本次社区数据约 ${(payload.length*2/1024/1024).toFixed(2)} MB；当前 moli localStorage 约 ${(moliBytes/1024/1024).toFixed(2)} MB。${top?`\n\n占用最大的 moli 存储：\n${top}`:''}`);
     wrapped.name=error?.name||'CommunityStorageError';wrapped.cause=error;throw wrapped;
   }
 }
