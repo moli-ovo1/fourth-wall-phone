@@ -4288,26 +4288,25 @@ export function createPhonePanel({
     return raw;
   }
 
-  function privateConversationScopeAnnotation(conversation, ownTitle = '') {
+  function privateConversationScopeAnnotation(conversation, ownTitle = '', item = null) {
+    if (item?.kind === 'custom' && item?.customRoleMode === 'npc' && conversation?.scopeMode !== 'global') return 'NPC';
     if (conversation?.scopeMode === 'global') {
       const title = String(ownTitle || conversation?.title || '').trim();
       return title ? `陪伴•${title}` : '陪伴';
     }
-    const title = String(ownTitle || conversation?.title || '').trim();
-    const chatLabel = scopeChatLabel(conversation?.boundScopeKey || conversation?.storageScopeKey || '');
-    const worldLabel = title || chatLabel;
-    return worldLabel ? `正文•${worldLabel}` : '正文';
+    // 聊天列表/标题只表达产品身份，不暴露正文标题、分支号等内部 World Instance 标签。
+    return '正文';
   }
 
   function privateConversationTitle(conversation, item) {
     if (isFourthWallContact(item)) return '皮下';
-    return `${displayName(item)} · ${privateConversationScopeAnnotation(conversation)}`;
+    return `${displayName(item)} · ${privateConversationScopeAnnotation(conversation, '', item)}`;
   }
 
   function privateConversationListIdentity(conversation, item) {
     if (isFourthWallContact(item)) return { name: '皮下', annotation: '我在这边，你呢？' };
     if (specialPersonaIds.has(String(item?.id || ''))) return { name: displayName(item), annotation: '' };
-    return { name: displayName(item), annotation: privateConversationScopeAnnotation(conversation) };
+    return { name: displayName(item), annotation: privateConversationScopeAnnotation(conversation, '', item) };
   }
 
   function refreshTavernSources() {
