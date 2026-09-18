@@ -373,3 +373,12 @@
 - Community quota diagnostics now include the 12 largest `moli-phone:` localStorage keys and their approximate sizes.
 - This is intentionally diagnostic-only: do not migrate Community merely because its write failed; first identify the actual large persistent stores consuming the shared origin quota.
 - Preserve the user's over-quota state until the true large stores are identified; do not recommend clearing site data as the default recovery path.
+
+
+## v0.5.47 / moli203 — temporary-scope storage cleanup
+- Confirmed quota pressure was dominated by a legacy `moments:v2:character:unknown-character:fallback:*` record (~2.56 MB).
+- Added one-time startup cleanup for persisted business records whose decoded scope is `:fallback:` or `:no-chat` across Moments, Community, World Events, Awareness, Continuity and scope runtime stores.
+- This is intentionally deletion, not migration: fallback/no-chat are temporary startup/runtime scopes and must never become formal archives. The current storage modules already route non-persistent scopes to in-memory transient state.
+- Cleanup runs before normal data initialization, removes the large records first, then writes a tiny idempotence marker so it can recover even when localStorage begins at quota.
+- Formal `:chat:` records, contacts/role configuration, prompt/API settings and world-book/profile configuration are not cleared. Conversation IndexedDB v2 remains unchanged.
+- Rejected alternative: moving legacy fallback payloads into IndexedDB. That would preserve invalid archival behavior instead of fixing the lifecycle boundary.
