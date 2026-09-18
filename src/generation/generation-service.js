@@ -1664,36 +1664,42 @@ export async function generateCommunitySettlement({ scopeKey, post, pending = []
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const userName=getTavernUserContext().name||'User';
   const contactsById=new Map(getContacts().map(item=>[String(item.id||''),item]));
-  const targets=[];
+  const explicit=[];
   for(const item of (Array.isArray(pending)?pending:[]).filter(x=>x?.type==='invite'||x?.type==='mention')){
-    const raw=contactsById.get(String(item.targetId||'')); if(!raw) continue;
-    const contact=await fullyHydratedContact(raw);
-    const name=String(contact.remark||contact.displayName||contact.name||contact?.source?.originalName||'角色');
-    const identity=communityIdentityAnchor(contact);
-    let lore='';
-    try{
-      const scanText=[post.title,post.content,communityPostFacts(post,0),identity].filter(Boolean).join('\n');
-      const wb=contact.kind==='custom'?await getActivatedCustomWorldBook({contact,scanText}):await getActivatedTavernWorldBook({contact,scanText});
-      lore=String(wb?.text||'').trim();
-    }catch(error){console.warn('[moli小手机] settlement target lore failed:',contact.id,error);}
-    targets.push({item,contactId:String(contact.id),name,identity,lore});
+    const raw=contactsById.get(String(item.targetId||'')); if(raw) explicit.push({item,raw,required:true});
   }
-  const targetText=targets.length?targets.map((t,i)=>`【目标${i+1}｜targetId=${t.contactId}｜pendingId=${t.item.id}】\n${t.identity}\n${t.lore?`【该人物相关世界书】\n${t.lore}`:''}\n触发：${t.item.type==='invite'?'User明确邀请':`User明确@：${String(t.item.content||'')}`}\n要求：必须公开回应，不允许SKIP；只可选择 REAL 或 ANONYMOUS。`).join('\n\n'):'（本轮没有被明确邀请/@的角色）';
-  const system=`你正在执行 moli 社区的一次“统一刷新结算”。一次刷新只能对应这一次模型调用。你必须同时处理：1) User 已积累的评论与讨论；2) 所有明确邀请/@角色的强制公开回应；3) 当前平台自然出现的普通网友新增互动。\n\n硬规则：被明确邀请/@的角色必须公开回应，不允许SKIP，只能选择实名 REAL 或匿名 ANONYMOUS。不同角色必须严格依据各自的人设/世界书，不得互相串设定。匿名只是对其他社区参与者隐藏真实身份，不得虚构后台实名、IP追踪等机制否定匿名。普通网友互动可以为0条。只输出严格JSON。`;
-  const schema=`返回：{"targetActions":[{"pendingId":"必须对应输入pendingId","targetId":"角色id","identity":"REAL|ANONYMOUS","alias":"匿名时网名","publicText":"公开回复/回答正文","privateDecision":"SEND|SKIP","privateReason":"可选","privateMessages":["0~3条私聊"]}],"comments":[{"author":"网友","authorId":"可选","content":"新增评论","replyToCommentId":"可选已有评论id"}],"answers":[{"author":"回答者","authorId":"可选","content":"知乎新增回答","upvotes":0}],"commentAdditions":[{"answerId":"知乎已有answerId","comments":[{"author":"网友","content":"新增评论","replyToCommentId":"可选"}]}]}。非知乎 answers/commentAdditions 为空；知乎回答评论刷新可使用 comments 或 commentAdditions。`;
-  const user=`平台：${post.section}\n结算模式：${mode}${answerId?`\n当前回答id：${answerId}`:''}\n标题：${post.title||''}\n正文：${post.content||''}\n\n【刷新前完整可见讨论】\n${communityPostFacts(post,0)}\n\n【本轮明确角色目标】\n${targetText}\n\n${schema}`;
+  // 已经真实参与过该帖的角色，在帖子继续变化时仍有自然行动机会；这不是随机概率，也不等于必须继续发言。
+  const explicitIds=new Set(explicit.map(x=>String(x.raw.id)));
+  const participantIds=new Set();
+  const addActor=a=>{const id=String(a?.knownIdentityId||a?.id||'');if(id&&contactsById.has(id)&&!explicitIds.has(id))participantIds.add(id);};
+  for(const c of (post.comments||[]))addActor(c?.author);
+  if(post.section==='zhihu')for(const a of (post.extra?.answers||[])){addActor(a?.author);for(const c of (a?.comments||[]))addActor(c?.author);}
+  const candidates=[...explicit,...[...participantIds].slice(0,6).map(id=>({item:null,raw:contactsById.get(id),required:false}))];
+  const targets=[];
+  const query=[post.title,post.content,communityPostFacts(post,0)].filter(Boolean).join('\n');
+  for(const row of candidates){
+    const contact=await fullyHydratedContact(row.raw); const name=String(contact.remark||contact.displayName||contact.name||contact?.source?.originalName||'角色');
+    const identity=communityIdentityAnchor(contact); let lore='';
+    try{const wb=contact.kind==='custom'?await getActivatedCustomWorldBook({contact,scanText:query+'\n'+identity}):await getActivatedTavernWorldBook({contact,scanText:query+'\n'+identity});lore=String(wb?.text||'').trim();}catch(error){console.warn('[moli小手机] settlement target lore failed:',contact.id,error);}
+    const continuity=buildCharacterContinuity(scopeKey,contact.id,{limit:36,query}).text;
+    const persona=contact.kind==='builtin'?replaceUserPlaceholder(getBuiltinPersonaPrompt(contact.id),userName):'';
+    targets.push({item:row.item,contactId:String(contact.id),name,required:row.required,identity,lore,continuity,persona});
+  }
+  const targetText=targets.length?targets.map((t,i)=>`【人物${i+1}｜targetId=${t.contactId}${t.item?`｜pendingId=${t.item.id}`:''}｜${t.required?'明确互动：本轮必须回应':'既有参与者：本轮可自然继续或SKIP'}】\n${t.identity}${t.persona?`\n【人物核心Prompt】\n${t.persona}`:''}${t.lore?`\n【该人物相关世界书】\n${t.lore}`:''}${t.continuity?`\n【该人物真正知道/经历过的连续性】\n${t.continuity}`:''}\n${t.item?`本轮触发：${t.item.type==='invite'?'User明确邀请':`User明确@：${String(t.item.content||'')}`}`:'本轮触发：这个人物此前已经真实参与过该帖；只有当新讨论、人际关系、立场或未解决事件给了他继续行动的真实动机时才继续，否则SKIP。'}\n请先作为这个人物本人理解当前帖子，再决定动作；不要写成中立总结员、客服、百科或泛泛劝慰。`).join('\n\n'):'（本轮没有角色目标）';
+  const system=`你正在执行 moli 社区的一次统一刷新结算。一次刷新只对应这一次模型调用，但这不意味着把多个人物压成同一种口吻。你必须分别扮演每个人物：人物身份、语言习惯、与User关系、自己真正知道的经历和世界书都只属于该人物。\n\n规则：明确邀请/@的角色本轮必须公开回应，只能 REAL 或 ANONYMOUS，不能SKIP。此前已参与帖子的人属于自然候选：知道≠在意≠行动；根据人物性格、关系、帖子新增变化、是否有人回应他、是否存在未解决冲突决定 REAL / ANONYMOUS / SKIP，禁止用Math.random或固定百分比代替人物判断。匿名只对其他社区参与者隐藏真实身份，不得虚构后台实名/IP追踪来否定匿名。普通网友互动可以为0条。只输出严格JSON。`;
+  const schema=`返回：{"targetActions":[{"pendingId":"明确互动时原样返回；自然候选留空","targetId":"角色id","decision":"REAL|ANONYMOUS|SKIP","alias":"匿名时网名","publicText":"REAL/ANONYMOUS时正文；SKIP留空","privateDecision":"SEND|SKIP","privateReason":"可选","privateMessages":["0~3条私聊"]}],"comments":[{"author":"网友","authorId":"可选","content":"新增评论","replyToCommentId":"可选已有评论id"}],"answers":[],"commentAdditions":[]}。`;
+  const user=`平台：${post.section}\n结算模式：${mode}${answerId?`\n当前回答id：${answerId}`:''}\n标题：${post.title||''}\n正文：${post.content||''}\n\n【刷新前完整可见讨论】\n${communityPostFacts(post,0)}\n\n【逐人物 Acting Pack】\n${targetText}\n\n${schema}`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
-  const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
-  let data; try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('社区统一刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
-  const allowed=new Map(targets.map(t=>[String(t.item.id),t]));
-  const targetActions=[];
+  const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''); let data;
+  try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('社区统一刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
+  const byId=new Map(targets.map(t=>[t.contactId,t])); const targetActions=[]; const returnedRequired=new Set();
   for(const action of (Array.isArray(data?.targetActions)?data.targetActions:[])){
-    const t=allowed.get(String(action?.pendingId||'')); if(!t)continue;
-    const publicText=String(action?.publicText||'').trim(); if(!publicText)continue;
-    const identity=String(action?.identity||'REAL').toUpperCase()==='ANONYMOUS'?'ANONYMOUS':'REAL';
-    targetActions.push({pendingId:String(t.item.id),targetId:t.contactId,kind:String(t.item.kind||'comment'),answerId:String(t.item.answerId||''),replyToCommentId:String(t.item.replyToCommentId||''),identity,alias:String(action?.alias||'匿名用户').trim()||'匿名用户',publicText,privateDecision:String(action?.privateDecision||'SKIP').toUpperCase()==='SEND'?'SEND':'SKIP',privateReason:String(action?.privateReason||'').trim(),privateMessages:(Array.isArray(action?.privateMessages)?action.privateMessages:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,3)});
+    const t=byId.get(String(action?.targetId||'')); if(!t)continue; const decision=String(action?.decision||action?.identity||'SKIP').toUpperCase();
+    if(t.required&&decision==='SKIP')continue; const identity=decision==='ANONYMOUS'?'ANONYMOUS':decision==='REAL'?'REAL':'SKIP'; const publicText=String(action?.publicText||'').trim();
+    if(identity!=='SKIP'&&!publicText)continue; if(t.required)returnedRequired.add(t.contactId);
+    targetActions.push({pendingId:String(t.item?.id||''),targetId:t.contactId,natural:!t.required,kind:String(t.item?.kind||'comment'),answerId:String(t.item?.answerId||''),replyToCommentId:String(t.item?.replyToCommentId||''),identity,alias:String(action?.alias||'匿名用户').trim()||'匿名用户',publicText,privateDecision:String(action?.privateDecision||'SKIP').toUpperCase()==='SEND'?'SEND':'SKIP',privateReason:String(action?.privateReason||'').trim(),privateMessages:(Array.isArray(action?.privateMessages)?action.privateMessages:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,3)});
   }
-  if(targetActions.length<targets.length) throw new Error('角色必须回应，但统一刷新没有返回全部目标角色的公开正文，请重试刷新。');
+  if(targets.filter(t=>t.required).some(t=>!returnedRequired.has(t.contactId)))throw new Error('角色必须回应，但统一刷新没有返回全部明确邀请/@角色的公开正文，请重试刷新。');
   const comments=(Array.isArray(data?.comments)?data.comments:[]).slice(0,8).map((c,i)=>({id:`webc_${Date.now()}_${i}_${Math.random().toString(36).slice(2,7)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:String(c?.content||'').trim().slice(0,1200),replyToCommentId:String(c?.replyToCommentId||'')})).filter(x=>x.content);
   const answers=(Array.isArray(data?.answers)?data.answers:[]).slice(0,3).map((a,i)=>({id:`za_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author,userName,'匿名用户')},content:String(a?.content||'').trim().slice(0,8000),upvotes:Number(a?.upvotes||0),comments:[]})).filter(x=>x.content);
   const commentAdditions=(Array.isArray(data?.commentAdditions)?data.commentAdditions:[]).slice(0,8).map(batch=>({answerId:String(batch?.answerId||''),comments:(Array.isArray(batch?.comments)?batch.comments:[]).slice(0,6).map((c,i)=>({id:`zac_${Date.now()}_${i}_${Math.random().toString(36).slice(2,7)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:String(c?.content||'').trim().slice(0,1200),replyToCommentId:String(c?.replyToCommentId||'')})).filter(x=>x.content)})).filter(x=>x.answerId&&x.comments.length);
