@@ -1954,6 +1954,7 @@ function contextMessageForContact(message, conversation, contactId) {
           authorName: String(message.communityForward.authorName || '匿名网友'),
           title: String(message.communityForward.title || '无标题'),
           content: String(message.communityForward.content || ''),
+          snapshotAt: Number(message.communityForward.snapshotAt || message.createdAt || 0),
         }
       : null,
   };
