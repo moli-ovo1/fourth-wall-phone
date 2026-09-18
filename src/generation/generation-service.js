@@ -1426,6 +1426,103 @@ function parsePublicWebBatch(text, userName = 'User') {
   })).filter(item => item.title && (item.section !== 'xiaohongshu' || (item.extra?.imagePrompt && item.extra?.imageText)));
 }
 
+
+function truncateCommunityContext(value, limit = 5000) {
+  const text = String(value || '').trim();
+  if (!text || text.length <= limit) return text;
+  return `${text.slice(0, limit)}\n…（为社区上下文压缩，后文省略）`;
+}
+
+function communityWorldContacts(scopeKey) {
+  const key = String(scopeKey || '');
+  if (!key) return [];
+  const contacts = new Map(getContacts().map(item => [String(item.id || ''), item]));
+  const rows = [];
+  const seen = new Set();
+  for (const conversation of getScopeConversations(key)) {
+    if (conversation?.type !== 'private' || conversation.scopeMode === 'global') continue;
+    const bound = String(conversation.boundScopeKey || conversation.storageScopeKey || key);
+    if (bound !== key) continue;
+    const id = String(conversation.contactId || '');
+    if (!id || seen.has(id)) continue;
+    const contact = contacts.get(id);
+    if (!contact || String(contact.id || '').startsWith('builtin:')) continue;
+    if (contact.kind === 'custom' && contact.customRoleMode === 'global') continue;
+    seen.add(id);
+    rows.push(hydratedContact(contact));
+  }
+  return rows;
+}
+
+function communityIdentityAnchor(contact) {
+  if (!contact) return '';
+  const name = String(contact.remark || contact.displayName || contact.name || contact?.source?.originalName || '未命名人物').trim();
+  const blocks = [`【人物身份锚点：${name}】`];
+  if (contact.kind === 'custom') {
+    if (String(contact.intro || '').trim()) blocks.push(`简介：${truncateCommunityContext(contact.intro, 2200)}`);
+    if (String(contact.prompt || '').trim()) blocks.push(`人物设定：${truncateCommunityContext(contact.prompt, 3200)}`);
+    if (Array.isArray(contact.profileEntries) && contact.profileEntries.length) {
+      const profile = contact.profileEntries.slice(0, 12).map(entry => {
+        const title = String(entry?.title || '资料').trim();
+        const content = truncateCommunityContext(entry?.content, 1800);
+        return content ? `【${title}】\n${content}` : '';
+      }).filter(Boolean).join('\n');
+      if (profile) blocks.push(`资料卡：\n${truncateCommunityContext(profile, 5000)}`);
+    }
+  } else if (contact.kind === 'tavern') {
+    const fidelity = contact?.source?.roleFidelity || {};
+    const stable = Object.entries(fidelity).map(([key, value]) => {
+      const text = truncateCommunityContext(value, 2600);
+      return text ? `${key}：${text}` : '';
+    }).filter(Boolean).join('\n');
+    if (stable) blocks.push(`角色卡：\n${truncateCommunityContext(stable, 6500)}`);
+  }
+  return truncateCommunityContext(blocks.join('\n'), 7500);
+}
+
+async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
+  const recentText = recent?.messages?.map(message => `${message?.role === 'user' ? userName : (message?.name || '角色')}：${String(message?.content || '')}`).join('\n') || '';
+  const contacts = communityWorldContacts(scopeKey);
+  const identityPack = contacts.map(communityIdentityAnchor).filter(Boolean).join('\n\n');
+  const scanText = [recentText, identityPack, ...contacts.map(contact => String(contact.name || contact?.source?.originalName || ''))].filter(Boolean).join('\n');
+
+  const selectedId = getSelectedWorldContactId();
+  let selected = contacts.find(contact => String(contact.id || '') === String(selectedId || '')) || contacts[0] || null;
+  if (!selected && selectedId) {
+    const base = getContacts().find(item => String(item.id || '') === String(selectedId));
+    selected = base ? hydratedContact(base) : null;
+  }
+
+  let worldBookText = '';
+  if (selected) {
+    try {
+      const worldBook = selected.kind === 'custom'
+        ? await getActivatedCustomWorldBook({ contact: selected, scanText })
+        : await getActivatedTavernWorldBook({ contact: selected, scanText });
+      worldBookText = truncateCommunityContext(worldBook?.text || '', 9000);
+    } catch (error) {
+      console.warn('[moli小手机] community world-book context failed:', error);
+    }
+  }
+
+  let longTermText = '';
+  if (String(scopeKey || '').includes(':chat:')) {
+    try {
+      const longTerm = getBaiBaiLongTermMemory();
+      longTermText = truncateCommunityContext(longTerm?.text || longTerm?.content || longTerm || '', 7000);
+    } catch (error) {
+      console.warn('[moli小手机] community long-term context failed:', error);
+    }
+  }
+
+  return [
+    identityPack ? `【稳定人物身份 · Identity Anchor】\n以下用于确认“谁是谁”，不得把一个人物的职业、关系、性别或经历移植给另一个人物。\n${truncateCommunityContext(identityPack, 14000)}` : '',
+    recentText ? `【当前正文 · Recent World State】\n${truncateCommunityContext(recentText, 12000)}` : '',
+    worldBookText ? `【相关世界书 · Relevant World Lore】\n${worldBookText}` : '',
+    longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道。\n${longTermText}` : '',
+  ].filter(Boolean).join('\n\n');
+}
+
 function communityNativeRoster(scopeKey) {
   const key = String(scopeKey || '');
   if (!key) return '';
@@ -1451,27 +1548,7 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
   const userContext = getTavernUserContext();
   const userName = userContext.name || 'User';
   const recent = getRecentTavernBody({ messageLimit: 14, charLimit: 12000 });
-  let context = recent?.messages?.map(m=>`${m?.role==='user'?userName:(m?.name||'角色')}：${String(m?.content||'')}`).join('\n') || '';
-  if (!context.trim()) {
-    const selectedId = getSelectedWorldContactId();
-    const baseContact = getContacts().find(item => String(item.id || '') === selectedId) || null;
-    const contact = baseContact ? hydratedContact(baseContact) : null;
-    if (contact) {
-      const scanText = [contact.name, contact.intro, contact.prompt, ...(contact.kind==='tavern'?Object.values(contact?.source?.roleFidelity||{}):[])].filter(Boolean).join('\n');
-      const worldBook = contact.kind === 'custom'
-        ? await getActivatedCustomWorldBook({ contact, scanText })
-        : await getActivatedTavernWorldBook({ contact, scanText });
-      const profile = contact.kind === 'custom' && Array.isArray(contact.profileEntries)
-        ? getActivatedProfileEntries(contact.profileEntries, scanText).map(entry=>`【${entry.title}】\n${entry.content}`).join('\n\n')
-        : '';
-      context = [
-        `【当前角色世界：${contact.name || contact?.source?.originalName || '未命名角色'}】`,
-        contact.intro, contact.prompt,
-        contact.kind==='tavern' ? Object.values(contact?.source?.roleFidelity||{}).filter(Boolean).join('\n\n') : '',
-        profile, worldBook?.text || ''
-      ].map(v=>String(v||'').trim()).filter(Boolean).join('\n\n');
-    }
-  }
+  let context = await buildCommunityWorldContextPack(scopeKey, recent, userName);
   const userIdentityBoundary = `【User 身份（系统事实）】\n姓名：${userName}\n${userContext.description?`User Persona：${userContext.description}`:'User Persona：未提供'}\n硬边界：以上只描述 User。正文中的其他女性/男性角色、配角、网友的人设不得移植给 User；允许网友造谣、猜测或误解，但必须表现为未经证实的社区说法，不能把别人的角色卡事实当成 User 的系统事实。`;
   context = [userIdentityBoundary, context].filter(Boolean).join('\n\n');
     const nativeRoster = communityNativeRoster(scopeKey);
