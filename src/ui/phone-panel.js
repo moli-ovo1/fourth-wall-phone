@@ -6413,36 +6413,53 @@ export function createPhonePanel({
 
 
   function sendMessage() {
-    if (!currentContactId) return;
+    let stage = '入口';
+    try {
+      if (!currentContactId) {
+        toast('发送失败：当前没有聊天对象');
+        return;
+      }
 
-    if (generationController || isGenerationActive(conversationRuntimeScopeKey(), currentContactId)) {
-      stopGeneration();
-      return;
+      stage = '检查生成状态';
+      if (generationController || isGenerationActive(conversationRuntimeScopeKey(), currentContactId)) {
+        stopGeneration();
+        return;
+      }
+
+      stage = '读取输入框';
+      const text = String(input?.value || '').trim();
+
+      if (!text) {
+        requestReply();
+        return;
+      }
+
+      stage = '解析聊天作用域';
+      const conversation = currentConversation();
+      const scopeKey = conversationRuntimeScopeKey(conversation);
+      if (!scopeKey) throw new Error('当前聊天作用域为空');
+
+      stage = '保存 User 消息';
+      appendMessage(
+        scopeKey,
+        currentContactId,
+        'user',
+        text,
+        { ...(pendingQuote ? { quote: pendingQuote } : {}), storyTime: messageStoryTimeMeta(conversation) }
+      );
+
+      stage = '清理输入框';
+      if (input) input.value = '';
+      pendingQuote = null;
+      if (quoteDraft) quoteDraft.hidden = true;
+      if (quoteDraftText) quoteDraftText.textContent = '';
+
+      stage = '刷新聊天界面';
+      renderChat();
+    } catch (error) {
+      console.error(`[moli小手机] send message failed at ${stage}:`, error);
+      toast(`发送失败（${stage}）：${error?.message || error}`);
     }
-
-    const text = input.value.trim();
-
-    if (!text) {
-      requestReply();
-      return;
-    }
-
-    const scopeKey = conversationRuntimeScopeKey();
-
-    appendMessage(
-      scopeKey,
-      currentContactId,
-      'user',
-      text,
-      { ...(pendingQuote ? { quote: pendingQuote } : {}), storyTime: messageStoryTimeMeta(currentConversation()) }
-    );
-
-    input.value = '';
-    pendingQuote = null;
-    if (quoteDraft) quoteDraft.hidden = true;
-    if (quoteDraftText) quoteDraftText.textContent = '';
-
-    renderChat();
   }
 
   function clampPanelPosition(left, top) {
@@ -8292,10 +8309,13 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
   });
   applyCurrentChatWallpaper();
 
-  panel.querySelector(
-    '[data-action="send"]'
-  ).onclick =
-    sendMessage;
+  // 发送按钮使用显式事件监听；不要依赖可被后续代码覆盖的 onclick 属性。
+  // 捕获运行时异常时 sendMessage 会直接在 UI 中报告具体阶段。
+  sendButton?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    sendMessage();
+  });
 
 
   chatInfo.addEventListener('input', event => {
