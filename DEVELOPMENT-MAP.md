@@ -3190,3 +3190,9 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - Memory Service 在 transcript 层把社区转发降为标题级事件，并在压缩规则中禁止总结完整正文、回答、楼层或评论区；双方随后形成的重要讨论仍可正常概括。
 - 小红书作者回复徽标使用“作者”，天涯仍使用“楼主”。
 - 兼容策略：旧转发若仍保存 `content` 可继续回退读取；无 schemaVersion、Storage Key 或 Scope Key 变化，无需迁移。
+
+## v0.5.30 后增量 — Community Invite Identity Decision
+- 社区邀请的公开决策从顺序式 `REPLY/SKIP → REAL/ANONYMOUS` 改为同层 `REPLY_REAL / REPLY_ANONYMOUS / SKIP`，避免谨慎人物在尚未考虑匿名前就因身份风险直接退出。
+- Prompt 明确：仅担心实名曝光时应考虑匿名；SKIP 只用于即使匿名也不愿参与，并要求返回原因。
+- 结算提示分别显示实名回应、匿名回应与不回应原因；World Event 继续保存最终 identityMode 与 publicDecision。
+- 保留旧 `REPLY + community_identity` 解析兼容；不修改 Store Schema、Scope Key、manifest 版本，无需迁移。
