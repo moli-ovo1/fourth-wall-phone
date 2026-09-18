@@ -4157,3 +4157,11 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - Community 知道 World 事实，不等于每个角色知道。角色知识必须通过 Awareness。
 - 角色真正参与帖子或 User 明确转发帖子时，建立带 `snapshotAt` 的帖子认知水位；旧水位不能自动读取未来新增楼层/评论。
 - 角色间私密内容只进入直接参与者 Continuity，禁止因为数据库可访问而广播给第三人。
+
+
+## v0.5.34 / moli190 — runtime regression + Community identity hardening
+- Fixed group-chat runtime regression `scopeKey is not defined`: `batchRoleProfile()` had referenced `scopeKey` / `id` without receiving them. Group generation now passes the resolved conversation scope explicitly; this restores both 围读会 and ordinary group generation.
+- Provider rejection text is treated as an API failure, not as an assistant utterance. Known Gemini/provider safety/error payloads are rejected before message parsing, so they cannot be saved as character chat bubbles or continuity.
+- Community World Context now resolves activated world-book material per World-bound contact instead of selecting only one contact's world book. NPC profile/Role Fidelity remains the identity anchor; each NPC's own activated world-book entries can supplement missing identity facts.
+- Removed the final extra truncation pass around the assembled Community Identity Anchor and Recent World State. Source-specific safety budgets remain for now; do not remove all limits blindly because provider context windows are finite. Future work should replace scattered fixed caps with one provider-aware context budget.
+- IMPORTANT: one-refresh/one-API Community settlement is NOT falsely marked closed here. Current queued invite/@ settlement and ambient refresh are still separate generation paths. Next package must unify them into one batch settlement request before further Awareness expansion.
