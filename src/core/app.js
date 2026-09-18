@@ -5,6 +5,7 @@ import { getCurrentScopeKey } from './tavern-scope.js';
 import { createReviewAutomation } from '../automation/review.js';
 import { createPrivateAutomation } from '../automation/private-automation.js';
 import { createTavernInjectionBridge } from './tavern-injection.js';
+import { initConversationStorage } from '../storage/conversation-db.js';
 import {
   getContacts,
   getScopeConversations,
@@ -13,8 +14,13 @@ import {
 
 let appInstance = null;
 
-export function initApp() {
+export async function initApp() {
   appInstance?.destroy?.();
+
+  const migration = await initConversationStorage();
+  if (migration.migrated) {
+    try { window.toastr?.success?.(`微信聊天已安全迁移到新版存储（${migration.count} 个会话）`, '', { timeOut: 3500, positionClass: 'toast-top-center' }); } catch {}
+  }
 
   const uiState = loadUiState();
 
