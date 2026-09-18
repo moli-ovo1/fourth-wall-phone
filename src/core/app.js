@@ -7,6 +7,7 @@ import { createPrivateAutomation } from '../automation/private-automation.js';
 import { createTavernInjectionBridge } from './tavern-injection.js';
 import { initConversationStorage } from '../storage/conversation-db.js';
 import { cleanupLegacyTemporaryScopeStorage } from '../storage/temporary-scope-cleanup.js';
+import { initLargeStorage } from '../storage/large-storage.js';
 import {
   getContacts,
   getScopeConversations,
@@ -22,6 +23,12 @@ export async function initApp() {
   if (cleanup.cleaned) {
     const mb = (cleanup.bytes / 1024 / 1024).toFixed(2);
     try { window.toastr?.success?.(`已清理旧临时作用域数据 ${mb} MB（${cleanup.removed} 项）`, '', { timeOut: 3500, positionClass: 'toast-top-center' }); } catch {}
+  }
+
+  const largeMigration = await initLargeStorage();
+  if (largeMigration.migrated) {
+    const mb = (largeMigration.bytes / 1024 / 1024).toFixed(2);
+    try { window.toastr?.success?.(`长期数据已迁移到大容量存储 ${mb} MB（${largeMigration.count} 项）`, '', { timeOut: 4000, positionClass: 'toast-top-center' }); } catch {}
   }
 
   const migration = await initConversationStorage();
