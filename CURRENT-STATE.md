@@ -360,3 +360,9 @@
 - 首次启动执行 COPY → VERIFY → SWITCH → CLEANUP：先复制旧 localStorage Conversation，校验会话键数量与存在性，成功后才删除旧大 JSON；失败则保留旧数据并阻止主体启动，避免静默丢失。
 - 运行期保持同步内存快照兼容现有 data-store API，持久化异步写入 IndexedDB；不再因每发一条消息重写 localStorage 巨型 JSON 而触发 quota。
 - 本阶段只迁移已被真实证据证明爆仓的 global conversations；Community / World Event / Awareness 等是否迁移，后续依据真实占用再决定。
+
+
+## v0.5.45 / moli201 — Community User comment diagnostics
+- Conversation Storage v2 remains unchanged and verified by User to restore WeChat sending after localStorage quota exhaustion.
+- Added visible diagnostics around Community User-comment persistence. If Community localStorage write fails, the UI now reports the exact storage key, attempted Community payload size, approximate total `moli-phone:*` localStorage size, and original browser error.
+- This is diagnostic only: Community generation/settlement semantics and data layout are unchanged. Do not clear User storage; use the surfaced error to decide the next Storage v2 migration target.
