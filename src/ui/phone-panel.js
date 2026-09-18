@@ -105,6 +105,7 @@ import { getSelectedWorldContactId, getSelectedWorldTarget, setSelectedWorldTarg
 import { isPersistentScopeKey } from '../storage/scope-policy.js';
 import { recordWorldEvent, markWorldEventsKnown, markWorldEventsKnownByObjectTargets, markWorldEventsConsumedByObjectTargets, summarizeWorldEventsForContext, linkWorldEventResult, listWorldEvents } from '../storage/world-event-store.js';
 import { rememberAnonymousIdentity, revealAnonymousIdentity, findExplicitAnonymousIdentityDisclosures, buildCharacterContinuity } from '../storage/character-continuity-store.js';
+import { buildPhoneContext } from '../generation/phone-context-builder.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -7025,7 +7026,7 @@ export function createPhonePanel({
       const target=getContacts().find(x=>String(x.id)===String(contactId)); if(!target)continue;
       // A refresh is the cognition/decision opportunity. Knowing the new fact does not force action.
       markWorldEventsKnown(scopeKey,contactId,events.map(e=>e.id));
-      const continuity=buildCharacterContinuity(scopeKey,contactId,{limit:24,query:`${post.title||''}\n${events.map(e=>e.content||'').join('\n')}`,identityLabels:{user:getTavernUserContext()?.name||'User',...Object.fromEntries(getContacts().map(contact=>[String(contact.id||''),String(contact.remark||contact.name||contact.displayName||contact.id||'')]))}}).text;
+      const continuity=buildPhoneContext(scopeKey,contactId,{limit:30,query:`${post.title||''}\n${communityDiscussionContext(post)}\n${events.map(e=>e.content||'').join('\n')}`,userName:getTavernUserContext()?.name||'User'}).text;
       const conversationKey=privateConversationKeyFor(scopeKey,contactId);
       const privateConv=getScopeConversations(scopeKey).find(c=>String(c.conversationKey||c.id||'')===String(conversationKey));
       const proactiveEnabled=privateConv?.automation?.autoChatEnabled===true;
