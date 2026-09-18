@@ -214,7 +214,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           : buildCharacterDecisionInstruction({
               wakeReason: mode === 'social-event' ? '手机世界出现已知事件/社交变化' : '自然主动行为评估',
               newFacts: unifiedEventText,
-              continuity: buildCharacterContinuity(scopeKey, contact.id, { limit: 16, query: unifiedEventText }).text,
+              continuity: buildCharacterContinuity(scopeKey, contact.id, { limit: 16, query: unifiedEventText, identityLabels:Object.fromEntries(getContacts().map(item=>[String(item.id||''),String(item.remark||item.name||item.displayName||item.id||'')])) }).text,
               initiative: Number(a.autoChatProbability ?? 30),
               allowPost,
               allowPrivate,
