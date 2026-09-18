@@ -390,3 +390,12 @@
 - localStorage 保留轻量设置/标记；fallback/no-chat 继续只允许临时运行态，不得形成正式档案。
 - Conversation Storage v2 保持独立并继续生效。迁移失败必须保留旧值，不允许先删后迁。
 - 本阶段保持现有业务 API 的同步读取语义，通过启动预载缓存兼容旧调用链；持久化落 IndexedDB。后续若继续细化 messages/events 分表，应保持现有产品语义与数据边界。
+
+
+## Storage v2 hardening (moli205 / v0.5.49)
+- Long-lived user data must not depend on localStorage capacity. Contacts and chat wallpaper payloads are now managed by the large-storage adapter and migrate to IndexedDB with the other growing stores.
+- Image/Data-URL payloads such as chat wallpapers are explicitly treated as large data; do not introduce new direct localStorage writes for images or other unbounded payloads.
+- Startup requests persistent browser storage when supported (`navigator.storage.persist()`); failure or denial is non-fatal and must never block the phone.
+- The storage layer exposes origin quota/usage plus logical per-key sizes for future Storage Center diagnostics.
+- Invariant: fallback/no-chat remains transient; stable business persistence requires a stable chat scope.
+- Do not document external implementation references or provenance for this storage design. Repository documentation records only moli's own architecture and invariants.

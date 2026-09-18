@@ -3229,3 +3229,12 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 
 ## v0.5.44 Storage v2 决策
 已证实 `moli-phone:global-conversations:v1` 超出 localStorage quota，导致 User 消息在 API 前无法落库。moli200 将全局 Conversation 迁移至 IndexedDB，并保留现有同步 data-store 调用面的内存快照以控制改动范围。禁止回到“清 localStorage 解决”的临时方案。后续先实机验证旧私聊/群聊完整、发送恢复、重启后仍持久，再继续190后的产品路线。
+
+
+## Storage v2 hardening (moli205 / v0.5.49)
+- Long-lived user data must not depend on localStorage capacity. Contacts and chat wallpaper payloads are now managed by the large-storage adapter and migrate to IndexedDB with the other growing stores.
+- Image/Data-URL payloads such as chat wallpapers are explicitly treated as large data; do not introduce new direct localStorage writes for images or other unbounded payloads.
+- Startup requests persistent browser storage when supported (`navigator.storage.persist()`); failure or denial is non-fatal and must never block the phone.
+- The storage layer exposes origin quota/usage plus logical per-key sizes for future Storage Center diagnostics.
+- Invariant: fallback/no-chat remains transient; stable business persistence requires a stable chat scope.
+- Do not document external implementation references or provenance for this storage design. Repository documentation records only moli's own architecture and invariants.

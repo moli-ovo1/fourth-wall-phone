@@ -4172,3 +4172,12 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 旧 `moli-phone:global-conversations:v1` 必须自动无损迁移；顺序固定为 COPY → VERIFY → SWITCH → CLEANUP，验证成功前不得删除旧值。
 - 迁移失败必须保留旧数据并显式报错，禁止为了恢复发送自动清空用户聊天。
 - 先解决已证实的 Conversation 爆仓；其他增长型 store 以后根据占用诊断分批迁移，不进行无证据的大规模存储重写。
+
+
+## Storage v2 hardening (moli205 / v0.5.49)
+- Long-lived user data must not depend on localStorage capacity. Contacts and chat wallpaper payloads are now managed by the large-storage adapter and migrate to IndexedDB with the other growing stores.
+- Image/Data-URL payloads such as chat wallpapers are explicitly treated as large data; do not introduce new direct localStorage writes for images or other unbounded payloads.
+- Startup requests persistent browser storage when supported (`navigator.storage.persist()`); failure or denial is non-fatal and must never block the phone.
+- The storage layer exposes origin quota/usage plus logical per-key sizes for future Storage Center diagnostics.
+- Invariant: fallback/no-chat remains transient; stable business persistence requires a stable chat scope.
+- Do not document external implementation references or provenance for this storage design. Repository documentation records only moli's own architecture and invariants.
