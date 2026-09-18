@@ -7813,8 +7813,29 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
       if (summary) summary.innerHTML = `<strong>浏览器存储</strong><br>已使用：${escapeHtml(usageText)}<br>可用额度：${escapeHtml(quotaText)}<br>估算剩余：${escapeHtml(remain == null ? '未知' : formatStorageBytes(remain))}`;
       if (local) local.innerHTML = `<strong>localStorage</strong><br>当前页面全部 localStorage 约 ${escapeHtml(formatStorageBytes(localStats.bytes))}<br>其中 moli 项目共 ${localStats.entries.length} 项。长期增长数据不应继续堆在这里。`;
       if (large) large.innerHTML = `<strong>moli 大容量存储（IndexedDB）</strong><br>逻辑数据约 ${escapeHtml(formatStorageBytes(stats.logicalBytes))}<br>当前记录 ${stats.entries.length} 项。`;
-      const biggest = [...stats.entries.slice(0, 6).map(item => ({...item, source:'IndexedDB'})), ...localStats.entries.slice(0, 6).map(item => ({...item, source:'localStorage'}))].sort((a,b)=>b.bytes-a.bytes).slice(0,8);
-      if (top) top.innerHTML = `<strong>当前最大的 moli 数据项</strong><br>${biggest.length ? biggest.map((item, index) => `${index + 1}. ${escapeHtml(formatStorageBytes(item.bytes))} · ${escapeHtml(item.source)} · ${escapeHtml(item.key)}`).join('<br>') : '暂无数据'}`;
+      const describeStorageKey = key => {
+        const value = String(key || '');
+        const decoded = (() => { try { return decodeURIComponent(value); } catch { return value; } })();
+        if (value.startsWith('moli.chatWallpaper')) return '聊天壁纸';
+        if (value.startsWith('moli-phone:contacts:')) return '联系人与角色资料';
+        if (value.startsWith('moli-phone:scope:')) return '当前聊天运行数据';
+        if (value.startsWith('moli-phone:moments:')) return '朋友圈';
+        if (value.startsWith('moli-phone:public-web:')) return '社区';
+        if (value.startsWith('moli-phone:world-events:')) return '世界事件';
+        if (value.startsWith('moli-phone:character-awareness:')) return '角色认知';
+        if (value.startsWith('moli-phone:identity-awareness:')) return '匿名身份认知';
+        if (value.startsWith('moli-phone:injection-history:')) return '我们的墙 · 历史';
+        if (value.startsWith('moli-phone:injection-workspace:')) return '我们的墙 · 工作区';
+        if (value.startsWith('moli-phone:injection:')) return '我们的墙';
+        if (value.startsWith('moli-phone:prompt-settings:')) return 'Prompt 设置';
+        if (value.startsWith('moli-phone:api-presets:')) return 'API 预设';
+        if (value.startsWith('moli-phone:world-context:')) return '世界目标选择';
+        if (value.startsWith('moli-phone:ui-state:')) return '界面状态';
+        return decoded.length > 72 ? `${decoded.slice(0, 69)}…` : decoded;
+      };
+      const biggest = [...stats.entries.slice(0, 8).map(item => ({...item, source:'IndexedDB'})), ...localStats.entries.slice(0, 8).map(item => ({...item, source:'localStorage'}))].sort((a,b)=>b.bytes-a.bytes).slice(0,10);
+      const localGrowing = localStats.entries.filter(item => item.bytes >= 128 * 1024);
+      if (top) top.innerHTML = `<strong>当前最大的 moli 数据项</strong><br>${biggest.length ? biggest.map((item, index) => `${index + 1}. ${escapeHtml(formatStorageBytes(item.bytes))} · ${escapeHtml(item.source)} · ${escapeHtml(describeStorageKey(item.key))}`).join('<br>') : '暂无数据'}${localGrowing.length ? `<br><br><strong>⚠ localStorage 审计</strong><br>发现 ${localGrowing.length} 项超过 128 KB，请检查是否仍有增长型数据遗漏。` : '<br><br><strong>localStorage 审计</strong><br>未发现超过 128 KB 的 moli 项，当前结构正常。'}`;
     } catch (error) {
       if (summary) summary.textContent = `读取存储状态失败：${error?.message || error}`;
     }
