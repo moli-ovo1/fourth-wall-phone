@@ -435,3 +435,9 @@
 - 不复制微信正文到 Community，不使用模型猜测身份，不因同帖参与自动泄露；指代不唯一时不落知识。
 - 已知身份通过 World Event + identity awareness 保存，后续同一角色在 Community/微信连续性中可读取；未获证据的其他角色仍不知道。
 - 保持“手机内部人物认知连续性”与“我们的墙→正文”边界独立。
+
+
+## v0.5.55 / moli211 — Zhihu answer action isolation
+- Zhihu answers now have their own long-press action target. Long-pressing an answer deletes that answer only; long-pressing a nested comment/reply still deletes only that comment/reply.
+- Answer action consumes the contextmenu event before whole-post deletion, preserving the Post Action / Answer Action / Comment Action boundary.
+- Character Knowledge v0.5.54 remains intact; this patch deliberately does not broaden uncertain chat statements into factual knowledge.
