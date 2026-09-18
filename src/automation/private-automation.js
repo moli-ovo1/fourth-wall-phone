@@ -5,7 +5,7 @@ import { parseGeneratedMessages, parseFourthWallResponse } from '../generation/m
 import { beginGenerationTask, endGenerationTask, setGenerationError } from '../core/generation-runtime.js';
 import { createProfileMoment } from '../storage/moments-store.js';
 import { listWorldEvents, markWorldEventsConsumed, recordWorldEvent, summarizeWorldEventsForContext, linkWorldEventResult } from '../storage/world-event-store.js';
-import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
+import { buildPhoneContext } from '../generation/phone-context-builder.js';
 import { buildCharacterDecisionInstruction } from '../generation/character-decision.js';
 
 const POLL_MS = 5000;
@@ -214,7 +214,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           : buildCharacterDecisionInstruction({
               wakeReason: mode === 'social-event' ? '手机世界出现已知事件/社交变化' : '自然主动行为评估',
               newFacts: unifiedEventText,
-              continuity: buildCharacterContinuity(scopeKey, contact.id, { limit: 16, query: unifiedEventText, identityLabels:Object.fromEntries(getContacts().map(item=>[String(item.id||''),String(item.remark||item.name||item.displayName||item.id||'')])) }).text,
+              continuity: buildPhoneContext(scopeKey, contact.id, { limit: 24, query: unifiedEventText, userName: 'User' }).text,
               initiative: Number(a.autoChatProbability ?? 30),
               allowPost,
               allowPrivate,
