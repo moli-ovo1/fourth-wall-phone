@@ -1,10 +1,11 @@
+import { readRaw, writeRaw } from './storage-adapter.js';
 import { isPersistentScopeKey } from './scope-policy.js';
 const PREFIX = 'moli-phone:world-events:v1:';
 const MAX_EVENTS = 1600;
 const transientStates = new Map();
 function key(scopeKey){ return `${PREFIX}${String(scopeKey||'global')}`; }
-function load(scopeKey){ if(!isPersistentScopeKey(scopeKey)) return transientStates.get(String(scopeKey||'')) || {events:[]}; try{ const raw=localStorage.getItem(key(scopeKey)); const data=raw?JSON.parse(raw):{}; return {events:Array.isArray(data.events)?data.events:[]}; }catch{return {events:[]};} }
-function save(scopeKey,state){ state.events=(state.events||[]).filter(Boolean).slice(-MAX_EVENTS); if(isPersistentScopeKey(scopeKey)) localStorage.setItem(key(scopeKey),JSON.stringify(state)); else transientStates.set(String(scopeKey||''),state); }
+function load(scopeKey){ if(!isPersistentScopeKey(scopeKey)) return transientStates.get(String(scopeKey||'')) || {events:[]}; try{ const raw=readRaw(key(scopeKey)); const data=raw?JSON.parse(raw):{}; return {events:Array.isArray(data.events)?data.events:[]}; }catch{return {events:[]};} }
+function save(scopeKey,state){ state.events=(state.events||[]).filter(Boolean).slice(-MAX_EVENTS); if(isPersistentScopeKey(scopeKey)) writeRaw(key(scopeKey),JSON.stringify(state)); else transientStates.set(String(scopeKey||''),state); }
 function makeId(){ return `world:${Date.now()}:${Math.random().toString(36).slice(2,9)}`; }
 function unique(values=[]){ return [...new Set((Array.isArray(values)?values:[values]).map(String).filter(Boolean))]; }
 export function recordWorldEvent(scopeKey,{source='phone',actorId='',action='EVENT',targetContactIds=[],objectId='',content='',metadata={},awareness='pending',dedupeKey=''}={}){

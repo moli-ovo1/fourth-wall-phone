@@ -1,10 +1,11 @@
+import { readRaw, writeRaw } from './storage-adapter.js';
 import { isPersistentScopeKey } from './scope-policy.js';
 import { listWorldEvents } from './world-event-store.js';
 import { getCharacterAwarenessText } from './character-awareness-store.js';
 const PREFIX='moli-phone:identity-awareness:v1:'; const transient=new Map();
 const key=s=>`${PREFIX}${String(s||'global')}`;
-function read(scopeKey){if(!isPersistentScopeKey(scopeKey))return transient.get(String(scopeKey||''))||{identities:{}};try{const v=JSON.parse(localStorage.getItem(key(scopeKey))||'null');return v&&typeof v==='object'?v:{identities:{}};}catch{return{identities:{}};}}
-function write(scopeKey,state){if(isPersistentScopeKey(scopeKey))localStorage.setItem(key(scopeKey),JSON.stringify(state));else transient.set(String(scopeKey||''),state);}
+function read(scopeKey){if(!isPersistentScopeKey(scopeKey))return transient.get(String(scopeKey||''))||{identities:{}};try{const v=JSON.parse(readRaw(key(scopeKey))||'null');return v&&typeof v==='object'?v:{identities:{}};}catch{return{identities:{}};}}
+function write(scopeKey,state){if(isPersistentScopeKey(scopeKey))writeRaw(key(scopeKey),JSON.stringify(state));else transient.set(String(scopeKey||''),state);}
 function uniq(v=[]){return[...new Set((Array.isArray(v)?v:[v]).map(String).filter(Boolean))];}
 export function rememberAnonymousIdentity(scopeKey,{surface='',alias='',realContactId='',knownBy=[],evidenceEventId=''}={}){const real=String(realContactId||''),name=String(alias||'').trim();if(!scopeKey||!real||!name)return null;const state=read(scopeKey);const id=`${String(surface||'community')}:${name}:${real}`;const old=state.identities[id]||{};state.identities[id]={id,surface:String(surface||'community'),alias:name,realContactId:real,knownBy:uniq([...(old.knownBy||[]),real,...knownBy]),evidenceEventIds:uniq([...(old.evidenceEventIds||[]),evidenceEventId]),updatedAt:Date.now()};write(scopeKey,state);return state.identities[id];}
 export function revealAnonymousIdentity(scopeKey,{surface='',alias='',realContactId='',toContactIds=[],evidenceEventId=''}={}){return rememberAnonymousIdentity(scopeKey,{surface,alias,realContactId,knownBy:toContactIds,evidenceEventId});}

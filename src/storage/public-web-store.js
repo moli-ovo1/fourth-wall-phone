@@ -1,14 +1,15 @@
 import { isPersistentScopeKey } from './scope-policy.js';
+import { readRaw, writeRaw } from './storage-adapter.js';
 const PREFIX = 'moli-phone:public-web:v1:';
 const SECTIONS = new Set(['tianya', 'xiaohongshu', 'zhihu', 'weibo', 'custom']);
 const transientStates = new Map();
 function key(scopeKey) { return `${PREFIX}${String(scopeKey || 'default')}`; }
-function read(scopeKey) { if(!isPersistentScopeKey(scopeKey)) return transientStates.get(String(scopeKey||'')) || {version:1,posts:[],actors:[]}; try { const raw=localStorage.getItem(key(scopeKey)); const parsed=raw?JSON.parse(raw):null; return parsed&&typeof parsed==='object'?parsed:{version:1,posts:[],actors:[]}; } catch { return {version:1,posts:[],actors:[]}; } }
+function read(scopeKey) { if(!isPersistentScopeKey(scopeKey)) return transientStates.get(String(scopeKey||'')) || {version:1,posts:[],actors:[]}; try { const raw=readRaw(key(scopeKey)); const parsed=raw?JSON.parse(raw):null; return parsed&&typeof parsed==='object'?parsed:{version:1,posts:[],actors:[]}; } catch { return {version:1,posts:[],actors:[]}; } }
 function write(scopeKey,state){
   if(!isPersistentScopeKey(scopeKey)){transientStates.set(String(scopeKey||''),state);return;}
   const storageKey=key(scopeKey);
   const payload=JSON.stringify(state);
-  try{localStorage.setItem(storageKey,payload);}
+  try{writeRaw(storageKey,payload);}
   catch(error){
     let moliBytes=0;const largest=[];try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i)||'';if(!k.startsWith('moli-phone:'))continue;const raw=localStorage.getItem(k)||'';const bytes=(k.length+raw.length)*2;moliBytes+=bytes;largest.push({key:k,bytes});}largest.sort((a,b)=>b.bytes-a.bytes);}catch{}
     const top=largest.slice(0,12).map((item,index)=>`${index+1}. ${(item.bytes/1024/1024).toFixed(2)} MB  ${item.key}`).join('\n');
