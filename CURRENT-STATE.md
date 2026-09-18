@@ -399,3 +399,11 @@
 - The storage layer exposes origin quota/usage plus logical per-key sizes for future Storage Center diagnostics.
 - Invariant: fallback/no-chat remains transient; stable business persistence requires a stable chat scope.
 - Do not document external implementation references or provenance for this storage design. Repository documentation records only moli's own architecture and invariants.
+
+
+## v0.5.50 / moli206 — Storage Center 首屏
+- 设置 App 新增“存储与数据”。
+- 显示浏览器 origin 的 usage/quota/估算剩余空间（浏览器支持 Storage Estimate 时）。
+- 分开显示 localStorage 体积与 moli IndexedDB 大容量存储逻辑体积，并列出当前最大的 moli 数据项。
+- 该页面是 Storage Audit，不是 AI Token/Context Audit；二者保持独立，避免把磁盘容量与模型上下文消耗混为一谈。
+- 本轮不修改 Prompt、Community 生成或角色行为。
