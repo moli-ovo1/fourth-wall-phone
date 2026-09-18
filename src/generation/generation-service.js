@@ -29,6 +29,7 @@ import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfi
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
+import { buildPhoneContext } from './phone-context-builder.js';
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
 import { getPublicWebPost } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
@@ -411,7 +412,7 @@ export async function generatePrivateReply({
       longTermMemoryText: baiBaiMemory?.text || '',
       longTermMemoryCoverage: baiBaiMemory?.coverage || null,
       phoneMemory: getConversationMemory(scopeKey, conversationKey),
-      momentsContext: freshMomentContext + getContactMomentsContinuity(scopeKey, contact.id, continuityQuery),
+      momentsContext: freshMomentContext + buildPhoneContext(scopeKey, contact.id, { query: continuityQuery, currentConversationKey: conversationKey, userName: userContext.name || 'User' }).text,
       historyLimit: currentConversation.recentChatLimit || 100,
       fourthWallCharacterName: currentTavernCharacter?.name || '',
       fourthWallCommentary,
@@ -730,6 +731,7 @@ async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, membe
     longTermMemoryText: baiBaiMemory?.text || '',
     longTermMemoryCoverage: baiBaiMemory?.coverage || null,
     phoneMemory: modeMemory,
+    momentsContext: buildPhoneContext(scopeKey, contact.id, { query: scanParts.join('\n'), currentConversationKey: conversation.conversationKey || conversation.id, userName: userContext.name || 'User' }).text,
     otherContextSources: getScopeConversations(scopeKey)
       .filter(source => source?.type === 'private' && String(source.contactId || '') === String(contact.id))
       .map(source => ({ type: 'private', name: contactLabel(contact), messages: (source.messages || []).slice(-12).map(message => ({ ...message, senderName: message?.senderSnapshot?.name || contactLabel(contact) })) }))
