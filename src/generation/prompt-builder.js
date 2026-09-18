@@ -163,7 +163,7 @@ function roleFidelityBlocks(contact) {
   return blocks;
 }
 
-function recentBodyBlock(recentBody, { fourthWall = false, userName = 'User', observed = false } = {}) {
+function recentBodyBlock(recentBody, { fourthWall = false, userName = 'User', observed = false, perspectiveProjected = false } = {}) {
   const messages = Array.isArray(recentBody?.messages)
     ? recentBody.messages
     : [];
@@ -189,6 +189,14 @@ function recentBodyBlock(recentBody, { fourthWall = false, userName = 'User', ob
     .filter(Boolean);
 
   if (!lines.length) return '';
+
+  if (perspectiveProjected) {
+    return (
+      '【NPC正文亲历认知｜视角投影】\n'
+      + '以下不是完整正文，也不是上帝视角摘要；它只包含系统从当前 World Instance 正文中投影出的、这个 NPC 能够确定看到、听到、亲历或被明确告知的事实。未出现在这里的私密场景、他人内心和不在场信息不得自行补齐。\n\n'
+      + lines.join('\n')
+    );
+  }
 
   if (observed) {
     return (
@@ -236,6 +244,7 @@ export function buildPrivateGenerationRequest({
   fourthWallDisableAssistantPrefill = null,
   userContext = null,
   observedBody = false,
+  npcPerspectiveProjected = false,
 } = {}) {
   if (!contact || !conversation || conversation.type !== 'private') {
     throw new Error('当前只支持私聊生成');
@@ -393,7 +402,7 @@ export function buildPrivateGenerationRequest({
     );
   }
 
-  const bodyBlock = recentBodyBlock(recentBody, { fourthWall: isFourthWall, userName: tavernUserName, observed: observedBody });
+  const bodyBlock = recentBodyBlock(recentBody, { fourthWall: isFourthWall, userName: tavernUserName, observed: observedBody, perspectiveProjected: npcPerspectiveProjected });
   if (bodyBlock) {
     systemBlocks.push(bodyBlock);
   }

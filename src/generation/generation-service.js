@@ -30,6 +30,7 @@ import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
+import { projectNpcBodyAwareness } from './npc-awareness-service.js';
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -59,7 +60,7 @@ function formatMomentContinuityItem(item) {
   return `${when ? `[${when}] ` : ''}${item?.author?.name || '未知'}：${String(item?.content || '').trim()}${image ? `\n[附图：${image}]` : ''}${social ? `\n${social}` : ''}`.trim();
 }
 
-function getContactMomentsContinuity(scopeKey, contactId) {
+function getContactMomentsContinuity(scopeKey, contactId, queryText = '') {
   const id = String(contactId || '');
   if (!scopeKey || !id || id === 'builtin:meta') return '';
 
@@ -72,7 +73,7 @@ function getContactMomentsContinuity(scopeKey, contactId) {
   const authoredPublic = listPublicMoments(scopeKey).filter(item => String(item?.author?.id || '') === id).slice(0, 8);
 
   const blocks = [];
-  const continuity = buildCharacterContinuity(scopeKey,id,{limit:30});
+  const continuity = buildCharacterContinuity(scopeKey,id,{limit:30,query:queryText});
   if (continuity.text) blocks.push(`【这个角色的跨 App 手机经历】\n这是同一个人物在不同 App 中亲历或已经知道的事实。App 只是发生场所；不要把匿名系统真相当成公开知识。\n${continuity.text}`);
   const knownWorldEvents = summarizeWorldEventsForContext(scopeKey,{contactId:id,awareness:'known',limit:24});
   if (knownWorldEvents) blocks.push(`【这个角色已经知道的手机世界事件】\n这些是已经真正进入角色认知的事实；SKIP 只代表当时没有行动，不代表遗忘。\n${knownWorldEvents}`);
@@ -273,7 +274,7 @@ export async function generatePrivateReply({
     && conversation.scopeMode === 'global'
     && conversation.bodyContextEnabled === true
     && currentTavernScopeKey.includes(':chat:');
-  const recentBody = isFourthWall
+  let recentBody = isFourthWall
     ? getRecentTavernBody({
         messageLimit: Math.max(1, Math.min(9999, Number((contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.maxChatLayers) || 20)),
         charLimit: 1000000,
@@ -283,6 +284,16 @@ export async function generatePrivateReply({
       : (!isBoundCurrentWorld
           ? null
           : getRecentTavernBody({ messageLimit: 24, charLimit: 24000 }));
+
+  // Unified Awareness v1: custom NPCs bound to a正文 World must not receive raw omniscient正文.
+  // Project the visible recent body into this NPC's own perspective first, persist only definite knowledge,
+  // and feed that projection to the normal prompt/continuity path. Global observers remain observation-only.
+  let npcPerspectiveProjected = false;
+  if (!isFourthWall && isBoundCurrentWorld && contact?.kind === 'custom' && contact?.customRoleMode === 'npc' && recentBody?.messages?.length) {
+    const projection = await projectNpcBodyAwareness({ scopeKey, contact, conversation, recentBody, config, signal });
+    recentBody = projection.recentBody;
+    npcPerspectiveProjected = projection.projected === true;
+  }
 
   const worldBookScanParts = (requestConversation.messages || [])
     .slice(-Math.max(1, Number(conversation.recentChatLimit) || 100))
@@ -313,6 +324,8 @@ export async function generatePrivateReply({
   const momentEventIds = pendingMomentEvents.map(event => event.id);
   const freshMomentContext = pendingMomentEvents.length ? `【自上次同步后新发生的朋友圈变化】\n这些是新鲜事件，只在本次作为新变化强调；你已经知道它们，可以自主决定是否主动提起，不要求必须回应。\n${pendingMomentEvents.map(event=>`- ${event.content}${event.momentId ? `（momentId=${event.momentId}）` : ''}`).join('\n')}\n\n` : '';
 
+  const continuityQuery = (requestConversation.messages || []).slice(-6).map(message => String(message?.content || '')).join('\n');
+
   const buildRequest = () => {
     const currentConversation = regenerateFromMessageId
       ? requestConversation
@@ -326,7 +339,7 @@ export async function generatePrivateReply({
       longTermMemoryText: baiBaiMemory?.text || '',
       longTermMemoryCoverage: baiBaiMemory?.coverage || null,
       phoneMemory: getConversationMemory(scopeKey, conversationKey),
-      momentsContext: freshMomentContext + getContactMomentsContinuity(scopeKey, contact.id),
+      momentsContext: freshMomentContext + getContactMomentsContinuity(scopeKey, contact.id, continuityQuery),
       historyLimit: currentConversation.recentChatLimit || 100,
       fourthWallCharacterName: currentTavernCharacter?.name || '',
       fourthWallCommentary,
@@ -334,6 +347,7 @@ export async function generatePrivateReply({
       fourthWallDisableAssistantPrefill: fourthWallPrefillCompatibility?.disableAssistantPrefill,
       userContext,
       observedBody: isGlobalObserver,
+      npcPerspectiveProjected,
     });
   };
 

@@ -1,0 +1,4 @@
+export function buildCharacterDecisionInstruction({wakeReason='natural',newFacts='',continuity='',initiative=30,allowPost=false,allowPrivate=true,recentActions='（无）'}={}){
+  const actions=[allowPost?'POST（公开表达）':'',allowPrivate?'PRIVATE_CHAT（微信主动私聊 User）':'',allowPost&&allowPrivate?'POST+PRIVATE_CHAT（两者都有独立真实动机时）':'','SKIP（知道但此刻不行动）'].filter(Boolean).join(' / ');
+  return `【统一人物判断】\n唤醒原因：${wakeReason}\n\n【这次新知道/需要处理的事实】\n${newFacts||'（没有单独新事实，这是自然主动评估）'}\n\n【与当前人物相关的既往连续性】\n${continuity||'（没有额外相关经历）'}\n\n主动私聊倾向：${Number(initiative??30)} / 100。它描述人物总体主动习惯，不是本次事件的随机触发概率。\n最近已执行行为：\n${recentActions}\n\n先判断“我是否真的想行动”，再判断“在哪个允许出口行动”。知道 ≠ 在意 ≠ 行动；SKIP ≠ 遗忘。不要为了展示功能而行动，也不要把私聊秘密无脑公开。\n本入口允许：${actions}。\n只输出严格 JSON，不解释：{"action":"SKIP|POST|PRIVATE_CHAT|POST+PRIVATE_CHAT","post":"只有 POST 时填写，否则空字符串","privateMessages":["只有 PRIVATE_CHAT 时填写，1~3条真实手机气泡"]}`;
+}
