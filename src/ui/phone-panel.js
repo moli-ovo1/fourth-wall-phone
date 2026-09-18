@@ -332,11 +332,11 @@ export function createPhonePanel({
         <div class="moli-settings-note">选择这些酒馆角色加入 moli小手机 后的归属。这个选择在添加好友时完成，不放进角色资料卡重复修改。</div>
         <label class="moli-choice-card">
           <input type="radio" name="moli-sync-scope-mode" value="current" checked>
-          <span><strong>正文角色</strong><small>只属于当前 SillyTavern 存档，默认跟随正文时间并读取当前正文。</small></span>
+          <span><strong>跟随正文</strong><small>跟随该酒馆角色自己的正文世界，读取其角色卡与对应正文；不会因为你当前站在别人的正文里而改绑。</small></span>
         </label>
         <label class="moli-choice-card">
           <input type="radio" name="moli-sync-scope-mode" value="global">
-          <span><strong>全局角色</strong><small>跨正文持续存在，默认使用现实时间且不读取当前正文。</small></span>
+          <span><strong>现实陪伴</strong><small>跨正文持续存在，不属于任何正文世界；默认与正文认知隔离，可在联系人设置中选择“旁观正文”。</small></span>
         </label>
       </main>
       <footer class="moli-sync-footer">
@@ -3119,54 +3119,9 @@ export function createPhonePanel({
 
   function renderTavernRoleSources(item) {
     if (!contactRoleSources) return;
-    const roleSources = item?.roleSources && typeof item.roleSources === 'object'
-      ? item.roleSources
-      : {};
-    const freshCharacter = getTavernCharacterForContact(item);
-    const displayItem = freshCharacter?.roleFidelity
-      ? { ...item, source: { ...(item?.source || {}), roleFidelity: freshCharacter.roleFidelity, status: 'available' } }
-      : item;
-    const sourceMissing = displayItem?.source?.status === 'missing';
-    const providedCount = TAVERN_ROLE_SOURCE_ITEMS.filter(([key]) => Boolean(tavernRoleSourceValue(displayItem, key))).length;
-    const cardProfileEnabled = roleSources.cardProfile !== false;
-    const cardStatus = providedCount
-      ? `${sourceMissing ? '使用最近同步快照' : '自动跟随当前角色卡'} · 已检测到 ${providedCount} 项资料`
-      : (freshCharacter ? '正在读取完整角色卡…' : '当前角色卡暂时无法读取');
-
-    // The UI must use the same Character Identity -> full card path as generation.
-    // ST may expose a shallow list row until the card is explicitly fetched; do not let
-    // the settings page falsely report "no persona" while generation already has the card.
-    if (!providedCount && freshCharacter) {
-      const hydrationKey = String(item?.source?.sourceId || freshCharacter.sourceId || item?.id || '');
-      if (hydrationKey && !pendingRoleCardHydration.has(hydrationKey)) {
-        pendingRoleCardHydration.add(hydrationKey);
-        Promise.resolve(hydrateTavernCharacterSnapshot(freshCharacter))
-          .then(full => {
-            if (full?.roleFidelity && Object.values(full.roleFidelity).some(value => String(value || '').trim())) {
-              refreshTavernContacts([full], { markMissing: false });
-              const active = currentPrivateContact();
-              if (active && String(active.id) === String(item.id)) renderTavernRoleSources(active);
-            }
-          })
-          .catch(error => console.warn('[moli小手机] 角色设定页读取完整角色卡失败', error))
-          .finally(() => pendingRoleCardHydration.delete(hydrationKey));
-      }
-    }
-
+    // 酒馆角色必须读取自己的角色卡：这是身份事实，不再作为 User 可选开关或连接状态展示。
+    // 此页只保留真正需要 User 管理的世界书白名单。
     contactRoleSources.innerHTML = `
-      <div class="moli-source-section">
-        <div class="moli-source-section-title">角色卡资料</div>
-        <div class="moli-role-source-row">
-          <div class="moli-role-source-view is-static">
-            <span><strong>自动跟随角色卡</strong><small>${escapeHtml(cardStatus)}</small></span>
-          </div>
-          <label class="moli-role-source-switch" title="自动跟随角色卡">
-            <input type="checkbox" data-role-source-toggle="cardProfile" ${cardProfileEnabled ? 'checked' : ''}>
-            <span></span>
-          </label>
-        </div>
-        <div class="moli-source-section-note">开启后自动读取角色卡中实际填写的人设资料，包括角色描述、性格、场景、示例对话以及角色卡自带提示词；空字段会自动跳过。关闭只影响本轮生成，不会删除已同步快照。</div>
-      </div>
       <div class="moli-source-section">
         <div class="moli-source-section-title">世界书</div>
         <button type="button" class="moli-source-placeholder" data-action="contact-worldbook-settings"><span>世界书条目</span><strong>读取 ›</strong></button>
@@ -3175,7 +3130,6 @@ export function createPhonePanel({
       `;
     contactRoleSources.hidden = false;
   }
-
 
   let currentWorldBookSnapshot = null;
   let activeWorldBookEntryKey = '';
@@ -4464,7 +4418,7 @@ export function createPhonePanel({
     // 用户下次仍可再次选择它创建另一个独立 Conversation。
     syncList.querySelectorAll('[data-sync-source-id]').forEach(input => { input.checked = false; });
     renderTavernSync();
-    toast(`已添加 ${syncedContacts.length} 个${scopeMode === 'global' ? '全局角色' : '正文角色'}`);
+    toast(`已添加 ${syncedContacts.length} 个${scopeMode === 'global' ? '现实陪伴' : '跟随正文'}`);
     show('home');
   }
 
@@ -4729,7 +4683,10 @@ export function createPhonePanel({
     }
     const conversations = allConversations.filter(conversation => {
       if (conversation?.type === 'group') {
-        return Boolean(activeScope) && String(conversation.storageScopeKey || conversation.boundScopeKey || '') === activeScope;
+        const groupScope = String(conversation.storageScopeKey || conversation.boundScopeKey || '');
+        // 群聊是 World Instance 数据：正文内只显示当前正文群；正文外只显示当前正文外 scope 的群。
+        // 不把历史 A/B 正文群带到酒馆主页，也不把正文外群带进 A/B。
+        return activeScope ? groupScope === activeScope : groupScope === rawScopeKey;
       }
       const contactId = String(conversation?.contactId || '');
       if (specialIds.has(contactId)) return specialChoice.get(contactId) === conversation;
