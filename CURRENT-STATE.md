@@ -407,3 +407,10 @@
 - 分开显示 localStorage 体积与 moli IndexedDB 大容量存储逻辑体积，并列出当前最大的 moli 数据项。
 - 该页面是 Storage Audit，不是 AI Token/Context Audit；二者保持独立，避免把磁盘容量与模型上下文消耗混为一谈。
 - 本轮不修改 Prompt、Community 生成或角色行为。
+
+
+## Storage v2 audit closure (v0.5.51)
+- Storage Center now renders user-facing data categories instead of raw internal keys.
+- localStorage is continuously audited: any moli item >= 128 KB is flagged as a possible growing-data leak.
+- Current invariant: long-lived/growing business data belongs in IndexedDB; localStorage is reserved for lightweight settings/runtime markers.
+- Do not reintroduce fallback/no-chat as formal persistence.

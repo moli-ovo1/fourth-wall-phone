@@ -4181,3 +4181,10 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - The storage layer exposes origin quota/usage plus logical per-key sizes for future Storage Center diagnostics.
 - Invariant: fallback/no-chat remains transient; stable business persistence requires a stable chat scope.
 - Do not document external implementation references or provenance for this storage design. Repository documentation records only moli's own architecture and invariants.
+
+
+## Storage v2 audit closure (v0.5.51)
+- Storage Center now renders user-facing data categories instead of raw internal keys.
+- localStorage is continuously audited: any moli item >= 128 KB is flagged as a possible growing-data leak.
+- Current invariant: long-lived/growing business data belongs in IndexedDB; localStorage is reserved for lightweight settings/runtime markers.
+- Do not reintroduce fallback/no-chat as formal persistence.
