@@ -420,3 +420,11 @@
 - Community comment/reply long-press is isolated from whole-post deletion: comment action consumes the contextmenu event before post action. Tianya, Xiaohongshu and Zhihu answer comments use explicit comment IDs; deleting a comment never calls the post-delete path.
 - Community identity ownership is stricter: every identity fact belongs only to its named character; uncertain attribution is omitted rather than migrated to a similar character.
 - The previously observed multi-invite anomaly is intentionally not changed in this version because it is not currently reproducible; do not reintroduce batch settlement merely to address a historical symptom.
+
+
+## v0.5.53 / moli209 — 聊天壁纸体积优化
+- 新导入的聊天壁纸在写入 Storage v2 前先在本地浏览器缩放：最长边最多 2048px，并优先转为 WebP。
+- 从质量 0.88 开始，仅当结果仍过大时逐级降低到约 0.64；目标是单张壁纸 Base64 字符串尽量低于约 0.9MB，而不是固定低质量压缩。
+- 图片处理完全在本地完成，不上传外部服务；原图文件本身不被修改。
+- 仅优化“之后新选择/重新选择”的壁纸。已有 IndexedDB 壁纸不在启动时静默重压，避免未经 User 操作改变现有图像。
+- Storage v2 与 localStorage 审计规则保持不变。下一主线回到 Character Knowledge / 跨 App 人物认知闭环。
