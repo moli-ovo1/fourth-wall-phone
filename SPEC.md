@@ -4075,3 +4075,10 @@ NPC 虽能读取绑定世界当前正文用于即时参与，但持久认知不�
 - 角色设定页与生成链必须共用 Character Identity → 完整 Tavern 角色卡的解析路径。SillyTavern 前端若仅提供 shallow row，角色设定页应主动补取完整角色卡并刷新联系人快照，不得出现“模型已拿到角色卡但 UI 仍称无资料”的分裂状态。
 - Current Tavern Page 只描述 User 当前站在哪个页面，不得决定另一个 Contact 有没有角色卡。
 - 当前阶段 User Persona 读取 SillyTavern 当前激活 Persona 的实际文本；后续若实现每 World/Contact 独立 Persona 锁定，应把 Persona 快照纳入 Identity Context，而不是重新绑定到正文读取开关。
+
+
+## moli183 / v0.5.26 — 群聊 World Boundary 与角色设置收口
+- 群聊/围读会按 World Instance 隔离：酒馆主页（正文外）只显示当前正文外 scope 的群聊；A 正文只显示 A 群；B 正文只显示 B 群。历史其他正文群不得跨世界出现在列表。
+- 围读会正文读取增加底层硬边界：只有“群绑定 scope 是具体 `:chat:` 正文”且“当前 Tavern scope 与群绑定 scope 完全相同”时才允许读取正文。正文外围读会不读取正文；后台/Automation 即使误触发也不得偷读另一正文。
+- 酒馆角色的角色卡属于 Character Identity 必读事实，不再显示“自动跟随角色卡”提示/开关；旧 `cardProfile` 值不再能阻止 Role Fidelity 注入。角色设定页保留世界书与自定义附加 Prompt。
+- 添加酒馆角色的用户可见类型改名：`正文角色` → `跟随正文`；`全局角色` → `现实陪伴`。类型只决定世界归属语义，不允许用当前屏幕正文替代该角色自己的 World Instance。
