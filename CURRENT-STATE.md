@@ -449,3 +449,10 @@
 - 该事件以 `epistemicStatus=user-assertion / beliefState=unresolved / worldTruth=false` 保存，并进入该角色自己的 Cross-App Character Continuity。后续 Community 角色生成可通过既有 private generation continuity 路径自然使用，但不得改写成系统真相。
 - 问句、普通寒暄、模糊聊天不提升为长期人物认知；同一明确陈述有去重键，避免重复发送造成认知膨胀。
 - moli210 的“匿名身份=User”明确披露仍属于可确定身份知识，保持原有专门闭环；普通陈述不得冒充这种确定身份事实。
+
+## moli213 · Community 自然参与接入人物连续性（2026-09-19）
+- 已参与过帖子的角色，在 User 产生新的社区评论/回答后，于下一次对应刷新获得一次自然判断机会；没有新变化时不会重复调用。
+- 判断读取该角色自己的 Character Continuity / Knowledge；角色可公开继续参与、转私聊或 SKIP。SKIP 只消费本次判断机会，不删除事实、不等于遗忘。
+- 明确邀请/@仍走原来的强制明确互动路径；自然参与不会取代它，也不恢复统一批量 Settlement。
+- User 新评论的认知目标现在包含帖子中既有的真实角色参与者，使“已经参与过 → 后续看见新变化”可以闭环。
+- 角色之间的 Knowledge 继续隔离；微信原文不复制进 Community；手机认知不自动注入正文。

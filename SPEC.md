@@ -4223,3 +4223,9 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 该事件以 `epistemicStatus=user-assertion / beliefState=unresolved / worldTruth=false` 保存，并进入该角色自己的 Cross-App Character Continuity。后续 Community 角色生成可通过既有 private generation continuity 路径自然使用，但不得改写成系统真相。
 - 问句、普通寒暄、模糊聊天不提升为长期人物认知；同一明确陈述有去重键，避免重复发送造成认知膨胀。
 - moli210 的“匿名身份=User”明确披露仍属于可确定身份知识，保持原有专门闭环；普通陈述不得冒充这种确定身份事实。
+
+## Community natural participation invariant (moli213)
+- A character who has already participated in a Community thread may receive a decision opportunity only when a new relevant User event exists for that thread.
+- The opportunity is per-character and uses that character's own continuity/knowledge. It may yield public reply, permitted private message, both, or SKIP.
+- SKIP consumes only that decision opportunity. It must not erase awareness or continuity.
+- Explicit invite/@ remains a separate stronger path. Do not merge natural participants, targeted characters and ordinary internet actors into one batch model settlement.

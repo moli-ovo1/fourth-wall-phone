@@ -3280,3 +3280,8 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - 该事件以 `epistemicStatus=user-assertion / beliefState=unresolved / worldTruth=false` 保存，并进入该角色自己的 Cross-App Character Continuity。后续 Community 角色生成可通过既有 private generation continuity 路径自然使用，但不得改写成系统真相。
 - 问句、普通寒暄、模糊聊天不提升为长期人物认知；同一明确陈述有去重键，避免重复发送造成认知膨胀。
 - moli210 的“匿名身份=User”明确披露仍属于可确定身份知识，保持原有专门闭环；普通陈述不得冒充这种确定身份事实。
+
+## moli213 · Community 自然参与竖切
+- 接通：既有角色参与者 → User 新社区事件 → refresh cognition opportunity → per-character continuity → REPLY / MESSAGE / BOTH / SKIP → World Event result/consumed。
+- 不做全联系人扫描式活跃；只有已经在该帖留下角色身份且有新事件的角色进入判断。
+- 后续继续验证匿名认知、自然参与后的再次刷新不重复，以及 Community ↔ 微信人物经历的双向一致性。
