@@ -3,6 +3,8 @@ const DB_VERSION = 1;
 const STORE = 'kv';
 
 const MANAGED_PREFIXES = [
+  'moli-phone:contacts:v1',
+  'moli.chatWallpaper',
   'moli-phone:scope:v1:',
   'moli-phone:moments:v2:',
   'moli-phone:public-web:v1:',
@@ -18,6 +20,7 @@ const MANAGED_PREFIXES = [
 const cache = new Map();
 let dbPromise = null;
 let ready = false;
+let persistenceRequested = false;
 
 export function isLargeStorageKey(key) {
   const value = String(key || '');
@@ -67,6 +70,10 @@ async function readAllIntoCache() {
 }
 
 export async function initLargeStorage() {
+  if (!persistenceRequested) {
+    persistenceRequested = true;
+    try { await navigator.storage?.persist?.(); } catch {}
+  }
   await readAllIntoCache();
   const legacy = [];
   for (let i = 0; i < localStorage.length; i += 1) {
@@ -122,4 +129,24 @@ export function removeLargeRaw(key) {
 export function listLargeKeys(prefix = '') {
   const wanted = String(prefix || '');
   return [...cache.keys()].filter(key => key.startsWith(wanted));
+}
+
+
+export async function getLargeStorageStats() {
+  let usage = null;
+  let quota = null;
+  try {
+    const estimate = await navigator.storage?.estimate?.();
+    usage = Number.isFinite(Number(estimate?.usage)) ? Number(estimate.usage) : null;
+    quota = Number.isFinite(Number(estimate?.quota)) ? Number(estimate.quota) : null;
+  } catch {}
+  let logicalBytes = 0;
+  const entries = [];
+  for (const [key, raw] of cache.entries()) {
+    const bytes = (String(key).length + String(raw ?? '').length) * 2;
+    logicalBytes += bytes;
+    entries.push({ key, bytes });
+  }
+  entries.sort((a, b) => b.bytes - a.bytes);
+  return { usage, quota, logicalBytes, entries };
 }
