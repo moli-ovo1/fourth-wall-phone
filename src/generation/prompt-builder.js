@@ -37,12 +37,15 @@ function momentForwardText(message) {
 function communityForwardText(message) {
   const post = message?.communityForward;
   if (!post) return '';
+  const resolvedContext = clean(post.resolvedContext);
   return [
     `[moli社区转发｜${clean(post.platform) || '社区'}]`,
     `标题：${clean(post.title) || '无标题'}`,
-    post.authorName ? `作者：${clean(post.authorName)}` : '',
-    clean(post.content),
-    '这是 User 转发给你的社区帖子，不是普通聊天文本。你知道 User 把这篇帖子分享给了你。',
+    resolvedContext || [
+      post.authorName ? `作者：${clean(post.authorName)}` : '',
+      clean(post.content),
+    ].filter(Boolean).join('\n'),
+    '这是 User 转发给你的社区帖子入口，不是普通聊天文本。以上是系统从原帖读取的、截至分享时角色可见的帖子事实。',
   ].filter(Boolean).join('\n');
 }
 

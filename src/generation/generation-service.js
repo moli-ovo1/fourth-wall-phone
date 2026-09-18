@@ -30,7 +30,73 @@ import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
+import { getPublicWebPost } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
+
+function communityActorName(actor) {
+  return String(actor?.uiName || actor?.name || '匿名网友').trim() || '匿名网友';
+}
+
+function visibleAtShare(item, sharedAt) {
+  const createdAt = Number(item?.createdAt || 0);
+  return !createdAt || !sharedAt || createdAt <= sharedAt;
+}
+
+function communityPostFacts(post, sharedAt = 0) {
+  if (!post) return '';
+  const lines = [
+    `作者：${communityActorName(post.author)}`,
+    `正文：${String(post.content || '').trim() || '（无正文）'}`,
+  ];
+  if (post.section === 'xiaohongshu') {
+    if (String(post.extra?.imagePrompt || '').trim()) lines.push(`配图内容：${String(post.extra.imagePrompt).trim()}`);
+    if (String(post.extra?.imageText || '').trim()) lines.push(`图片文字：${String(post.extra.imageText).trim()}`);
+    if (Array.isArray(post.tags) && post.tags.length) lines.push(`标签：${post.tags.map(String).join('、')}`);
+  }
+  if (post.section === 'zhihu') {
+    const storedAnswers = Array.isArray(post.extra?.answers) ? post.extra.answers : [];
+    const answers = storedAnswers.length
+      ? storedAnswers.filter(item => visibleAtShare(item, sharedAt))
+      : (String(post.extra?.answer || '').trim() ? [{ author: post.author, content: post.extra.answer, comments: post.comments || [], createdAt: post.createdAt }] : []);
+    if (answers.length) {
+      lines.push('回答与各自评论：');
+      answers.forEach((answer, index) => {
+        lines.push(`${index + 1}. ${communityActorName(answer.author)}：${String(answer.content || '').trim()}`);
+        const comments = (Array.isArray(answer.comments) ? answer.comments : []).filter(item => visibleAtShare(item, sharedAt));
+        comments.forEach(comment => lines.push(`   - ${communityActorName(comment.author)}：${String(comment.content || '').trim()}`));
+      });
+    }
+  } else {
+    const comments = (Array.isArray(post.comments) ? post.comments : []).filter(item => visibleAtShare(item, sharedAt));
+    if (comments.length) {
+      lines.push(post.section === 'tianya' ? '已有楼层：' : '已有评论与回复：');
+      comments.forEach((comment, index) => {
+        const reply = comment.replyToCommentId ? `（回复 commentId=${comment.replyToCommentId}）` : '';
+        lines.push(`${index + 1}. ${communityActorName(comment.author)}${reply}：${String(comment.content || '').trim()}`);
+      });
+    }
+  }
+  return lines.filter(Boolean).join('\n');
+}
+
+function resolveCommunityForwardEntries(scopeKey, conversation) {
+  return {
+    ...conversation,
+    messages: (conversation?.messages || []).map(message => {
+      const ref = message?.communityForward;
+      if (!ref?.postId) return message;
+      const post = getPublicWebPost(scopeKey, String(ref.postId));
+      if (!post) return message;
+      return {
+        ...message,
+        communityForward: {
+          ...ref,
+          resolvedContext: communityPostFacts(post, Number(ref.snapshotAt || message.createdAt || 0)),
+        },
+      };
+    }),
+  };
+}
 
 function findContact(contactId) {
   return getContacts().find(item => item.id === contactId) || null;
@@ -337,7 +403,7 @@ export async function generatePrivateReply({
       : (getConversation(scopeKey, conversationKey) || conversation);
     return buildPrivateGenerationRequest({
       contact,
-      conversation: currentConversation,
+      conversation: resolveCommunityForwardEntries(scopeKey, currentConversation),
       otherContextSources,
       recentBody,
       worldBookText: activatedWorldBook?.text || '',
@@ -548,9 +614,8 @@ function communityForwardSemanticText(message) {
   return [
     `[moli社区转发｜${String(post.platform || '社区')}]`,
     `标题：${String(post.title || '无标题')}`,
-    post.authorName ? `作者：${String(post.authorName)}` : '',
-    String(post.content || '').trim(),
-    '这是 User 转发来的社区帖子。',
+    String(post.resolvedContext || '').trim() || (post.authorName ? `作者：${String(post.authorName)}` : ''),
+    '这是 User 转发来的社区帖子入口。帖子事实来自原帖，认知范围截至分享时。',
   ].filter(Boolean).join('\n');
 }
 
@@ -605,7 +670,8 @@ function parseSpeakerOrder(text, members, forcedIds) {
 
 async function buildGroupSpeakerRequest({ scopeKey, conversation, contact, members, workingMessages, reviewTarget = null }) {
   const userContext = getTavernUserContext();
-  const syntheticMessages = workingMessages.map(message => {
+  const resolvedWorkingMessages = resolveCommunityForwardEntries(scopeKey, { messages: workingMessages }).messages;
+  const syntheticMessages = resolvedWorkingMessages.map(message => {
     if (message?.role === 'user') return { ...message, role: 'user' };
     if (String(message?.senderId || '') === String(contact.id)) return { ...message, role: 'assistant' };
     return { ...message, role: 'user', content: groupMessageText(message, new Map(members.map(item => [String(item.id), item]))) };
@@ -826,7 +892,7 @@ async function buildBatchGroupRequest({
   const concreteGroupScope = boundGroupScope.includes(':chat:');
   // 围读会只能读取它自己绑定的正文。即使未来从后台/Automation 误触发，也不得偷读当前屏幕的另一正文。
   const mayReadBoundBody = readingMode && concreteGroupScope && currentTavernScope === boundGroupScope;
-  const messages = (Array.isArray(conversation.messages) ? conversation.messages : [])
+  const messages = resolveCommunityForwardEntries(scopeKey, { messages: Array.isArray(conversation.messages) ? conversation.messages : [] }).messages
     .filter(message => !excludeMessageId || String(message?.id || '') !== String(excludeMessageId));
   const membersById = new Map(members.map(item => [String(item.id), item]));
   const groupHistory = messages.slice(-Math.min(40, Math.max(8, Number(conversation.recentChatLimit) || 40)))

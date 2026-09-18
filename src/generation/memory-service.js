@@ -167,6 +167,10 @@ function eligibleTurns(conversation, memory) {
 function transcript(messages) {
   return messages.map(item => {
     const role = item?.role === 'user' ? '用户' : (item?.senderSnapshot?.name || '角色');
+    if (item?.communityForward) {
+      const post = item.communityForward;
+      return `${role}：[转发了${String(post.platform || '社区')}帖子《${String(post.title || '无标题')}》；记忆总结只能记录转发及双方围绕该帖发生的讨论，不得展开或复述帖子正文、回答、楼层、评论区]`;
+    }
     return `${role}：${String(item?.content || '').trim()}`;
   }).filter(Boolean).join('\n');
 }
@@ -178,7 +182,7 @@ async function condenseRecent(scopeKey, conversationKey, conversation, memory, c
   const batch = batchTurns.flatMap(turn => turn.messages);
   const text = await generateMemoryText(
     config,
-    '你是聊天记忆压缩器。只提取对未来延续关系真正有用的事实、约定、称呼、偏好、关系变化、未完成事项和重要情绪节点。不得编造。输出一段紧凑中文记忆，不要标题，不要解释。',
+    '你是聊天记忆压缩器。只提取对未来延续关系真正有用的事实、约定、称呼、偏好、关系变化、未完成事项和重要情绪节点。社区转发只能简要记为 User 转发了某帖、双方因某主题发生讨论；绝不能把帖子正文、回答、楼层或评论区总结进聊天记忆。不得编造。输出一段紧凑中文记忆，不要标题，不要解释。',
     transcript(batch),
   );
   if (!text) throw new Error('近期记忆压缩返回空内容');
