@@ -6440,6 +6440,74 @@ export function createPhonePanel({
   }
 
 
+  function captureExplicitChatAnonymousDisclosure(scopeKey, conversation, text) {
+    const content = String(text || '').trim();
+    if (!scopeKey || !conversation || !content) return 0;
+    // Only accept an explicit first-person disclosure.  Do not infer identity from hints,
+    // tone, same-post participation, or model guesses.
+    if (!/(?:那个|这个|帖子里|评论里|回答里|社区里)?\s*(?:匿名(?:的|那个|用户|账号|人)?|匿名者).{0,10}(?:是我|就是我|我发的|我写的|我本人)|(?:是我|就是我|我发的|我写的).{0,10}(?:匿名(?:的|那个|用户|账号|人)?|匿名者)/u.test(content)) return 0;
+
+    const messages = Array.isArray(conversation.messages) ? conversation.messages : [];
+    const forwards = messages.slice(-24).reverse().filter(message => message?.communityForward?.postId);
+    const candidates = [];
+    const seen = new Set();
+    const addAuthor = (author, post, surface) => {
+      if (!author?.anonymous || String(author?.knownIdentityId || author?.id || '') !== 'user') return;
+      const alias = String(author?.name || author?.uiName || '').trim();
+      if (!alias) return;
+      const id = `${post.id}:${surface}:${alias}`;
+      if (seen.has(id)) return;
+      seen.add(id);
+      candidates.push({ post, alias, surface });
+    };
+    for (const message of forwards) {
+      const ref = message.communityForward;
+      const post = getPublicWebPost(scopeKey, String(ref.postId || ''));
+      if (!post) continue;
+      addAuthor(post.author, post, `community.${post.section || 'unknown'}`);
+      for (const row of (Array.isArray(post.comments) ? post.comments : [])) addAuthor(row?.author, post, `community.${post.section || 'unknown'}`);
+      for (const answer of (Array.isArray(post.extra?.answers) ? post.extra.answers : [])) {
+        addAuthor(answer?.author, post, `community.${post.section || 'unknown'}`);
+        for (const row of (Array.isArray(answer?.comments) ? answer.comments : [])) addAuthor(row?.author, post, `community.${post.section || 'unknown'}`);
+      }
+      // Deictic “那个匿名的是我” is only safe when the active recent Community
+      // context resolves to one User-owned anonymous identity.
+      if (candidates.length) break;
+    }
+    if (candidates.length !== 1) return 0;
+
+    const targetIds = conversation.type === 'group'
+      ? (conversation.memberIds || []).map(String).filter(Boolean)
+      : [String(conversation.contactId || currentContactId || '')].filter(Boolean);
+    if (!targetIds.length) return 0;
+    const candidate = candidates[0];
+    const event = recordWorldEvent(scopeKey, {
+      source: 'wechat.character-knowledge',
+      actorId: 'user',
+      action: 'ANONYMOUS_IDENTITY_REVEALED',
+      targetContactIds: targetIds,
+      objectId: String(candidate.post.id || ''),
+      content: `User 在微信中明确告诉你：刚才相关社区内容里的匿名身份“${candidate.alias}”就是 User 本人。`,
+      metadata: {
+        alias: candidate.alias,
+        realContactId: 'user',
+        surface: candidate.surface,
+        postId: String(candidate.post.id || ''),
+        evidence: 'explicit-user-chat-disclosure',
+      },
+      awareness: 'known',
+      dedupeKey: `wechat-identity-reveal:${candidate.post.id}:${candidate.alias}:${targetIds.slice().sort().join(',')}`,
+    });
+    revealAnonymousIdentity(scopeKey, {
+      surface: candidate.surface,
+      alias: candidate.alias,
+      realContactId: 'user',
+      toContactIds: targetIds,
+      evidenceEventId: event?.id || '',
+    });
+    return targetIds.length;
+  }
+
   function sendMessage() {
     let stage = '入口';
     try {
@@ -6475,6 +6543,9 @@ export function createPhonePanel({
         text,
         { ...(pendingQuote ? { quote: pendingQuote } : {}), storyTime: messageStoryTimeMeta(conversation) }
       );
+
+      stage = '记录明确人物认知';
+      captureExplicitChatAnonymousDisclosure(scopeKey, currentConversation() || conversation, text);
 
       stage = '清理输入框';
       if (input) input.value = '';
