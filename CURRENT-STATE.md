@@ -374,3 +374,12 @@
 ## v0.5.37 / moli193 — Community natural-participant settlement guard
 - Fixed a v0.5.36 regression in unified Community refresh: natural continuing participants have no pending invite/@ item, so writeback must use the normalized `targetAction.kind / answerId / replyToCommentId` instead of dereferencing a missing pending item.
 - This is a writeback/runtime fix only. It does not change the rule that explicit invite/@ must respond while prior participants may naturally continue or SKIP, and it does not change World/Awareness boundaries.
+
+
+## v0.5.38 / moli194 — Conversation → Character Knowledge Bridge
+- 微信私聊/群聊不把整段聊天复制进 Community；同一角色在聊天生成中已经明确解开的匿名身份，会作为 Knowledge Delta 回写到统一 Anonymous Identity Awareness。
+- Community 中 User 的匿名评论/回答现在登记为匿名身份对象：系统知道真实身份是 User，但角色默认不知道。
+- 私聊与群聊生成只获得“尚未知身份的匿名对象引用（identityId / surface / alias）”，不会获得其系统真实身份；只有角色在本轮明确理解并接受身份揭露时才允许回写。猜测、相似感、怀疑不得升级为确定知识。
+- 群聊 Knowledge Delta 带 learnedBy，只有实际学到该事实的成员获得认知；其他联系人不会同步知道。
+- Community 继续通过 Character Continuity / Awareness 读取同一个人物已经知道的事实，因此无需建立“微信全文 → Community Prompt”复制通道。
+- 设计原则：App 不是人物的脑；Knowledge 跟随 Character 跨 App，原始聊天仍留在原 Conversation。
