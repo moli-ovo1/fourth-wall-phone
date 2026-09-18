@@ -8392,19 +8392,59 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
     if (wallpaperScopeMenu) wallpaperScopeMenu.hidden = true;
     chatWallpaperInput?.click();
   });
-  chatWallpaperInput?.addEventListener('change', () => {
+  async function optimizeChatWallpaper(file) {
+    const sourceUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('无法读取壁纸图片'));
+        img.src = sourceUrl;
+      });
+      const maxLongEdge = 2048;
+      const width = Number(image.naturalWidth || image.width || 0);
+      const height = Number(image.naturalHeight || image.height || 0);
+      if (!width || !height) throw new Error('壁纸尺寸无效');
+      const scale = Math.min(1, maxLongEdge / Math.max(width, height));
+      const targetWidth = Math.max(1, Math.round(width * scale));
+      const targetHeight = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const context = canvas.getContext('2d', { alpha: false });
+      if (!context) throw new Error('当前浏览器无法处理壁纸');
+      context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+      // 壁纸属于大面积背景图：优先 WebP，在保持观感的同时避免原始相机图/PNG长期占用数MB。
+      // 若浏览器不支持 WebP，则 canvas 会回退为 PNG；仍然保留尺寸缩放收益。
+      let quality = 0.88;
+      let dataUrl = canvas.toDataURL('image/webp', quality);
+      const targetChars = 900 * 1024; // Base64约束：单张壁纸尽量控制在约0.9MB字符串以内。
+      while (dataUrl.length > targetChars && quality > 0.64) {
+        quality -= 0.06;
+        dataUrl = canvas.toDataURL('image/webp', quality);
+      }
+      return { dataUrl, width: targetWidth, height: targetHeight, originalBytes: Number(file.size || 0) };
+    } finally {
+      URL.revokeObjectURL(sourceUrl);
+    }
+  }
+
+  chatWallpaperInput?.addEventListener('change', async () => {
     const file = chatWallpaperInput.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result || '');
-      if (!dataUrl) return;
-      try { writeRaw(wallpaperStorageKey(pendingWallpaperScope), dataUrl); } catch (error) { toast(error?.message || '壁纸保存失败'); return; }
+    try {
+      const optimized = await optimizeChatWallpaper(file);
+      writeRaw(wallpaperStorageKey(pendingWallpaperScope), optimized.dataUrl);
       applyCurrentChatWallpaper();
-      toast(pendingWallpaperScope === 'current' ? '当前聊天壁纸已设置' : '全局聊天壁纸已设置');
+      const savedKb = Math.max(0, Math.round((optimized.originalBytes - optimized.dataUrl.length * 0.75) / 1024));
+      const suffix = savedKb >= 64 ? `，约节省 ${savedKb} KB` : '';
+      toast(`${pendingWallpaperScope === 'current' ? '当前聊天壁纸已设置' : '全局聊天壁纸已设置'}${suffix}`);
+    } catch (error) {
+      toast(error?.message || '壁纸保存失败');
+    } finally {
       chatWallpaperInput.value = '';
-    };
-    reader.readAsDataURL(file);
+    }
   });
   applyCurrentChatWallpaper();
 
