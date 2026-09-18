@@ -369,3 +369,8 @@
 - Community comments support long-press/context-menu deletion. Deleting visible content does not erase World Event/Awareness already formed by characters. Descendant reply rows are removed with a deleted parent to avoid dangling UI reply chains.
 - Continuity retrieval used by the Acting Pack preserves recent/direct/unresolved event relevance; SKIP is an action decision, not forgetting.
 - Weibo remains the next Community surface; do not add it by bypassing the shared Community cognition/settlement architecture.
+
+
+## v0.5.37 / moli193 — Community natural-participant settlement guard
+- Fixed a v0.5.36 regression in unified Community refresh: natural continuing participants have no pending invite/@ item, so writeback must use the normalized `targetAction.kind / answerId / replyToCommentId` instead of dereferencing a missing pending item.
+- This is a writeback/runtime fix only. It does not change the rule that explicit invite/@ must respond while prior participants may naturally continue or SKIP, and it does not change World/Awareness boundaries.
