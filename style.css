@@ -2319,3 +2319,7 @@
 #moli-phone-panel .moli-custom-user-home-body input{min-height:34px;border:1px solid rgba(0,0,0,.12);border-radius:8px;padding:0 9px;background:rgba(255,255,255,.72)}
 #moli-phone-panel .moli-custom-user-home-body button{min-height:34px;border:1px solid rgba(0,0,0,.1);border-radius:8px;background:rgba(255,255,255,.62)}
 #moli-phone-panel .moli-custom-user-home-body p{margin:0;color:#777;font-size:10px;line-height:1.55}
+
+/* moli187: Zhihu top compose entry */
+#moli-phone-panel .moli-community-topnav .moli-zhihu-top-compose{flex:0 0 30px;min-width:30px;padding:3px 2px 6px;font-size:25px;line-height:1;color:#1677ff!important;font-weight:400;background:transparent!important;box-shadow:none!important}
+#moli-phone-panel .moli-community-topnav .moli-zhihu-top-compose[hidden]{display:none!important}

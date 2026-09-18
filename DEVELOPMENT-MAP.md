@@ -3196,3 +3196,11 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - Prompt 明确：仅担心实名曝光时应考虑匿名；SKIP 只用于即使匿名也不愿参与，并要求返回原因。
 - 结算提示分别显示实名回应、匿名回应与不回应原因；World Event 继续保存最终 identityMode 与 publicDecision。
 - 保留旧 `REPLY + community_identity` 解析兼容；不修改 Store Schema、Scope Key、manifest 版本，无需迁移。
+
+
+## v0.5.31 / moli187
+- 明确社区互动（邀请评论、邀请回答、@）不再判断是否回应：角色必须回应，只在实名 / 匿名之间选择；模型缺失公开正文时视为生成失败并保留待结算，不伪装成角色 SKIP。
+- 通讯录「群聊」按当前 World Instance 过滤，与聊天列表的 World 边界一致：A 正文只见 A 群，正文外只见正文外群。
+- 修复删除 Contact 时 World scope 定位：从 Contact 绑定 World + 全部私聊实例解析 scope，删除 NPC/正文人物时其所属 World 的社区、朋友圈、World Event、匿名认知与「我们的墙」scope 数据一并清除，避免 UI 仍显示旧社区帖子。
+- 知乎顶部新增「＋」发布入口，复用现有 User 发帖链。
+- Character↔Character Awareness 第一段接入社区明确互动：角色公开回答/回复后，直接相关的角色参与者获得该公开互动的已知 World Event；不是把整帖复制给所有角色。帖子转发的 snapshotAt 仍作为私聊查看“转发当时帖子内容”的受控上下文来源。
