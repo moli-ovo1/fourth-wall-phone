@@ -3204,3 +3204,11 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - 修复删除 Contact 时 World scope 定位：从 Contact 绑定 World + 全部私聊实例解析 scope，删除 NPC/正文人物时其所属 World 的社区、朋友圈、World Event、匿名认知与「我们的墙」scope 数据一并清除，避免 UI 仍显示旧社区帖子。
 - 知乎顶部新增「＋」发布入口，复用现有 User 发帖链。
 - Character↔Character Awareness 第一段接入社区明确互动：角色公开回答/回复后，直接相关的角色参与者获得该公开互动的已知 World Event；不是把整帖复制给所有角色。帖子转发的 snapshotAt 仍作为私聊查看“转发当时帖子内容”的受控上下文来源。
+
+
+## v0.5.32 / moli188
+- 修复主动行为决策的“上下文素材泄漏成第一条私聊”：Automation 的非 JSON 回退不再把任意模型原文当作 PRIVATE_CHAT；只有显式 `<msg>` 才允许作为兼容回退。柏宝书、记忆总结、正文、Prompt 回显因此不会被直接落成微信气泡。
+- 小红书楼中楼展示去除模型正文中重复的“回复 @某人：”前缀；回复关系由结构化 `replyToCommentId` 负责展示，避免 UI 再显示第二遍。
+- 知乎发布按钮从社区顶层导航彻底移除，改为知乎问题列表内容区左上角的蓝色圆形“＋”；详情页“增加回答”上移到操作栏右侧，并把原粗分隔缩成细线。
+- Character↔Character Awareness 继续扩展到直接 @ 回应：公开回应发生后，与该回复直接相关的角色参与者获得自己的已知 World Event；仍不把整帖广播给所有联系人。
+- Community 身份混淆本轮只审计、不修改。实际代码显示：当最近正文存在时，`generatePublicWebRefresh()` 当前只把最近 14 条 / 12000 字正文作为故事 context；Role Fidelity / 世界书补充仅在 recent body 为空时进入 fallback。因此“长世界书没读全”并非唯一可能，现有 Context Builder 确实存在“有最近正文时不同时合并角色资料/世界书”的结构性缺口。下一阶段先设计 World Context Pack，再改生成链，避免直接堆几万字导致 token/身份混淆。
