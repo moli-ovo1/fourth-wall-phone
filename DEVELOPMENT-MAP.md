@@ -3245,3 +3245,9 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - localStorage is continuously audited: any moli item >= 128 KB is flagged as a possible growing-data leak.
 - Current invariant: long-lived/growing business data belongs in IndexedDB; localStorage is reserved for lightweight settings/runtime markers.
 - Do not reintroduce fallback/no-chat as formal persistence.
+
+
+## moli208 / v0.5.52 — Community interaction reliability
+- Community comment/reply long-press is isolated from whole-post deletion: comment action consumes the contextmenu event before post action. Tianya, Xiaohongshu and Zhihu answer comments use explicit comment IDs; deleting a comment never calls the post-delete path.
+- Community identity ownership is stricter: every identity fact belongs only to its named character; uncertain attribution is omitted rather than migrated to a similar character.
+- The previously observed multi-invite anomaly is intentionally not changed in this version because it is not currently reproducible; do not reintroduce batch settlement merely to address a historical symptom.
