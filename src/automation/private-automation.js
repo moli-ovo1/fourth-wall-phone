@@ -5,6 +5,8 @@ import { parseGeneratedMessages, parseFourthWallResponse } from '../generation/m
 import { beginGenerationTask, endGenerationTask, setGenerationError } from '../core/generation-runtime.js';
 import { createProfileMoment } from '../storage/moments-store.js';
 import { listWorldEvents, markWorldEventsConsumed, recordWorldEvent, summarizeWorldEventsForContext, linkWorldEventResult } from '../storage/world-event-store.js';
+import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
+import { buildCharacterDecisionInstruction } from '../generation/character-decision.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -207,7 +209,15 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           ? (isFourthWall
             ? '这是正文刚发生后的场外私聊反应机会。你就是正文中的你本人，不是分析员。只有此刻真的会想联系用户时才回复；若不想说，严格只输出 [SKIP]。若回复，像手机私聊一样简短自然。'
             : `这是一次“酒馆正文事件 → 这个人物是否会在手机里产生反应”的行为判断机会，不是命令你必须吐槽。刚发生的正文事件：\n${String(commentaryEvent?.targetText || '').trim().slice(0, 1800) || '（正文有新进展）'}\n你可以揶揄、生气、看戏、担心、追问、冷淡、转移话题，或者完全不想说；一切由你的人格、与用户的关系、当前情绪和已有手机连续性决定。若此刻不会主动在手机里联系用户，严格只输出 [SKIP]；若会，直接发真实手机私聊内容，不解释判断过程。`)
-          : `这是一次人物主动行为判断机会。它不是“必须行动”的命令，也不是随机抽签。\n最近事件：\n${unifiedEventText || '（没有单独的新社交事件，这是一次自然主动行为机会）'}\n主动私聊倾向设置为 ${Number(a.autoChatProbability ?? 30)}%，它只表示人物主动联系用户的倾向/评估频率，不代表必须联系。\n结合你的人格、关系、当前情绪、最近聊天、未完话题、长期未互动、朋友圈历史、社交习惯、已经公开表达过什么，以及距离上次互动的间隔，决定此刻最自然的行为。\n最近已经执行过的主动行为：\n${recentActionText}\n这些只是 soft cooldown：如果刚刚已经 POST/PRIVATE_CHAT，普通小事通常不值得马上重复；但重大关系或剧情变化绝不能被硬性禁止继续行动。\n允许的动作：${allowPost ? 'POST（发一条自己的朋友圈）' : ''}${allowPost && allowPrivate ? ' / ' : ''}${allowPrivate ? 'PRIVATE_CHAT（主动私聊用户）' : ''}${allowPost && allowPrivate ? ' / POST+PRIVATE_CHAT（两者都做，但必须各自有真实动机）' : ''} / SKIP（什么都不做）。\n不要为了展示功能而行动；不要机械回应每个朋友圈事件；不要把私聊秘密无脑公开。\n只输出严格 JSON，不要解释：{"action":"SKIP|POST|PRIVATE_CHAT|POST+PRIVATE_CHAT","post":"只有 POST 时填写朋友圈正文，否则空字符串","privateMessages":["只有 PRIVATE_CHAT 时填写的真实手机气泡，可 1~3 条"]}`;
+          : buildCharacterDecisionInstruction({
+              wakeReason: mode === 'social-event' ? '手机世界出现已知事件/社交变化' : '自然主动行为评估',
+              newFacts: unifiedEventText,
+              continuity: buildCharacterContinuity(scopeKey, contact.id, { limit: 16, query: unifiedEventText }).text,
+              initiative: Number(a.autoChatProbability ?? 30),
+              allowPost,
+              allowPrivate,
+              recentActions: recentActionText,
+            });
         const result = await generatePrivateReply({
           scopeKey,
           conversationKey: key,
