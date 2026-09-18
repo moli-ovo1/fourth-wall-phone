@@ -29,53 +29,9 @@ import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfi
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
-import { buildCharacterContinuity, listAnonymousIdentityCandidates, revealAnonymousIdentityById } from '../storage/character-continuity-store.js';
+import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
 import { getPublicWebPost } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
-import { fitContextSections } from './context-budget.js';
-
-function anonymousKnowledgeCandidates(scopeKey, contactIds = []) {
-  const seen = new Map();
-  for (const contactId of contactIds.map(String).filter(Boolean)) {
-    for (const item of listAnonymousIdentityCandidates(scopeKey, contactId)) {
-      if (!seen.has(item.id)) seen.set(item.id, item);
-    }
-  }
-  return [...seen.values()].slice(0, 24);
-}
-
-function knowledgeCandidatePrompt(candidates = []) {
-  if (!candidates.length) return '';
-  return `【可发生认知更新的匿名身份引用】\n这些只是当前角色尚未确定真实身份、但聊天上下文可能正在指向的对象。不要猜身份；只有本轮对话让角色明确理解并接受了身份揭露时才回写。\n${candidates.map(x => `- identityId=${x.id}｜${x.surface}｜公开名“${x.alias}”`).join('\n')}`;
-}
-
-function extractPrivateKnowledgeDelta(rawText = '') {
-  const raw = String(rawText || '');
-  const deltas = [];
-  const cleaned = raw.replace(/<knowledge_delta>([\s\S]*?)<\/knowledge_delta>/gi, (_all, body) => {
-    try {
-      const parsed = JSON.parse(String(body || '').trim());
-      const rows = Array.isArray(parsed) ? parsed : [parsed];
-      for (const row of rows) if (row && row.type === 'anonymous_identity_reveal' && row.identityId) deltas.push(row);
-    } catch {}
-    return '';
-  }).trim();
-  return { text: cleaned, deltas };
-}
-
-function applyKnowledgeDeltas(scopeKey, deltas = [], allowedContactIds = []) {
-  const allowed = new Set(allowedContactIds.map(String));
-  const applied = [];
-  for (const row of deltas) {
-    if (!row || row.type !== 'anonymous_identity_reveal' || !row.identityId) continue;
-    const learnedBy = (Array.isArray(row.learnedBy) ? row.learnedBy : [row.learnedBy]).map(String).filter(id => allowed.has(id));
-    if (!learnedBy.length) continue;
-    const identity = revealAnonymousIdentityById(scopeKey,{identityId:String(row.identityId),toContactIds:learnedBy,evidenceEventId:''});
-    if (identity) applied.push({identityId:identity.id,learnedBy});
-  }
-  return applied;
-}
-
 
 function communityActorName(actor) {
   return String(actor?.uiName || actor?.name || '匿名网友').trim() || '匿名网友';
@@ -476,11 +432,6 @@ export async function generatePrivateReply({
       })
     : buildRequest();
 
-  const privateKnowledgeCandidates = !isFourthWall ? anonymousKnowledgeCandidates(scopeKey, [contact.id]) : [];
-  if (privateKnowledgeCandidates.length) {
-    request.system = `${String(request.system || '')}\n\n${knowledgeCandidatePrompt(privateKnowledgeCandidates)}\n【认知回写协议】正常聊天回复照旧。仅当「${contactLabel(contact)}」在本轮明确理解并接受某个匿名身份揭露时，在所有正常回复之后额外输出一段机器标记：<knowledge_delta>{\"type\":\"anonymous_identity_reveal\",\"identityId\":\"上方identityId\",\"learnedBy\":[\"${contact.id}\"]}</knowledge_delta>。没有明确揭露则绝对不要输出。不要仅凭猜测、语气相似或系统真相回写。`;
-  }
-
   if (String(automationInstruction || '').trim() && !fourthWallCommentary) {
     request.messages = [...(request.messages || []), { role: 'user', content: String(automationInstruction).trim() }];
   }
@@ -507,12 +458,6 @@ export async function generatePrivateReply({
   }
 
   if (momentEventIds.length) markMomentChatEventsDelivered(scopeKey, contact.id, momentEventIds);
-
-  if (!isFourthWall && privateKnowledgeCandidates.length) {
-    const parsedKnowledge = extractPrivateKnowledgeDelta(result?.text || '');
-    result = { ...result, text: parsedKnowledge.text, knowledgeDeltas: parsedKnowledge.deltas };
-    applyKnowledgeDeltas(scopeKey, parsedKnowledge.deltas, [contact.id]);
-  }
 
   return {
     ...result,
@@ -1029,11 +974,6 @@ async function buildBatchGroupRequest({
   // moli73：普通群聊继承全局“线上聊天预设”的行为规则。
   // 私聊专用 <message> 输出格式与群聊 JSON 协议冲突，因此群聊只排除系统默认的 output-protocol；
   // 其余启用条目（包括用户自定义条目）继续作为群成员共同的线上行为规则。
-  const groupKnowledgeCandidates = anonymousKnowledgeCandidates(scopeKey, members.map(member => member.id));
-  const groupKnowledgeBlock = groupKnowledgeCandidates.length
-    ? `\n${knowledgeCandidatePrompt(groupKnowledgeCandidates)}\n【群聊认知回写】如果本轮群聊让某位成员明确理解并接受了某个匿名身份揭露，在 knowledgeDeltas 中记录；只写真正学到的成员。猜测不算。\n`
-    : '';
-
   const onlinePreset = buildOnlinePresetPrompt(undefined, { excludeIds: ['output-protocol'] });
   const onlinePresetBlock = onlinePreset
     ? `【moli小手机：线上聊天预设｜群聊内容规则】
@@ -1048,7 +988,7 @@ ${onlinePreset}
     ? `【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮真实群聊。整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标，不要为了填满而硬说。所有群成员都只是可发言者，没有谁被强制必须出现；沉默型角色可以完全不说，爱插科打诨或此刻有话的人可以连续出现多次。同一 speakerId 可以在这一轮重复出现，允许真实的来回接话，例如 A→B→A→moli。气泡数量和分配应由人物性格、当前情绪、关系、话题价值和前一个气泡共同决定，而不是平均分配。成员不必各自从头分析正文，后发成员可以接前一个成员的话、争论、接梗、吐槽、补充或沉默。不要为了证明完成点评任务而复述正文、总结情节或强行寻找分析点。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长。`
     : targetedRegeneration
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
-      : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n${groupKnowledgeBlock}【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}],"knowledgeDeltas":[{"type":"anonymous_identity_reveal","identityId":"上方identityId","learnedBy":["成员id"]}]}。没有认知更新时 knowledgeDeltas 必须是空数组。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
+      : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
   const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}`;
   return { system, messages: [{ role: 'user', content: shared }] };
@@ -1085,11 +1025,6 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   assertApiConfig(config);
   const result = await runGeneration(config, request, { signal });
   if (looksLikeProviderErrorText(result?.text)) throw new Error('API 提供方拒绝了本次请求；错误内容不会写入聊天记录，请修改内容或重试。');
-  try {
-    const raw = String(result?.text || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
-    const parsed = JSON.parse(raw);
-    applyKnowledgeDeltas(scopeKey, Array.isArray(parsed?.knowledgeDeltas) ? parsed.knowledgeDeltas : [], members.map(member => member.id));
-  } catch {}
   const replies = parseBatchGroupOutput(result.text, members, {
     review: false,
     forcedIds,
@@ -1116,11 +1051,6 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
   assertApiConfig(config);
   const result = await runGeneration(config, request, { signal });
   if (looksLikeProviderErrorText(result?.text)) throw new Error('API 提供方拒绝了本次请求；错误内容不会写入聊天记录，请修改内容或重试。');
-  try {
-    const raw = String(result?.text || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
-    const parsed = JSON.parse(raw);
-    applyKnowledgeDeltas(scopeKey, Array.isArray(parsed?.knowledgeDeltas) ? parsed.knowledgeDeltas : [], members.map(member => member.id));
-  } catch {}
   const replies = parseBatchGroupOutput(result.text, members, {
     review: true,
     bubbleRange: conversation.groupReplyBubbleRange,
@@ -1582,18 +1512,18 @@ async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
   if (String(scopeKey || '').includes(':chat:')) {
     try {
       const longTerm = getBaiBaiLongTermMemory();
-      longTermText = String(longTerm?.text || longTerm?.content || longTerm || '').trim();
+      longTermText = truncateCommunityContext(longTerm?.text || longTerm?.content || longTerm || '', 7000);
     } catch (error) {
       console.warn('[moli小手机] community long-term context failed:', error);
     }
   }
 
-  return fitContextSections([
-    { key:'identity', priority:100, text:identityPack ? `【稳定人物身份 · Identity Anchor】\n以下用于确认“谁是谁”，不得把一个人物的职业、关系、性别或经历移植给另一个人物。\n${identityPack}` : '' },
-    { key:'recent', priority:95, text:recentText ? `【当前正文 · Recent World State】\n${recentText}` : '' },
-    { key:'worldbook', priority:85, text:worldBookText ? `【相关世界书 · Relevant World Lore】\n${worldBookText}` : '' },
-    { key:'longterm', priority:70, text:longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道。\n${longTermText}` : '' },
-  ], { charBudget: 90000 });
+  return [
+    identityPack ? `【稳定人物身份 · Identity Anchor】\n以下用于确认“谁是谁”，不得把一个人物的职业、关系、性别或经历移植给另一个人物。\n${identityPack}` : '',
+    recentText ? `【当前正文 · Recent World State】\n${recentText}` : '',
+    worldBookText ? `【相关世界书 · Relevant World Lore】\n${worldBookText}` : '',
+    longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道。\n${longTermText}` : '',
+  ].filter(Boolean).join('\n\n');
 }
 
 function communityNativeRoster(scopeKey) {
@@ -1724,55 +1654,6 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
   posts=posts.map(post=>{if(post.section!=='custom')return post;const def=customById.get(String(post.extra?.customCommunityId||''));if(def?.needsComments===false)return{...post,comments:[]};return post;});
   if (!ghostStoriesEnabled) posts=posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
   return posts;
-}
-
-
-
-export async function generateCommunitySettlement({ scopeKey, post, pending = [], mode = 'thread', answerId = '', signal } = {}) {
-  if (!scopeKey || !post) throw new Error('当前社区内容不可用');
-  const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
-  const userName=getTavernUserContext().name||'User';
-  const contactsById=new Map(getContacts().map(item=>[String(item.id||''),item]));
-  const explicit=[];
-  for(const item of (Array.isArray(pending)?pending:[]).filter(x=>x?.type==='invite'||x?.type==='mention')){
-    const raw=contactsById.get(String(item.targetId||'')); if(raw) explicit.push({item,raw,required:true});
-  }
-  // 已经真实参与过该帖的角色，在帖子继续变化时仍有自然行动机会；这不是随机概率，也不等于必须继续发言。
-  const explicitIds=new Set(explicit.map(x=>String(x.raw.id)));
-  const participantIds=new Set();
-  const addActor=a=>{const id=String(a?.knownIdentityId||a?.id||'');if(id&&contactsById.has(id)&&!explicitIds.has(id))participantIds.add(id);};
-  for(const c of (post.comments||[]))addActor(c?.author);
-  if(post.section==='zhihu')for(const a of (post.extra?.answers||[])){addActor(a?.author);for(const c of (a?.comments||[]))addActor(c?.author);}
-  const candidates=[...explicit,...[...participantIds].slice(0,6).map(id=>({item:null,raw:contactsById.get(id),required:false}))];
-  const targets=[];
-  const query=[post.title,post.content,communityPostFacts(post,0)].filter(Boolean).join('\n');
-  for(const row of candidates){
-    const contact=await fullyHydratedContact(row.raw); const name=String(contact.remark||contact.displayName||contact.name||contact?.source?.originalName||'角色');
-    const identity=communityIdentityAnchor(contact); let lore='';
-    try{const wb=contact.kind==='custom'?await getActivatedCustomWorldBook({contact,scanText:query+'\n'+identity}):await getActivatedTavernWorldBook({contact,scanText:query+'\n'+identity});lore=String(wb?.text||'').trim();}catch(error){console.warn('[moli小手机] settlement target lore failed:',contact.id,error);}
-    const continuity=buildCharacterContinuity(scopeKey,contact.id,{limit:36,query}).text;
-    const persona=contact.kind==='builtin'?replaceUserPlaceholder(getBuiltinPersonaPrompt(contact.id),userName):'';
-    targets.push({item:row.item,contactId:String(contact.id),name,required:row.required,identity,lore,continuity,persona});
-  }
-  const targetText=targets.length?targets.map((t,i)=>`【人物${i+1}｜targetId=${t.contactId}${t.item?`｜pendingId=${t.item.id}`:''}｜${t.required?'明确互动：本轮必须回应':'既有参与者：本轮可自然继续或SKIP'}】\n${t.identity}${t.persona?`\n【人物核心Prompt】\n${t.persona}`:''}${t.lore?`\n【该人物相关世界书】\n${t.lore}`:''}${t.continuity?`\n【该人物真正知道/经历过的连续性】\n${t.continuity}`:''}\n${t.item?`本轮触发：${t.item.type==='invite'?'User明确邀请':`User明确@：${String(t.item.content||'')}`}`:'本轮触发：这个人物此前已经真实参与过该帖；只有当新讨论、人际关系、立场或未解决事件给了他继续行动的真实动机时才继续，否则SKIP。'}\n请先作为这个人物本人理解当前帖子，再决定动作；不要写成中立总结员、客服、百科或泛泛劝慰。`).join('\n\n'):'（本轮没有角色目标）';
-  const system=`你正在执行 moli 社区的一次统一刷新结算。一次刷新只对应这一次模型调用，但这不意味着把多个人物压成同一种口吻。你必须分别扮演每个人物：人物身份、语言习惯、与User关系、自己真正知道的经历和世界书都只属于该人物。\n\n规则：明确邀请/@的角色本轮必须公开回应，只能 REAL 或 ANONYMOUS，不能SKIP。此前已参与帖子的人属于自然候选：知道≠在意≠行动；根据人物性格、关系、帖子新增变化、是否有人回应他、是否存在未解决冲突决定 REAL / ANONYMOUS / SKIP，禁止用Math.random或固定百分比代替人物判断。匿名只对其他社区参与者隐藏真实身份，不得虚构后台实名/IP追踪来否定匿名。普通网友互动可以为0条。只输出严格JSON。`;
-  const schema=`返回：{"targetActions":[{"pendingId":"明确互动时原样返回；自然候选留空","targetId":"角色id","decision":"REAL|ANONYMOUS|SKIP","alias":"匿名时网名","publicText":"REAL/ANONYMOUS时正文；SKIP留空","privateDecision":"SEND|SKIP","privateReason":"可选","privateMessages":["0~3条私聊"]}],"comments":[{"author":"网友","authorId":"可选","content":"新增评论","replyToCommentId":"可选已有评论id"}],"answers":[],"commentAdditions":[]}。`;
-  const user=`平台：${post.section}\n结算模式：${mode}${answerId?`\n当前回答id：${answerId}`:''}\n标题：${post.title||''}\n正文：${post.content||''}\n\n【刷新前完整可见讨论】\n${communityPostFacts(post,0)}\n\n【逐人物 Acting Pack】\n${targetText}\n\n${schema}`;
-  const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
-  const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''); let data;
-  try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('社区统一刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
-  const byId=new Map(targets.map(t=>[t.contactId,t])); const targetActions=[]; const returnedRequired=new Set();
-  for(const action of (Array.isArray(data?.targetActions)?data.targetActions:[])){
-    const t=byId.get(String(action?.targetId||'')); if(!t)continue; const decision=String(action?.decision||action?.identity||'SKIP').toUpperCase();
-    if(t.required&&decision==='SKIP')continue; const identity=decision==='ANONYMOUS'?'ANONYMOUS':decision==='REAL'?'REAL':'SKIP'; const publicText=String(action?.publicText||'').trim();
-    if(identity!=='SKIP'&&!publicText)continue; if(t.required)returnedRequired.add(t.contactId);
-    targetActions.push({pendingId:String(t.item?.id||''),targetId:t.contactId,natural:!t.required,kind:String(t.item?.kind||'comment'),answerId:String(t.item?.answerId||''),replyToCommentId:String(t.item?.replyToCommentId||''),identity,alias:String(action?.alias||'匿名用户').trim()||'匿名用户',publicText,privateDecision:String(action?.privateDecision||'SKIP').toUpperCase()==='SEND'?'SEND':'SKIP',privateReason:String(action?.privateReason||'').trim(),privateMessages:(Array.isArray(action?.privateMessages)?action.privateMessages:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,3)});
-  }
-  if(targets.filter(t=>t.required).some(t=>!returnedRequired.has(t.contactId)))throw new Error('角色必须回应，但统一刷新没有返回全部明确邀请/@角色的公开正文，请重试刷新。');
-  const comments=(Array.isArray(data?.comments)?data.comments:[]).slice(0,8).map((c,i)=>({id:`webc_${Date.now()}_${i}_${Math.random().toString(36).slice(2,7)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:String(c?.content||'').trim().slice(0,1200),replyToCommentId:String(c?.replyToCommentId||'')})).filter(x=>x.content);
-  const answers=(Array.isArray(data?.answers)?data.answers:[]).slice(0,3).map((a,i)=>({id:`za_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author,userName,'匿名用户')},content:String(a?.content||'').trim().slice(0,8000),upvotes:Number(a?.upvotes||0),comments:[]})).filter(x=>x.content);
-  const commentAdditions=(Array.isArray(data?.commentAdditions)?data.commentAdditions:[]).slice(0,8).map(batch=>({answerId:String(batch?.answerId||''),comments:(Array.isArray(batch?.comments)?batch.comments:[]).slice(0,6).map((c,i)=>({id:`zac_${Date.now()}_${i}_${Math.random().toString(36).slice(2,7)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:String(c?.content||'').trim().slice(0,1200),replyToCommentId:String(c?.replyToCommentId||'')})).filter(x=>x.content)})).filter(x=>x.answerId&&x.comments.length);
-  return {targetActions,comments,answers,commentAdditions};
 }
 
 export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}) {
