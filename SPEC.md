@@ -4195,3 +4195,21 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 群聊 Knowledge Delta 带 learnedBy，只有实际学到该事实的成员获得认知；其他联系人不会同步知道。
 - Community 继续通过 Character Continuity / Awareness 读取同一个人物已经知道的事实，因此无需建立“微信全文 → Community Prompt”复制通道。
 - 设计原则：App 不是人物的脑；Knowledge 跟随 Character 跨 App，原始聊天仍留在原 Conversation。
+
+
+## v0.5.39 / moli195 — Community 稳定基线回退（2026-09-18）
+
+本版不是继续叠加 Community 新能力，而是依据 moli188–191 与最新完整仓库的真实代码差异，将 Community 的运行基线选择性回退到统一 Settlement 之前。
+
+- Community 生成链恢复 moli190：普通网友刷新与角色邀请/@继续走各自原有生成路径，不再由 `generateCommunitySettlement()` 把两类任务压进同一次调用。
+- Community UI/刷新调度恢复 moli189（即 moli190 当时沿用的 UI 基线）：撤销 191–194 的统一 Settlement 调度、自然候选续帖和评论长按删除入口。
+- 因此 192 引入的“长按评论删除”暂时撤回，避免评论事件继续误触整帖删除。之后若重新加入，必须把 comment 与 post 的删除事件边界独立实现并单独验收。
+- 194 的“微信 → Character Knowledge → Community”运行入口冻结，不在当前生成链执行。设计保留，但必须等 Community 稳定后再接。
+- World Event、Awareness、Character Continuity 等既有底层文件和数据结构不做破坏性删除；本次只撤回已证明造成体验回归的运行路径。
+- Community → Conversation 的原帖引用继续采用 moli190 已有机制：转发对象通过 `communityForward` / `snapshotAt` 读取对应帖子快照，不应退化为仅凭摘要猜测。
+- 下一阶段先真实设备验收：①普通刷新能自然产生网友互动；②@/邀请角色恢复人物口吻；③角色处理后再次刷新帖子仍可继续生长；④转发帖子进私聊/群聊后角色确实读取帖子对象。四项稳定前不接微博和反向 Knowledge Delta。
+
+## Stable-baseline correction (v0.5.40)
+Conversation reference continuity requirement: when a Community object has already entered a conversation through the supported Community reference/context path, later natural-language references such as “那个匿名的是我” must be interpreted against that already-known object context. The model must not be prompted to describe itself as lacking the post when the resolved Community context is present.
+
+Do not implement reverse cross-app knowledge by exposing machine identity candidate IDs or Knowledge Delta protocol text inside ordinary roleplay prompts during stabilization. Reverse knowledge propagation is deferred.
