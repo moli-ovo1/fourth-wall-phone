@@ -4229,3 +4229,8 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - The opportunity is per-character and uses that character's own continuity/knowledge. It may yield public reply, permitted private message, both, or SKIP.
 - SKIP consumes only that decision opportunity. It must not erase awareness or continuity.
 - Explicit invite/@ remains a separate stronger path. Do not merge natural participants, targeted characters and ordinary internet actors into one batch model settlement.
+
+### Character Knowledge：行为经历必须保存“做了什么”而非只有“做过” (v0.5.58)
+角色在 Community 公开回答/回复后，该行为属于角色自己的跨 App 经历。World Event 应保存实际公开内容及身份方式，使同一角色稍后回到微信或其他手机入口时能够自然记得自己的发言；不得仅保存抽象的“参与了讨论”。这不是 App 文本复制：只记录该角色亲自实施的行为结果及必要 provenance。
+
+匿名身份在角色上下文中必须使用可读的人物名称，不能暴露内部 contact id。身份映射仍严格服从 knownBy：系统知道真实身份，不等于所有角色知道。

@@ -3285,3 +3285,9 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - 接通：既有角色参与者 → User 新社区事件 → refresh cognition opportunity → per-character continuity → REPLY / MESSAGE / BOTH / SKIP → World Event result/consumed。
 - 不做全联系人扫描式活跃；只有已经在该帖留下角色身份且有新事件的角色进入判断。
 - 后续继续验证匿名认知、自然参与后的再次刷新不重复，以及 Community ↔ 微信人物经历的双向一致性。
+
+## v0.5.58 / moli214 — Cross-App Character Experience closure
+- Community role action -> World Event now retains the role's actual public content (`publicContent`), identity mode/alias and associated private action metadata.
+- Character Continuity can therefore carry the role's own Community action back into later WeChat/phone generation without copying an entire app transcript.
+- Anonymous identity rendering is character-readable and must never expose internal IDs; knowledge visibility remains controlled by `knownBy`.
+- Keep this invariant for future apps: persist compact character-owned action results + provenance, not whole-source prompt dumps.
