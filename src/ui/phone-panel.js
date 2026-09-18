@@ -184,6 +184,7 @@ export function createPhonePanel({
         <button type="button" data-public-web-tab="tianya">天涯社区</button>
         <button type="button" data-public-web-tab="xiaohongshu">小红书</button>
         <button type="button" data-public-web-tab="zhihu">知乎</button>
+        <button type="button" class="moli-zhihu-top-compose" data-action="zhihu-top-compose" aria-label="发布知乎问题" hidden>＋</button>
         <button type="button" data-public-web-tab="custom">自创</button>
       </nav>
       <div class="moli-retro-browser">
@@ -3746,7 +3747,13 @@ export function createPhonePanel({
       }
     }
 
-    const groups = conversations.filter(conversation => conversation?.type === 'group').sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
+    const rawContactScope = String(scopeKey || '');
+    const activeContactWorld = isConcreteTavernWorldScope(rawContactScope) ? rawContactScope : '';
+    const groups = conversations.filter(conversation => {
+      if (conversation?.type !== 'group') return false;
+      const groupScope = String(conversation.storageScopeKey || conversation.boundScopeKey || '');
+      return activeContactWorld ? groupScope === activeContactWorld : groupScope === rawContactScope;
+    }).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
     const groupRows = groups.map(group => `<button class="moli-contact-group-row" data-contact-group-conversation="${escapeHtml(group.conversationKey || group.id || '')}"><span>${escapeHtml(group.name || '群聊')}</span></button>`).join('');
     const groupSection = `<section class="moli-contact-groups"><button type="button" class="moli-contact-groups-toggle" data-action="contacts-groups-toggle"><span class="moli-contact-groups-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.8 19c.4-4 2.2-6 5.7-6s5.3 2 5.7 6M13.5 14c3.4-.3 5.5 1.4 5.9 4.5"/></svg></span><b>群聊</b><i>›</i></button><div class="moli-contact-group-list" data-contact-group-list hidden>${groupRows || '<div class="moli-contact-group-empty">暂无群聊</div>'}</div></section>`;
     contactsTabList.innerHTML = groupSection + (rows.length ? rows.join('') : '<div class="moli-empty">暂无联系人</div>');
@@ -6857,15 +6864,27 @@ export function createPhonePanel({
       const target=getContacts().find(x=>String(x.id)===String(item.targetId)); if(!target){done.push(item.id);continue;}
       const scopeKey=getScopeKey?.(); const conversationKey=privateConversationKeyFor(scopeKey,target.id); const privateConv=getScopeConversations(scopeKey).find(c=>String(c.conversationKey||c.id||'')===String(conversationKey)); const proactiveEnabled=privateConv?.automation?.autoChatEnabled===true; const isAnswer=item.kind==='answer';
       markWorldEventsKnownByObjectTargets(scopeKey,[item.id]);
-      const instruction=`【moli社区刷新结算｜${isAnswer?'邀请回答':'明确互动'}】\n平台：${sourceLabel(post)}\n标题/问题：${post.title||'无标题'}\n正文/补充：${post.content||'无'}\n当前讨论：\n${communityDiscussionContext(post)}\n\n${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参与跟帖'}`:`User 在评论中明确 @了你：${item.content||''}`}。请按人物自身兴趣、认知、关系与现实风险，在同一层做三选一：REPLY_REAL（愿意实名回应）、REPLY_ANONYMOUS（愿意回应但只会匿名）、SKIP（即使匿名也不愿回应）。不要为了展示功能强行回应；但如果唯一顾虑只是暴露真实身份，应考虑 REPLY_ANONYMOUS，而不是直接 SKIP。SKIP 必须给一句说明为什么即使匿名也不愿参与的简短原因。${proactiveEnabled?'主动私聊权限已开启：公开判断之后，再独立判断是否需要私聊 User；SEND 时给 1~3 条真实手机气泡，SKIP 时给简短原因。':'主动私聊权限关闭：PRIVATE 必须 SKIP。'}\n严格追加：<community_decision>REPLY_REAL|REPLY_ANONYMOUS|SKIP</community_decision><community_reason>仅 SKIP 时填写即使匿名也不回应的原因</community_reason><community_alias>选择匿名时使用的匿名网名</community_alias>${isAnswer?'<community_answer>回答正文</community_answer>':'<community_reply>回复正文</community_reply>'}<community_private>SEND|SKIP</community_private><community_private_reason>不私聊时的原因</community_private_reason>；SEND 时再输出 1~3 个 <msg>私聊内容</msg>。`;
+      const instruction=`【moli社区刷新结算｜${isAnswer?'邀请回答':'明确互动'}】
+平台：${sourceLabel(post)}
+标题/问题：${post.title||'无标题'}
+正文/补充：${post.content||'无'}
+当前讨论：
+${communityDiscussionContext(post)}
+
+${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参与跟帖'}`:`User 在评论中明确 @了你：${item.content||''}`}。这是 User 的明确互动，你必须${isAnswer?'回答':'回应'}，不允许 SKIP。你只判断使用 REPLY_REAL（实名）还是 REPLY_ANONYMOUS（匿名）；匿名表示对社区其他参与者隐藏真实身份，不得自行虚构后台实名、IP追踪、平台泄密等未提供机制来否定匿名选项。${proactiveEnabled?'公开回应完成后，再独立判断是否需要私聊 User；SEND 时给 1~3 条真实手机气泡，SKIP 时可给简短原因。':'主动私聊权限关闭：PRIVATE 必须 SKIP。'}
+严格追加：<community_decision>REPLY_REAL|REPLY_ANONYMOUS</community_decision><community_alias>选择匿名时使用的匿名网名</community_alias>${isAnswer?'<community_answer>回答正文</community_answer>':'<community_reply>回复正文</community_reply>'}<community_private>SEND|SKIP</community_private><community_private_reason>不私聊时的原因</community_private_reason>；SEND 时再输出 1~3 个 <msg>私聊内容</msg>。`;
       try{
         const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction,allowNoPendingUser:true}); const raw=String(result?.text||'');
-        const decision=(raw.match(/<community_decision>\s*(REPLY_ANONYMOUS|REPLY_REAL|REPLY|SKIP)\s*<\/community_decision>/i)?.[1]||'SKIP').toUpperCase(); const reason=String(raw.match(/<community_reason>([\s\S]*?)<\/community_reason>/i)?.[1]||'角色此刻即使匿名也不想参与这个话题。').trim();
+        const decision=(raw.match(/<community_decision>\s*(REPLY_ANONYMOUS|REPLY_REAL|REPLY)\s*<\/community_decision>/i)?.[1]||'REPLY_REAL').toUpperCase();
         const legacyIdentity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase(); const identity=decision==='REPLY_ANONYMOUS'?'ANONYMOUS':decision==='REPLY_REAL'?'REAL':legacyIdentity; const alias=String(raw.match(/<community_alias>([\s\S]*?)<\/community_alias>/i)?.[1]||'').trim()||'匿名用户'; const author=identity==='ANONYMOUS'?{type:'contact',id:target.id,name:alias,uiName:`${alias}（${displayName(target)}）`,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false};
-        let publicDid=false;if(decision!=='SKIP'){if(isAnswer){const text=String(raw.match(/<community_answer>([\s\S]*?)<\/community_answer>/i)?.[1]||'').trim();if(text){addZhihuAnswer(scopeKey,post.id,{author,content:text});publicDid=true;}}else{const text=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim();if(text){if(post.section==='zhihu'&&item.answerId)addZhihuAnswerComments(scopeKey,post.id,item.answerId,[{author,content:text,replyToCommentId:String(item.replyToCommentId||'')}]);else addPublicWebComment(scopeKey,post.id,{author,content:text,replyToCommentId:String(item.replyToCommentId||'')});publicDid=true;}}}
+        let publicDid=false;if(isAnswer){const text=String(raw.match(/<community_answer>([\s\S]*?)<\/community_answer>/i)?.[1]||'').trim();if(text){addZhihuAnswer(scopeKey,post.id,{author,content:text});publicDid=true;}}else{const text=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim();if(text){if(post.section==='zhihu'&&item.answerId)addZhihuAnswerComments(scopeKey,post.id,item.answerId,[{author,content:text,replyToCommentId:String(item.replyToCommentId||'')}]);else addPublicWebComment(scopeKey,post.id,{author,content:text,replyToCommentId:String(item.replyToCommentId||'')});publicDid=true;}}
+        if(!publicDid) throw new Error(`角色必须${isAnswer?'回答':'回应'}，但模型没有返回可写入的公开正文，请重试刷新。`);
         const privateDecision=proactiveEnabled?(raw.match(/<community_private>\s*(SEND|SKIP)\s*<\/community_private>/i)?.[1]||'SKIP').toUpperCase():'SKIP'; const privateReason=proactiveEnabled?String(raw.match(/<community_private_reason>([\s\S]*?)<\/community_private_reason>/i)?.[1]||'此刻没有需要单独私聊的动机。').trim():'主动私聊权限未开启'; const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean).slice(0,3);let privateDid=false;if(privateDecision==='SEND'&&msgs.length){for(const text of msgs)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-decision',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});privateDid=true;}
-        const resultEvent=recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:target.id,action:publicDid?(isAnswer?'PUBLIC_ANSWER':'PUBLIC_REPLY'):'PUBLIC_SKIP',targetContactIds:[target.id],objectId:String(post.id||''),content:publicDid?`你在${sourceLabel(post)}公开${isAnswer?'回答':'回应'}了 User 的互动。`:`你知道了 User 的社区互动，但没有公开回应：${reason}`,metadata:{postId:String(post.id||''),pendingId:String(item.id||''),identityMode:identity,publicDecision:publicDid?'REPLY':'SKIP',publicReason:reason,privateDecision:privateDid?'SEND':'SKIP',privateReason},awareness:'known',dedupeKey:`community-role:${item.id}`}); if(identity==='ANONYMOUS'&&publicDid)rememberAnonymousIdentity(scopeKey,{surface:`community.${post.section||'unknown'}`,alias,realContactId:target.id,knownBy:[target.id],evidenceEventId:resultEvent?.id});
-        markWorldEventsConsumedByObjectTargets(scopeKey,[item.id],'community-settlement'); done.push(item.id); notices.push(`${displayName(target)}${publicDid?`${identity==='ANONYMOUS'?'已匿名':'已实名'}${isAnswer?'回答':'回应'}`:`未${isAnswer?'回答':'回应'}：${reason}`}；${privateDid?'已私聊':`未私聊：${privateReason}`}`);
+        const resultEvent=recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:target.id,action:isAnswer?'PUBLIC_ANSWER':'PUBLIC_REPLY',targetContactIds:[target.id],objectId:String(post.id||''),content:`你在${sourceLabel(post)}公开${isAnswer?'回答':'回应'}了 User 的明确互动。`,metadata:{postId:String(post.id||''),pendingId:String(item.id||''),identityMode:identity,publicDecision:'REPLY',privateDecision:privateDid?'SEND':'SKIP',privateReason},awareness:'known',dedupeKey:`community-role:${item.id}`});
+        const coParticipants=communityRelevantContactIds(post,{replyToCommentId:item.replyToCommentId,answerId:item.answerId}).filter(id=>String(id)!==String(target.id));
+        if(coParticipants.length)recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:target.id,action:isAnswer?'CHARACTER_ANSWERED':'CHARACTER_REPLIED',targetContactIds:coParticipants,objectId:String(post.id||''),content:`${displayName(target)}在${sourceLabel(post)}${isAnswer?'回答了问题':'参与了与你有关的公开讨论'}。`,metadata:{postId:String(post.id||''),pendingId:String(item.id||''),identityMode:identity,causedByEventId:String(resultEvent?.id||'')},awareness:'known',dedupeKey:`community-co-awareness:${item.id}`});
+        if(identity==='ANONYMOUS'&&publicDid)rememberAnonymousIdentity(scopeKey,{surface:`community.${post.section||'unknown'}`,alias,realContactId:target.id,knownBy:[target.id],evidenceEventId:resultEvent?.id});
+        markWorldEventsConsumedByObjectTargets(scopeKey,[item.id],'community-settlement'); done.push(item.id); notices.push(`${displayName(target)}${identity==='ANONYMOUS'?'已匿名':'已实名'}${isAnswer?'回答':'回应'}；${privateDid?'已私聊':`未私聊：${privateReason}`}`);
       }catch(error){console.error('[moli小手机] queued community interaction failed:',error);throw error;}
     }
     consumePending(done); renderPublicWeb(); if(notices.length)windowRef.alert?.(notices.join('\n')); return notices;
@@ -6877,7 +6896,7 @@ export function createPhonePanel({
     const mentionWorldEvent=recordWorldEvent(getScopeKey?.(),{source:`community.${post?.section||'unknown'}`,actorId:'user',action:'MENTION',targetContactIds:[mentionTarget.id],objectId:String(userEntry?.id||post?.id||''),content:`User 在${post?.section||'社区'}中 @了你：${String(userEntry?.content||'').trim()}`,metadata:{postId:String(post?.id||''),commentId:String(userEntry?.id||'')},awareness:'known'});
     const busyKey=`community-mention:${mentionTarget.id}:${post.id}:${Date.now()}`; publicWebGenerating.add(busyKey);
     try{
-      const platform=sourceLabel(post); const instruction=`【moli社区事件｜${platform} @提及】\nUser 在${platform}的一条内容下 @了你。\n帖子/问题：${post.title||'无标题'}\n正文：${post.content||'无'}\nUser 的评论：${userEntry.content}\n这是 User 对你的明确 @，你必须公开跟帖回应。你可以自行决定是否另外私聊 User，但公开回复不可省略。\n严格追加机器可读块：<community_action>REPLY|BOTH</community_action><community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias>；公开回复追加 <community_reply>公开回复正文</community_reply>；若私聊，再用正常 <msg>私聊内容</msg>。公开回复只能以你自己的身份发言，绝不能代替 User。`;
+      const platform=sourceLabel(post); const instruction=`【moli社区事件｜${platform} @提及】\nUser 在${platform}的一条内容下 @了你。\n帖子/问题：${post.title||'无标题'}\n正文：${post.content||'无'}\nUser 的评论：${userEntry.content}\n这是 User 对你的明确 @，你必须公开跟帖回应。你只在实名与匿名之间选择，不允许 SKIP；匿名表示对社区其他参与者隐藏真实身份，不得自行虚构后台实名、IP追踪、平台泄密等未提供机制来否定匿名选项。你可以自行决定是否另外私聊 User，但公开回复不可省略。\n严格追加机器可读块：<community_action>REPLY|BOTH</community_action><community_identity>REAL|ANONYMOUS</community_identity><community_alias>匿名时使用的网名</community_alias>；公开回复追加 <community_reply>公开回复正文</community_reply>；若私聊，再用正常 <msg>私聊内容</msg>。公开回复只能以你自己的身份发言，绝不能代替 User。`;
       const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction,allowNoPendingUser:true});
       const raw=String(result?.text||''); let action=(raw.match(/<community_action>\s*(REPLY|MESSAGE|BOTH|SKIP)\s*<\/community_action>/i)?.[1]||'REPLY').toUpperCase(); if(!['REPLY','BOTH'].includes(action))action='REPLY';
       const publicReply=String(raw.match(/<community_reply>([\s\S]*?)<\/community_reply>/i)?.[1]||'').trim(); const identity=(raw.match(/<community_identity>\s*(REAL|ANONYMOUS)\s*<\/community_identity>/i)?.[1]||'REAL').toUpperCase(); const alias=String(raw.match(/<community_alias>([\s\S]*?)<\/community_alias>/i)?.[1]||'').trim()||'匿名用户';
@@ -6974,7 +6993,7 @@ export function createPhonePanel({
     panel.querySelector('.moli-retro-browser')?.classList.toggle('is-community-mode', !tianyaChrome);
     panel.querySelector('.moli-tianya-sitebar')?.classList.toggle('is-hidden', !tianyaChrome);
     panel.querySelector('.moli-tianya-commandbar')?.classList.toggle('is-hidden', !tianyaChrome || Boolean(openedPublicWebPostId));
-    panel.querySelector('[data-action="public-web-compose"]')?.classList.toggle('is-hidden', !tianyaChrome);
+    panel.querySelector('[data-action="public-web-compose"]')?.classList.toggle('is-hidden', !tianyaChrome); const zhihuTopCompose=panel.querySelector('[data-action="zhihu-top-compose"]'); if(zhihuTopCompose)zhihuTopCompose.hidden=currentPublicWebTab!=='zhihu';
     panel.querySelector('.moli-tianya-moderators')?.classList.toggle('is-hidden', !tianyaChrome || Boolean(openedPublicWebPostId));
     const tianyaRefreshButton = panel.querySelector('[data-action="public-web-refresh"]');
     if (tianyaRefreshButton) { const busy=publicWebGenerating.has('tianya'); tianyaRefreshButton.disabled=busy; tianyaRefreshButton.textContent=busy?'[刷新中…]':'[刷新]'; }
@@ -7080,12 +7099,15 @@ export function createPhonePanel({
     catch(error){ console.error('[moli小手机] public web refresh failed:',error); windowRef.alert?.(`刷新失败：${error?.message||error}`); }
     finally { publicWebGenerating.delete(refreshSection); button.disabled=false; button.textContent=old; renderPublicWeb(); }
   });
-  panel.querySelector('[data-action="public-web-compose"]')?.addEventListener('click', () => {
-    const section = ['tianya','xiaohongshu','zhihu'].includes(currentPublicWebTab) ? currentPublicWebTab : 'tianya'; const label=publicWebTypeNames[section]||'帖子';
+  const composePublicWebPost = sectionInput => {
+    const section = ['tianya','xiaohongshu','zhihu'].includes(sectionInput) ? sectionInput : 'tianya'; const label=publicWebTypeNames[section]||'帖子';
     const title=windowRef.prompt?.(`发布${label}：标题`,'')??null; if(title===null)return; const content=windowRef.prompt?.(`发布${label}：正文`,'')??null; if(content===null||(!String(title).trim()&&!String(content).trim()))return;
     const userName=getTavernUserContext()?.name||'User'; const settings=getPublicWebSettings(getScopeKey?.()); const pool=settings.ghostStoriesEnabled?[...tianyaSubtitles,'莲蓬鬼话']:tianyaSubtitles;
-    createPublicWebPost(getScopeKey?.(),{section,author:{type:'user',id:'user',name:userName},title,content,extra:{subtitle:section==='tianya'?pool[Math.floor(Math.random()*pool.length)]:'',style:'user'}}); renderPublicWeb();
-  });
+    createPublicWebPost(getScopeKey?.(),{section,author:{type:'user',id:'user',name:userName},title,content,extra:{subtitle:section==='tianya'?pool[Math.floor(Math.random()*pool.length)]:'',style:'user',userOwned:true}}); renderPublicWeb();
+  };
+  panel.querySelector('[data-action="public-web-compose"]')?.addEventListener('click', () => composePublicWebPost(currentPublicWebTab));
+  panel.querySelector('[data-action="zhihu-top-compose"]')?.addEventListener('click', () => composePublicWebPost('zhihu'));
+
   panel.querySelector('[data-public-web-feed]')?.addEventListener('contextmenu', event => { const target=event.target?.closest?.('[data-post-id]'); const postId=String(target?.dataset?.postId||''); if(!postId)return; event.preventDefault(); const post=getPublicWebPost(getScopeKey?.(),postId); if(!post)return; if(windowRef.confirm?.(`删除这条${publicWebTypeNames[post.section]||'内容'}？`)){forceDeletePublicWebPost(getScopeKey?.(),postId);if(openedPublicWebPostId===postId)openedPublicWebPostId='';renderPublicWeb();} });
   panel.querySelector('[data-public-web-feed]')?.addEventListener('click', async event => {
     const ghostToggle=event.target?.closest?.('[data-action="toggle-ghost-stories"]'); if(ghostToggle){const current=getPublicWebSettings(getScopeKey?.()).ghostStoriesEnabled;updatePublicWebSettings(getScopeKey?.(),{ghostStoriesEnabled:!current});renderPublicWeb();return;}
