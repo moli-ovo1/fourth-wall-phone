@@ -760,12 +760,11 @@ function clipBatchTail(value, max = 4000) {
   return text.length <= max ? text : `[较早内容已截断]\n${text.slice(-max)}`;
 }
 
-function batchRoleProfile(contact, scanText = '', userName = 'User', scopeKey = '') {
+function batchRoleProfile(contact, scanText = '', userName = 'User') {
   const fidelity = contact?.source?.roleFidelity || {};
   const sources = contact?.roleSources || {};
   const blocks = [];
-  const id = String(contact?.id || '');
-  const knownMomentEvents = scopeKey && id ? getRecentMomentChatEvents(scopeKey, id, 20) : [];
+  const knownMomentEvents = getRecentMomentChatEvents(scopeKey, id, 20);
   if (knownMomentEvents.length) blocks.push(`【这个角色最近已经知道的 User 朋友圈互动】\n这些事实已经结算给角色；之前没有行动不代表遗忘，后续聊天中可在人物真正会在意时自然提起。\n${knownMomentEvents.map(event => `- ${event.content}${event.momentId ? `（momentId=${event.momentId}）` : ''}`).join('\n')}`);
   const add = (label, value, max = 5000) => {
     const text = clipBatchText(value, max);
@@ -937,7 +936,7 @@ async function buildBatchGroupRequest({
       : await getActivatedTavernWorldBook({ contact: member, scanText });
     memberBlocks.push(
       `===== MEMBER PRIVATE ZONE: ${contactLabel(member)} | id=${member.id} =====\n`
-      + `【身份资料】\n${batchRoleProfile(member, scanText, userContext.name, scopeKey)}\n\n`
+      + `【身份资料】\n${batchRoleProfile(member, scanText, userContext.name)}\n\n`
       + `${String(member?.userProfile || '').trim() ? `【这个成员保存的 User 设定】\n${clipBatchText(member.userProfile, 5000)}\n\n` : ''}`
       + `${String(userContext.description || '').trim() ? `【当前 SillyTavern User Persona】\n${clipBatchText(userContext.description, 5000)}\n\n` : ''}`
       + `【本成员自己的世界书】\n${clipBatchText(worldBook?.text || '', 6000) || '本轮无激活条目。'}\n\n`
@@ -994,11 +993,6 @@ ${onlinePreset}
   return { system, messages: [{ role: 'user', content: shared }] };
 }
 
-function looksLikeProviderErrorText(value = '') {
-  const text = String(value || '').trim();
-  return /The prompt could not be submitted|Generative AI Prohibited Use policy|RESOURCE_EXHAUSTED|SAFETY|blocked by.*safety|content filter/i.test(text);
-}
-
 export async function generateGroupReply({ scopeKey, conversationKey, signal, onDelta, targetMemberId = '', excludeMessageId = '' } = {}) {
   if (!scopeKey || !conversationKey) throw new Error('当前群聊不可用');
   const conversation = getConversation(scopeKey, conversationKey);
@@ -1024,7 +1018,6 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, request, { signal });
-  if (looksLikeProviderErrorText(result?.text)) throw new Error('API 提供方拒绝了本次请求；错误内容不会写入聊天记录，请修改内容或重试。');
   const replies = parseBatchGroupOutput(result.text, members, {
     review: false,
     forcedIds,
@@ -1050,7 +1043,6 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, request, { signal });
-  if (looksLikeProviderErrorText(result?.text)) throw new Error('API 提供方拒绝了本次请求；错误内容不会写入聊天记录，请修改内容或重试。');
   const replies = parseBatchGroupOutput(result.text, members, {
     review: true,
     bubbleRange: conversation.groupReplyBubbleRange,
@@ -1494,19 +1486,24 @@ async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
   const identityPack = contacts.map(communityIdentityAnchor).filter(Boolean).join('\n\n');
   const scanText = [recentText, identityPack, ...contacts.map(contact => String(contact.name || contact?.source?.originalName || ''))].filter(Boolean).join('\n');
 
-  const worldBookBlocks = [];
-  for (const person of contacts) {
+  const selectedId = getSelectedWorldContactId();
+  let selected = contacts.find(contact => String(contact.id || '') === String(selectedId || '')) || contacts[0] || null;
+  if (!selected && selectedId) {
+    const base = getContacts().find(item => String(item.id || '') === String(selectedId));
+    selected = base ? hydratedContact(base) : null;
+  }
+
+  let worldBookText = '';
+  if (selected) {
     try {
-      const worldBook = person.kind === 'custom'
-        ? await getActivatedCustomWorldBook({ contact: person, scanText })
-        : await getActivatedTavernWorldBook({ contact: person, scanText });
-      const text = String(worldBook?.text || '').trim();
-      if (text) worldBookBlocks.push(`【${String(person.remark || person.displayName || person.name || '人物')}自己的世界书】\n${text}`);
+      const worldBook = selected.kind === 'custom'
+        ? await getActivatedCustomWorldBook({ contact: selected, scanText })
+        : await getActivatedTavernWorldBook({ contact: selected, scanText });
+      worldBookText = truncateCommunityContext(worldBook?.text || '', 9000);
     } catch (error) {
-      console.warn('[moli小手机] community per-contact world-book context failed:', person?.id, error);
+      console.warn('[moli小手机] community world-book context failed:', error);
     }
   }
-  const worldBookText = worldBookBlocks.join('\n\n');
 
   let longTermText = '';
   if (String(scopeKey || '').includes(':chat:')) {
@@ -1519,8 +1516,8 @@ async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
   }
 
   return [
-    identityPack ? `【稳定人物身份 · Identity Anchor】\n以下每个【人物身份锚点】都是独立人物档案。职业、身份、关系、性别、学校/单位、经历等事实只归属于该锚点对应的人物；不得因为人物同时出现在当前正文、世界书或柏宝书中，就把甲的事实移植给乙。遇到同场多人时，先按姓名/称谓逐一对齐归属；没有明确归属的事实宁可不补，不得猜成另一个人的身份。\n${identityPack}` : '',
-    recentText ? `【当前正文 · Recent World State】\n${recentText}` : '',
+    identityPack ? `【稳定人物身份 · Identity Anchor】\n以下用于确认“谁是谁”，不得把一个人物的职业、关系、性别或经历移植给另一个人物。\n${truncateCommunityContext(identityPack, 14000)}` : '',
+    recentText ? `【当前正文 · Recent World State】\n${truncateCommunityContext(recentText, 12000)}` : '',
     worldBookText ? `【相关世界书 · Relevant World Lore】\n${worldBookText}` : '',
     longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道。\n${longTermText}` : '',
   ].filter(Boolean).join('\n\n');
