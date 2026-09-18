@@ -4165,3 +4165,10 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - Community World Context now resolves activated world-book material per World-bound contact instead of selecting only one contact's world book. NPC profile/Role Fidelity remains the identity anchor; each NPC's own activated world-book entries can supplement missing identity facts.
 - Removed the final extra truncation pass around the assembled Community Identity Anchor and Recent World State. Source-specific safety budgets remain for now; do not remove all limits blindly because provider context windows are finite. Future work should replace scattered fixed caps with one provider-aware context budget.
 - IMPORTANT: one-refresh/one-API Community settlement is NOT falsely marked closed here. Current queued invite/@ settlement and ambient refresh are still separate generation paths. Next package must unify them into one batch settlement request before further Awareness expansion.
+
+
+## v0.5.35 / moli191 — Unified Community Settlement + Context Budget v1
+- Community detail refresh is now a single generation request per user refresh for pending explicit @/invite targets and ordinary public additions. Explicit targets remain mandatory-response and choose only real-name vs anonymous public identity.
+- The settlement result is written back to the original public surface; optional private messages use the existing private conversation outlet. Pending items are consumed only after a valid unified result is returned.
+- Community Context Budget v1 centralizes packing priority instead of repeatedly clipping Identity/Recent/WorldBook/long-term sections at small independent limits. Identity and current world state are highest priority; relevant lore and long-term history use remaining room. This is transport budgeting, not permission to cross World boundaries.
+- Existing World Event/Awareness/Continuity stores and app-specific queues remain intact; unified settlement is an execution entrypoint, not a replacement store.
