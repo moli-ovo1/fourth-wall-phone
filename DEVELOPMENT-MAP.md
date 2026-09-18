@@ -3272,3 +3272,11 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - Zhihu answers now have their own long-press action target. Long-pressing an answer deletes that answer only; long-pressing a nested comment/reply still deletes only that comment/reply.
 - Answer action consumes the contextmenu event before whole-post deletion, preserving the Post Action / Answer Action / Comment Action boundary.
 - Character Knowledge v0.5.54 remains intact; this patch deliberately does not broaden uncertain chat statements into factual knowledge.
+
+
+## moli212 · Character Knowledge v2（2026-09-19）
+- 微信中的“人物知道”继续采用认识论分层：**角色听见 User 的明确陈述 ≠ 角色相信该陈述 ≠ 客观世界事实**。
+- 对具有明确陈述形态的 User 消息，记录 `USER_EXPLICIT_STATEMENT` World Event，仅表示当前私聊角色/在场群成员亲耳听见；不向未在场角色传播。
+- 该事件以 `epistemicStatus=user-assertion / beliefState=unresolved / worldTruth=false` 保存，并进入该角色自己的 Cross-App Character Continuity。后续 Community 角色生成可通过既有 private generation continuity 路径自然使用，但不得改写成系统真相。
+- 问句、普通寒暄、模糊聊天不提升为长期人物认知；同一明确陈述有去重键，避免重复发送造成认知膨胀。
+- moli210 的“匿名身份=User”明确披露仍属于可确定身份知识，保持原有专门闭环；普通陈述不得冒充这种确定身份事实。
