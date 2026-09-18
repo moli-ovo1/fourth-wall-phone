@@ -3272,3 +3272,13 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 
 ## v0.5.40 stabilization gate
 Before new Community features, verify four regressions independently: (1) normal refresh grows the thread with ordinary internet actors; (2) invited/@ characters retain their own voice; (3) repeated refresh can continue ordinary thread activity; (4) after a Community post is already known in a chat, a follow-up disclosure like “那个匿名的是我” is naturally resolved from that existing context. Do not resume reverse Knowledge Delta or Weibo until these pass.
+
+
+## v0.5.41 / moli197 — 196稳定基线第一轮收口
+- 保留196恢复后的活跃Community旧生成结构，不重新引入191统一Settlement。
+- 多角色邀请/@仍逐角色独立调用，优先人格质量；每个角色调用被明确限制为只生成自己的一条公开内容，不代写其他角色或路人。
+- pending只有在该角色公开内容真实写入存储后才结算为已回复；写入失败时保留pending并报错，避免“显示已回复但帖子没有该角色”。
+- 普通路人1~6条刷新继续独立于角色邀请，不把角色回复算进路人生成职责。
+- Community Identity Anchor强化事实归属：职业/身份/关系/学校/经历必须绑定到具体人物，禁止把甲的资料迁移给乙。
+- 私聊/群聊Prompt中原先把跨App continuity整体标成“朋友圈连续性”的标签改为“手机跨 App 连续性”，明确Community亲历/已知事实也属于同一人物后续聊天记忆；不增加微信→Community反向Knowledge Delta。
+- 评论删除、微信→Community、微博继续冻结。

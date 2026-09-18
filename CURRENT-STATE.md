@@ -403,3 +403,13 @@
 - Community runtime remains on the pre-unified-settlement stable generation path (v0.5.34 generation + pre-v0.5.35 Community UI orchestration). This is intentional to restore ordinary netizen growth and separate character invite/@ generation.
 - Community -> Conversation forward references remain supported by the pre-existing `communityForward` + `resolvedContext` object-resolution path. Do not replace this with copied summary text.
 - Reverse Conversation -> Community knowledge propagation remains deferred until the forward/reference and Community ecology regressions are verified stable.
+
+
+## v0.5.41 / moli197 — 196稳定基线第一轮收口
+- 保留196恢复后的活跃Community旧生成结构，不重新引入191统一Settlement。
+- 多角色邀请/@仍逐角色独立调用，优先人格质量；每个角色调用被明确限制为只生成自己的一条公开内容，不代写其他角色或路人。
+- pending只有在该角色公开内容真实写入存储后才结算为已回复；写入失败时保留pending并报错，避免“显示已回复但帖子没有该角色”。
+- 普通路人1~6条刷新继续独立于角色邀请，不把角色回复算进路人生成职责。
+- Community Identity Anchor强化事实归属：职业/身份/关系/学校/经历必须绑定到具体人物，禁止把甲的资料迁移给乙。
+- 私聊/群聊Prompt中原先把跨App continuity整体标成“朋友圈连续性”的标签改为“手机跨 App 连续性”，明确Community亲历/已知事实也属于同一人物后续聊天记忆；不增加微信→Community反向Knowledge Delta。
+- 评论删除、微信→Community、微博继续冻结。
