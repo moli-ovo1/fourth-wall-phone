@@ -1382,7 +1382,8 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
   if (!scopeKey) throw new Error('当前公共网络不可用');
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
-  const userName = getTavernUserContext().name || 'User';
+  const userContext = getTavernUserContext();
+  const userName = userContext.name || 'User';
   const recent = getRecentTavernBody({ messageLimit: 14, charLimit: 12000 });
   let context = recent?.messages?.map(m=>`${m?.role==='user'?userName:(m?.name||'角色')}：${String(m?.content||'')}`).join('\n') || '';
   if (!context.trim()) {
@@ -1405,7 +1406,9 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
       ].map(v=>String(v||'').trim()).filter(Boolean).join('\n\n');
     }
   }
-  const nativeRoster = communityNativeRoster(scopeKey);
+  const userIdentityBoundary = `【User 身份（系统事实）】\n姓名：${userName}\n${userContext.description?`User Persona：${userContext.description}`:'User Persona：未提供'}\n硬边界：以上只描述 User。正文中的其他女性/男性角色、配角、网友的人设不得移植给 User；允许网友造谣、猜测或误解，但必须表现为未经证实的社区说法，不能把别人的角色卡事实当成 User 的系统事实。`;
+  context = [userIdentityBoundary, context].filter(Boolean).join('\n\n');
+    const nativeRoster = communityNativeRoster(scopeKey);
   if (nativeRoster) context = [context, nativeRoster].filter(Boolean).join('\n\n');
   if (!context.trim()) context = '当前没有打开正文，也没有选择“当前角色世界”。不要读取、猜测或讨论程序代码、插件、API、Prompt、SillyTavern、模型、世界书、角色卡、调试信息；只生成自然的普通社区内容。';
   const ghostRule = ghostStoriesEnabled ? '允许在内容自然适合时选择“莲蓬鬼话”。' : '“莲蓬鬼话”关闭：不得生成莲蓬鬼话分类，也不得用其他分类绕过限制生成灵异鬼话主题。';
@@ -1546,6 +1549,20 @@ export async function generateXiaohongshuCommentRefresh({ scopeKey, post, signal
   return created;
 }
 
+
+export async function generateZhihuDetailRefresh({ scopeKey, post, signal } = {}) {
+  const userName=getTavernUserContext().name||'User'; if(!scopeKey||!post)throw new Error('当前知乎问题不可用');
+  const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config); const answers=Array.isArray(post.extra?.answers)?post.extra.answers:[];
+  const existing=answers.map((a,i)=>`answerId=${a.id}｜${a.author?.name||'匿名用户'}：${a.content||''}\n评论：${(a.comments||[]).map(c=>`[${c.id}] ${c.author?.name||'网友'}：${c.content||''}`).join('；')||'暂无'}`).join('\n\n');
+  const communityPreset=buildCommunityPresetPrompt();
+  const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在刷新同一个知乎问题。已有回答和评论是永久历史，绝对不能改写、替换或删除。一次刷新可以：新增 0~3 个独立回答；给任意已有回答新增 0~4 条评论/回复；或者两者同时发生。不要重复已有内容。只输出严格 JSON。`;
+  const user=`问题：${post.title||''}\n问题补充：${post.content||''}\n\n已有回答与评论：\n${existing||'暂无回答'}\n\n返回：{"answers":[{"author":"回答者","authorId":"可选","content":"新增回答","upvotes":0}],"commentAdditions":[{"answerId":"必须是已有 answerId","comments":[{"author":"昵称","authorId":"可选","content":"新增评论","replyToCommentId":"可选已有评论id"}]}]}。允许 answers 或 commentAdditions 为空；不要 markdown。`;
+  const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal}); const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''); let data;try{data=JSON.parse(raw)}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('知乎刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
+  const newAnswers=(Array.isArray(data?.answers)?data.answers:[]).slice(0,3).map((a,i)=>({id:`za_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author,userName,'匿名用户')},content:String(a?.content||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:[]})).filter(a=>a.content);
+  const knownAnswers=new Map(answers.map(a=>[String(a.id),a])); const commentAdditions=[];
+  for(const batch of (Array.isArray(data?.commentAdditions)?data.commentAdditions:[]).slice(0,8)){const answer=knownAnswers.get(String(batch?.answerId||''));if(!answer)continue;const known=new Set((answer.comments||[]).map(c=>String(c.id)));const rows=[];for(const c of (Array.isArray(batch?.comments)?batch.comments:[]).slice(0,4)){const id=`zac_${Date.now()}_${Math.random().toString(36).slice(2,7)}_${rows.length}`;const requested=String(c?.replyToCommentId||'');const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:known.has(requested)?requested:''};if(item.content){rows.push(item);known.add(id);}}if(rows.length)commentAdditions.push({answerId:String(answer.id),comments:rows});}
+  return {answers:newAnswers,commentAdditions};
+}
 
 export async function generateZhihuAnswerCommentRefresh({ scopeKey, post, answer, signal } = {}) {
   const userName = getTavernUserContext().name || 'User';
