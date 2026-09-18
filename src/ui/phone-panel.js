@@ -6508,6 +6508,45 @@ export function createPhonePanel({
     return targetIds.length;
   }
 
+  function captureExplicitChatUserStatement(scopeKey, conversation, text) {
+    const content = String(text || '').trim();
+    if (!scopeKey || !conversation || !content || content.length > 1200) return 0;
+    // Character Knowledge v2 deliberately records only an explicit User assertion as
+    // something the character HEARD. It is not promoted to objective world truth and
+    // does not mean the character believes it. Questions, roleplay commands and vague
+    // chatter stay in ordinary chat history instead of becoming durable knowledge.
+    if (/[？?]\s*$/.test(content)) return 0;
+    const explicit = /(?:^|[，。！？!?；;\s])(?:其实|说真的|告诉你|跟你说|你记住|记住|顺便说|对了)[，：:\s]*[^\n]{1,500}|(?:^|[，。！？!?；;\s])我(?:是|叫|姓|住在|来自|在|有|没有|没|已经|刚刚|刚才|曾经|以前|现在|决定|准备|喜欢|不喜欢|讨厌|认识|知道|见过|做过|去了|去过|买了|发了|写了|删了|看了|收到|答应|拒绝)[^\n]{0,500}/u.test(content);
+    if (!explicit) return 0;
+
+    const targetIds = conversation.type === 'group'
+      ? (conversation.memberIds || []).map(String).filter(Boolean)
+      : [String(conversation.contactId || currentContactId || '')].filter(Boolean);
+    if (!targetIds.length) return 0;
+
+    const normalized = content.replace(/\s+/g, ' ').slice(0, 800);
+    const fingerprint = normalized.toLowerCase().replace(/[，。！？!?；;、\s]/g, '').slice(0, 180);
+    recordWorldEvent(scopeKey, {
+      source: 'wechat.character-knowledge',
+      actorId: 'user',
+      action: 'USER_EXPLICIT_STATEMENT',
+      targetContactIds: targetIds,
+      objectId: String(conversation.conversationKey || conversation.id || currentContactId || ''),
+      content: `User 在微信中亲口对你说：“${normalized}”`,
+      metadata: {
+        epistemicStatus: 'user-assertion',
+        evidence: 'explicit-user-chat-statement',
+        conversationType: String(conversation.type || 'private'),
+        // Hard boundary: heard != believed != objective truth.
+        beliefState: 'unresolved',
+        worldTruth: false,
+      },
+      awareness: 'known',
+      dedupeKey: `wechat-user-statement:${targetIds.slice().sort().join(',')}:${fingerprint}`,
+    });
+    return targetIds.length;
+  }
+
   function sendMessage() {
     let stage = '入口';
     try {
@@ -6545,7 +6584,9 @@ export function createPhonePanel({
       );
 
       stage = '记录明确人物认知';
-      captureExplicitChatAnonymousDisclosure(scopeKey, currentConversation() || conversation, text);
+      const knowledgeConversation = currentConversation() || conversation;
+      captureExplicitChatAnonymousDisclosure(scopeKey, knowledgeConversation, text);
+      captureExplicitChatUserStatement(scopeKey, knowledgeConversation, text);
 
       stage = '清理输入框';
       if (input) input.value = '';
