@@ -3182,3 +3182,11 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 
 ## moli186 / v0.5.29
 本轮继续 Unified Character Cognition & Decision，不重写现有 App 队列。完成：聊天列表 NPC/正文身份标签收口；Continuity 相关性加入 recency/self-action/unresolved；World Event consumption 按 decision entrypoint 细分；Decision Contract 明确“先行动意愿、后行动地点”。下一阶段继续 Character↔Character Awareness 投影与更多成熟入口接入统一 Decision，仍禁止自动跨「我们的墙」。
+
+## v0.5.30 后增量 — Community Forward Reference
+- `community-forward` 不再把正文复制进新消息；消息保存 `postId / section / platform / title / snapshotAt` 引用，聊天卡片只显示标题。
+- Generation 在私聊与群聊请求构造时解析引用，从当前 scope 的 Public Web Store 读取完整结构化帖子事实；UI Payload、生成语义与记忆语义保持分层。
+- 引用以 `snapshotAt` 锁定角色已读水位。后续新增互动必须具有 `createdAt`，旧转发不能让角色永久实时监控帖子。
+- Memory Service 在 transcript 层把社区转发降为标题级事件，并在压缩规则中禁止总结完整正文、回答、楼层或评论区；双方随后形成的重要讨论仍可正常概括。
+- 小红书作者回复徽标使用“作者”，天涯仍使用“楼主”。
+- 兼容策略：旧转发若仍保存 `content` 可继续回退读取；无 schemaVersion、Storage Key 或 Scope Key 变化，无需迁移。
