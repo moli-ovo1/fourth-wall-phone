@@ -6880,6 +6880,8 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
         if(!publicDid) throw new Error(`角色必须${isAnswer?'回答':'回应'}，但模型没有返回可写入的公开正文，请重试刷新。`);
         const privateDecision=proactiveEnabled?(raw.match(/<community_private>\s*(SEND|SKIP)\s*<\/community_private>/i)?.[1]||'SKIP').toUpperCase():'SKIP'; const privateReason=proactiveEnabled?String(raw.match(/<community_private_reason>([\s\S]*?)<\/community_private_reason>/i)?.[1]||'此刻没有需要单独私聊的动机。').trim():'主动私聊权限未开启'; const msgs=[...raw.matchAll(/<msg>([\s\S]*?)<\/msg>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean).slice(0,3);let privateDid=false;if(privateDecision==='SEND'&&msgs.length){for(const text of msgs)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-decision',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});privateDid=true;}
         const resultEvent=recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:target.id,action:isAnswer?'PUBLIC_ANSWER':'PUBLIC_REPLY',targetContactIds:[target.id],objectId:String(post.id||''),content:`你在${sourceLabel(post)}公开${isAnswer?'回答':'回应'}了 User 的明确互动。`,metadata:{postId:String(post.id||''),pendingId:String(item.id||''),identityMode:identity,publicDecision:'REPLY',privateDecision:privateDid?'SEND':'SKIP',privateReason},awareness:'known',dedupeKey:`community-role:${item.id}`});
+        recordCommunityPostSnapshotAwareness(scopeKey,post,[target.id],'explicit-participation',Date.now());
+        if(privateDid)recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:target.id,action:'PRIVATE_MESSAGE_SENT',targetContactIds:[target.id],objectId:String(post.id||''),content:`你因这次${sourceLabel(post)}互动主动私聊了 User。`,metadata:{postId:String(post.id||''),pendingId:String(item.id||''),causedByEventId:String(resultEvent?.id||'')},awareness:'known',dedupeKey:`community-private-experience:${item.id}:${target.id}`});
         const coParticipants=communityRelevantContactIds(post,{replyToCommentId:item.replyToCommentId,answerId:item.answerId}).filter(id=>String(id)!==String(target.id));
         if(coParticipants.length)recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:target.id,action:isAnswer?'CHARACTER_ANSWERED':'CHARACTER_REPLIED',targetContactIds:coParticipants,objectId:String(post.id||''),content:`${displayName(target)}在${sourceLabel(post)}${isAnswer?'回答了问题':'参与了与你有关的公开讨论'}。`,metadata:{postId:String(post.id||''),pendingId:String(item.id||''),identityMode:identity,causedByEventId:String(resultEvent?.id||'')},awareness:'known',dedupeKey:`community-co-awareness:${item.id}`});
         if(identity==='ANONYMOUS'&&publicDid)rememberAnonymousIdentity(scopeKey,{surface:`community.${post.section||'unknown'}`,alias,realContactId:target.id,knownBy:[target.id],evidenceEventId:resultEvent?.id});
@@ -6906,7 +6908,7 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
         else addPublicWebComment(scopeKey,post.id,{author:roleAuthor,content:publicReply,replyToCommentId:String(replyToCommentId||'')});
       }
       if(action==='MESSAGE'||action==='BOTH')for(const text of msgs)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-mention',senderId:mentionTarget.id,senderSnapshot:{name:displayName(mentionTarget),avatar:avatarUrl(mentionTarget)}});
-      const resultEvent=recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:mentionTarget.id,action:action==='BOTH'?'PUBLIC_REPLY+PRIVATE_CHAT':'PUBLIC_REPLY',targetContactIds:[mentionTarget.id],objectId:String(userEntry?.id||post.id||''),content:`你收到 User 的 @ 后在${sourceLabel(post)}公开回应${action==='BOTH'?'，并另外私聊了 User':''}。`,metadata:{postId:String(post.id||''),commentId:String(userEntry?.id||''),causedByEventId:String(mentionWorldEvent?.id||''),identityMode:identity},awareness:'known'}); const coParticipants=communityRelevantContactIds(post,{replyToCommentId,answerId:zhihuAnswerId}).filter(id=>String(id)!==String(mentionTarget.id)); if(coParticipants.length)recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:mentionTarget.id,action:'CHARACTER_REPLIED',targetContactIds:coParticipants,objectId:String(post.id||''),content:`${displayName(mentionTarget)}在${sourceLabel(post)}参与了与你有关的公开讨论。`,metadata:{postId:String(post.id||''),commentId:String(userEntry?.id||''),causedByEventId:String(resultEvent?.id||'')},awareness:'known',dedupeKey:`community-mention-co-awareness:${userEntry?.id||post.id}:${mentionTarget.id}`}); linkWorldEventResult(scopeKey,{causeEventIds:[mentionWorldEvent?.id],resultEventId:resultEvent?.id,decision:action,contactId:mentionTarget.id}); if(identity==='ANONYMOUS')rememberAnonymousIdentity(scopeKey,{surface:`community.${post.section||'unknown'}`,alias,realContactId:mentionTarget.id,knownBy:[mentionTarget.id],evidenceEventId:resultEvent?.id});
+      const resultEvent=recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:mentionTarget.id,action:action==='BOTH'?'PUBLIC_REPLY+PRIVATE_CHAT':'PUBLIC_REPLY',targetContactIds:[mentionTarget.id],objectId:String(userEntry?.id||post.id||''),content:`你收到 User 的 @ 后在${sourceLabel(post)}公开回应${action==='BOTH'?'，并另外私聊了 User':''}。`,metadata:{postId:String(post.id||''),commentId:String(userEntry?.id||''),causedByEventId:String(mentionWorldEvent?.id||''),identityMode:identity},awareness:'known'}); recordCommunityPostSnapshotAwareness(scopeKey,post,[mentionTarget.id],'mention-participation',Date.now()); if(action==='BOTH')recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:mentionTarget.id,action:'PRIVATE_MESSAGE_SENT',targetContactIds:[mentionTarget.id],objectId:String(post.id||''),content:`你因 User 的 @ 另外私聊了 User。`,metadata:{postId:String(post.id||''),commentId:String(userEntry?.id||''),causedByEventId:String(resultEvent?.id||'')},awareness:'known',dedupeKey:`community-mention-private:${userEntry?.id||post.id}:${mentionTarget.id}`}); const coParticipants=communityRelevantContactIds(post,{replyToCommentId,answerId:zhihuAnswerId}).filter(id=>String(id)!==String(mentionTarget.id)); if(coParticipants.length)recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:mentionTarget.id,action:'CHARACTER_REPLIED',targetContactIds:coParticipants,objectId:String(post.id||''),content:`${displayName(mentionTarget)}在${sourceLabel(post)}参与了与你有关的公开讨论。`,metadata:{postId:String(post.id||''),commentId:String(userEntry?.id||''),causedByEventId:String(resultEvent?.id||'')},awareness:'known',dedupeKey:`community-mention-co-awareness:${userEntry?.id||post.id}:${mentionTarget.id}`}); linkWorldEventResult(scopeKey,{causeEventIds:[mentionWorldEvent?.id],resultEventId:resultEvent?.id,decision:action,contactId:mentionTarget.id}); if(identity==='ANONYMOUS')rememberAnonymousIdentity(scopeKey,{surface:`community.${post.section||'unknown'}`,alias,realContactId:mentionTarget.id,knownBy:[mentionTarget.id],evidenceEventId:resultEvent?.id});
       renderPublicWeb();
     }catch(error){console.error('[moli小手机] community mention bridge failed:',error);windowRef.alert?.(`@角色联动失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);}
   };
@@ -7174,7 +7176,9 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
       const forwardSnapshot={postId:String(post.id||''),section:String(post.section||''),platform,customCommunityId:String(post.extra?.customCommunityId||''),customCommunityName:String(post.extra?.customCommunityName||''),authorName:String(post.author?.name||post.authorName||'匿名网友'),title:String(post.title||'无标题'),snapshotAt:Date.now()};
       const saved=appendMessage(scopeKey,conversationKey,'user',`转发了一篇${platform}帖子：${forwardSnapshot.title}`,{source:'community-forward',messageType:'community-forward',communityForward:forwardSnapshot,senderId:'user'});
       if(!saved){windowRef.alert?.('转发失败：消息没有写入聊天记录。');return;}
-      recordWorldEvent(scopeKey,{source:`community.${post.section||'custom'}`,actorId:'user',action:'FORWARD',targetContactIds:choice.kind==='group'?(target.memberIds||[]):[target.id],objectId:String(post.id||''),content:`User 转发给你一条${platform}内容：${post.title||'无标题'}`,metadata:{postId:String(post.id||''),customCommunityId:String(post.extra?.customCommunityId||'')},awareness:'known'});
+      const forwardTargets=choice.kind==='group'?(target.memberIds||[]):[target.id];
+      recordWorldEvent(scopeKey,{source:`community.${post.section||'custom'}`,actorId:'user',action:'FORWARD',targetContactIds:forwardTargets,objectId:String(post.id||''),content:`User 转发给你一条${platform}内容：${post.title||'无标题'}`,metadata:{postId:String(post.id||''),customCommunityId:String(post.extra?.customCommunityId||''),snapshotAt:forwardSnapshot.snapshotAt},awareness:'known'});
+      recordCommunityPostSnapshotAwareness(scopeKey,post,forwardTargets,'user-forward',forwardSnapshot.snapshotAt);
       toast(`已转发给 ${choice.kind==='group'?choice.label:displayName(target)}`);
       return;
     }
@@ -7208,6 +7212,34 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
     if(post?.section==='zhihu'&&answerId){const answer=(post?.extra?.answers||[]).find(a=>String(a.id||'')===String(answerId));if(answer){add(answer.author);if(replyToCommentId)findComment(answer.comments||[]);}}
     return [...ids];
   };
+  const communityPostKnowledgeText = (post, snapshotAt = Date.now()) => {
+    if (!post) return '';
+    const at = Number(snapshotAt || Date.now());
+    const visible = item => !Number(item?.createdAt || 0) || Number(item.createdAt) <= at;
+    const actor = author => String(author?.uiName || author?.name || '匿名网友').trim() || '匿名网友';
+    const lines = [`帖子：${String(post.title || '无标题').trim()}`, `作者：${actor(post.author)}`, `正文：${String(post.content || '').trim() || '（无正文）'}`];
+    if (post.section === 'xiaohongshu') {
+      if (String(post.extra?.imagePrompt || '').trim()) lines.push(`配图：${String(post.extra.imagePrompt).trim()}`);
+      if (String(post.extra?.imageText || '').trim()) lines.push(`图中文字：${String(post.extra.imageText).trim()}`);
+    }
+    if (post.section === 'zhihu') {
+      const answers = Array.isArray(post.extra?.answers) ? post.extra.answers.filter(visible) : [];
+      for (const answer of answers) {
+        lines.push(`回答 · ${actor(answer.author)}：${String(answer.content || '').trim()}`);
+        for (const comment of (Array.isArray(answer.comments) ? answer.comments : []).filter(visible)) lines.push(`  评论 · ${actor(comment.author)}：${String(comment.content || '').trim()}`);
+      }
+    } else {
+      for (const comment of (Array.isArray(post.comments) ? post.comments : []).filter(visible)) lines.push(`${post.section === 'tianya' ? '楼层' : '评论'} · ${actor(comment.author)}：${String(comment.content || '').trim()}`);
+    }
+    const text = lines.filter(Boolean).join('\n');
+    return text.length > 7000 ? `${text.slice(0, 7000)}\n…（帖子认知快照已压缩）` : text;
+  };
+  const recordCommunityPostSnapshotAwareness = (scopeKey, post, contactIds, reason = 'participated', snapshotAt = Date.now()) => {
+    const ids = [...new Set((Array.isArray(contactIds) ? contactIds : [contactIds]).map(String).filter(Boolean))];
+    if (!post || !ids.length) return null;
+    return recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:'system',action:'POST_SNAPSHOT_KNOWN',targetContactIds:ids,objectId:String(post.id||''),content:`你已经看过截至当时的这篇${sourceLabel(post)}内容。\n${communityPostKnowledgeText(post,snapshotAt)}`,metadata:{postId:String(post.id||''),snapshotAt:Number(snapshotAt||Date.now()),knowledgeScope:'post_snapshot',reason},awareness:'known',dedupeKey:`community-post-snapshot:${post.id}:${ids.sort().join(',')}:${Number(snapshotAt||0)}`});
+  };
+
   const recordCommunityUserFact = ({post,saved,state,content}) => {
     const targets=communityRelevantContactIds(post,{replyToCommentId:state.replyToCommentId,answerId:state.zhihuAnswerId});
     if(!targets.length)return null;
