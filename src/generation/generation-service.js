@@ -1519,7 +1519,7 @@ async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
   }
 
   return [
-    identityPack ? `【稳定人物身份 · Identity Anchor】\n以下用于确认“谁是谁”，不得把一个人物的职业、关系、性别或经历移植给另一个人物。\n${identityPack}` : '',
+    identityPack ? `【稳定人物身份 · Identity Anchor】\n以下用于确认“谁是谁”。每条人物资料只属于其标题所指的人物；职业、关系、性别、年龄、经历、称谓与社会身份都不得跨人物迁移。若某事实无法明确归属于某个人物，就省略该事实，不得借用相似人物的资料补全。\n${identityPack}` : '',
     recentText ? `【当前正文 · Recent World State】\n${recentText}` : '',
     worldBookText ? `【相关世界书 · Relevant World Lore】\n${worldBookText}` : '',
     longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道。\n${longTermText}` : '',
