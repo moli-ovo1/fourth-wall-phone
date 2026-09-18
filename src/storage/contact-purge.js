@@ -1,4 +1,4 @@
-import { getPrivateConversationsForContact } from './data-store.js';
+import { getAllConversations, getContacts } from './data-store.js';
 import { listKeys, readJson, writeJson, removeValue } from './storage-adapter.js';
 
 const FULL_SCOPE_PREFIXES = [
@@ -27,8 +27,16 @@ function cleanEvents(state,cid){ if(!state||typeof state!=='object')return state
 function cleanIdentity(state,cid){ if(!state||typeof state!=='object')return state; const next={}; for(const [k,v] of Object.entries(state.identities||{})){if(String(v?.realContactId||'')===cid)continue; v.knownBy=(v.knownBy||[]).filter(x=>String(x)!==cid); next[k]=v;} state.identities=next; return state; }
 export function purgeContactPhoneFootprint(contactId){
   const cid=String(contactId||''); if(!cid)return {scopeKeys:[]};
-  const scopeKeys=[...new Set(getPrivateConversationsForContact(cid).filter(c=>c.scopeMode!=='global').map(c=>String(c.boundScopeKey||c.storageScopeKey||'')).filter(Boolean))];
-  for(const scope of scopeKeys) purgeWholeScope(scope);
+  const contact=getContacts().find(item=>String(item.id||'')===cid);
+  const scopeKeys=[...new Set([
+    String(contact?.boundScopeKey||''),
+    ...getAllConversations().filter(c=>c?.type==='private'&&String(c.contactId||'')===cid&&c.scopeMode!=='global').map(c=>String(c.boundScopeKey||c.storageScopeKey||''))
+  ].filter(Boolean))];
+  for(const scope of scopeKeys){
+    purgeWholeScope(scope);
+    removeValue(`moli:community:pending:${scope}`);
+    for(const aliasKey of listKeys(`moli:community:anonymous-alias:${scope}::`)) removeValue(aliasKey);
+  }
   for(const key of listKeys('moli-phone:public-web:v1:')){const v=readJson(key,null);if(v)writeJson(key,cleanPublicWeb(v,cid));}
   for(const key of listKeys('moli-phone:moments:v2:')){const v=readJson(key,null);if(v)writeJson(key,cleanMoments(v,cid));}
   for(const key of listKeys('moli-phone:world-events:v1:')){const v=readJson(key,null);if(v)writeJson(key,cleanEvents(v,cid));}
