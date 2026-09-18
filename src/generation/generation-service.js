@@ -289,8 +289,12 @@ export async function generatePrivateReply({
   // Project the visible recent body into this NPC's own perspective first, persist only definite knowledge,
   // and feed that projection to the normal prompt/continuity path. Global observers remain observation-only.
   let npcPerspectiveProjected = false;
-  if (!isFourthWall && isBoundCurrentWorld && contact?.kind === 'custom' && contact?.customRoleMode === 'npc' && recentBody?.messages?.length) {
-    const projection = await projectNpcBodyAwareness({ scopeKey, contact, conversation, recentBody, config, signal });
+  const isCustomNpc = !isFourthWall && isBoundCurrentWorld && contact?.kind === 'custom' && contact?.customRoleMode === 'npc';
+  // NPC always receives正文 + 柏宝书 as *source material* for Awareness projection.
+  // Neither source is injected raw into the NPC chat prompt; only projected cognition may cross this boundary.
+  const npcLongTermSource = isCustomNpc ? getBaiBaiLongTermMemory() : null;
+  if (isCustomNpc && (recentBody?.messages?.length || npcLongTermSource?.text)) {
+    const projection = await projectNpcBodyAwareness({ scopeKey, contact, conversation, recentBody, longTermMemory: npcLongTermSource, config, signal });
     recentBody = projection.recentBody;
     npcPerspectiveProjected = projection.projected === true;
   }
@@ -312,6 +316,7 @@ export async function generatePrivateReply({
   // Conversation 的正文读取开关决定本次聊天是否接入动态剧情上下文。
   const baiBaiMemory = (
     !isFourthWall
+    && !isCustomNpc
     && conversation.bodyContextEnabled !== false
     && isBoundCurrentWorld
     && (
