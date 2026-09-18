@@ -3218,3 +3218,11 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 已落地：Community World Context Pack 第一版；NPC资料卡/Role Fidelity身份锚点；最近正文 + 相关世界书 + 柏宝书分层；帖子参与/转发 `snapshotAt` 认知水位；社区互动引发私聊的角色自身经历。
 
 下一阶段：继续把普通（非User强制邀请/@）角色公开互动接入同一帖子认知水位；完善 Character↔Character 的 reply/answer 视角投影与 unresolved continuity；再扩大 Unified Decision 的跨App出口。不要重做 Community Store，不要自动跨“我们的墙”。
+
+
+## v0.5.34 / moli190 — runtime regression + Community identity hardening
+- Fixed group-chat runtime regression `scopeKey is not defined`: `batchRoleProfile()` had referenced `scopeKey` / `id` without receiving them. Group generation now passes the resolved conversation scope explicitly; this restores both 围读会 and ordinary group generation.
+- Provider rejection text is treated as an API failure, not as an assistant utterance. Known Gemini/provider safety/error payloads are rejected before message parsing, so they cannot be saved as character chat bubbles or continuity.
+- Community World Context now resolves activated world-book material per World-bound contact instead of selecting only one contact's world book. NPC profile/Role Fidelity remains the identity anchor; each NPC's own activated world-book entries can supplement missing identity facts.
+- Removed the final extra truncation pass around the assembled Community Identity Anchor and Recent World State. Source-specific safety budgets remain for now; do not remove all limits blindly because provider context windows are finite. Future work should replace scattered fixed caps with one provider-aware context budget.
+- IMPORTANT: one-refresh/one-API Community settlement is NOT falsely marked closed here. Current queued invite/@ settlement and ambient refresh are still separate generation paths. Next package must unify them into one batch settlement request before further Awareness expansion.

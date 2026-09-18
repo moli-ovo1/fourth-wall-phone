@@ -345,3 +345,11 @@
 - 角色因社区明确互动另外私聊 User 时，新增仅属于该角色自身的 `PRIVATE_MESSAGE_SENT` 经历，供后续 Continuity 检索；不向第三人广播私聊内容。
 - Character↔Character Awareness 继续沿用“直接参与/直接相关才获得认知”的原则：仅被帖子文字提名不等于看过整帖；真正参与或被 User 转发才建立帖子快照认知。
 - NPC Awareness 主链维持已验收状态：NPC资料卡=身份锚点，正文/柏宝书=世界素材，NPC认知=人物真正知道的内容。Community World Context 不绕过 NPC Perspective Projection。
+
+
+## v0.5.34 / moli190 — runtime regression + Community identity hardening
+- Fixed group-chat runtime regression `scopeKey is not defined`: `batchRoleProfile()` had referenced `scopeKey` / `id` without receiving them. Group generation now passes the resolved conversation scope explicitly; this restores both 围读会 and ordinary group generation.
+- Provider rejection text is treated as an API failure, not as an assistant utterance. Known Gemini/provider safety/error payloads are rejected before message parsing, so they cannot be saved as character chat bubbles or continuity.
+- Community World Context now resolves activated world-book material per World-bound contact instead of selecting only one contact's world book. NPC profile/Role Fidelity remains the identity anchor; each NPC's own activated world-book entries can supplement missing identity facts.
+- Removed the final extra truncation pass around the assembled Community Identity Anchor and Recent World State. Source-specific safety budgets remain for now; do not remove all limits blindly because provider context windows are finite. Future work should replace scattered fixed caps with one provider-aware context budget.
+- IMPORTANT: one-refresh/one-API Community settlement is NOT falsely marked closed here. Current queued invite/@ settlement and ambient refresh are still separate generation paths. Next package must unify them into one batch settlement request before further Awareness expansion.
