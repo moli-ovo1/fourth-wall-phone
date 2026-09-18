@@ -126,16 +126,9 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       const pendingSocialEvents = (Array.isArray(a.pendingSocialEvents) ? a.pendingSocialEvents : [])
         .filter(event => event && now - Number(event.createdAt || 0) <= SOCIAL_FACT_MAX_AGE_MS)
         .slice(-12);
-      const decisionWorldEvents = listWorldEvents(scopeKey, {
-        contactId: contact.id,
-        awareness: 'known',
-        limit: 30,
-        unconsumedBy: 'character-decision',
-      });
-      const decisionWorldEventIds = decisionWorldEvents.map(event => event.id);
-      const worldEventText = decisionWorldEvents.length
-        ? summarizeWorldEventsForContext(scopeKey, { contactId: contact.id, awareness: 'known', limit: 30 })
-        : '';
+      let decisionWorldEvents = [];
+      let decisionWorldEventIds = [];
+      let worldEventText = '';
       const wakeEvents = pendingSocialEvents.filter(event => event?.wakeBehavior === true);
       const socialEventReady = wakeEvents.length > 0
         && now - Number(wakeEvents[0]?.createdAt || 0) >= SOCIAL_EVENT_BATCH_MS;
@@ -183,6 +176,14 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         socialEvents = pendingSocialEvents;
       }
       if (!mode) continue;
+      const decisionConsumer = mode === 'social-event' ? 'social-event-decision' : (mode === 'chat' ? 'proactive-private-decision' : 'commentary-decision');
+      decisionWorldEvents = listWorldEvents(scopeKey, {
+        contactId: contact.id, awareness: 'known', limit: 30, unconsumedBy: decisionConsumer,
+      });
+      decisionWorldEventIds = decisionWorldEvents.map(event => event.id);
+      worldEventText = decisionWorldEvents.length
+        ? decisionWorldEvents.map(event => `- ${event.content || `[${event.source}] ${event.action}`}`).join('\n')
+        : '';
       running.add(key);
       beginGenerationTask(scopeKey, key, null, mode);
       try {
@@ -217,6 +218,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
               allowPost,
               allowPrivate,
               recentActions: recentActionText,
+              entrypoint: mode === 'social-event' ? 'social-event-decision' : 'proactive-private-decision',
             });
         const result = await generatePrivateReply({
           scopeKey,
@@ -243,7 +245,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           privateMessages = decision.privateMessages;
         }
         if (behaviorAction === 'SKIP') {
-          if (mode !== 'commentary' && decisionWorldEventIds.length) markWorldEventsConsumed(scopeKey, contact.id, decisionWorldEventIds, 'character-decision');
+          if (mode !== 'commentary' && decisionWorldEventIds.length) markWorldEventsConsumed(scopeKey, contact.id, decisionWorldEventIds, decisionConsumer);
           continue;
         }
 
@@ -286,7 +288,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
             });
             linkWorldEventResult(scopeKey,{causeEventIds:decisionWorldEventIds,resultEventId:resultEvent?.id,decision:behaviorAction,contactId:contact.id});
           }
-          if (decisionWorldEventIds.length) markWorldEventsConsumed(scopeKey, contact.id, decisionWorldEventIds, 'character-decision');
+          if (decisionWorldEventIds.length) markWorldEventsConsumed(scopeKey, contact.id, decisionWorldEventIds, decisionConsumer);
         }
 
         if (mode !== 'commentary' && behaviorAction !== 'SKIP') {
