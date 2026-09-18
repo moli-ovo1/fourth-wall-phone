@@ -32,6 +32,7 @@ import { summarizeWorldEventsForContext } from '../storage/world-event-store.js'
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
 import { getPublicWebPost } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
+import { fitContextSections } from './context-budget.js';
 
 function communityActorName(actor) {
   return String(actor?.uiName || actor?.name || '匿名网友').trim() || '匿名网友';
@@ -1512,18 +1513,18 @@ async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
   if (String(scopeKey || '').includes(':chat:')) {
     try {
       const longTerm = getBaiBaiLongTermMemory();
-      longTermText = truncateCommunityContext(longTerm?.text || longTerm?.content || longTerm || '', 7000);
+      longTermText = String(longTerm?.text || longTerm?.content || longTerm || '').trim();
     } catch (error) {
       console.warn('[moli小手机] community long-term context failed:', error);
     }
   }
 
-  return [
-    identityPack ? `【稳定人物身份 · Identity Anchor】\n以下用于确认“谁是谁”，不得把一个人物的职业、关系、性别或经历移植给另一个人物。\n${identityPack}` : '',
-    recentText ? `【当前正文 · Recent World State】\n${recentText}` : '',
-    worldBookText ? `【相关世界书 · Relevant World Lore】\n${worldBookText}` : '',
-    longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道。\n${longTermText}` : '',
-  ].filter(Boolean).join('\n\n');
+  return fitContextSections([
+    { key:'identity', priority:100, text:identityPack ? `【稳定人物身份 · Identity Anchor】\n以下用于确认“谁是谁”，不得把一个人物的职业、关系、性别或经历移植给另一个人物。\n${identityPack}` : '' },
+    { key:'recent', priority:95, text:recentText ? `【当前正文 · Recent World State】\n${recentText}` : '' },
+    { key:'worldbook', priority:85, text:worldBookText ? `【相关世界书 · Relevant World Lore】\n${worldBookText}` : '' },
+    { key:'longterm', priority:70, text:longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道。\n${longTermText}` : '' },
+  ], { charBudget: 90000 });
 }
 
 function communityNativeRoster(scopeKey) {
@@ -1654,6 +1655,49 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
   posts=posts.map(post=>{if(post.section!=='custom')return post;const def=customById.get(String(post.extra?.customCommunityId||''));if(def?.needsComments===false)return{...post,comments:[]};return post;});
   if (!ghostStoriesEnabled) posts=posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
   return posts;
+}
+
+
+
+export async function generateCommunitySettlement({ scopeKey, post, pending = [], mode = 'thread', answerId = '', signal } = {}) {
+  if (!scopeKey || !post) throw new Error('当前社区内容不可用');
+  const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
+  const userName=getTavernUserContext().name||'User';
+  const contactsById=new Map(getContacts().map(item=>[String(item.id||''),item]));
+  const targets=[];
+  for(const item of (Array.isArray(pending)?pending:[]).filter(x=>x?.type==='invite'||x?.type==='mention')){
+    const raw=contactsById.get(String(item.targetId||'')); if(!raw) continue;
+    const contact=await fullyHydratedContact(raw);
+    const name=String(contact.remark||contact.displayName||contact.name||contact?.source?.originalName||'角色');
+    const identity=communityIdentityAnchor(contact);
+    let lore='';
+    try{
+      const scanText=[post.title,post.content,communityPostFacts(post,0),identity].filter(Boolean).join('\n');
+      const wb=contact.kind==='custom'?await getActivatedCustomWorldBook({contact,scanText}):await getActivatedTavernWorldBook({contact,scanText});
+      lore=String(wb?.text||'').trim();
+    }catch(error){console.warn('[moli小手机] settlement target lore failed:',contact.id,error);}
+    targets.push({item,contactId:String(contact.id),name,identity,lore});
+  }
+  const targetText=targets.length?targets.map((t,i)=>`【目标${i+1}｜targetId=${t.contactId}｜pendingId=${t.item.id}】\n${t.identity}\n${t.lore?`【该人物相关世界书】\n${t.lore}`:''}\n触发：${t.item.type==='invite'?'User明确邀请':`User明确@：${String(t.item.content||'')}`}\n要求：必须公开回应，不允许SKIP；只可选择 REAL 或 ANONYMOUS。`).join('\n\n'):'（本轮没有被明确邀请/@的角色）';
+  const system=`你正在执行 moli 社区的一次“统一刷新结算”。一次刷新只能对应这一次模型调用。你必须同时处理：1) User 已积累的评论与讨论；2) 所有明确邀请/@角色的强制公开回应；3) 当前平台自然出现的普通网友新增互动。\n\n硬规则：被明确邀请/@的角色必须公开回应，不允许SKIP，只能选择实名 REAL 或匿名 ANONYMOUS。不同角色必须严格依据各自的人设/世界书，不得互相串设定。匿名只是对其他社区参与者隐藏真实身份，不得虚构后台实名、IP追踪等机制否定匿名。普通网友互动可以为0条。只输出严格JSON。`;
+  const schema=`返回：{"targetActions":[{"pendingId":"必须对应输入pendingId","targetId":"角色id","identity":"REAL|ANONYMOUS","alias":"匿名时网名","publicText":"公开回复/回答正文","privateDecision":"SEND|SKIP","privateReason":"可选","privateMessages":["0~3条私聊"]}],"comments":[{"author":"网友","authorId":"可选","content":"新增评论","replyToCommentId":"可选已有评论id"}],"answers":[{"author":"回答者","authorId":"可选","content":"知乎新增回答","upvotes":0}],"commentAdditions":[{"answerId":"知乎已有answerId","comments":[{"author":"网友","content":"新增评论","replyToCommentId":"可选"}]}]}。非知乎 answers/commentAdditions 为空；知乎回答评论刷新可使用 comments 或 commentAdditions。`;
+  const user=`平台：${post.section}\n结算模式：${mode}${answerId?`\n当前回答id：${answerId}`:''}\n标题：${post.title||''}\n正文：${post.content||''}\n\n【刷新前完整可见讨论】\n${communityPostFacts(post,0)}\n\n【本轮明确角色目标】\n${targetText}\n\n${schema}`;
+  const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
+  const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  let data; try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('社区统一刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
+  const allowed=new Map(targets.map(t=>[String(t.item.id),t]));
+  const targetActions=[];
+  for(const action of (Array.isArray(data?.targetActions)?data.targetActions:[])){
+    const t=allowed.get(String(action?.pendingId||'')); if(!t)continue;
+    const publicText=String(action?.publicText||'').trim(); if(!publicText)continue;
+    const identity=String(action?.identity||'REAL').toUpperCase()==='ANONYMOUS'?'ANONYMOUS':'REAL';
+    targetActions.push({pendingId:String(t.item.id),targetId:t.contactId,kind:String(t.item.kind||'comment'),answerId:String(t.item.answerId||''),replyToCommentId:String(t.item.replyToCommentId||''),identity,alias:String(action?.alias||'匿名用户').trim()||'匿名用户',publicText,privateDecision:String(action?.privateDecision||'SKIP').toUpperCase()==='SEND'?'SEND':'SKIP',privateReason:String(action?.privateReason||'').trim(),privateMessages:(Array.isArray(action?.privateMessages)?action.privateMessages:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,3)});
+  }
+  if(targetActions.length<targets.length) throw new Error('角色必须回应，但统一刷新没有返回全部目标角色的公开正文，请重试刷新。');
+  const comments=(Array.isArray(data?.comments)?data.comments:[]).slice(0,8).map((c,i)=>({id:`webc_${Date.now()}_${i}_${Math.random().toString(36).slice(2,7)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:String(c?.content||'').trim().slice(0,1200),replyToCommentId:String(c?.replyToCommentId||'')})).filter(x=>x.content);
+  const answers=(Array.isArray(data?.answers)?data.answers:[]).slice(0,3).map((a,i)=>({id:`za_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`,author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author,userName,'匿名用户')},content:String(a?.content||'').trim().slice(0,8000),upvotes:Number(a?.upvotes||0),comments:[]})).filter(x=>x.content);
+  const commentAdditions=(Array.isArray(data?.commentAdditions)?data.commentAdditions:[]).slice(0,8).map(batch=>({answerId:String(batch?.answerId||''),comments:(Array.isArray(batch?.comments)?batch.comments:[]).slice(0,6).map((c,i)=>({id:`zac_${Date.now()}_${i}_${Math.random().toString(36).slice(2,7)}`,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:String(c?.content||'').trim().slice(0,1200),replyToCommentId:String(c?.replyToCommentId||'')})).filter(x=>x.content)})).filter(x=>x.answerId&&x.comments.length);
+  return {targetActions,comments,answers,commentAdditions};
 }
 
 export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}) {
