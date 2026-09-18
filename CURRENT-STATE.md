@@ -382,3 +382,11 @@
 - Cleanup runs before normal data initialization, removes the large records first, then writes a tiny idempotence marker so it can recover even when localStorage begins at quota.
 - Formal `:chat:` records, contacts/role configuration, prompt/API settings and world-book/profile configuration are not cleared. Conversation IndexedDB v2 remains unchanged.
 - Rejected alternative: moving legacy fallback payloads into IndexedDB. That would preserve invalid archival behavior instead of fixing the lifecycle boundary.
+
+
+## v0.5.48 Storage v2 长期数据层
+- 已确认原型期 localStorage 会被增长型业务数据快速耗尽；正式架构不再允许把长期增长数据持续写入 localStorage。
+- 新增 IndexedDB 大容量 KV 层，并在启动时对 scope、朋友圈、社区、World Events、Awareness、Continuity、我们的墙相关增长型数据执行 COPY → VERIFY → SWITCH → CLEANUP 迁移。
+- localStorage 保留轻量设置/标记；fallback/no-chat 继续只允许临时运行态，不得形成正式档案。
+- Conversation Storage v2 保持独立并继续生效。迁移失败必须保留旧值，不允许先删后迁。
+- 本阶段保持现有业务 API 的同步读取语义，通过启动预载缓存兼容旧调用链；持久化落 IndexedDB。后续若继续细化 messages/events 分表，应保持现有产品语义与数据边界。
