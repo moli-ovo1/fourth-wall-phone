@@ -6864,9 +6864,14 @@ export function createPhonePanel({
       if(action.identity==='SKIP'){ if(item){markWorldEventsKnownByObjectTargets(scopeKey,[item.id]);markWorldEventsConsumedByObjectTargets(scopeKey,[item.id],'community-settlement');done.push(item.id);} continue; }
       const identity=action.identity==='ANONYMOUS'?'ANONYMOUS':'REAL'; const alias=String(action.alias||'匿名用户').trim()||'匿名用户';
       const author=identity==='ANONYMOUS'?{type:'contact',id:target.id,name:alias,uiName:`${alias}（${displayName(target)}）`,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false};
-      if(item?.kind==='answer') addZhihuAnswer(scopeKey,post.id,{author,content:action.publicText});
-      else if(post.section==='zhihu'&&item?.answerId) addZhihuAnswerComments(scopeKey,post.id,item.answerId,[{author,content:action.publicText,replyToCommentId:String(item?.replyToCommentId||'')}]);
-      else addPublicWebComment(scopeKey,post.id,{author,content:action.publicText,replyToCommentId:String(item.replyToCommentId||'')});
+      // 明确邀请/@有 pending item；自然续帖没有 pending item。自然候选的回复落点已经由
+      // generation-service 固化在 action 上，不能再假定 item 一定存在。
+      const actionKind=String(action?.kind||item?.kind||'comment');
+      const actionAnswerId=String(action?.answerId||item?.answerId||'');
+      const actionReplyToCommentId=String(action?.replyToCommentId||item?.replyToCommentId||'');
+      if(actionKind==='answer') addZhihuAnswer(scopeKey,post.id,{author,content:action.publicText});
+      else if(post.section==='zhihu'&&actionAnswerId) addZhihuAnswerComments(scopeKey,post.id,actionAnswerId,[{author,content:action.publicText,replyToCommentId:actionReplyToCommentId}]);
+      else addPublicWebComment(scopeKey,post.id,{author,content:action.publicText,replyToCommentId:actionReplyToCommentId});
       const conversationKey=privateConversationKeyFor(scopeKey,target.id); const privateConv=getScopeConversations(scopeKey).find(c=>String(c.conversationKey||c.id||'')===String(conversationKey)); const proactiveEnabled=privateConv?.automation?.autoChatEnabled===true; let privateDid=false;
       if(proactiveEnabled&&action.privateDecision==='SEND'&&action.privateMessages?.length){for(const text of action.privateMessages)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-decision',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});privateDid=true;}
       const resultEvent=recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:target.id,action:item?.kind==='answer'?'PUBLIC_ANSWER':'PUBLIC_REPLY',targetContactIds:[target.id],objectId:String(post.id||''),content:`你在${sourceLabel(post)}公开${item?.kind==='answer'?'回答':'回应'}${item?'了 User 的明确互动':'并继续参与了这场讨论'}。`,metadata:{postId:String(post.id||''),pendingId:String(item?.id||''),identityMode:identity,privateDecision:privateDid?'SEND':'SKIP',privateReason:String(action.privateReason||'')},awareness:'known',dedupeKey:`community-role:${item?.id||`natural-${post.id}-${target.id}-${Date.now()}`}`});
