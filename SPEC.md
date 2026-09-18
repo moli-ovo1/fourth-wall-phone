@@ -4100,3 +4100,10 @@ NPC 虽能读取绑定世界当前正文用于即时参与，但持久认知不�
 
 ### Unified Decision v1
 统一的是人物判断输入语义，不是强行合并各 App 执行 Store。第一阶段输入为：wake reason / newly known facts / relevant continuity / initiative tendency / allowed actions / recent actions。动作继续复用成熟出口。知道 ≠ 在意 ≠ 行动；先判断是否行动，再在允许出口中选择；主动程度不是 Math.random 概率门。
+
+### NPC认知（v0.5.28）
+NPC 的正文知识分为“历史事实来源”和“人物当前认知”。最近正文、柏宝书长期剧情属于来源；只有经过 Perspective Projection 的 personalFacts、NPC合理会知道/受影响的重大 worldChanges，以及明确的认知 invalidations 才进入人物认知。正文没有出现 NPC 名字不代表世界重大变化不可知；反之，正文出现 NPC 名字也不代表 NPC 在场或知道。
+
+资料卡「记忆 → NPC认知」展示的不是调试副本，而是生成时实际读取的 Character Awareness。User 可直接修正；保存后该文本成为新的人工校正基线，旧自动投影不得覆盖它，后续新正文仍可追加新的认知变化。时间线重置、失忆等默认不物理删除历史事实，而以认知变更说明当前 NPC 不再拥有/适用哪些记忆。复杂叙事最终以 User 校正为准。
+
+自建 NPC 必须自动读取其绑定正文 World 与柏宝书长期剧情作为认知素材，不提供“关闭正文/柏宝书认知”的产品开关；但两者都不得未经 Awareness 过滤直接注入 NPC 私聊。Global「现实陪伴」的旁观正文属于 Observed Context，不适用此规则，也不得自动沉淀为亲历。

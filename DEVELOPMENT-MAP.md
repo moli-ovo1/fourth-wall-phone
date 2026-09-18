@@ -3169,3 +3169,13 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - Phone→正文仍必须经「我们的墙」由 User 主动选择。
 
 下一阶段：扩大 Character↔Character 的视角投影/共同经历覆盖；把更多成熟人物判断入口迁入统一 Decision Contract；补更精确的 unresolved/relation relevance 信号与 Awareness 调试/验收工具。不要在这些完成前开放所有 App 任意跨 App 自动行动。
+
+## moli185 / v0.5.28 收口：NPC Awareness 可见、可改、可继续演化
+已完成：
+1. NPC认知资料卡入口：记忆页显示真实 Character Awareness，并允许 User 直接修正后台认知。
+2. NPC长期来源：柏宝书长期剧情 + 最近正文只作为 Awareness source material，不直接作为 NPC 已知内容。
+3. Awareness 投影支持 personalFacts / worldChanges / invalidations；重大洪灾等公共世界变化不要求正文必须出现 NPC 名字。
+4. 时间线重置/失忆等不删除历史事实，而是新增当前认知变更；User 可在台前校正复杂情况。
+5. Continuity 优先读取 NPC 当前认知文本，并避免再次把 tavern.awareness World Event 重复铺一遍。
+
+后续：继续做更稳定的正文增量 cursor/coverage（避免窗口滑动造成不必要重投影）、Character↔Character 视角投影、更多 Unified Decision entrypoint。不要用关键词命中 NPC 名字替代 Perspective Projection。

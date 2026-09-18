@@ -280,3 +280,11 @@
 - 新增统一 `character-decision.js` 输入契约，并首先接入 private Automation：唤醒原因 → 新事实 → 相关 Continuity → 主动倾向 → 当前允许动作 → POST / PRIVATE_CHAT / POST+PRIVATE_CHAT / SKIP。30% 仍是主动习惯，不是事件骰子；SKIP 仍不删除 known/continuity。
 - 匿名身份确定知识传播第一条真实链：User 在社区对明确相关/被 @ 的人物，用“匿名别名 + 明确等同表达 + 真实联系人名”直接告知身份时，先登记 pending `ANONYMOUS_IDENTITY_REVEALED`；只有社区刷新结算该 User comment 后，才扩展对应人物的 `identityKnownBy`。AI 猜测不会升级为 definite knowledge。
 - 继续复用现有 World Event / community:pending / Moments chatEvents / Behavior Queue；没有重建 Store，没有重做 CLOSED Community，也没有自动跨「我们的墙」。
+
+## v0.5.28 / moli185 — NPC认知台前校正 + 正文/柏宝书统一认知来源
+- 自建 NPC 的「记忆」页新增「NPC认知」框。它直接读取 Character Awareness 后台；User 编辑并保存后，后续生成读取同一份修正后的认知，不再维护一份仅供展示的副本。
+- User 手动修正采用“修正基线 + 修正后新增自动认知”的方式：旧正文不会重新覆盖修正，新正文仍可继续追加新的认知变化。
+- NPC 的柏宝书长期剧情现在是强制认知素材来源，与最近正文一起进入 Perspective Projection；柏宝书原文不会直接注入 NPC 私聊，避免从长期记忆后门恢复上帝视角。
+- NPC Perspective Projection 输出扩展为 personalFacts / worldChanges / invalidations / excluded。worldChanges 用于没有点名 NPC 但会改变其现实的重大公共变化；invalidations 用于穿越、失忆、时间线重置等使既有认知失效/改变的明确剧情。
+- 历史事实不因 invalidation 被物理删除；当前认知会记录“认知变更”。复杂特殊剧情仍允许 User 在 NPC认知框中最终校正。
+- NPC Conversation 仍自动绑定并读取自己的正文 World；Global「现实陪伴」旁观正文仍只是 Observed Context，不进入 NPC Awareness。
