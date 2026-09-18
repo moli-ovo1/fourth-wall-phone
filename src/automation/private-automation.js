@@ -60,9 +60,10 @@ function parseBehaviorDecision(rawText = '', { allowPost = true, allowPrivate = 
       return { action, post, privateMessages };
     } catch {}
   }
-  // 兼容模型偶尔没有遵守 JSON：纯 [SKIP] 仍按跳过；其余文本只在允许私聊时作为普通私聊回退。
+  // Automation 决策必须是 JSON，或至少显式使用 <msg>。绝不能把模型回显的世界书/记忆/正文素材当成一条主动私聊发送出去。
   if (/^\s*\[SKIP\]\s*$/i.test(text) || /\[SKIP\]/i.test(text)) return fallback;
-  return allowPrivate ? { action: 'PRIVATE_CHAT', post: '', privateMessages: parseGeneratedMessages(text).slice(0, 3) } : fallback;
+  const explicitMessages = [...text.matchAll(/<(?:message|msg)>([\s\S]*?)<\/(?:message|msg)>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean).slice(0,3);
+  return allowPrivate && explicitMessages.length ? { action: 'PRIVATE_CHAT', post: '', privateMessages: explicitMessages } : fallback;
 }
 
 export function createPrivateAutomation({ getScopeKey } = {}) {
