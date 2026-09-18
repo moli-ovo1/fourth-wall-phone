@@ -3179,3 +3179,6 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 5. Continuity 优先读取 NPC 当前认知文本，并避免再次把 tavern.awareness World Event 重复铺一遍。
 
 后续：继续做更稳定的正文增量 cursor/coverage（避免窗口滑动造成不必要重投影）、Character↔Character 视角投影、更多 Unified Decision entrypoint。不要用关键词命中 NPC 名字替代 Perspective Projection。
+
+## moli186 / v0.5.29
+本轮继续 Unified Character Cognition & Decision，不重写现有 App 队列。完成：聊天列表 NPC/正文身份标签收口；Continuity 相关性加入 recency/self-action/unresolved；World Event consumption 按 decision entrypoint 细分；Decision Contract 明确“先行动意愿、后行动地点”。下一阶段继续 Character↔Character Awareness 投影与更多成熟入口接入统一 Decision，仍禁止自动跨「我们的墙」。

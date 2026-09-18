@@ -4107,3 +4107,9 @@ NPC 的正文知识分为“历史事实来源”和“人物当前认知”。�
 资料卡「记忆 → NPC认知」展示的不是调试副本，而是生成时实际读取的 Character Awareness。User 可直接修正；保存后该文本成为新的人工校正基线，旧自动投影不得覆盖它，后续新正文仍可追加新的认知变化。时间线重置、失忆等默认不物理删除历史事实，而以认知变更说明当前 NPC 不再拥有/适用哪些记忆。复杂叙事最终以 User 校正为准。
 
 自建 NPC 必须自动读取其绑定正文 World 与柏宝书长期剧情作为认知素材，不提供“关闭正文/柏宝书认知”的产品开关；但两者都不得未经 Awareness 过滤直接注入 NPC 私聊。Global「现实陪伴」的旁观正文属于 Observed Context，不适用此规则，也不得自动沉淀为亲历。
+
+### Unified Decision entrypoint consumption（v0.5.29）
+World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过”，不是事实被全局删除。social-event 与 proactive-private 必须使用不同 consumer key；事件即使在某入口 SKIP，也仍保留在 Character Continuity 中。人物决策顺序固定为：先判断是否行动，再判断在哪个当前允许的出口行动。
+
+### 聊天列表身份短标签
+自建 NPC：`NPC`。正文绑定角色：`正文`。Global：沿用`陪伴`语义。列表不得把正文标题、Branch 编号等 World Instance 内部标签拼到角色身份后缀。

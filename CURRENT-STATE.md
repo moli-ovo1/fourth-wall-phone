@@ -288,3 +288,9 @@
 - NPC Perspective Projection 输出扩展为 personalFacts / worldChanges / invalidations / excluded。worldChanges 用于没有点名 NPC 但会改变其现实的重大公共变化；invalidations 用于穿越、失忆、时间线重置等使既有认知失效/改变的明确剧情。
 - 历史事实不因 invalidation 被物理删除；当前认知会记录“认知变更”。复杂特殊剧情仍允许 User 在 NPC认知框中最终校正。
 - NPC Conversation 仍自动绑定并读取自己的正文 World；Global「现实陪伴」旁观正文仍只是 Observed Context，不进入 NPC Awareness。
+
+## v0.5.29 / moli186 — Awareness/Decision 第二阶段收口
+- 微信聊天列表身份后缀收口：自建 NPC 只显示「NPC」；正文角色只显示「正文」，不再暴露正文标题/Branch 标签。Global/陪伴语义保持原样。
+- Character Continuity 检索在既有话题相关性基础上加入近期性、人物自身行动、未解决事件优先级；已消费事件仍可作为经历被检索，SKIP 不等于遗忘。
+- Unified Decision consumption 从笼统 `character-decision` 细分为 `social-event-decision` 与 `proactive-private-decision`，同一事实可被不同合法入口分别处理，避免全局消费。
+- Decision Prompt 明确两阶段：先决定是否行动，再在允许出口中决定行动地点；主动程度仍是行为倾向而非逐事件随机骰子。
