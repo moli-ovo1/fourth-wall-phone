@@ -462,3 +462,11 @@
 - 公开行为的实名/匿名方式、匿名别名，以及同次主动私聊结果作为行为 provenance 一并保留；这仍是“角色自己的经历”，不是把 Community 原文整包复制进微信。
 - 匿名身份连续性输出改用人物可读名称：User 使用当前 Tavern User Persona 名称，联系人使用当前联系人显示名称，避免把内部 id 当作角色世界里的姓名。
 - 知情边界不变：只有 identity knownBy 中已经明确知道身份的人才会收到该身份映射；未知角色不会因为这次改动获得系统真相。
+
+## v0.5.59 / moli215 — Unified Phone Context v1
+- 新增 `src/generation/phone-context-builder.js`，把 Character 设为跨 App 连续性的主体：App 是发生场所，不再是记忆孤岛。
+- 私聊、群聊、Community 自然参与、主动行为判断开始共用同一个 Phone Context 出口。
+- Phone Context 统一读取：Character Continuity / Awareness 已知事件 / 该角色亲自参加的微信私聊与群聊 / 自己及已经看过的朋友圈。
+- Community 角色再次行动时可直接带着本人近期微信经历回来；微信/群聊生成也继续带着 Community/朋友圈中已经进入本人认知的经历。
+- 隐私边界仍按 Character 过滤：不注入别人私聊；匿名身份只使用该角色已经确定知道的映射；SKIP 不等于遗忘。
+- 架构铁律：禁止继续新增 App A -> App B 专用“认知桥”。新增 App 应写入统一事实/认知底座，并从 Unified Phone Context 读取当前角色上下文。

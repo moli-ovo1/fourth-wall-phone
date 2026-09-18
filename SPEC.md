@@ -4234,3 +4234,12 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 角色在 Community 公开回答/回复后，该行为属于角色自己的跨 App 经历。World Event 应保存实际公开内容及身份方式，使同一角色稍后回到微信或其他手机入口时能够自然记得自己的发言；不得仅保存抽象的“参与了讨论”。这不是 App 文本复制：只记录该角色亲自实施的行为结果及必要 provenance。
 
 匿名身份在角色上下文中必须使用可读的人物名称，不能暴露内部 contact id。身份映射仍严格服从 knownBy：系统知道真实身份，不等于所有角色知道。
+
+## Unified Phone Context（v0.5.59）
+跨 App 连续性的所有权属于 Character，而不是 App。微信、Community、朋友圈以及未来新增 App 只是同一人物经历发生的不同地点。
+
+统一读取规则：生成某个角色时，由 Phone Context Builder 根据 `characterId + 当前话题 + 权限/awareness` 组装该角色本人已经亲历、看过、听见或确定知道的手机世界上下文。来源 App 不构成遗忘边界。
+
+隐私/认知边界仍必须成立：角色未参加的私聊不可见；未获得的匿名真实身份不可见；系统真相不得因为帖子对象里存在真实 ID 而泄漏；User 陈述与客观事实保持认识论区分。
+
+**禁止 App-to-App 桥接扩散：** 后续不得为“微信→微博”“微博→Community”等组合建立专用角色认知桥。新 App 只需要：①产生规范事实/awareness/experience；②生成角色时调用 Unified Phone Context。小手机→正文仍由“我们的墙”控制，不因本规则自动注入正文。
