@@ -335,3 +335,13 @@
 - 知乎发布按钮从社区顶层导航彻底移除，改为知乎问题列表内容区左上角的蓝色圆形“＋”；详情页“增加回答”上移到操作栏右侧，并把原粗分隔缩成细线。
 - Character↔Character Awareness 继续扩展到直接 @ 回应：公开回应发生后，与该回复直接相关的角色参与者获得自己的已知 World Event；仍不把整帖广播给所有联系人。
 - Community 身份混淆本轮只审计、不修改。实际代码显示：当最近正文存在时，`generatePublicWebRefresh()` 当前只把最近 14 条 / 12000 字正文作为故事 context；Role Fidelity / 世界书补充仅在 recent body 为空时进入 fallback。因此“长世界书没读全”并非唯一可能，现有 Context Builder 确实存在“有最近正文时不同时合并角色资料/世界书”的结构性缺口。下一阶段先设计 World Context Pack，再改生成链，避免直接堆几万字导致 token/身份混淆。
+
+
+## v0.5.33 / moli189 — Community World Context Pack + 帖子认知水位
+- Community 生成不再在“有最近正文”时丢失人物稳定身份/世界资料。新增 World Context Pack：当前 World 的 NPC 资料卡/正文角色 Role Fidelity 作为 Identity Anchor，最近正文作为 Current World State，相关世界书与柏宝书长期剧情作为历史/世界素材；User Persona 仍单独保持身份边界。
+- Identity Anchor 的职责只回答“这个人是谁”；正文/世界书回答“这个世界发生了什么”；它们不等于某个角色本人知道这些事实。Character Awareness 仍是人物知识边界，避免为了修 Community 串身份而恢复角色上帝视角。
+- Community Context 对角色卡、资料卡、世界书、柏宝书分别设置压缩上限，不把几万字世界书无脑整包塞入 Prompt。相关世界书仍按当前正文 + 人物身份扫描激活。
+- 角色明确参与社区公开互动（邀请回应/@回应）后，新增 `POST_SNAPSHOT_KNOWN`：该角色知道截至自己参与时已经存在的帖子内容；后续新增评论不会通过旧水位自动进入认知。User 转发帖子也用 `snapshotAt` 写入同一认知水位。
+- 角色因社区明确互动另外私聊 User 时，新增仅属于该角色自身的 `PRIVATE_MESSAGE_SENT` 经历，供后续 Continuity 检索；不向第三人广播私聊内容。
+- Character↔Character Awareness 继续沿用“直接参与/直接相关才获得认知”的原则：仅被帖子文字提名不等于看过整帖；真正参与或被 User 转发才建立帖子快照认知。
+- NPC Awareness 主链维持已验收状态：NPC资料卡=身份锚点，正文/柏宝书=世界素材，NPC认知=人物真正知道的内容。Community World Context 不绕过 NPC Perspective Projection。

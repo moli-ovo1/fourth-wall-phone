@@ -4149,3 +4149,11 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 知乎发布按钮从社区顶层导航彻底移除，改为知乎问题列表内容区左上角的蓝色圆形“＋”；详情页“增加回答”上移到操作栏右侧，并把原粗分隔缩成细线。
 - Character↔Character Awareness 继续扩展到直接 @ 回应：公开回应发生后，与该回复直接相关的角色参与者获得自己的已知 World Event；仍不把整帖广播给所有联系人。
 - Community 身份混淆本轮只审计、不修改。实际代码显示：当最近正文存在时，`generatePublicWebRefresh()` 当前只把最近 14 条 / 12000 字正文作为故事 context；Role Fidelity / 世界书补充仅在 recent body 为空时进入 fallback。因此“长世界书没读全”并非唯一可能，现有 Context Builder 确实存在“有最近正文时不同时合并角色资料/世界书”的结构性缺口。下一阶段先设计 World Context Pack，再改生成链，避免直接堆几万字导致 token/身份混淆。
+
+
+## Community World Context / Awareness 分层（v0.5.33）
+- Community 的世界生成上下文必须同时拥有：稳定人物身份锚点、当前正文状态、相关世界书/柏宝书历史；不能因为 recent body 非空就跳过 Identity/Lore。
+- NPC 资料卡与正文角色 Role Fidelity 是 Identity Anchor，优先解决“谁是谁”；它们不是人物经历。
+- Community 知道 World 事实，不等于每个角色知道。角色知识必须通过 Awareness。
+- 角色真正参与帖子或 User 明确转发帖子时，建立带 `snapshotAt` 的帖子认知水位；旧水位不能自动读取未来新增楼层/评论。
+- 角色间私密内容只进入直接参与者 Continuity，禁止因为数据库可访问而广播给第三人。

@@ -3212,3 +3212,9 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - 知乎发布按钮从社区顶层导航彻底移除，改为知乎问题列表内容区左上角的蓝色圆形“＋”；详情页“增加回答”上移到操作栏右侧，并把原粗分隔缩成细线。
 - Character↔Character Awareness 继续扩展到直接 @ 回应：公开回应发生后，与该回复直接相关的角色参与者获得自己的已知 World Event；仍不把整帖广播给所有联系人。
 - Community 身份混淆本轮只审计、不修改。实际代码显示：当最近正文存在时，`generatePublicWebRefresh()` 当前只把最近 14 条 / 12000 字正文作为故事 context；Role Fidelity / 世界书补充仅在 recent body 为空时进入 fallback。因此“长世界书没读全”并非唯一可能，现有 Context Builder 确实存在“有最近正文时不同时合并角色资料/世界书”的结构性缺口。下一阶段先设计 World Context Pack，再改生成链，避免直接堆几万字导致 token/身份混淆。
+
+
+## moli189 已落地 / 下一阶段
+已落地：Community World Context Pack 第一版；NPC资料卡/Role Fidelity身份锚点；最近正文 + 相关世界书 + 柏宝书分层；帖子参与/转发 `snapshotAt` 认知水位；社区互动引发私聊的角色自身经历。
+
+下一阶段：继续把普通（非User强制邀请/@）角色公开互动接入同一帖子认知水位；完善 Character↔Character 的 reply/answer 视角投影与 unresolved continuity；再扩大 Unified Decision 的跨App出口。不要重做 Community Store，不要自动跨“我们的墙”。
