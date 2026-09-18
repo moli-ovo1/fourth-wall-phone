@@ -1,3 +1,4 @@
+import { getLargeStorageStats } from '../storage/large-storage.js';
 import { readRaw, writeRaw } from '../storage/storage-adapter.js';
 import {
   getContacts,
@@ -553,9 +554,35 @@ export function createPhonePanel({
           </span>
           <b>›</b>
         </button>
+        <button type="button" class="moli-settings-row" data-action="storage-audit">
+          <span>
+            <strong>存储与数据</strong>
+            <small>查看本机存储占用与剩余空间</small>
+          </span>
+          <b>›</b>
+        </button>
         <div class="moli-settings-note">
           当前聊天模式统一为线上即时通讯。预设负责所有联系人共用的线上聊天行为；联系人自身的人格与资料仍由联系人配置提供。
         </div>
+      </main>
+    </section>
+
+    <section class="moli-page" data-page="storage-audit">
+      <header class="moli-nav">
+        <div class="moli-nav-side">
+          <button class="moli-icon-btn moli-back" data-action="storage-audit-back" aria-label="返回">‹</button>
+        </div>
+        <div class="moli-nav-title">存储与数据</div>
+        <div class="moli-nav-side right">
+          <button class="moli-icon-btn" data-action="storage-audit-refresh" aria-label="刷新">↻</button>
+        </div>
+      </header>
+      <main class="moli-settings-list">
+        <div class="moli-settings-note" data-storage-audit-summary>正在读取存储状态…</div>
+        <div class="moli-settings-note" data-storage-audit-local></div>
+        <div class="moli-settings-note" data-storage-audit-large></div>
+        <div class="moli-settings-note" data-storage-audit-top></div>
+        <div class="moli-settings-note">这里显示的是小手机在浏览器中的数据存储占用，不是 AI Token。Token/上下文分析属于另一套诊断功能。</div>
       </main>
     </section>
 
@@ -7749,6 +7776,52 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
     let i=0; settings.blocks=settings.blocks.map(x=>String(x.scope||'wechat')===activePromptScope?ordered[i++]||x:x); savePromptSettings(settings); promptDragState=null;
   };
   promptBlockList?.addEventListener('pointerup',finishPromptDrag); promptBlockList?.addEventListener('pointercancel',finishPromptDrag);
+
+  const formatStorageBytes = value => {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes) || bytes < 0) return '未知';
+    if (bytes < 1024) return `${Math.round(bytes)} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  };
+  const readLocalStorageAudit = () => {
+    let bytes = 0;
+    const entries = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      const raw = localStorage.getItem(key) ?? '';
+      const size = (key.length + raw.length) * 2;
+      bytes += size;
+      if (key.startsWith('moli-phone:') || key.startsWith('moli.')) entries.push({ key, bytes: size });
+    }
+    entries.sort((a, b) => b.bytes - a.bytes);
+    return { bytes, entries };
+  };
+  const renderStorageAudit = async () => {
+    const summary = panel.querySelector('[data-storage-audit-summary]');
+    const local = panel.querySelector('[data-storage-audit-local]');
+    const large = panel.querySelector('[data-storage-audit-large]');
+    const top = panel.querySelector('[data-storage-audit-top]');
+    if (summary) summary.textContent = '正在读取存储状态…';
+    try {
+      const stats = await getLargeStorageStats();
+      const localStats = readLocalStorageAudit();
+      const usageText = stats.usage == null ? '未知' : formatStorageBytes(stats.usage);
+      const quotaText = stats.quota == null ? '未知' : formatStorageBytes(stats.quota);
+      const remain = stats.usage != null && stats.quota != null ? Math.max(0, stats.quota - stats.usage) : null;
+      if (summary) summary.innerHTML = `<strong>浏览器存储</strong><br>已使用：${escapeHtml(usageText)}<br>可用额度：${escapeHtml(quotaText)}<br>估算剩余：${escapeHtml(remain == null ? '未知' : formatStorageBytes(remain))}`;
+      if (local) local.innerHTML = `<strong>localStorage</strong><br>当前页面全部 localStorage 约 ${escapeHtml(formatStorageBytes(localStats.bytes))}<br>其中 moli 项目共 ${localStats.entries.length} 项。长期增长数据不应继续堆在这里。`;
+      if (large) large.innerHTML = `<strong>moli 大容量存储（IndexedDB）</strong><br>逻辑数据约 ${escapeHtml(formatStorageBytes(stats.logicalBytes))}<br>当前记录 ${stats.entries.length} 项。`;
+      const biggest = [...stats.entries.slice(0, 6).map(item => ({...item, source:'IndexedDB'})), ...localStats.entries.slice(0, 6).map(item => ({...item, source:'localStorage'}))].sort((a,b)=>b.bytes-a.bytes).slice(0,8);
+      if (top) top.innerHTML = `<strong>当前最大的 moli 数据项</strong><br>${biggest.length ? biggest.map((item, index) => `${index + 1}. ${escapeHtml(formatStorageBytes(item.bytes))} · ${escapeHtml(item.source)} · ${escapeHtml(item.key)}`).join('<br>') : '暂无数据'}`;
+    } catch (error) {
+      if (summary) summary.textContent = `读取存储状态失败：${error?.message || error}`;
+    }
+  };
+  panel.querySelector('[data-action="storage-audit"]')?.addEventListener('click', () => { show('storage-audit'); renderStorageAudit(); });
+  panel.querySelector('[data-action="storage-audit-back"]')?.addEventListener('click', () => show('settings'));
+  panel.querySelector('[data-action="storage-audit-refresh"]')?.addEventListener('click', renderStorageAudit);
 
   panel.querySelector(
     '[data-action="api-settings"]'
