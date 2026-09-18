@@ -3151,3 +3151,21 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - World Event 增加 Result/Provenance 链接：cause event 可记录 decision 与 resultEventIds，result event 反向记录 causedByEventIds。Automation 与社区 @ 的公开/私聊结果开始写回因果链。
 - Cross-App Continuity 只读取“本人亲历”或 Awareness=known 的事实；pending 事实不会因为跨 App 检索而泄露给人物。SKIP 仍不删除事实。
 - 本阶段不修改 CLOSED 的社区 UI，不新增匿名猜测机制，不自动把手机事实注入正文；“我们的墙”继续是 User-controlled bridge。
+
+## v0.5.27 / moli184 — Unified Character Cognition 第一阶段落地
+本阶段不是重写 World Event，而是在现有 Ledger/Awareness/Continuity/Automation 上补统一认知入口。
+
+已落地纵切：
+1. 正文 World → custom NPC perspective projection → Character Awareness → known World Event → Character Continuity → 私聊生成。
+2. 手机已知 World Events → relevance-aware Continuity → Unified Decision Input → 现有 Automation 动作出口 → consumed/result provenance（沿用既有实现）。
+3. 社区明确匿名身份告知 → pending reveal event → User 主动刷新结算 → 指定人物 identityKnownBy 扩展。
+
+硬边界：
+- 不允许 NPC 用名字关键词截正文冒充视角过滤。
+- Global observer 只旁观，不写亲历 Awareness。
+- identityKnownBy 只接受确定证据链；AI 怀疑不升级为确定身份。
+- consumed 按 contact + decision entrypoint；不是全局删除事实。
+- Community 产品层 CLOSED；App Queue 保持各自职责。
+- Phone→正文仍必须经「我们的墙」由 User 主动选择。
+
+下一阶段：扩大 Character↔Character 的视角投影/共同经历覆盖；把更多成熟人物判断入口迁入统一 Decision Contract；补更精确的 unresolved/relation relevance 信号与 Awareness 调试/验收工具。不要在这些完成前开放所有 App 任意跨 App 自动行动。

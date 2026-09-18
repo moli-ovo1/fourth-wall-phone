@@ -271,3 +271,12 @@
 - 围读会正文读取增加底层硬边界：只有“群绑定 scope 是具体 `:chat:` 正文”且“当前 Tavern scope 与群绑定 scope 完全相同”时才允许读取正文。正文外围读会不读取正文；后台/Automation 即使误触发也不得偷读另一正文。
 - 酒馆角色的角色卡属于 Character Identity 必读事实，不再显示“自动跟随角色卡”提示/开关；旧 `cardProfile` 值不再能阻止 Role Fidelity 注入。角色设定页保留世界书与自定义附加 Prompt。
 - 添加酒馆角色的用户可见类型改名：`正文角色` → `跟随正文`；`全局角色` → `现实陪伴`。类型只决定世界归属语义，不允许用当前屏幕正文替代该角色自己的 World Instance。
+
+## v0.5.27 — Unified Awareness / Decision 第一阶段（moli184）
+- 新增 `character-awareness-store.js` 与 `npc-awareness-service.js`：自建 NPC 绑定正文 World 时，不再把最近正文原文直接当作 NPC 已知事实；先通过 perspective projection 提取其能确定看到、听到、亲历或被明确告知的事实，再以 `tavern.body.awareness` World Event（known）进入该 NPC 的 Continuity。
+- NPC perspective projection 明确排除：不在场私密场景、仅仅被别人提名、其他人物未说出口的内心活动、旁白上帝视角秘密。投影按精确 scopeKey / World Instance 保存；fallback scope 仍只使用临时状态。
+- Global「旁观正文」保持原语义：最近约十楼仅为 Observed Context，不写入 NPC 亲历 Awareness，不因 User 当前打开某正文而成为 Global 人物经历。
+- Character Continuity 增加轻量相关性检索：近期性、人物自身行动、已有 decision/result、当前聊天词项共同参与排序；无查询时保持最近经历路径。没有把完整跨 App 历史无限塞入 Prompt。
+- 新增统一 `character-decision.js` 输入契约，并首先接入 private Automation：唤醒原因 → 新事实 → 相关 Continuity → 主动倾向 → 当前允许动作 → POST / PRIVATE_CHAT / POST+PRIVATE_CHAT / SKIP。30% 仍是主动习惯，不是事件骰子；SKIP 仍不删除 known/continuity。
+- 匿名身份确定知识传播第一条真实链：User 在社区对明确相关/被 @ 的人物，用“匿名别名 + 明确等同表达 + 真实联系人名”直接告知身份时，先登记 pending `ANONYMOUS_IDENTITY_REVEALED`；只有社区刷新结算该 User comment 后，才扩展对应人物的 `identityKnownBy`。AI 猜测不会升级为 definite knowledge。
+- 继续复用现有 World Event / community:pending / Moments chatEvents / Behavior Queue；没有重建 Store，没有重做 CLOSED Community，也没有自动跨「我们的墙」。

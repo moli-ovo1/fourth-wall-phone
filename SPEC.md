@@ -4082,3 +4082,21 @@ NPC 虽能读取绑定世界当前正文用于即时参与，但持久认知不�
 - 围读会正文读取增加底层硬边界：只有“群绑定 scope 是具体 `:chat:` 正文”且“当前 Tavern scope 与群绑定 scope 完全相同”时才允许读取正文。正文外围读会不读取正文；后台/Automation 即使误触发也不得偷读另一正文。
 - 酒馆角色的角色卡属于 Character Identity 必读事实，不再显示“自动跟随角色卡”提示/开关；旧 `cardProfile` 值不再能阻止 Role Fidelity 注入。角色设定页保留世界书与自定义附加 Prompt。
 - 添加酒馆角色的用户可见类型改名：`正文角色` → `跟随正文`；`全局角色` → `现实陪伴`。类型只决定世界归属语义，不允许用当前屏幕正文替代该角色自己的 World Instance。
+
+## Unified Awareness v1（v0.5.27）
+### 事实、观察、认知、行动必须分层
+- World Event：系统事实账本。
+- Observed Context：人物被允许临时看到的材料；不自动成为亲历（典型：Global「旁观正文」）。
+- Character Awareness：人物有证据能够确定知道的事实。
+- Character Continuity：该人物跨 App 可延续的自身经历/已知事实视图。
+- Character Decision：人物在某个合法唤醒点面对新事实和相关经历所做的行动判断。
+- consumed：某 contact 的某 decision entrypoint 已处理该事实；不代表事实删除或人物遗忘。
+
+### NPC 正文 Perspective Projection
+自建 NPC 属于明确正文 World。正文原文可以作为投影器的系统证据，但不能直接等同 NPC Knowledge。进入 NPC 手机连续性的正文事实必须经过 perspective projection：明确在场/参与、可看到、可听到、亲历或被明确告知。仅出现 NPC 名字、不在场私密事件、他人内心、上帝旁白秘密不得写入 NPC Awareness。禁止关键词窗口冒充视角过滤。
+
+### Anonymous definite identity
+系统真实 `realContactId` 不等于人物知道。匿名人物本人可知道自己的匿名身份；其他人物只有在确定证据链结算后进入 `identityKnownBy`。v1 支持社区中 User 对明确接收者作直接等同告知，并在社区刷新结算后生效。猜测、语气相似、同帖出现均不能自动升级为 definite knowledge。
+
+### Unified Decision v1
+统一的是人物判断输入语义，不是强行合并各 App 执行 Store。第一阶段输入为：wake reason / newly known facts / relevant continuity / initiative tendency / allowed actions / recent actions。动作继续复用成熟出口。知道 ≠ 在意 ≠ 行动；先判断是否行动，再在允许出口中选择；主动程度不是 Math.random 概率门。
