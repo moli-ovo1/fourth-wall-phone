@@ -1,5 +1,6 @@
 import { isPersistentScopeKey } from './scope-policy.js';
 import { listKeys, readJson, writeJson } from './storage-adapter.js';
+import { getGlobalConversationSnapshot, saveGlobalConversationSnapshot } from './conversation-db.js';
 
 const BUILTIN_CONTACTS = [
   {
@@ -25,7 +26,6 @@ const BUILTIN_CONTACTS = [
 const CONTACTS_KEY = 'moli-phone:contacts:v1';
 const SCOPE_PREFIX = 'moli-phone:scope:v1:';
 const SCOPE_MIGRATIONS_KEY = 'moli-phone:scope-migrations:v1';
-const GLOBAL_CONVERSATIONS_KEY = 'moli-phone:global-conversations:v1';
 const SCOPE_SCHEMA_VERSION = 1;
 
 const DEFAULT_TAVERN_ROLE_SOURCES = Object.freeze({
@@ -343,7 +343,7 @@ export function deleteContact(contactId) {
   for (const storageKey of listKeys(SCOPE_PREFIX)) {
     const data = readJson(storageKey, null); if (data) writeJson(storageKey, cleanData(data));
   }
-  const globalData = readJson(GLOBAL_CONVERSATIONS_KEY, null); if (globalData) writeJson(GLOBAL_CONVERSATIONS_KEY, cleanData(globalData));
+  const globalData = getGlobalConversationSnapshot(); if (globalData) saveGlobalConversationSnapshot(cleanData(globalData));
   return true;
 }
 
@@ -530,7 +530,7 @@ function saveScope(scopeKey, data) {
 }
 
 function loadGlobalConversationStore() {
-  const raw = readJson(GLOBAL_CONVERSATIONS_KEY, null);
+  const raw = getGlobalConversationSnapshot();
   const source = raw && typeof raw === 'object' ? raw : {};
   const conversations =
     source.conversations && typeof source.conversations === 'object'
@@ -574,7 +574,7 @@ function locateStoredScopeConversation(conversationKey) {
 }
 
 function saveGlobalConversationStore(data) {
-  writeJson(GLOBAL_CONVERSATIONS_KEY, {
+  saveGlobalConversationSnapshot({
     schemaVersion: 1,
     conversations:
       data?.conversations && typeof data.conversations === 'object'
