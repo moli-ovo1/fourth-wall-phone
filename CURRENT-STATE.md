@@ -413,3 +413,10 @@
 - Community Identity Anchor强化事实归属：职业/身份/关系/学校/经历必须绑定到具体人物，禁止把甲的资料迁移给乙。
 - 私聊/群聊Prompt中原先把跨App continuity整体标成“朋友圈连续性”的标签改为“手机跨 App 连续性”，明确Community亲历/已知事实也属于同一人物后续聊天记忆；不增加微信→Community反向Knowledge Delta。
 - 评论删除、微信→Community、微博继续冻结。
+
+
+## v0.5.42 / moli198 — 微信发送回归修复
+- 保留 v0.5.41 的 Community 多角色逐人写回可靠性与人物身份归属约束。
+- 撤回 v0.5.41 对普通微信 prompt-builder 的“手机跨 App 连续性”改写，恢复新完整仓库中已验证可工作的聊天 Prompt 构建路径；避免 Community 稳定化改动侵入普通私聊/群聊发送主链。
+- Community→微信长期连续性增强暂缓，后续在稳定聊天基线上单独接入，不再与 Community 多角色修复同包耦合。
+- 微信→Community Knowledge Delta、评论长按删除、微博继续冻结。
