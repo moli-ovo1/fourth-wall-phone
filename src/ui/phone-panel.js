@@ -39,6 +39,7 @@ import {
   updateFourthWallSessionState,
 } from '../storage/data-store.js';
 import { purgeContactPhoneFootprint } from '../storage/contact-purge.js';
+import { getCharacterAwarenessText, saveCharacterAwarenessText } from '../storage/character-awareness-store.js';
 import {
   getTavernCharactersSnapshot,
   hydrateTavernCharacterSnapshot,
@@ -961,6 +962,11 @@ export function createPhonePanel({
         <label class="moli-form-field"><span>近期记忆</span><textarea rows="10" data-phone-recent-memory placeholder="每段记忆之间空一行。可直接编辑或删除。"></textarea></label>
         <div class="moli-api-hint">自动压缩按完整 AI 交互轮次计数：同一轮里用户多气泡 + 角色多气泡仍只算 1 轮；只有整轮离开最近聊天窗口后才参与累计。</div>
         <label class="moli-form-field"><span>长期总结</span><textarea rows="10" data-phone-long-memory placeholder="当前手机聊天的长期关系与历史总结。可直接编辑或清空。"></textarea></label>
+        <div class="moli-source-section" data-npc-awareness-section hidden>
+          <div class="moli-source-section-title">NPC认知</div>
+          <div class="moli-source-section-note">这是该NPC在所属正文World中当前真正知道/经历的内容，以及会影响其现实的重大世界变化。AI会自动整理；如果过滤错误，你可以直接修改。保存后，后台生成读取的就是你修正后的版本。后续新正文仍可在此基础上追加新的认知变化。</div>
+          <label class="moli-form-field"><textarea rows="14" data-npc-awareness-text placeholder="尚未形成NPC认知。首次在该NPC需要生成且正文/柏宝书有可处理内容时，系统会自动整理。"></textarea></label>
+        </div>
         <div class="moli-source-section" data-memory-baibai-section hidden>
           <div class="moli-source-section-title">正文长期剧情记忆</div>
           <div class="moli-role-source-row">
@@ -2385,6 +2391,11 @@ export function createPhonePanel({
     const memoryBaiBaiToggle = panel.querySelector('[data-memory-baibai-toggle]');
     const memoryBaiBaiStatus = panel.querySelector('[data-memory-baibai-status]');
     const memoryContact = conversation.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
+    const npcAwarenessSection = panel.querySelector('[data-npc-awareness-section]');
+    const npcAwarenessText = panel.querySelector('[data-npc-awareness-text]');
+    const isNpc = memoryContact?.kind === 'custom' && memoryContact?.customRoleMode === 'npc' && conversation?.scopeMode !== 'global';
+    if (npcAwarenessSection) npcAwarenessSection.hidden = !isNpc;
+    if (npcAwarenessText) npcAwarenessText.value = isNpc ? getCharacterAwarenessText(scopeKey, memoryContact.id) : '';
     if (memoryBaiBaiSection) memoryBaiBaiSection.hidden = memoryContact?.kind !== 'tavern';
     if (memoryBaiBaiToggle && memoryContact?.kind === 'tavern') memoryBaiBaiToggle.checked = memoryContact?.roleSources?.longTermMemory !== false;
     if (memoryBaiBaiStatus) memoryBaiBaiStatus.textContent = getBaiBaiMemoryStatus().available ? '已检测到 · 读取正常注入口径历史' : '未检测到 · 自动回退最近正文';
@@ -2442,6 +2453,9 @@ export function createPhonePanel({
       });
     }
     const memoryContact = conversation.type === 'private' ? contact(conversation.contactId || currentContactId) : null;
+    if (memoryContact?.kind === 'custom' && memoryContact?.customRoleMode === 'npc' && conversation?.scopeMode !== 'global') {
+      saveCharacterAwarenessText(scopeKey, memoryContact.id, panel.querySelector('[data-npc-awareness-text]')?.value || '');
+    }
     const memoryBaiBaiToggle = panel.querySelector('[data-memory-baibai-toggle]');
     if (memoryContact?.kind === 'tavern' && memoryBaiBaiToggle) {
       updateContact(memoryContact.id, { roleSources: { ...(memoryContact.roleSources || {}), longTermMemory: Boolean(memoryBaiBaiToggle.checked) } });
