@@ -366,3 +366,10 @@
 - Conversation Storage v2 remains unchanged and verified by User to restore WeChat sending after localStorage quota exhaustion.
 - Added visible diagnostics around Community User-comment persistence. If Community localStorage write fails, the UI now reports the exact storage key, attempted Community payload size, approximate total `moli-phone:*` localStorage size, and original browser error.
 - This is diagnostic only: Community generation/settlement semantics and data layout are unchanged. Do not clear User storage; use the surfaced error to decide the next Storage v2 migration target.
+
+
+## v0.5.46 / moli202 — localStorage top-key inspector
+
+- Community quota diagnostics now include the 12 largest `moli-phone:` localStorage keys and their approximate sizes.
+- This is intentionally diagnostic-only: do not migrate Community merely because its write failed; first identify the actual large persistent stores consuming the shared origin quota.
+- Preserve the user's over-quota state until the true large stores are identified; do not recommend clearing site data as the default recovery path.
