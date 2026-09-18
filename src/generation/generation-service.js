@@ -29,10 +29,53 @@ import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfi
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
-import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
+import { buildCharacterContinuity, listAnonymousIdentityCandidates, revealAnonymousIdentityById } from '../storage/character-continuity-store.js';
 import { getPublicWebPost } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
 import { fitContextSections } from './context-budget.js';
+
+function anonymousKnowledgeCandidates(scopeKey, contactIds = []) {
+  const seen = new Map();
+  for (const contactId of contactIds.map(String).filter(Boolean)) {
+    for (const item of listAnonymousIdentityCandidates(scopeKey, contactId)) {
+      if (!seen.has(item.id)) seen.set(item.id, item);
+    }
+  }
+  return [...seen.values()].slice(0, 24);
+}
+
+function knowledgeCandidatePrompt(candidates = []) {
+  if (!candidates.length) return '';
+  return `【可发生认知更新的匿名身份引用】\n这些只是当前角色尚未确定真实身份、但聊天上下文可能正在指向的对象。不要猜身份；只有本轮对话让角色明确理解并接受了身份揭露时才回写。\n${candidates.map(x => `- identityId=${x.id}｜${x.surface}｜公开名“${x.alias}”`).join('\n')}`;
+}
+
+function extractPrivateKnowledgeDelta(rawText = '') {
+  const raw = String(rawText || '');
+  const deltas = [];
+  const cleaned = raw.replace(/<knowledge_delta>([\s\S]*?)<\/knowledge_delta>/gi, (_all, body) => {
+    try {
+      const parsed = JSON.parse(String(body || '').trim());
+      const rows = Array.isArray(parsed) ? parsed : [parsed];
+      for (const row of rows) if (row && row.type === 'anonymous_identity_reveal' && row.identityId) deltas.push(row);
+    } catch {}
+    return '';
+  }).trim();
+  return { text: cleaned, deltas };
+}
+
+function applyKnowledgeDeltas(scopeKey, deltas = [], allowedContactIds = []) {
+  const allowed = new Set(allowedContactIds.map(String));
+  const applied = [];
+  for (const row of deltas) {
+    if (!row || row.type !== 'anonymous_identity_reveal' || !row.identityId) continue;
+    const learnedBy = (Array.isArray(row.learnedBy) ? row.learnedBy : [row.learnedBy]).map(String).filter(id => allowed.has(id));
+    if (!learnedBy.length) continue;
+    const identity = revealAnonymousIdentityById(scopeKey,{identityId:String(row.identityId),toContactIds:learnedBy,evidenceEventId:''});
+    if (identity) applied.push({identityId:identity.id,learnedBy});
+  }
+  return applied;
+}
+
 
 function communityActorName(actor) {
   return String(actor?.uiName || actor?.name || '匿名网友').trim() || '匿名网友';
@@ -433,6 +476,11 @@ export async function generatePrivateReply({
       })
     : buildRequest();
 
+  const privateKnowledgeCandidates = !isFourthWall ? anonymousKnowledgeCandidates(scopeKey, [contact.id]) : [];
+  if (privateKnowledgeCandidates.length) {
+    request.system = `${String(request.system || '')}\n\n${knowledgeCandidatePrompt(privateKnowledgeCandidates)}\n【认知回写协议】正常聊天回复照旧。仅当「${contactLabel(contact)}」在本轮明确理解并接受某个匿名身份揭露时，在所有正常回复之后额外输出一段机器标记：<knowledge_delta>{\"type\":\"anonymous_identity_reveal\",\"identityId\":\"上方identityId\",\"learnedBy\":[\"${contact.id}\"]}</knowledge_delta>。没有明确揭露则绝对不要输出。不要仅凭猜测、语气相似或系统真相回写。`;
+  }
+
   if (String(automationInstruction || '').trim() && !fourthWallCommentary) {
     request.messages = [...(request.messages || []), { role: 'user', content: String(automationInstruction).trim() }];
   }
@@ -459,6 +507,12 @@ export async function generatePrivateReply({
   }
 
   if (momentEventIds.length) markMomentChatEventsDelivered(scopeKey, contact.id, momentEventIds);
+
+  if (!isFourthWall && privateKnowledgeCandidates.length) {
+    const parsedKnowledge = extractPrivateKnowledgeDelta(result?.text || '');
+    result = { ...result, text: parsedKnowledge.text, knowledgeDeltas: parsedKnowledge.deltas };
+    applyKnowledgeDeltas(scopeKey, parsedKnowledge.deltas, [contact.id]);
+  }
 
   return {
     ...result,
@@ -975,6 +1029,11 @@ async function buildBatchGroupRequest({
   // moli73：普通群聊继承全局“线上聊天预设”的行为规则。
   // 私聊专用 <message> 输出格式与群聊 JSON 协议冲突，因此群聊只排除系统默认的 output-protocol；
   // 其余启用条目（包括用户自定义条目）继续作为群成员共同的线上行为规则。
+  const groupKnowledgeCandidates = anonymousKnowledgeCandidates(scopeKey, members.map(member => member.id));
+  const groupKnowledgeBlock = groupKnowledgeCandidates.length
+    ? `\n${knowledgeCandidatePrompt(groupKnowledgeCandidates)}\n【群聊认知回写】如果本轮群聊让某位成员明确理解并接受了某个匿名身份揭露，在 knowledgeDeltas 中记录；只写真正学到的成员。猜测不算。\n`
+    : '';
+
   const onlinePreset = buildOnlinePresetPrompt(undefined, { excludeIds: ['output-protocol'] });
   const onlinePresetBlock = onlinePreset
     ? `【moli小手机：线上聊天预设｜群聊内容规则】
@@ -989,7 +1048,7 @@ ${onlinePreset}
     ? `【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮真实群聊。整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标，不要为了填满而硬说。所有群成员都只是可发言者，没有谁被强制必须出现；沉默型角色可以完全不说，爱插科打诨或此刻有话的人可以连续出现多次。同一 speakerId 可以在这一轮重复出现，允许真实的来回接话，例如 A→B→A→moli。气泡数量和分配应由人物性格、当前情绪、关系、话题价值和前一个气泡共同决定，而不是平均分配。成员不必各自从头分析正文，后发成员可以接前一个成员的话、争论、接梗、吐槽、补充或沉默。不要为了证明完成点评任务而复述正文、总结情节或强行寻找分析点。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长。`
     : targetedRegeneration
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
-      : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
+      : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n${groupKnowledgeBlock}【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}],"knowledgeDeltas":[{"type":"anonymous_identity_reveal","identityId":"上方identityId","learnedBy":["成员id"]}]}。没有认知更新时 knowledgeDeltas 必须是空数组。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
   const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}`;
   return { system, messages: [{ role: 'user', content: shared }] };
@@ -1026,6 +1085,11 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   assertApiConfig(config);
   const result = await runGeneration(config, request, { signal });
   if (looksLikeProviderErrorText(result?.text)) throw new Error('API 提供方拒绝了本次请求；错误内容不会写入聊天记录，请修改内容或重试。');
+  try {
+    const raw = String(result?.text || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+    const parsed = JSON.parse(raw);
+    applyKnowledgeDeltas(scopeKey, Array.isArray(parsed?.knowledgeDeltas) ? parsed.knowledgeDeltas : [], members.map(member => member.id));
+  } catch {}
   const replies = parseBatchGroupOutput(result.text, members, {
     review: false,
     forcedIds,
@@ -1052,6 +1116,11 @@ export async function generateGroupReview({ scopeKey, conversationKey, signal, o
   assertApiConfig(config);
   const result = await runGeneration(config, request, { signal });
   if (looksLikeProviderErrorText(result?.text)) throw new Error('API 提供方拒绝了本次请求；错误内容不会写入聊天记录，请修改内容或重试。');
+  try {
+    const raw = String(result?.text || '').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+    const parsed = JSON.parse(raw);
+    applyKnowledgeDeltas(scopeKey, Array.isArray(parsed?.knowledgeDeltas) ? parsed.knowledgeDeltas : [], members.map(member => member.id));
+  } catch {}
   const replies = parseBatchGroupOutput(result.text, members, {
     review: true,
     bubbleRange: conversation.groupReplyBubbleRange,
