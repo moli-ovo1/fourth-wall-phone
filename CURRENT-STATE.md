@@ -428,3 +428,10 @@
 - 图片处理完全在本地完成，不上传外部服务；原图文件本身不被修改。
 - 仅优化“之后新选择/重新选择”的壁纸。已有 IndexedDB 壁纸不在启动时静默重压，避免未经 User 操作改变现有图像。
 - Storage v2 与 localStorage 审计规则保持不变。下一主线回到 Character Knowledge / 跨 App 人物认知闭环。
+
+
+## v0.5.54 — Character Knowledge bridge (WeChat → Community cognition)
+- 微信中的明确第一人称身份披露可以成为角色认知证据：当最近转发/可解析的 Community 上下文中只有一个 User 自己的匿名身份，User 明确说“那个匿名的是我/我发的”等时，只把该事实写入当前私聊角色或群成员的 Awareness/Character Continuity。
+- 不复制微信正文到 Community，不使用模型猜测身份，不因同帖参与自动泄露；指代不唯一时不落知识。
+- 已知身份通过 World Event + identity awareness 保存，后续同一角色在 Community/微信连续性中可读取；未获证据的其他角色仍不知道。
+- 保持“手机内部人物认知连续性”与“我们的墙→正文”边界独立。
