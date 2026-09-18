@@ -80,6 +80,7 @@ import {
   generateXiaohongshuCommentRefresh,
   generateZhihuAnswerCommentRefresh,
   generateZhihuDetailRefresh,
+  generateCommunitySettlement,
   summarizeProfileMomentsMemory,
 } from '../generation/generation-service.js';
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
@@ -6856,6 +6857,35 @@ export function createPhonePanel({
   const pendingForPost = postId => readCommunityPending().filter(x=>String(x.postId||'')===String(postId||''));
   const consumePending = ids => { const set=new Set((ids||[]).map(String));writeCommunityPending(readCommunityPending().filter(x=>!set.has(String(x.id)))); };
   const consumeUserCommentPending = (postId,answerId=null) => { const scopeKey=getScopeKey?.();const rows=readCommunityPending().filter(x=>x.type==='user-comment'&&String(x.postId||'')===String(postId||'')&&(answerId===null||String(x.answerId||'')===String(answerId||'')));const objectIds=rows.map(x=>x.commentId);markWorldEventsKnownByObjectTargets(scopeKey,objectIds);const objectSet=new Set(objectIds.map(String));for(const event of listWorldEvents(scopeKey,{limit:500}).filter(e=>e.action==='ANONYMOUS_IDENTITY_REVEALED'&&objectSet.has(String(e.objectId||'')))){revealAnonymousIdentity(scopeKey,{surface:String(event.metadata?.surface||event.source||'community'),alias:String(event.metadata?.alias||''),realContactId:String(event.metadata?.realContactId||''),toContactIds:event.targetContactIds||[],evidenceEventId:event.id});}consumePending(rows.map(x=>x.id)); };
+  const applyUnifiedCommunitySettlement = async (post, result, pending, { answerId = '' } = {}) => {
+    const scopeKey=getScopeKey?.(); const done=[]; const notices=[];
+    for(const action of (result?.targetActions||[])){
+      const item=(pending||[]).find(x=>String(x.id)===String(action.pendingId)); const target=getContacts().find(x=>String(x.id)===String(action.targetId)); if(!item||!target)continue;
+      const identity=action.identity==='ANONYMOUS'?'ANONYMOUS':'REAL'; const alias=String(action.alias||'匿名用户').trim()||'匿名用户';
+      const author=identity==='ANONYMOUS'?{type:'contact',id:target.id,name:alias,uiName:`${alias}（${displayName(target)}）`,anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false};
+      if(item.kind==='answer') addZhihuAnswer(scopeKey,post.id,{author,content:action.publicText});
+      else if(post.section==='zhihu'&&item.answerId) addZhihuAnswerComments(scopeKey,post.id,item.answerId,[{author,content:action.publicText,replyToCommentId:String(item.replyToCommentId||'')}]);
+      else addPublicWebComment(scopeKey,post.id,{author,content:action.publicText,replyToCommentId:String(item.replyToCommentId||'')});
+      const conversationKey=privateConversationKeyFor(scopeKey,target.id); const privateConv=getScopeConversations(scopeKey).find(c=>String(c.conversationKey||c.id||'')===String(conversationKey)); const proactiveEnabled=privateConv?.automation?.autoChatEnabled===true; let privateDid=false;
+      if(proactiveEnabled&&action.privateDecision==='SEND'&&action.privateMessages?.length){for(const text of action.privateMessages)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-decision',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});privateDid=true;}
+      const resultEvent=recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:target.id,action:item.kind==='answer'?'PUBLIC_ANSWER':'PUBLIC_REPLY',targetContactIds:[target.id],objectId:String(post.id||''),content:`你在${sourceLabel(post)}公开${item.kind==='answer'?'回答':'回应'}了 User 的明确互动。`,metadata:{postId:String(post.id||''),pendingId:String(item.id||''),identityMode:identity,privateDecision:privateDid?'SEND':'SKIP',privateReason:String(action.privateReason||'')},awareness:'known',dedupeKey:`community-role:${item.id}`});
+      recordCommunityPostSnapshotAwareness(scopeKey,post,[target.id],'explicit-participation',Date.now());
+      if(privateDid)recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:target.id,action:'PRIVATE_MESSAGE_SENT',targetContactIds:[target.id],objectId:String(post.id||''),content:`你因这次${sourceLabel(post)}互动主动私聊了 User。`,metadata:{postId:String(post.id||''),pendingId:String(item.id||''),causedByEventId:String(resultEvent?.id||'')},awareness:'known',dedupeKey:`community-private-experience:${item.id}:${target.id}`});
+      if(identity==='ANONYMOUS')rememberAnonymousIdentity(scopeKey,{surface:`community.${post.section||'unknown'}`,alias,realContactId:target.id,knownBy:[target.id],evidenceEventId:resultEvent?.id});
+      markWorldEventsKnownByObjectTargets(scopeKey,[item.id]); markWorldEventsConsumedByObjectTargets(scopeKey,[item.id],'community-settlement'); done.push(item.id); notices.push(`${displayName(target)}${identity==='ANONYMOUS'?'已匿名':'已实名'}回应`);
+    }
+    for(const c of (result?.comments||[])){
+      if(post.section==='zhihu'&&answerId) addZhihuAnswerComments(scopeKey,post.id,answerId,[c]); else addPublicWebComment(scopeKey,post.id,c);
+    }
+    if(post.section==='zhihu'){
+      for(const a of (result?.answers||[])) addZhihuAnswer(scopeKey,post.id,a);
+      for(const batch of (result?.commentAdditions||[])) addZhihuAnswerComments(scopeKey,post.id,batch.answerId,batch.comments);
+    }
+    consumePending(done); consumeUserCommentPending(post.id, answerId || null); if(notices.length)windowRef.alert?.(notices.join('\n')); return result;
+  };
+  const runUnifiedCommunityRefresh = async (post, { mode='thread', answerId='' } = {}) => {
+    const pending=pendingForPost(post?.id); const result=await generateCommunitySettlement({scopeKey:getScopeKey?.(),post,pending,mode,answerId}); await applyUnifiedCommunitySettlement(post,result,pending,{answerId}); return result;
+  };
   const settleQueuedCommunityTargets = async post => {
     const pending=pendingForPost(post?.id); const targeted=pending.filter(x=>x.type==='invite'||x.type==='mention'); if(!targeted.length)return [];
     const done=[]; const notices=[];
@@ -7131,7 +7161,7 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
     const xhsToggle=event.target?.closest?.('[data-action="xhs-toggle-replies"]');
     if(xhsToggle){const id=String(xhsToggle.dataset.commentId||'');if(expandedXhsThreads.has(id))expandedXhsThreads.delete(id);else expandedXhsThreads.add(id);renderPublicWeb();return;}
     const xhsAdd=event.target?.closest?.('[data-action="xhs-comments-add"]');
-    if(xhsAdd){const postId=String(xhsAdd.dataset.postId||'');const busyKey=`xhs-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);await settleQueuedCommunityTargets(post);const additions=await generateXiaohongshuCommentRefresh({scopeKey:getScopeKey?.(),post});for(const item of additions)addPublicWebComment(getScopeKey?.(),postId,item);consumeUserCommentPending(postId,null);renderPublicWeb();}catch(error){console.error('[moli小手机] xhs add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
+    if(xhsAdd){const postId=String(xhsAdd.dataset.postId||'');const busyKey=`xhs-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);await runUnifiedCommunityRefresh(post,{mode:'comments'});renderPublicWeb();}catch(error){console.error('[moli小手机] xhs add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const tianyaFloorReply=event.target?.closest?.('[data-action="tianya-floor-reply"]');
     if(tianyaFloorReply){openCommunityComposer({postId:tianyaFloorReply.dataset.postId,replyToCommentId:tianyaFloorReply.dataset.commentId,replyLabel:`@${tianyaFloorReply.dataset.commentAuthor||'网友'} #${tianyaFloorReply.dataset.floor||''}`});return;}
     const xhsReply=event.target?.closest?.('[data-action="xhs-comment-reply"]');
@@ -7158,11 +7188,11 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
       recordWorldEvent(getScopeKey?.(),{source:'community.zhihu',actorId:'user',action:'INVITE_ANSWER',targetContactIds:[choice.item.id],objectId:String(queuedInvite.id),content:`User 邀请你回答知乎问题：${post.title}`,metadata:{postId:String(post.id||''),pendingRefresh:true},awareness:'pending'});
       toast(`已邀请${displayName(choice.item)}，点击回答区刷新后统一结算`); return;
     }
-    const zhihuAnswersRefresh=event.target?.closest?.('[data-action="zhihu-answers-refresh"]'); if(zhihuAnswersRefresh){const postId=String(zhihuAnswersRefresh.dataset.postId||'');const busyKey=`zhihu-detail:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{let post=getPublicWebPost(getScopeKey?.(),postId);if(!post)return;await settleQueuedCommunityTargets(post);post=getPublicWebPost(getScopeKey?.(),postId);const additions=await generateZhihuDetailRefresh({scopeKey:getScopeKey?.(),post});mergeZhihuRefresh(getScopeKey?.(),postId,additions);consumeUserCommentPending(postId,null);renderPublicWeb();}catch(error){windowRef.alert?.(`刷新知乎失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
+    const zhihuAnswersRefresh=event.target?.closest?.('[data-action="zhihu-answers-refresh"]'); if(zhihuAnswersRefresh){const postId=String(zhihuAnswersRefresh.dataset.postId||'');const busyKey=`zhihu-detail:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);if(!post)return;await runUnifiedCommunityRefresh(post,{mode:'zhihu-detail'});renderPublicWeb();}catch(error){windowRef.alert?.(`刷新知乎失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const zhihuWrite=event.target?.closest?.('[data-action="zhihu-write-answer"]'); if(zhihuWrite){openCommunityComposer({postId:zhihuWrite.dataset.postId,composeMode:'zhihu-answer'});return;}
     const zhihuCommentReply=event.target?.closest?.('[data-action="zhihu-comment-reply"]'); if(zhihuCommentReply){openCommunityComposer({postId:zhihuCommentReply.dataset.postId,zhihuAnswerId:zhihuCommentReply.dataset.answerId,replyToCommentId:zhihuCommentReply.dataset.commentId,replyLabel:`@${zhihuCommentReply.dataset.commentAuthor||'网友'}`});return;}
     const zhihuUserComment=event.target?.closest?.('[data-action="zhihu-user-comment"]'); if(zhihuUserComment){openCommunityComposer({postId:zhihuUserComment.dataset.postId,zhihuAnswerId:zhihuUserComment.dataset.answerId});return;}
-    const zhihuAdd=event.target?.closest?.('[data-action="zhihu-comments-add"]'); if(zhihuAdd){const postId=String(zhihuAdd.dataset.postId||'');const answerId=String(zhihuAdd.dataset.answerId||'');const busyKey=`zhihu-comments:${postId}:${answerId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);const answer=(post?.extra?.answers||[]).find(a=>String(a.id)===answerId);await settleQueuedCommunityTargets(post);const additions=await generateZhihuAnswerCommentRefresh({scopeKey:getScopeKey?.(),post,answer});addZhihuAnswerComments(getScopeKey?.(),postId,answerId,additions);consumeUserCommentPending(postId,answerId);renderPublicWeb();}catch(error){console.error('[moli小手机] zhihu add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
+    const zhihuAdd=event.target?.closest?.('[data-action="zhihu-comments-add"]'); if(zhihuAdd){const postId=String(zhihuAdd.dataset.postId||'');const answerId=String(zhihuAdd.dataset.answerId||'');const busyKey=`zhihu-comments:${postId}:${answerId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);await runUnifiedCommunityRefresh(post,{mode:'zhihu-answer-comments',answerId});renderPublicWeb();}catch(error){console.error('[moli小手机] zhihu add comments failed:',error);windowRef.alert?.(`新增评论失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const share=event.target?.closest?.('[data-action="public-web-share"]'); if(share){
       const post=getPublicWebPost(getScopeKey?.(),share.dataset.postId);if(!post)return;
       const people=communityCallableContacts().map(item=>({kind:'private',id:item.id,label:displayName(item),target:item}));
@@ -7184,7 +7214,7 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
     }
     const favorite=event.target?.closest?.('[data-action="public-web-favorite"]'); if(favorite){const result=togglePublicWebFavorite(getScopeKey?.(),favorite.dataset.postId,'user');renderPublicWeb();toast(result?.favorited?'已投入我们的墙':'已从我们的墙移除');return;}
     const pin=event.target?.closest?.('[data-action="public-web-pin"]'); if(pin){togglePublicWebPinned(getScopeKey?.(),pin.dataset.postId);renderPublicWeb();return;}
-    const replyRefresh=event.target?.closest?.('[data-action="tianya-replies-refresh"]'); if(replyRefresh){const postId=String(replyRefresh.dataset.postId||'');const busyKey=`tianya-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);await settleQueuedCommunityTargets(post);const replies=await generateTianyaReplyRefresh({scopeKey:getScopeKey?.(),post});for(const reply of replies)addPublicWebComment(getScopeKey?.(),post.id,reply);consumeUserCommentPending(postId,null);renderPublicWeb();}catch(error){console.error('[moli小手机] tianya replies refresh failed:',error);windowRef.alert?.(`新增回复失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
+    const replyRefresh=event.target?.closest?.('[data-action="tianya-replies-refresh"]'); if(replyRefresh){const postId=String(replyRefresh.dataset.postId||'');const busyKey=`tianya-comments:${postId}`;if(publicWebGenerating.has(busyKey))return;publicWebGenerating.add(busyKey);renderPublicWeb();try{const post=getPublicWebPost(getScopeKey?.(),postId);await runUnifiedCommunityRefresh(post,{mode:'replies'});renderPublicWeb();}catch(error){console.error('[moli小手机] tianya replies refresh failed:',error);windowRef.alert?.(`新增回复失败：${error?.message||error}`);}finally{publicWebGenerating.delete(busyKey);renderPublicWeb();}return;}
     const comment=event.target?.closest?.('[data-action="public-web-comment"]'); if(comment){openCommunityComposer({postId:comment.dataset.postId});return;}
   });
   renderPublicWeb();
