@@ -6,6 +6,7 @@ import { createReviewAutomation } from '../automation/review.js';
 import { createPrivateAutomation } from '../automation/private-automation.js';
 import { createTavernInjectionBridge } from './tavern-injection.js';
 import { initConversationStorage } from '../storage/conversation-db.js';
+import { cleanupLegacyTemporaryScopeStorage } from '../storage/temporary-scope-cleanup.js';
 import {
   getContacts,
   getScopeConversations,
@@ -16,6 +17,12 @@ let appInstance = null;
 
 export async function initApp() {
   appInstance?.destroy?.();
+
+  const cleanup = cleanupLegacyTemporaryScopeStorage();
+  if (cleanup.cleaned) {
+    const mb = (cleanup.bytes / 1024 / 1024).toFixed(2);
+    try { window.toastr?.success?.(`已清理旧临时作用域数据 ${mb} MB（${cleanup.removed} 项）`, '', { timeOut: 3500, positionClass: 'toast-top-center' }); } catch {}
+  }
 
   const migration = await initConversationStorage();
   if (migration.migrated) {
