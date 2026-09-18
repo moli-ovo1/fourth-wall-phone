@@ -59,7 +59,7 @@ async function bootMoliPhone() {
 
   try {
     const { initApp } = await import('./src/core/app.js');
-    initApp();
+    await initApp();
 
     try {
       window.toastr?.success?.('moli小手机已加载', '', {

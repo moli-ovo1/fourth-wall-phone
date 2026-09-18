@@ -354,9 +354,9 @@
 - Removed the final extra truncation pass around the assembled Community Identity Anchor and Recent World State. Source-specific safety budgets remain for now; do not remove all limits blindly because provider context windows are finite. Future work should replace scattered fixed caps with one provider-aware context budget.
 - IMPORTANT: one-refresh/one-API Community settlement is NOT falsely marked closed here. Current queued invite/@ settlement and ambient refresh are still separate generation paths. Next package must unify them into one batch settlement request before further Awareness expansion.
 
-
-## v0.5.43 / moli199 — 微信发送链诊断护栏
-- 基线：纯净 moli190 / v0.5.34；不移植 191–198 的 Community/跨 App 实验实现。
-- 修复/诊断：微信发送按钮改用显式 addEventListener；sendMessage 对入口、生成状态、输入、scope、User 消息落库、UI 刷新逐阶段捕获运行时异常并在界面直接提示。
-- 目的：定位“点击发送后连 User 自己消息都不出现”的前端断点；不修改 API、Prompt、Community、Awareness、Continuity 语义。
-- 若 User 消息恢复出现，说明原 onclick 绑定/运行时链已被绕开；若仍失败，UI 提示的阶段即为下一次修复依据。
+## v0.5.44 / Storage v2（moli200）
+- 已确认微信发送失败根因：`moli-phone:global-conversations:v1` 达到 localStorage quota；不是 API/Prompt/190 发送链故障。
+- 全局微信 Conversation 正式存储迁移至 IndexedDB：`moli-phone-db` / `global-conversations`。
+- 首次启动执行 COPY → VERIFY → SWITCH → CLEANUP：先复制旧 localStorage Conversation，校验会话键数量与存在性，成功后才删除旧大 JSON；失败则保留旧数据并阻止主体启动，避免静默丢失。
+- 运行期保持同步内存快照兼容现有 data-store API，持久化异步写入 IndexedDB；不再因每发一条消息重写 localStorage 巨型 JSON 而触发 quota。
+- 本阶段只迁移已被真实证据证明爆仓的 global conversations；Community / World Event / Awareness 等是否迁移，后续依据真实占用再决定。

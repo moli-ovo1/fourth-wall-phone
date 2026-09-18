@@ -4166,9 +4166,9 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - Removed the final extra truncation pass around the assembled Community Identity Anchor and Recent World State. Source-specific safety budgets remain for now; do not remove all limits blindly because provider context windows are finite. Future work should replace scattered fixed caps with one provider-aware context budget.
 - IMPORTANT: one-refresh/one-API Community settlement is NOT falsely marked closed here. Current queued invite/@ settlement and ambient refresh are still separate generation paths. Next package must unify them into one batch settlement request before further Awareness expansion.
 
-
-## v0.5.43 / moli199 — 微信发送链诊断护栏
-- 基线：纯净 moli190 / v0.5.34；不移植 191–198 的 Community/跨 App 实验实现。
-- 修复/诊断：微信发送按钮改用显式 addEventListener；sendMessage 对入口、生成状态、输入、scope、User 消息落库、UI 刷新逐阶段捕获运行时异常并在界面直接提示。
-- 目的：定位“点击发送后连 User 自己消息都不出现”的前端断点；不修改 API、Prompt、Community、Awareness、Continuity 语义。
-- 若 User 消息恢复出现，说明原 onclick 绑定/运行时链已被绕开；若仍失败，UI 提示的阶段即为下一次修复依据。
+### Storage v2：Conversation 容量边界（v0.5.44）
+- `localStorage` 只适合轻量配置/索引，不再作为无限增长的全局微信 Conversation 正式数据库。
+- 全局 Conversation 使用 IndexedDB `moli-phone-db/global-conversations`。
+- 旧 `moli-phone:global-conversations:v1` 必须自动无损迁移；顺序固定为 COPY → VERIFY → SWITCH → CLEANUP，验证成功前不得删除旧值。
+- 迁移失败必须保留旧数据并显式报错，禁止为了恢复发送自动清空用户聊天。
+- 先解决已证实的 Conversation 爆仓；其他增长型 store 以后根据占用诊断分批迁移，不进行无证据的大规模存储重写。

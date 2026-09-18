@@ -3227,9 +3227,5 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - Removed the final extra truncation pass around the assembled Community Identity Anchor and Recent World State. Source-specific safety budgets remain for now; do not remove all limits blindly because provider context windows are finite. Future work should replace scattered fixed caps with one provider-aware context budget.
 - IMPORTANT: one-refresh/one-API Community settlement is NOT falsely marked closed here. Current queued invite/@ settlement and ambient refresh are still separate generation paths. Next package must unify them into one batch settlement request before further Awareness expansion.
 
-
-## v0.5.43 / moli199 — 微信发送链诊断护栏
-- 基线：纯净 moli190 / v0.5.34；不移植 191–198 的 Community/跨 App 实验实现。
-- 修复/诊断：微信发送按钮改用显式 addEventListener；sendMessage 对入口、生成状态、输入、scope、User 消息落库、UI 刷新逐阶段捕获运行时异常并在界面直接提示。
-- 目的：定位“点击发送后连 User 自己消息都不出现”的前端断点；不修改 API、Prompt、Community、Awareness、Continuity 语义。
-- 若 User 消息恢复出现，说明原 onclick 绑定/运行时链已被绕开；若仍失败，UI 提示的阶段即为下一次修复依据。
+## v0.5.44 Storage v2 决策
+已证实 `moli-phone:global-conversations:v1` 超出 localStorage quota，导致 User 消息在 API 前无法落库。moli200 将全局 Conversation 迁移至 IndexedDB，并保留现有同步 data-store 调用面的内存快照以控制改动范围。禁止回到“清 localStorage 解决”的临时方案。后续先实机验证旧私聊/群聊完整、发送恢复、重启后仍持久，再继续190后的产品路线。
