@@ -3233,3 +3233,12 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - The settlement result is written back to the original public surface; optional private messages use the existing private conversation outlet. Pending items are consumed only after a valid unified result is returned.
 - Community Context Budget v1 centralizes packing priority instead of repeatedly clipping Identity/Recent/WorldBook/long-term sections at small independent limits. Identity and current world state are highest priority; relevant lore and long-term history use remaining room. This is transport budgeting, not permission to cross World boundaries.
 - Existing World Event/Awareness/Continuity stores and app-specific queues remain intact; unified settlement is an execution entrypoint, not a replacement store.
+
+
+## v0.5.36 / moli192 — Community Character Acting & Awareness
+- 191 unified one-refresh/one-request settlement is retained, but each role now receives its own Acting Pack: identity anchor, role/persona prompt where applicable, activated role world-book context, and that role’s known continuity. Batch settlement must not flatten role voices into a generic moderator voice.
+- Explicit invite/@ remains mandatory public response (REAL/ANONYMOUS only). Characters who already participated in the same post become natural follow-up candidates on later refreshes and may REAL/ANONYMOUS/SKIP according to character motive; no Math.random probability gate.
+- Public character actions now create awareness for other actual character participants in that discussion, while snapshot awareness remains time-bounded. This does not make every merely-mentioned character know the whole post.
+- Community comments support long-press/context-menu deletion. Deleting visible content does not erase World Event/Awareness already formed by characters. Descendant reply rows are removed with a deleted parent to avoid dangling UI reply chains.
+- Continuity retrieval used by the Acting Pack preserves recent/direct/unresolved event relevance; SKIP is an action decision, not forgetting.
+- Weibo remains the next Community surface; do not add it by bypassing the shared Community cognition/settlement architecture.
