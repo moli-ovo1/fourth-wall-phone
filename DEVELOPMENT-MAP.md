@@ -3482,3 +3482,11 @@ Still next, without splitting into UI micro-patches:
 - Audited natural Character participation context. Community generation already had stable identity anchors, per-contact world-book context, current正文 and long-term world history; this version adds a bounded per-character Phone Continuity Actor Pack. Each pack is explicitly owned by that character and may guide only that character's behavior, not become public knowledge or another character's knowledge. Explicit invite/@ still uses the dedicated Character generation path.
 - Character Batch remains postponed. Current explicit Character interactions remain per-character calls; future Settings may expose separate vs merged calling modes.
 - Design rule retained: control information, not reasoning. New behavior is driven by available facts/experiences rather than speculative prohibition prompts.
+
+
+## v0.5.82 / moli229 实机查漏（2026-09-20）
+- 已验证：原三板块推荐生成可自然出现正文 Character，首次评论/下级回复与网友互聊正常；社会余波、微博痕迹跨到知乎均通过。此次不重构这些已工作的能力。
+- 微博评论后续刷新：保留整个已有评论树作为可继续现场。User 新回复不再成为唯一续写中心；可同时续接旧楼、网友互回、作者回复或新增一级评论。
+- 微博账号生态：稳定 ID 的含义明确为“同一人再次出现时保持连续”，不再把已有持续账号当本轮候选名单；允许每轮按话题自然产生新普通网友、媒体、大V、营销号、兴趣用户、知情人等新公开 ID。
+- 微博 Character 自然参与：沿用 Community 已有世界人物上下文/Actor Pack，明确其本人账号或已有小号在自然相关时可直接发帖/互动，不要求每轮出现；明确邀请/@ 仍走角色专用调用。
+- 本轮没有修改已验证通过的社会余波和跨板块痕迹逻辑。
