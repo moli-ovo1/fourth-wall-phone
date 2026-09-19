@@ -3473,3 +3473,12 @@ Still next, without splitting into UI micro-patches:
 - audit and enrich natural Character participation context without exposing private knowledge to the shared Community generator;
 - extend Network Actor profile/evidence consolidation across all four Community boards;
 - later add the user-selectable Character API mode: isolated per-character calls vs merged batch. Character Batch is not part of v0.5.80.
+
+
+## moli228 / v0.5.81 — Social Network v1 closure + Community Echo
+- Added Community Echo (社区余波): high-impact posts and posts with meaningful User participation can leave short-lived public traces. The next normal Community generation receives at most two echo candidates and may naturally spend about 1–2 new items continuing their public consequences; no extra API call is required. Echo candidates are consumed after a successful refresh rather than replayed forever.
+- Network Actor experience capture now treats generated authors/comments/answers and User interaction paths as actor-owned experiences across Community surfaces. Local User small-account authorship is excluded from Network Actor creation so program ownership is not mistaken for an independent internet person.
+- Weibo normal refresh now includes a bounded persistent-network-actor action opportunity in the same API response. Relevant continuing actors may return PUBLIC / PRIVATE / SKIP; PUBLIC becomes a realtime Weibo action and PRIVATE enters the existing message center. This is not a random dice roll and does not force 🔥 actors to act.
+- Audited natural Character participation context. Community generation already had stable identity anchors, per-contact world-book context, current正文 and long-term world history; this version adds a bounded per-character Phone Continuity Actor Pack. Each pack is explicitly owned by that character and may guide only that character's behavior, not become public knowledge or another character's knowledge. Explicit invite/@ still uses the dedicated Character generation path.
+- Character Batch remains postponed. Current explicit Character interactions remain per-character calls; future Settings may expose separate vs merged calling modes.
+- Design rule retained: control information, not reasoning. New behavior is driven by available facts/experiences rather than speculative prohibition prompts.
