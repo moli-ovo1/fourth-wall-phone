@@ -1659,6 +1659,23 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
   return posts;
 }
 
+export async function generateCommunityPasserbyMentionReply({ scopeKey, post, actor, userContent, threadContext = '', signal } = {}) {
+  const userName = getTavernUserContext().name || 'User';
+  if (!scopeKey || !post || !actor?.name) throw new Error('当前路人 @ 上下文不可用');
+  const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
+  const communityPreset=buildCommunityPresetPrompt();
+  const actorName=String(actor.name||'网友').trim();
+  const actorId=String(actor.id||'').trim();
+  const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续同一篇社区讨论。User 明确 @ 了已经在本帖出现过的网友“${actorName}”。你只能继续扮演这个既有网友，不得把他/她当作第一次进帖的新网友，也不得创建同名替身。请依据这个网友在本帖此前真实说过的话、被谁回复过以及当前讨论自然续接。不要替 User 发言。只输出严格 JSON。`;
+  const user=`平台：${post.section||'社区'}\n标题：${post.title||'无标题'}\n正文：${post.content||'无'}\n\n【${actorName} 在本帖已有经历】\n${threadContext||'仅确认其已在本帖出现。'}\n\nUser 这次的内容：${String(userContent||'').trim()}\n\n返回：{"content":"${actorName} 对这次 @ 的公开回复"}。不要 markdown。`;
+  const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
+  const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  let data; try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('路人 @ 没有返回可解析 JSON');data=JSON.parse(m[0]);}
+  const content=String(data?.content||'').trim().slice(0,1200);
+  if(!content)throw new Error('路人 @ 没有返回公开回复');
+  return {author:{type:'internet_actor',id:actorId,name:actorName},content};
+}
+
 export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}) {
   const userName = getTavernUserContext().name || 'User';
   if (!scopeKey || !post) throw new Error('当前帖子不可用');
