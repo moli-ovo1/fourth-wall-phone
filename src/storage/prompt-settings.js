@@ -409,10 +409,10 @@ const DEFAULT_COMMUNITY_PROMPT_BLOCKS = [
 微博是当前世界中的实时公共舆论场，核心是“此刻发生什么、大家正在怎样传播和讨论”，不要写成天涯长帖、小红书生活笔记或知乎回答。
 
 ## 首页
-首页混合已关注账号、同城动态与实时微博。内容可以来自生活碎片、公共事件、新闻消息、兴趣讨论、网络争论、吐槽和轻娱乐。根据当前世界自然取舍：校园世界自然提高校园内容，职场/都市世界提高本地与行业内容，娱乐圈世界才自然提高明星与粉圈浓度，不为填频道硬造不属于当前世界的内容。
+首页混合已关注账号、大V、营销号、热点人物、同城实时等内容。内容可以包含生活碎片、网络争论、吐槽、成人话题、性癖交流、突发消息、争议人物、社会新闻、娱乐八卦、公共讨论和网络梗。允许传闻、质疑、带节奏、制造舆论、反串、媒体报道、当事人回应、澄清和网友反应并存。
 
-## 热搜
-热搜由当前世界正在集中讨论的事件形成，可包含突发消息、争议人物、校园/职场事件、社会话题、娱乐八卦、公共讨论和网络梗。热搜是话题聚合，不是文章分类；同一热搜下允许传闻、质疑、媒体报道、当事人回应、澄清和网友反应并存。
+## 热搜榜
+热搜榜只生成当前世界正在传播的 #关键词内容#。词条应短、狠、醒目，具有微博热搜标题感；可以辛辣、抓眼、制造悬念、突出冲突、反差、人物或事件核心。
 
 ## 超话
 超话是围绕当前正文世界中已知人物及人物关系形成的长期粉丝社区，尤其允许形成角色之间的CP超话。CP不要求正文已经确认恋爱关系；朋友、同事、对手、上下级、宿敌、暧昧关系都可能被网友组合，但不要为了凑CP凭空创造正文中不存在的重要角色。
@@ -432,7 +432,7 @@ const DEFAULT_COMMUNITY_PROMPT_BLOCKS = [
 转发是传播行为，不是普通评论。转发者可以补充自己的话，也可以形成 //@账号：内容 的传播链；同一事件可随着传播出现新的解读、回应与澄清。
 
 ## 初始回复规范
-初始互动遵循 Community 通用契约的热度分层。微博评论区应混合顶层评论与下级回复，允许博主回应、网友互相反驳、补充、追问、玩梗、站队和围观。首页普通微博可以相对疏一些；超话更容易形成粉丝阵营之间的小回复链；热搜/争议微博可以形成多立场争论。不要把所有互动平铺成互不相关的顶层评论。
+初始互动遵循 Community 通用契约的热度分层。微博评论区应混合顶层评论与下级回复，允许博主回应、网友互相反驳、补充、追问、玩梗、站队和围观。首页普通微博可以相对疏一些；超话更容易形成粉丝阵营之间的小回复链；争议微博可以形成多立场争论。不要把所有互动平铺成互不相关的顶层评论。
 
 ## 关注账号
 User关注的账号是持续存在的微博账号。刷新首页时可自然出现其中一部分，不要求所有关注账号每轮都发微博。🔥持续互动账号可以保留与User已经发生的微博互动记忆，并拥有主动私信或主动@User的能力；有能力不等于每轮必须行动。
@@ -498,6 +498,13 @@ function mergeSavedDefaultBlock(defaultItem, savedItem) {
   if (defaultItem.id === 'community-runtime' && !savedContent.includes('## 初始互动密度')) {
     const section = String(defaultItem.content).match(/## 初始互动密度[\s\S]*?(?=\n## 经历与事实)/)?.[0];
     if (section) savedContent = savedContent.replace(/\n## 经历与事实/, `\n${section}\n\n## 经历与事实`);
+  }
+  if (defaultItem.id === 'community-weibo' && !savedContent.includes('## 热搜榜')) {
+    const freshLead = String(defaultItem.content).match(/## 首页[\s\S]*?(?=\n## 超话)/)?.[0];
+    if (freshLead) {
+      if (/## 首页[\s\S]*?(?=\n## 超话)/.test(savedContent)) savedContent = savedContent.replace(/## 首页[\s\S]*?(?=\n## 超话)/, freshLead);
+      else savedContent = `${savedContent.trim()}\n\n${freshLead}`;
+    }
   }
   if (['community-tianya','community-xhs','community-zhihu','community-weibo','community-custom'].includes(defaultItem.id) && !savedContent.includes('## 初始回复规范')) {
     const section = String(defaultItem.content).match(/## 初始回复规范[\s\S]*?(?=\n## |$)/)?.[0];
