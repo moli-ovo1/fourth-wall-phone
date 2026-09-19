@@ -1443,7 +1443,7 @@ function parsePublicWebBatch(text, userName = 'User') {
         return {id:ids[i],author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now(),replyToCommentId};
       }).filter(c=>c.content);
     })(),
-    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), images:(Array.isArray(item?.images)?item.images:[item?.imageDescription||item?.imagePrompt].filter(Boolean)).map(String).filter(Boolean).slice(0,9), imageText:String(item?.imageText || ''), answer:String(item?.answer || ''), weiboLane:String(item?.lane||item?.weiboLane||'实时'), repostText:String(item?.repostText||''), repostChain:Array.isArray(item?.repostChain)?item.repostChain.map(String).slice(0,6):[], reposts:Number(item?.reposts||0), hotScore:Number(item?.hotScore||0), hotLabel:String(item?.hotLabel||''), customCommunityId:String(item?.customCommunityId||''), customCommunityName:String(item?.customCommunityName||''), answers:Array.isArray(item?.answers)?item.answers.slice(0,6).map((a,ai)=>({id:String(a?.id||`ans_${Date.now()}_${ai}`),author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author, userName, '匿名用户')},content:String(a?.content||a?.answer||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:Array.isArray(a?.comments)?a.comments.slice(0,15).map((c,ci)=>({id:String(c?.id||`zac_${Date.now()}_${ai}_${ci}`),author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:String(c?.replyToCommentId||'')})).filter(c=>c.content):[]})).filter(a=>a.content):[] }
+    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), images:(Array.isArray(item?.images)?item.images:[item?.imageDescription||item?.imagePrompt].filter(Boolean)).map(String).filter(Boolean).slice(0,9), videos:(Array.isArray(item?.videos)?item.videos:[item?.videoDescription].filter(Boolean)).map(String).filter(Boolean).slice(0,4), imageText:String(item?.imageText || ''), answer:String(item?.answer || ''), weiboLane:String(item?.lane||item?.weiboLane||'实时'), repostText:String(item?.repostText||''), repostChain:Array.isArray(item?.repostChain)?item.repostChain.map(String).slice(0,6):[], reposts:Number(item?.reposts||0), hotScore:Number(item?.hotScore||0), hotLabel:String(item?.hotLabel||''), customCommunityId:String(item?.customCommunityId||''), customCommunityName:String(item?.customCommunityName||''), answers:Array.isArray(item?.answers)?item.answers.slice(0,6).map((a,ai)=>({id:String(a?.id||`ans_${Date.now()}_${ai}`),author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author, userName, '匿名用户')},content:String(a?.content||a?.answer||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:Array.isArray(a?.comments)?a.comments.slice(0,15).map((c,ci)=>({id:String(c?.id||`zac_${Date.now()}_${ai}_${ci}`),author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:String(c?.replyToCommentId||'')})).filter(c=>c.content):[]})).filter(a=>a.content):[] }
   })).filter(item => item.title && (item.section !== 'xiaohongshu' || (item.extra?.imagePrompt && item.extra?.imageText)));
 }
 
@@ -1634,11 +1634,11 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
 
 【账号生态】允许普通网友、媒体/官号、大V、营销号、粉丝、知情人、角色本人账号与角色已有小号同时存在。不同账号必须有不同社会位置、信息来源和口吻。已有稳定账号不要无缘无故换身份。
 
-【微博正文】以短内容为主，但允许一句话、吐槽、照片配文、事件播报、长微博。可自然使用 #话题# 和 @公开ID。图片不生成真实图片，只用 images 数组描述这条微博世界中附带的 1~9 张图片；没有图片则为空数组。长微博保存完整正文，首页由前端自动截断并显示“……正文”。
+【微博正文】以短内容为主，但允许一句话、吐槽、照片配文、事件播报、长微博。可自然使用 #话题# 和 @公开ID。图片和视频都不生成真实媒体：images 数组描述 1~9 张图片，videos 数组描述 1~4 个视频；没有则为空数组。媒体描述只写可见/可听内容，不写“图片1/视频1”之类编号。长微博保存完整正文，首页由前端自动截断并显示“……正文”。
 
 【传播】转发是微博的重要结构。可用 repostText 表示本次转发者补充的话，用 repostChain 表示已有的 //@账号：内容 链；不要把转发写成普通评论。
 
-【评论】评论即时、碎片、立场不齐，可质疑、玩梗、补充、反驳、吃瓜、@别人或跑题。
+【评论】评论即时、碎片、立场不齐，可质疑、玩梗、补充、反驳、吃瓜、@别人或跑题。评论数量必须有冷热差异：冷微博 0~3 条，普通微博 2~6 条，较热微博 4~8 条；不要每条固定同一个数量。允许评论回复评论，用 replyToCommentId 指向此前评论；博主也可以自然回复。
 
 【人物边界】平台只决定微博的传播环境，不替角色规定立场。角色怎么想、用本名还是已有小号，由角色自身状态、经历与实际掌握的信息决定。程序内部路由身份不得泄漏成其他人物的知识。
 
@@ -1671,7 +1671,7 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
     : section === 'recommend'
       ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu|custom","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","customCommunityId":"仅自创使用","customCommunityName":"仅自创使用","needsComments":"仅自创使用；true|false，严格按条目设置","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 ${recommendCount>0?recommendCount+" 条":"6~8 条"}；每条生成 6~8 条符合所属社区结构的初始互动。不要 markdown。`
       : section === 'weibo'
-      ? `返回：{"posts":[{"section":"weibo","type":"weibo","author":"公开ID","authorId":"稳定id","title":"一句简短摘要或话题名","content":"微博正文","lane":"关注|同城|实时|热门","tags":["#话题#"],"images":["可空；图片1描述","图片2描述；最多9张"],"repostText":"可空；转发者补充","repostChain":["@账号：转发链内容"],"reposts":0,"hotScore":0,"hotLabel":"可空：新|热|沸|爆","comments":[{"author":"网友ID","authorId":"稳定id","content":"评论"}]}]}。生成 6~8 条。首页内容在关注/同城/实时之间自然混合；不要 markdown。`
+      ? `返回：{"posts":[{"section":"weibo","type":"weibo","author":"公开ID","authorId":"稳定id","title":"一句简短摘要或话题名","content":"微博正文","lane":"关注|同城|实时|热门","tags":["#话题#"],"images":["可空；图片内容描述；最多9张"],"videos":["可空；视频内容描述；最多4个"],"repostText":"可空；转发者补充","repostChain":["@账号：转发链内容"],"reposts":0,"hotScore":0,"hotLabel":"可空：新|热|沸|爆","comments":[{"author":"网友ID","authorId":"稳定id","content":"评论","replyToCommentId":"可空；回复此前评论时填其id"}]}]}。生成 6~8 条。每条微博评论数按冷热自然变化，不要统一为3。首页内容在关注/同城/实时之间自然混合；不要 markdown。`
     : section === 'xiaohongshu'
         ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~8 条；每篇笔记生成 6~8 条初始评论/回复。不要 markdown。`
         : `返回：{"posts":[{"section":"zhihu","type":"question","author":"题主昵称","authorId":"可选","title":"问题标题","content":"问题补充，可为空","answers":[{"author":"回答者昵称","authorId":"可选","content":"回答正文","upvotes":0,"comments":[{"author":"评论者","content":"评论"}]}]}]}。生成 6~8 个问题；每题生成 6~8 条风格明显不同的初始回答。回答下评论按内容自然生成，不强制每个回答再达到 6~8 条。不要 markdown。`;
@@ -1749,6 +1749,20 @@ export async function generateXiaohongshuCommentRefresh({ scopeKey, post, signal
   return created;
 }
 
+
+export async function generateWeiboCommentRefresh({ scopeKey, post, signal } = {}) {
+  const userName=getTavernUserContext().name||'User'; if(!scopeKey||!post)throw new Error('当前微博不可用');
+  const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
+  const comments=Array.isArray(post.comments)?post.comments:[];
+  const existing=comments.map(c=>`id=${c.id}｜${c.author?.name||'网友'}${c.replyToCommentId?` 回复 ${c.replyToCommentId}`:''}：${c.content||''}`).join('\n');
+  const communityPreset=buildCommunityPresetPrompt();
+  const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续一条微博的评论区。只新增 1~6 条自然评论/回复，不改原微博。允许新增一级评论，也允许回复任何已有评论；已有 User 评论或 @ 时优先自然回应。评论应有微博即时、碎片、口吻不齐的感觉，作者本人也可回复。只输出严格 JSON。`;
+  const user=`微博作者：${post.author?.name||'网友'}\n微博：${post.content||post.title||''}\n\n已有评论：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"公开ID","authorId":"可选稳定id","content":"评论","replyToCommentId":"可空；回复已有评论时填其id"}]}。`;
+  const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
+  const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''); let data; try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('微博评论刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
+  const known=new Set(comments.map(c=>String(c.id))); const out=[];
+  for(const c of (Array.isArray(data?.comments)?data.comments:[]).slice(0,6)){const id=`webc_${Date.now()}_${Math.random().toString(36).slice(2,8)}_${out.length}`;const requested=String(c?.replyToCommentId||'');const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:known.has(requested)?requested:''};if(item.content){out.push(item);known.add(id);}} return out;
+}
 
 export async function generateZhihuDetailRefresh({ scopeKey, post, signal } = {}) {
   const userName=getTavernUserContext().name||'User'; if(!scopeKey||!post)throw new Error('当前知乎问题不可用');
