@@ -1228,9 +1228,16 @@ export async function generateContactMoment({ scopeKey, contactId, signal } = {}
     return parts.length ? parts.join('\n') : '';
   }).filter(Boolean);
 
+  const unifiedPhoneContext = buildPhoneContext(scopeKey, contact.id, {
+    query: recentLines.join('\n\n'),
+    currentConversationKey: '',
+    userName: getTavernUserContext().name || 'User',
+    limit: 36,
+  }).text;
+
   const bodyAllowed = conversations.some(conversation => conversation?.scopeMode !== 'global' && conversation?.bodyContextEnabled !== false);
   const recentBody = bodyAllowed ? getRecentTavernBody({ messageLimit: 12, charLimit: 12000 }) : null;
-  const scanText = [recentLines.join('\n\n'), phoneMemories.join('\n\n'), ...(recentBody?.messages || []).map(message => String(message?.content || ''))].filter(Boolean).join('\n');
+  const scanText = [recentLines.join('\n\n'), phoneMemories.join('\n\n'), unifiedPhoneContext, ...(recentBody?.messages || []).map(message => String(message?.content || ''))].filter(Boolean).join('\n');
   const worldBook = contact?.kind === 'custom'
     ? await getActivatedCustomWorldBook({ contact, scanText })
     : await getActivatedTavernWorldBook({ contact, scanText });
@@ -1287,6 +1294,9 @@ ${personaParts}
 - 小上帝 actorType=writer, actorId=builtin:writer；moli actorType=guide, actorId=builtin:guide；角色本人 actorType=contact, actorId=${contact.id}；世界书 NPC actorType=npc。
 - 只输出 JSON，不要解释。`;
   const user = `当前时间：${new Date().toString()}
+
+【统一人物手机经历｜微信 / Community / 朋友圈】
+${unifiedPhoneContext || '暂无'}
 
 【最近手机连续性】
 ${recentLines.join('\n\n') || '暂无'}
@@ -1356,7 +1366,7 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
   const contacts = allContacts.filter(item => item && String(item.id || '') !== 'builtin:meta');
   if (!contacts.length) return { actors: [], consideredMomentIds: [], contacts: [] };
 
-  const feed = listPublicMoments(scopeKey).filter(item=>momentVisibleToContact(item,contact.id)).slice(0, 10);
+  const feed = listPublicMoments(scopeKey).filter(item => item?.visibility?.mode !== 'only').slice(0, 10);
   const feedText = feed.map(item => {
     const comments = (item.comments || []).map(comment => comment.deletedAt ? `${comment.actor?.name || '未知'} 删除了评论${comment.deletionReason ? `：${comment.deletionReason}` : ''}` : `${comment.actor?.name || '未知'}：${comment.content}`).join('；');
     return `momentId=${item.id}｜作者=${item.author?.name || '未知'}(id=${item.author?.id || ''})｜${new Date(Number(item.createdAt || Date.now())).toLocaleString()}\n${item.content}${comments ? `\n评论：${comments}` : ''}`;
@@ -1368,7 +1378,7 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
       ? await getActivatedCustomWorldBook({ contact: item, scanText })
       : await getActivatedTavernWorldBook({ contact: item, scanText });
     const privateVisibleFeed=feed.filter(moment=>moment?.visibility?.mode==='only'&&momentVisibleToContact(moment,item.id)).map(moment=>`momentId=${moment.id}｜作者=${moment.author?.name||'未知'}(id=${moment.author?.id||''})｜${new Date(Number(moment.createdAt||Date.now())).toLocaleString()}\n${moment.content}`).join('\n\n');
-    actorBlocks.push(`===== CONTACT id=${item.id}｜${contactLabel(item)} =====\n【身份】\n${batchRoleProfile(item, scanText)}\n\n【仅此联系人被允许看到的朋友圈】\n${privateVisibleFeed||'无'}\n\n【本人的世界书】\n${clipBatchText(worldBook?.text || '', 4500) || '本轮无激活条目'}\n\n【本人的手机连续性】\n${formatPhoneBridge(scopeKey, item)}\n===== END =====`);
+    actorBlocks.push(`===== CONTACT id=${item.id}｜${contactLabel(item)} =====\n【身份】\n${batchRoleProfile(item, scanText)}\n\n【仅此联系人被允许看到的朋友圈】\n${privateVisibleFeed||'无'}\n\n【本人的世界书】\n${clipBatchText(worldBook?.text || '', 4500) || '本轮无激活条目'}\n\n【本人的统一手机经历｜微信 / Community / 朋友圈】\n${buildPhoneContext(scopeKey, item.id, { query: scanText, userName: getTavernUserContext().name || 'User', limit: 30 }).text || '暂无'}\n===== END =====`);
   }
 
   const system = `你在推进 moli小手机 的 User 公共朋友圈。所有候选联系人都有资格看到朋友圈，但绝不是每个人都必须点赞、评论或发动态。
