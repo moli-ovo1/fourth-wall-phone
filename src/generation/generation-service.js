@@ -31,7 +31,7 @@ import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 import { buildPhoneContext } from './phone-context-builder.js';
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
-import { getPublicWebPost, listWeiboFollows, saveWeiboMessagePeer, addWeiboPrivateMessage } from '../storage/public-web-store.js';
+import { getPublicWebPost, listWeiboFollows, listNetworkActors, saveWeiboMessagePeer, addWeiboPrivateMessage } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
 
 function communityActorName(actor) {
@@ -1571,10 +1571,11 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
   if (nativeRoster) context = [context, nativeRoster].filter(Boolean).join('\n\n');
   if(section==='weibo'){context=[context,`【本次微博整站刷新】
 一次调用同时刷新三个内容池，但三者职责必须分开：
-1. 首页：3~5 条，lane 只能是“关注/同城/实时”；是关注账号、同城动态和实时见闻的自然混流。
-2. 超话：3~5 条，lane 必须是“超话”；只围绕当前正文世界已知人物及关系形成CP粉丝社区，依据公开材料讨论，允许脑补但不得泄露私聊/内心/未公开事实。
-3. 热搜：3~5 条，lane 必须是“热门”；围绕当前世界集中讨论的热点、爆料、质疑、回应、澄清和不同立场。
-总量最多15条。三个池共享同一世界时间点，但不要把同一条内容改个标题复制三遍。`].filter(Boolean).join('\n\n'); const follows=listWeiboFollows(scopeKey);if(follows.length){const followText=follows.slice(0,40).map(x=>`- @${x.name}${x.hot?' 🔥持续互动':''}${x.profile?`：${x.profile}`:''}${x.hot&&Array.isArray(x.memory)&&x.memory.length?`；最近互动：${x.memory.slice(-4).join(' / ')}`:''}`).join('\n');context=[context,`【User 已关注的微博账号】\n这些是持续账号；刷新首页时应自然让其中一部分账号发微博，但不要强制每个账号每次都出现。普通路人账号在确有自然动机时也可以 @User 或给 User 发一条私信；不要为了展示功能而人人私信。标记🔥的是 User 指定的持续网友：相比普通路人，可以基于与 User 已发生的互动更熟稔、更主动地 @User 或私信，但仍由账号自身和当前情境决定是否行动。\n${followText}`].filter(Boolean).join('\n\n');} if(String(weiboQuery||'').trim()) context=[context,`【User 本次微博搜索】\n关键词：${String(weiboQuery).trim()}\n本次生成优先围绕这个搜索意图，像用户主动搜索后看到的相关实时微博；仍保持不同账号、信息来源和立场。`].filter(Boolean).join('\n\n');}
+一次调用总共生成 8~10 条微博，并同时覆盖三个内容池。不要给三个板块机械固定相同配额；通常每区约 3 条，其中一到两个板块可根据当前世界内容价值多 1~2 条。
+1. 首页：lane 只能是“关注/同城/实时”；是关注账号、同城动态和实时见闻的自然混流。
+2. 超话：lane 必须是“超话”；只围绕当前正文世界已知人物及关系形成CP粉丝社区，依据公开材料讨论，允许脑补但不得泄露私聊/内心/未公开事实。
+3. 热搜：lane 必须是“热门”；围绕当前世界集中讨论的热点、爆料、质疑、回应、澄清和不同立场。
+三个池本轮都至少生成 2 条；总量必须 8~10 条。三个池共享同一世界时间点，但不要把同一条内容改个标题复制三遍。`].filter(Boolean).join('\n\n'); const follows=listWeiboFollows(scopeKey);if(follows.length){const followText=follows.slice(0,40).map(x=>`- @${x.name}${x.hot?' 🔥持续互动':''}${x.profile?`：${x.profile}`:''}${x.hot&&Array.isArray(x.memory)&&x.memory.length?`；最近互动：${x.memory.slice(-4).join(' / ')}`:''}`).join('\n');context=[context,`【User 已关注的微博账号】\n这些是持续账号；刷新首页时应自然让其中一部分账号发微博，但不要强制每个账号每次都出现。普通路人账号在确有自然动机时也可以 @User 或给 User 发一条私信；不要为了展示功能而人人私信。标记🔥的是 User 指定的持续网友：相比普通路人，可以基于与 User 已发生的互动更熟稔、更主动地 @User 或私信，但仍由账号自身和当前情境决定是否行动。\n${followText}`].filter(Boolean).join('\n\n');} const networkActors=listNetworkActors(scopeKey).filter(x=>Array.isArray(x.publicIds)&&x.publicIds.length).slice(0,50);if(networkActors.length){const actorText=networkActors.map(x=>`- ${x.publicIds.map(id=>'@'+id).join(' / ')}${x.profile?`：${x.profile}`:''}${x.memory?.length?`；已发生公开经历：${x.memory.slice(-3).join(' / ')}`:''}`).join('\n');context=[context,`【持续网络账号】\n以下公开ID已经在 Community 中真实出现过。再次使用同一ID时延续同一网络人物，不要无缘无故重置成陌生人。这里只提供该账号自己的公开经历，不代表其他人物知道其后台身份。\n${actorText}`].filter(Boolean).join('\n\n');} if(String(weiboQuery||'').trim()) context=[context,`【User 本次微博搜索】\n关键词：${String(weiboQuery).trim()}\n本次生成优先围绕这个搜索意图，像用户主动搜索后看到的相关实时微博；仍保持不同账号、信息来源和立场。`].filter(Boolean).join('\n\n');}
   if (!context.trim()) context = '当前没有打开正文，也没有选择“当前角色世界”。不要读取、猜测或讨论程序代码、插件、API、Prompt、SillyTavern、模型、世界书、角色卡、调试信息；只生成自然的普通社区内容。';
   const ghostRule = ghostStoriesEnabled ? '允许在内容自然适合时选择“莲蓬鬼话”。' : '“莲蓬鬼话”关闭：不得生成莲蓬鬼话分类，也不得用其他分类绕过限制生成灵异鬼话主题。';
   const tianyaSystem = `# 天涯社区 · 杂谈板块生成器\n\n你正在模拟一个真实存在于当前故事世界中的中文老式公共论坛。这里不是剧情旁白、角色聊天室、作者讨论区或为 User 服务的信息面板。你的任务不是写“像论坛的文案”，而是截取这个世界此刻真实天涯论坛中的一页。\n\n【世界来源】\n论坛与当前故事共享同一个现实世界。可以从当前角色、人物关系、职业环境、社会背景、地点、时代、近期事件和正文剧情自然发散。当前故事世界应当成为社区内容的重要来源，而不是偶尔出现的彩蛋。可以直接讨论角色或 User，也可以只捕捉他们留下的社会痕迹：旁观者目击、小号爆料、同行议论、熟人吐槽、职业圈传闻、地点事件、相似经历、关系猜测、由近期事件引发的话题等。不要机械复述正文，也不要让所有帖子都围绕主角；仍应保留一部分与主角无关的普通互联网内容，使这里像真实存在于故事世界里的论坛。\n\n【天涯社区气质】\n这是传统中文 BBS，不是微博、小红书、知乎或现代短视频评论区。网友身份感强，昵称比头像重要；标题承担吸引和筛选作用；既有长文也有一句话水帖；有求助、树洞、记录、连载、讨论、争论、围观、爆料、转载、考据。楼主可能更新；网友会催更、马克、插眼、占楼、歪楼。回复质量和长度高度不均，有善意、刻薄、怀疑、抬杠、冷嘲，也可能认真长评；不要求正确、不要求共识、不要求都喜欢楼主。语言可有早期中文论坛感，但不同网友必须有不同口吻。\n\n【帖子形式】\n主动变化帖型，不要连续套同一模板。可以是：求助帖、情感/树洞帖、经历帖、直播/连载帖、讨论帖、社会观察帖、本地帖、职业帖、八卦帖、爆料帖、怀旧帖、历史/煮酒式长帖、娱乐帖、闲聊/水帖、调查/投票式帖子，以及世界中自然出现的其他形式。${ghostRule}\n\n【标题】\n标题首先像真人会在论坛取的标题，其次才考虑文学性。允许朴素、啰嗦、口语、悬念、求助、818、记录、讨论。不要整页使用现代内容营销式“震惊/必看/大盘点/你绝对想不到”。\n\n【正文】\n长度自然变化：几十字、几百字、少数长帖都可以。楼主写作能力不同：有人条理清楚，有人啰嗦，有人分段混乱，有人错别字或标点习惯明显。不要统一润色成同一种写作腔。\n\n【回复生态】\n回复是线性楼层。可以认真回答、追问、质疑、支持、反对、阴阳怪气、争吵、补充个人经历、纠正事实、求后续、马克、插眼、占楼、跑题、回复另一楼、引用某句话、给专业解释或只留一句话。不同网友有不同知识、立场和表达习惯。\n\n【页面多样性】\n一次刷新是一页论坛，不是专题策划。帖子之间必须有明显差异。部分可受剧情影响，部分来自世界社会背景，部分只是普通人的日常。禁止因为运行环境出现 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、生成器、调试信息，就默认这些属于故事世界；除非正文明确证明它们存在，否则一律不可见。\n\n【常驻规则】\n帖子是否常驻由界面中的红色笑脸决定，不由你决定。你只负责生成本次新帖子。\n\n只输出严格 JSON，不要解释。`;
@@ -1606,7 +1607,7 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
 不要让所有小红书用户拥有同一种语气。有人很活泼，有人很克制；有人爱用 emoji，有人完全不用；有人有轻微炫耀感，有人只是单纯记录，等等。不要为了“像小红书”让所有人都变成“姐妹们谁懂啊😭😭😭”。
 
 【四、评论生态】
-评论区不是客服区。评论者可能求教程、分享自己的经历、关注某个不起眼的细节、跑题、@别人、回复另一条评论、质疑真实性、给出建议等等。作者可以回复评论。评论允许形成小范围回复关系。评论数量要有疏密：冷笔记可 0~3 条，普通笔记约 4~8 条，热笔记可 9~15 条；不要让每篇都固定三四条。
+评论区不是客服区。评论者可能求教程、分享自己的经历、关注某个不起眼的细节、跑题、@别人、回复另一条评论、质疑真实性、给出建议等等。作者可以回复评论。评论允许形成小范围回复关系。首次生成的互动密度遵循上方 Community 通用契约；评论区后续刷新仍按原有追加规则。
 
 【运行环境隔离】
 AI、API、Prompt、插件、SillyTavern、世界书、角色卡、调试信息、代码、生成器等，如果只是系统运行环境中的信息，而不是故事世界明确存在的事物，不得成为社区内容。
@@ -1623,7 +1624,7 @@ AI、API、Prompt、插件、SillyTavern、世界书、角色卡、调试信息�
 知乎的核心对象是“问题 → 多个回答 → 每个回答自己的评论区”。同一问题的回答者必须像不同的人：身份、经历、专业程度、立场、信息来源、表达能力都可以不同。不要把多个回答写成同一个 AI 的分点总结。允许亲历、专业解释、短观点、反问、质疑题主、抖机灵、不同意其他回答。知乎感来自具体的人用自己的知识与经历回答具体问题，不靠堆“谢邀”“人在××”等梗。
 
 【评论】
-评论属于具体回答，可以赞同、质疑、追问、补充、纠错、分享经历、抬杠或回复其他评论。评论数量要有疏密：冷回答可 0~3 条，普通回答约 4~8 条，热回答可 9~15 条。
+评论属于具体回答，可以赞同、质疑、追问、补充、纠错、分享经历、抬杠或回复其他评论。首次生成的互动密度遵循上方 Community 通用契约；问题的初始互动由回答与回答下评论共同组成，后续刷新仍按原有追加规则。
 
 【隔离】
 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、生成器和调试信息不属于故事世界，除非正文明确证明其存在。
@@ -1666,14 +1667,14 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
   const baseSystem = section === 'tianya' ? tianyaSystem : section === 'recommend' ? recommendSystem : genericSystem;
   const system = `${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}${baseSystem}`;
   const schema = section === 'tianya'
-    ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复","replyTo":"可选；回复已有楼层时填写被回复楼层序号，只能指向本条评论之前的楼层"}]}]}。生成 6~8 条；每帖生成 6~8 条初始回复。回复某楼时不要把 @用户名 #楼层号 重复写进 content，由界面根据 replyTo 展示。不要 markdown。`
+    ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复","replyTo":"可选；回复已有楼层时填写被回复楼层序号，只能指向本条评论之前的楼层"}]}]}。生成 6~8 条；每帖按热度生成初始互动：普通约5~8条、活跃约8~12条、热门或争议约12~18条。回复某楼时不要把 @用户名 #楼层号 重复写进 content，由界面根据 replyTo 展示。不要 markdown。`
     : section === 'recommend'
-      ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu|custom","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","customCommunityId":"仅自创使用","customCommunityName":"仅自创使用","needsComments":"仅自创使用；true|false，严格按条目设置","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 ${recommendCount>0?recommendCount+" 条":"6~8 条"}；每条生成 6~8 条符合所属社区结构的初始互动。不要 markdown。`
+      ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu|custom","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","customCommunityId":"仅自创使用","customCommunityName":"仅自创使用","needsComments":"仅自创使用；true|false，严格按条目设置","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 ${recommendCount>0?recommendCount+" 条":"6~8 条"}；每条按内容热度生成符合所属社区结构的初始互动：普通约5~8条、活跃约8~12条、热门或争议约12~18条。不要 markdown。`
       : section === 'weibo'
-      ? `返回：{"posts":[{"section":"weibo","type":"weibo","author":"公开ID","authorId":"稳定id","title":"一句简短摘要或话题名","content":"微博正文","lane":"关注|同城|实时|超话|热门","tags":["#话题#"],"images":["可空；图片内容描述；最多9张"],"videos":["可空；视频内容描述；最多4个"],"repostText":"可空；转发者补充","repostChain":["@账号：转发链内容"],"reposts":0,"hotScore":0,"hotLabel":"可空：新|热|沸|爆","privateMessage":"可空；该微博作者若此刻自然想单独私信User，填写一条私信，否则空字符串","comments":[{"author":"网友ID","authorId":"稳定id","content":"评论","replyToCommentId":"可空；回复此前评论时填其id"}]}]}。一次生成完整微博刷新：lane=关注/同城/实时合计3~5条；lane=超话 3~5条；lane=热门 3~5条；总计9~15条且不得超过15条。每条微博评论数按冷热自然变化，不要统一为3；不要 markdown。`
+      ? `返回：{"posts":[{"section":"weibo","type":"weibo","author":"公开ID","authorId":"稳定id","title":"一句简短摘要或话题名","content":"微博正文","lane":"关注|同城|实时|超话|热门","tags":["#话题#"],"images":["可空；图片内容描述；最多9张"],"videos":["可空；视频内容描述；最多4个"],"repostText":"可空；转发者补充","repostChain":["@账号：转发链内容"],"reposts":0,"hotScore":0,"hotLabel":"可空：新|热|沸|爆","privateMessage":"可空；该微博作者若此刻自然想单独私信User，填写一条私信，否则空字符串","comments":[{"author":"网友ID","authorId":"稳定id","content":"评论","replyToCommentId":"可空；回复此前评论时填其id"}]}]}。一次生成完整微博刷新，总计8~10条；首页(lane=关注/同城/实时)、超话(lane=超话)、热搜(lane=热门)三池都至少2条，通常每池约3条，允许其中一到两个池根据内容价值多1~2条。每条微博按热度生成初始互动：普通约5~8条、活跃约8~12条、热门或争议约12~18条；互动包含顶层评论与下级回复。不要 markdown。`
     : section === 'xiaohongshu'
-        ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~8 条；每篇笔记生成 6~8 条初始评论/回复。不要 markdown。`
-        : `返回：{"posts":[{"section":"zhihu","type":"question","author":"题主昵称","authorId":"可选","title":"问题标题","content":"问题补充，可为空","answers":[{"author":"回答者昵称","authorId":"可选","content":"回答正文","upvotes":0,"comments":[{"author":"评论者","content":"评论"}]}]}]}。生成 6~8 个问题；每题生成 6~8 条风格明显不同的初始回答。回答下评论按内容自然生成，不强制每个回答再达到 6~8 条。不要 markdown。`;
+        ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~8 条；每篇笔记按热度生成初始互动：普通约5~8条、活跃约8~12条、热门或争议约12~18条，混合顶层评论与下级回复。不要 markdown。`
+        : `返回：{"posts":[{"section":"zhihu","type":"question","author":"题主昵称","authorId":"可选","title":"问题标题","content":"问题补充，可为空","answers":[{"author":"回答者昵称","authorId":"可选","content":"回答正文","upvotes":0,"comments":[{"author":"评论者","content":"评论"}]}]}]}。生成 6~8 个问题；每题按热度形成约5~18条初始互动，由风格明显不同的独立回答与回答下评论共同构成，不要求全部都是回答。不要 markdown。`;
   const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【当前可参考的故事上下文】\n${context}\n\n${schema}`;
   let text='';
   if (config.source === 'tavern') {
