@@ -3460,3 +3460,16 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 ## v0.5.79 后续
 - 继续 Community Social Network v1：Network Actor / Public Identity 统一、🔥真实互动连续性与主动机会、超话持续社区状态、网友微信双向连续性。
 - Character API batching 暂不施工；后续作为可选设置同时支持逐角色调用与合并调用。
+
+## v0.5.80 — Social Network core landed
+Implemented in moli227:
+1. Shared Network Actor/Public Identity persistence and lazy migration from existing Community history/follows.
+2. Stable Network Actor <-> WeChat contact linkage for `+微信好友`.
+3. Network experiences/DM -> linked WeChat context, plus linked WeChat recent participation -> later Community context for that same actor.
+4. Lightweight persistent Weibo supertopic state (name/key, recent public material, recurring active IDs).
+
+Still next, without splitting into UI micro-patches:
+- deepen event-driven Network Actor opportunities for proactive @ / DM using actual new events rather than blanket refresh behavior;
+- audit and enrich natural Character participation context without exposing private knowledge to the shared Community generator;
+- extend Network Actor profile/evidence consolidation across all four Community boards;
+- later add the user-selectable Character API mode: isolated per-character calls vs merged batch. Character Batch is not part of v0.5.80.

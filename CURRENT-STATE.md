@@ -647,3 +647,12 @@
 - Community 普通刷新允许当前可用 Character 以本人账号/已有小号自然参与，不因此新增专用 API；User 明确邀请/@ Character 仍走现有角色调用链。
 - 微博前台 Preset 的首页/热搜榜改为最新正向规则；已有保存预设会增量迁移该段，不要求恢复默认。
 - Character Batch 暂缓；未来设置提供“逐角色调用 / 合并调用”选择，当前测试阶段维持逐角色调用。
+
+## v0.5.80 / moli227 — Community Social Network v1 core
+- Network Actor / Public Identity v1 is now a real shared Community continuity layer rather than a Weibo-only nickname list. Existing followed accounts and historical Community authors are lazily migrated into the actor directory without clearing old data.
+- A network actor may own stable public IDs across Community surfaces. Program routing remains internal; public identity continuity does not disclose hidden real identity to other actors.
+- `+微信好友` now links the Network Actor to the created WeChat contact instead of only copying a profile. The same actor can therefore be resolved from Community and WeChat.
+- Unified Phone Context now includes the linked network actor's own pre-WeChat network experiences and network DMs for contacts whose origin is network.
+- Community generation also receives the linked network actor's recent WeChat participation when that same actor later appears online, giving the network-person -> WeChat -> Community return path without an App-A-to-App-B bridge.
+- Weibo supertopics now retain a lightweight continuity state derived from real supertopic posts: stable supertopic name/key, recent public material and recurring active public IDs. Future refreshes receive this state so a supertopic can continue instead of restarting each round.
+- Character Batch remains intentionally deferred. Explicit invited/@ Character generation keeps the existing per-character calls until the user-selectable isolated/merged mode is designed.

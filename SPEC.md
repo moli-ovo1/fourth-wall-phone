@@ -4420,3 +4420,20 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 热门微博是 User 搜索结果池，不由普通刷新填充。
 - 常驻是 User 手工保留视图，不是生成池。
 - User 新发微博的初始互动在下一次总刷新中补种一次；手动评论区刷新规则保持不变。
+
+## Community Social Network v1 (v0.5.80)
+### Network person model
+- `Network Actor` is the persistent person-level object for recurring internet residents.
+- `Public Identity` is a public account identity used by that actor on a Community surface. One actor may accumulate stable public IDs; internal ownership/routing is not character knowledge.
+- Community posts/comments/answers across Tianya, Xiaohongshu, Zhihu and Weibo may contribute to the same recurring Network Actor when the same stable public ID is used.
+- Existing Community/follow data must migrate forward; this feature must not require clearing test data merely to create the new actor layer.
+
+### Network Actor -> WeChat
+- The only promotion action is the Community-side `+微信好友` action.
+- Promotion creates/links one WeChat contact and stores a stable actor-contact mapping. Repeated promotion resolves the existing contact instead of cloning a person.
+- The linked contact inherits the actor's public profile and actual network experiences. Subsequent WeChat participation belongs to the same person and may be available when that actor later participates in Community.
+- Being followed or marked 🔥 does not itself create a WeChat contact; no extra prohibition mechanism is required.
+
+### Supertopic continuity
+- CP supertopics are lightweight persistent communities, not one-refresh prompt decorations.
+- Persist enough public state to continue them: stable name/key, recent public material and recurring active public IDs. Do not create a hidden omniscient fandom database.
