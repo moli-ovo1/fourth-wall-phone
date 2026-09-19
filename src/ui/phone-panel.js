@@ -6970,6 +6970,17 @@ export function createPhonePanel({
     }
     return rows.length?rows.join('\n'):'（暂无评论）';
   };
+  const communitySelfAuthoredContext = (post, contactId) => {
+    const cid=String(contactId||''); if(!post||!cid)return '';
+    const rows=[];
+    const isSelf=author=>String(author?.id||'')===cid&&String(author?.type||'')==='contact';
+    const surface=author=>author?.anonymous?`匿名账号“${String(author?.name||'匿名用户')}”`:`本人账号“${String(author?.name||'')}”`;
+    if(isSelf(post.author))rows.push(`你曾以${surface(post.author)}发布本帖：${String(post.content||'').trim()}`);
+    const walk=(items,label='评论')=>{for(const item of items||[]){if(isSelf(item?.author))rows.push(`你曾以${surface(item.author)}发表${label}：${String(item?.content||'').trim()}`);walk(item?.replies||[],'回复');}};
+    walk(post.comments||[]);
+    for(const answer of post?.extra?.answers||[]){if(isSelf(answer?.author))rows.push(`你曾以${surface(answer.author)}发表回答：${String(answer?.content||'').trim()}`);walk(answer?.comments||[],'回答下评论');}
+    return rows.filter(Boolean).slice(-12).join('\n');
+  };
   const privateConversationKeyFor = (scopeKey, contactId) => {
     const rawScope = String(scopeKey || '');
     const inConcreteWorld = isConcreteTavernWorldScope(rawScope);
@@ -7030,7 +7041,8 @@ export function createPhonePanel({
       const conversationKey=privateConversationKeyFor(scopeKey,contactId);
       const privateConv=getScopeConversations(scopeKey).find(c=>String(c.conversationKey||c.id||'')===String(conversationKey));
       const proactiveEnabled=privateConv?.automation?.autoChatEnabled===true;
-      const instruction=`【moli社区自然参与判断】\n你之前已经参与过这篇${sourceLabel(post)}讨论。现在刷新时出现了你尚未判断的新变化。\n标题：${post.title||'无标题'}\n当前讨论：\n${communityDiscussionContext(post)}\n\n【这次真正的新变化】\n${events.map(e=>`- ${e.content||e.action}`).join('\n')}\n${continuity?`\n【你自己的手机经历/认知】\n${continuity}`:''}\n\n按照当前人物、已有经历与当前讨论自行决定。\nPUBLIC 可选 REPLY_REAL / REPLY_ANONYMOUS / SKIP。${proactiveEnabled?'PRIVATE 可独立选 SEND / SKIP。':'主动私聊权限关闭：PRIVATE 必须 SKIP。'}\n严格追加：<community_decision>REPLY_REAL|REPLY_ANONYMOUS|SKIP</community_decision><community_alias>匿名时的网名</community_alias><community_reply>公开回复；SKIP 时留空</community_reply><community_private>SEND|SKIP</community_private><community_private_reason>简短原因</community_private_reason>；PRIVATE=SEND 时再输出 2~5 个 <msg>私聊内容</msg>。`;
+      const selfAuthored=communitySelfAuthoredContext(post,contactId);
+      const instruction=`【moli社区自然参与判断】\n你之前已经参与过这篇${sourceLabel(post)}讨论。现在刷新时出现了你尚未判断的新变化。\n标题：${post.title||'无标题'}\n当前讨论：\n${communityDiscussionContext(post)}\n${selfAuthored?`\n\n【你本人此前在这篇讨论中说过的话】\n${selfAuthored}\n这些是你本人真实做过/说过的事，不是陌生网友发言。延续你当时已经形成的指代、立场和人物关系；除非后续事实明确改变，不要把自己原本指向自己或已知人物的称呼重新解释成一个凭空出现的第三人。`:''}\n\n【这次真正的新变化】\n${events.map(e=>`- ${e.content||e.action}`).join('\n')}\n${continuity?`\n【你自己的手机经历/认知】\n${continuity}`:''}\n\n按照当前人物、已有经历与当前讨论自行决定。\nPUBLIC 可选 REPLY_REAL / REPLY_ANONYMOUS / SKIP。${proactiveEnabled?'PRIVATE 可独立选 SEND / SKIP。':'主动私聊权限关闭：PRIVATE 必须 SKIP。'}\n严格追加：<community_decision>REPLY_REAL|REPLY_ANONYMOUS|SKIP</community_decision><community_alias>匿名时的网名</community_alias><community_reply>公开回复；SKIP 时留空</community_reply><community_private>SEND|SKIP</community_private><community_private_reason>简短原因</community_private_reason>；PRIVATE=SEND 时再输出 2~5 个 <msg>私聊内容</msg>。`;
       try{
         const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction,allowNoPendingUser:true}); const raw=String(result?.text||'');
         const decision=(raw.match(/<community_decision>\s*(REPLY_ANONYMOUS|REPLY_REAL|SKIP)\s*<\/community_decision>/i)?.[1]||'SKIP').toUpperCase();
@@ -7421,7 +7433,7 @@ ${item.type==='invite'?`User 明确邀请你${isAnswer?'回答这个问题':'参
     if (!post) return '';
     const at = Number(snapshotAt || Date.now());
     const visible = item => !Number(item?.createdAt || 0) || Number(item.createdAt) <= at;
-    const actor = author => String(author?.uiName || author?.name || '匿名网友').trim() || '匿名网友';
+    const actor = author => String(author?.name || '匿名网友').trim() || '匿名网友';
     const lines = [`帖子：${String(post.title || '无标题').trim()}`, `作者：${actor(post.author)}`, `正文：${String(post.content || '').trim() || '（无正文）'}`];
     if (post.section === 'xiaohongshu') {
       if (String(post.extra?.imagePrompt || '').trim()) lines.push(`配图：${String(post.extra.imagePrompt).trim()}`);
