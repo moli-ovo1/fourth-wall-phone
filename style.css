@@ -2483,3 +2483,7 @@
 #moli-phone-panel .moli-weibo-media-editor-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
 #moli-phone-panel .moli-weibo-media-editor-actions button{border:0;background:#f3f3f4;border-radius:16px;padding:7px 15px}
 #moli-phone-panel .moli-weibo-media-editor-actions .primary{background:#ff8200;color:#fff}
+
+/* moli224 · final Weibo polish */
+#moli-phone-panel .moli-weibo-comment-actions{gap:10px}
+#moli-phone-panel .moli-weibo-compose-at-hint{position:absolute;left:42px;top:20px;margin:0;max-width:calc(100% - 64px);font-size:11px;line-height:1.35;color:#999;background:#fff;cursor:pointer;z-index:2}
