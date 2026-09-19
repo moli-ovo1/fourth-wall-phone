@@ -4243,3 +4243,10 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 隐私/认知边界仍必须成立：角色未参加的私聊不可见；未获得的匿名真实身份不可见；系统真相不得因为帖子对象里存在真实 ID 而泄漏；User 陈述与客观事实保持认识论区分。
 
 **禁止 App-to-App 桥接扩散：** 后续不得为“微信→微博”“微博→Community”等组合建立专用角色认知桥。新 App 只需要：①产生规范事实/awareness/experience；②生成角色时调用 Unified Phone Context。小手机→正文仍由“我们的墙”控制，不因本规则自动注入正文。
+
+## Community Prompt responsibility boundary (v0.5.60)
+- Program responsibilities: identify the current character, provide facts/experience/knowledge, expose allowed actions, enforce permissions and parse output format.
+- Character behavior authority: character card/personality + User-editable Community preset + current facts. Runtime code must not add a hidden “second personality” that teaches the character how cautious, interested or active it should be.
+- Anonymous public identity uses data minimization: the model receives the public nickname/content it can actually observe. Local UI ownership is not character knowledge and must not be promoted into “anonymous nickname = User” truth.
+- AI may author a post as User when the generation entry permits it; AI must not author User comments, answers or replies. User-entered UI content is unaffected.
+- Machine action enums/JSON/XML-like tags are interface protocol, not behavior policy.

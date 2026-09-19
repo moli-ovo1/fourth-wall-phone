@@ -3296,3 +3296,11 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 跨 App 连续性从“逐 App 搭桥”改为“Character 单一连续性”。`phone-context-builder.js` 是角色手机上下文的统一 read model。现有 World Event、Awareness、Character Knowledge、Character Continuity 保留为事实与权限底座，不推倒重写。
 
 接入点：普通私聊生成、群聊逐人生成、Community 自然参与、主动行为判断。后续朋友圈角色行为和微博也必须复用该入口。禁止新增 App A -> App B 专用桥；如果某 App 内容没有进入角色上下文，应修正该 App 的事实/awareness 写入或统一 Builder，而不是另建桥。
+
+## v0.5.60 / moli216 — Community Prompt cleanup
+- Keep Unified Phone Context; do not return to pairwise App-to-App cognition bridges.
+- Remove hidden Community behavior philosophy while retaining action/output protocols.
+- Anonymous User UI ownership is separated from character cognition; no automatic hidden User identity injection.
+- Community batch targets: 6–8 new posts per refresh; 6–8 initial Tianya/Xiaohongshu interactions; 6–8 initial Zhihu answers.
+- Community SEND target: 2–5 bubbles.
+- Next validation: real-device Community refresh autonomy, same-character cross-App continuity, anonymous nickname behavior, and absence of meta/model talk.

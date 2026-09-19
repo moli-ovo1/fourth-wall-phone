@@ -470,3 +470,11 @@
 - Community 角色再次行动时可直接带着本人近期微信经历回来；微信/群聊生成也继续带着 Community/朋友圈中已经进入本人认知的经历。
 - 隐私边界仍按 Character 过滤：不注入别人私聊；匿名身份只使用该角色已经确定知道的映射；SKIP 不等于遗忘。
 - 架构铁律：禁止继续新增 App A -> App B 专用“认知桥”。新增 App 应写入统一事实/认知底座，并从 Unified Phone Context 读取当前角色上下文。
+
+## v0.5.60 / moli216 — Community Prompt responsibility cleanup
+- Community behavior authority is returned to the character card + User-editable Community preset. Runtime prompts keep facts, available actions and machine-readable output protocol, but no longer teach a second behavior philosophy such as “knowing ≠ caring ≠ acting” or “do not act just to show the feature”.
+- Proactive-chat tendency is not a Community participation probability and no random dice is introduced. Community natural participation keeps its own REPLY_REAL / REPLY_ANONYMOUS / SKIP capability protocol.
+- User anonymous Community comments store only the public alias plus local UI ownership metadata; they no longer create an AI-visible hidden truth that the alias is User. Existing legacy User identity mappings are filtered from Character Continuity output.
+- AI may generate a User-authored post, but must not impersonate User to generate comments, answers or replies.
+- Community private SEND protocol is 2–5 bubbles.
+- New Community page refresh batches request 6–8 new posts. Tianya/Xiaohongshu new posts request 6–8 initial interactions; Zhihu new questions request 6–8 initial answers.
