@@ -2422,3 +2422,64 @@
 #moli-phone-panel .moli-community-composer-backdrop.is-weibo-composer .moli-community-composer-top{background:#fff}
 #moli-phone-panel .moli-community-composer-backdrop.is-weibo-composer textarea{min-height:52px;background:#f6f6f7;border:0;border-radius:18px;padding:10px 13px;outline:0}
 #moli-phone-panel .moli-community-composer-backdrop.is-weibo-composer .moli-community-send{background:#ff8200;color:#fff;border-color:#ff8200}
+/* moli223 · Weibo visual/interaction refinement */
+@keyframes moli-spin{to{transform:rotate(360deg)}}
+#moli-phone-panel .moli-weibo-refresh.is-spinning,
+#moli-phone-panel .moli-comment-refresh.is-spinning{display:inline-grid;place-items:center;animation:moli-spin .72s linear infinite!important;transform-origin:50% 50%}
+
+/* Media tiles keep Weibo's compact square size even when there is only one. */
+#moli-phone-panel .moli-weibo-media,
+#moli-phone-panel .moli-weibo-media-1,
+#moli-phone-panel .moli-weibo-media-2,
+#moli-phone-panel .moli-weibo-media-4{grid-template-columns:repeat(3,minmax(0,1fr))}
+#moli-phone-panel .moli-weibo-media>div{aspect-ratio:1/1;min-height:0;max-height:none;padding:8px}
+
+/* Weibo detail typography: ordinary feed typography, not article typography. */
+#moli-phone-panel .moli-weibo-detail,
+#moli-phone-panel .moli-weibo-detail button{font-weight:400}
+#moli-phone-panel .moli-weibo-detail-head b{font-size:14px;font-weight:400}
+#moli-phone-panel .moli-weibo-detail-author b{font-size:12px;font-weight:400}
+#moli-phone-panel .moli-weibo-detail-body p{font-size:12px;line-height:1.62;font-weight:400;margin:7px 0}
+#moli-phone-panel .moli-weibo-detail-tabs button{font-size:11px;font-weight:400}
+
+/* Reposted Weibo keeps the source account visually identifiable. */
+#moli-phone-panel .moli-weibo-repost-author{display:flex;align-items:center;gap:7px;margin-bottom:6px;color:#333}
+#moli-phone-panel .moli-weibo-repost-author .moli-weibo-avatar{width:24px;height:24px;font-size:10px}
+#moli-phone-panel .moli-weibo-repost-author b{font-size:11px;font-weight:400}
+
+/* Weibo comment tree. No left reply rails; one preview reply then expandable remainder. */
+#moli-phone-panel .moli-weibo-comments{padding:2px 12px 24px}
+#moli-phone-panel .moli-weibo-comment{display:flex;gap:8px;padding:10px 0;border:0}
+#moli-phone-panel .moli-weibo-comment-thread{border-bottom:1px solid #f1f1f1;padding-bottom:2px}
+#moli-phone-panel .moli-weibo-comment.is-reply{margin-left:36px;padding-left:0;border-left:0}
+#moli-phone-panel .moli-weibo-comment-avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;background:#f0f0f2;color:#777;font-size:11px}
+#moli-phone-panel .moli-weibo-comment-main{min-width:0;flex:1}
+#moli-phone-panel .moli-weibo-comment-name{font-size:11px;font-weight:400;color:#555}
+#moli-phone-panel .moli-weibo-comment p{font-size:12px;line-height:1.55;margin:4px 0;color:#333;font-weight:400}
+#moli-phone-panel .moli-weibo-comment-actions{display:flex;justify-content:flex-end;gap:22px;margin-top:4px}
+#moli-phone-panel .moli-weibo-comment-actions button{width:22px;height:22px;display:grid;place-items:center;padding:0;border:0;background:none;color:#999}
+#moli-phone-panel .moli-weibo-comment-actions svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
+#moli-phone-panel .moli-weibo-comment-actions button:last-child svg{fill:none}
+#moli-phone-panel .moli-weibo-expand-replies{border:0;background:none;color:#507daf;font-size:10px;font-weight:400;padding:3px 0 8px 74px}
+
+/* Weibo composer: text first, compact icon-only toolbar, media cards and modal editor. */
+#moli-phone-panel .moli-weibo-compose-body{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+#moli-phone-panel .moli-weibo-compose-body>textarea[data-weibo-compose-text]{flex:1;min-height:180px;border:0;outline:0;padding:18px;font-size:15px;resize:none;background:#fff;color:#222}
+#moli-phone-panel .moli-weibo-compose-at-hint{margin:-4px 18px 8px;color:#999;font-size:10px;line-height:1.45}
+#moli-phone-panel .moli-weibo-compose-tools{display:flex;gap:26px;padding:11px 18px 16px;border-top:1px solid #eee}
+#moli-phone-panel .moli-weibo-compose-tools button{border:0;background:transparent;border-radius:0;padding:0;font-size:25px;line-height:1;color:#666}
+#moli-phone-panel .moli-weibo-compose-images{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:0 14px 10px}
+#moli-phone-panel .moli-weibo-compose-media-tile,
+#moli-phone-panel .moli-weibo-compose-media-plus{aspect-ratio:1/1;min-height:0;background:#f1f1f2;border:0;position:relative;padding:7px;display:flex;flex-direction:column;justify-content:center;color:#666;font-size:9px;overflow:hidden}
+#moli-phone-panel .moli-weibo-compose-media-tile>button{position:absolute;right:2px;top:2px;width:20px;height:20px;border:0;background:rgba(0,0,0,.35);color:#fff;font-size:15px}
+#moli-phone-panel .moli-weibo-compose-media-tile small{color:#999;margin-bottom:4px}
+#moli-phone-panel .moli-weibo-compose-media-plus{font-size:34px;color:#aaa;align-items:center}
+#moli-phone-panel .moli-weibo-media-editor{position:absolute;inset:0;z-index:190;background:rgba(0,0,0,.22);display:flex;align-items:flex-end}
+#moli-phone-panel .moli-weibo-media-editor-card{width:100%;background:#fff;border-radius:16px 16px 0 0;padding:14px}
+#moli-phone-panel .moli-weibo-media-editor-tabs{display:flex;gap:8px;margin-bottom:10px}
+#moli-phone-panel .moli-weibo-media-editor-tabs button{border:0;background:#f3f3f4;border-radius:16px;padding:6px 14px;color:#666}
+#moli-phone-panel .moli-weibo-media-editor-tabs button.is-active{background:#fff1df;color:#ff8200}
+#moli-phone-panel .moli-weibo-media-editor-card textarea{width:100%;box-sizing:border-box;border:1px solid #e4e4e6;border-radius:8px;padding:10px;resize:none;font:inherit;font-size:12px}
+#moli-phone-panel .moli-weibo-media-editor-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+#moli-phone-panel .moli-weibo-media-editor-actions button{border:0;background:#f3f3f4;border-radius:16px;padding:7px 15px}
+#moli-phone-panel .moli-weibo-media-editor-actions .primary{background:#ff8200;color:#fff}
