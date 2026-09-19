@@ -78,6 +78,7 @@ import {
   generateContactMoment,
   generatePublicMomentsRefresh,
   generatePublicWebRefresh,
+  generateCommunityDiscoveryRefresh,
   generateCommunityPasserbyMentionReply,
   generateTianyaReplyRefresh,
   generateXiaohongshuCommentRefresh,
@@ -7321,15 +7322,17 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     try {
       if (!['recommend','tianya','xiaohongshu','weibo'].includes(currentPublicWebTab)) { windowRef.alert?.('这个入口的专属生成规则还在打磨中。'); return; }
       const settings=getPublicWebSettings(getScopeKey?.());
+      let discoveryPosts=[];
       if (currentPublicWebTab === 'recommend') {
         const batchId=`recommend_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
         const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:'recommend',recommendSources:settings.recommendCustomized?settings.recommendSources:null,recommendCount:settings.recommendCustomized?settings.recommendCount:0,customCommunities:listCustomCommunities(getScopeKey?.()).filter(x=>!Array.isArray(settings.recommendCustomIds)||!settings.recommendCustomIds.length||settings.recommendCustomIds.includes(x.id))});
-        addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } })));
+        discoveryPosts=addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } })));
         updatePublicWebSettings(getScopeKey?.(),{ recommendationBatchId:batchId });
       } else {
         const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:currentPublicWebTab});
-        if(currentPublicWebTab==='weibo'){appendPublicWebSectionPosts(getScopeKey?.(),'weibo',items);trimWeiboLanePosts(getScopeKey?.(),15);for(const item of items){const message=String(item?.extra?.privateMessage||'').trim();const id=String(item?.author?.id||item?.author?.name||'').trim();const name=String(item?.author?.name||id).trim();if(message&&id&&name){saveWeiboMessagePeer(getScopeKey?.(),{id,name,profile:'由微博公开互动产生的持续网络账号'});addWeiboPrivateMessage(getScopeKey?.(),id,{role:'account',content:message});}}}else replacePublicWebSectionPosts(getScopeKey?.(),currentPublicWebTab,items);
+        if(currentPublicWebTab==='weibo'){discoveryPosts=appendPublicWebSectionPosts(getScopeKey?.(),'weibo',items);trimWeiboLanePosts(getScopeKey?.(),15);for(const item of items){const message=String(item?.extra?.privateMessage||'').trim();const id=String(item?.author?.id||item?.author?.name||'').trim();const name=String(item?.author?.name||id).trim();if(message&&id&&name){saveWeiboMessagePeer(getScopeKey?.(),{id,name,profile:'由微博公开互动产生的持续网络账号'});addWeiboPrivateMessage(getScopeKey?.(),id,{role:'account',content:message});}}}else discoveryPosts=replacePublicWebSectionPosts(getScopeKey?.(),currentPublicWebTab,items);
       }
+      await settleCommunityDiscovery(discoveryPosts);
       openedPublicWebPostId=''; renderPublicWeb();
     }
     catch(error){ console.error('[moli小手机] public web refresh failed:',error); windowRef.alert?.(`刷新失败：${error?.message||error}`); }
@@ -7400,8 +7403,8 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
         const settings=getPublicWebSettings(getScopeKey?.());
         const batchId=`recommend_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
         const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),ghostStoriesEnabled:settings.ghostStoriesEnabled,section:'recommend',recommendSources:settings.recommendCustomized?settings.recommendSources:null,recommendCount:settings.recommendCustomized?settings.recommendCount:0,customCommunities:listCustomCommunities(getScopeKey?.()).filter(x=>!Array.isArray(settings.recommendCustomIds)||!settings.recommendCustomIds.length||settings.recommendCustomIds.includes(x.id))});
-        addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } })));
-        updatePublicWebSettings(getScopeKey?.(),{ recommendationBatchId:batchId }); ['tianya','xiaohongshu','zhihu'].forEach(section=>trimPublicWebSectionPosts(getScopeKey?.(),section,10)); openedPublicWebPostId=''; renderPublicWeb();
+        const discoveryPosts=addPublicWebPosts(getScopeKey?.(),items.map(item=>({ ...item, extra:{ ...(item.extra||{}), recommendationBatchId:batchId } })));
+        updatePublicWebSettings(getScopeKey?.(),{ recommendationBatchId:batchId }); ['tianya','xiaohongshu','zhihu'].forEach(section=>trimPublicWebSectionPosts(getScopeKey?.(),section,10)); await settleCommunityDiscovery(discoveryPosts); openedPublicWebPostId=''; renderPublicWeb();
       }catch(error){console.error('[moli小手机] community recommend refresh failed:',error);windowRef.alert?.(`刷新失败：${error?.message||error}`);}
       finally{publicWebGenerating.delete('recommend');renderPublicWeb();}
       return;
@@ -7409,7 +7412,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     const xhsCompose=event.target?.closest?.('.moli-xhs-compose-fab[data-action="public-web-compose"]');
     if(xhsCompose){const imagePrompt=windowRef.prompt?.('图片内容','')??null;if(imagePrompt===null)return;const imageText=windowRef.prompt?.('图片里的文字','')??null;if(imageText===null)return;const title=windowRef.prompt?.('标题','')??null;if(title===null)return;const content=windowRef.prompt?.('点进去的正文（可以留空）','')??null;if(content===null)return;if(!String(imagePrompt).trim()||!String(imageText).trim()||!String(title).trim()){windowRef.alert?.('图片、图片里的文字和标题都需要填写。');return;}createPublicWebPost(getScopeKey?.(),{section:'xiaohongshu',author:{type:'user',id:'user',name:getTavernUserContext()?.name||'User'},title,content,extra:{imagePrompt:String(imagePrompt).trim(),imageText:String(imageText).trim(),style:'user'}});renderPublicWeb();return;}
     const xhsRefresh=event.target?.closest?.('[data-action="public-web-refresh-xhs"]');
-    if(xhsRefresh){if(publicWebGenerating.has('xiaohongshu'))return;publicWebGenerating.add('xiaohongshu');xhsRefresh.disabled=true;renderPublicWeb();try{const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),section:'xiaohongshu'});replacePublicWebSectionPosts(getScopeKey?.(),'xiaohongshu',items);openedPublicWebPostId='';renderPublicWeb();}catch(error){console.error('[moli小手机] xhs refresh failed:',error);windowRef.alert?.(`刷新失败：${error?.message||error}`);}finally{publicWebGenerating.delete('xiaohongshu');renderPublicWeb();}return;}
+    if(xhsRefresh){if(publicWebGenerating.has('xiaohongshu'))return;publicWebGenerating.add('xiaohongshu');xhsRefresh.disabled=true;renderPublicWeb();try{const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),section:'xiaohongshu'});const discoveryPosts=replacePublicWebSectionPosts(getScopeKey?.(),'xiaohongshu',items);await settleCommunityDiscovery(discoveryPosts);openedPublicWebPostId='';renderPublicWeb();}catch(error){console.error('[moli小手机] xhs refresh failed:',error);windowRef.alert?.(`刷新失败：${error?.message||error}`);}finally{publicWebGenerating.delete('xiaohongshu');renderPublicWeb();}return;}
     const xhsToggle=event.target?.closest?.('[data-action="xhs-toggle-replies"]');
     if(xhsToggle){const id=String(xhsToggle.dataset.commentId||'');if(expandedXhsThreads.has(id))expandedXhsThreads.delete(id);else expandedXhsThreads.add(id);renderPublicWeb();return;}
     const xhsAdd=event.target?.closest?.('[data-action="xhs-comments-add"]');
@@ -7418,7 +7421,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     if(tianyaFloorReply){openCommunityComposer({postId:tianyaFloorReply.dataset.postId,replyToCommentId:tianyaFloorReply.dataset.commentId,replyLabel:`@${tianyaFloorReply.dataset.commentAuthor||'网友'} #${tianyaFloorReply.dataset.floor||''}`});return;}
     const xhsReply=event.target?.closest?.('[data-action="xhs-comment-reply"]');
     if(xhsReply){openCommunityComposer({postId:xhsReply.dataset.postId,replyToCommentId:xhsReply.dataset.commentId,replyLabel:`@${xhsReply.dataset.commentAuthor||'网友'}`});return;}
-    const weiboRefresh=event.target?.closest?.('[data-action="public-web-refresh"]'); if(weiboRefresh&&currentPublicWebTab==='weibo'){if(publicWebGenerating.has('weibo'))return;publicWebGenerating.add('weibo');renderPublicWeb();try{const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),section:'weibo'});appendPublicWebSectionPosts(getScopeKey?.(),'weibo',items);if(Array.isArray(items.hotTopics))setWeiboHotTopics(getScopeKey?.(),items.hotTopics);for(const batch of (Array.isArray(items.userPostComments)?items.userPostComments:[]))settleWeiboUserPostEcology(getScopeKey?.(),batch?.postId,batch?.comments);trimWeiboLanePosts(getScopeKey?.(),15);for(const item of items){const message=String(item?.extra?.privateMessage||'').trim();const id=String(item?.author?.id||item?.author?.name||'').trim();const name=String(item?.author?.name||id).trim();if(message&&id&&name){saveWeiboMessagePeer(getScopeKey?.(),{id,name,profile:'由微博公开互动产生的持续网络账号'});addWeiboPrivateMessage(getScopeKey?.(),id,{role:'account',content:message});}}openedPublicWebPostId='';renderPublicWeb();}catch(error){console.error('[moli小手机] weibo refresh failed:',error);windowRef.alert?.(`刷新失败：${error?.message||error}`);}finally{publicWebGenerating.delete('weibo');renderPublicWeb();}return;}
+    const weiboRefresh=event.target?.closest?.('[data-action="public-web-refresh"]'); if(weiboRefresh&&currentPublicWebTab==='weibo'){if(publicWebGenerating.has('weibo'))return;publicWebGenerating.add('weibo');renderPublicWeb();try{const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),section:'weibo'});const discoveryPosts=appendPublicWebSectionPosts(getScopeKey?.(),'weibo',items);if(Array.isArray(items.hotTopics))setWeiboHotTopics(getScopeKey?.(),items.hotTopics);for(const batch of (Array.isArray(items.userPostComments)?items.userPostComments:[]))settleWeiboUserPostEcology(getScopeKey?.(),batch?.postId,batch?.comments);trimWeiboLanePosts(getScopeKey?.(),15);for(const item of items){const message=String(item?.extra?.privateMessage||'').trim();const id=String(item?.author?.id||item?.author?.name||'').trim();const name=String(item?.author?.name||id).trim();if(message&&id&&name){saveWeiboMessagePeer(getScopeKey?.(),{id,name,profile:'由微博公开互动产生的持续网络账号'});addWeiboPrivateMessage(getScopeKey?.(),id,{role:'account',content:message});}}await settleCommunityDiscovery(discoveryPosts);openedPublicWebPostId='';renderPublicWeb();}catch(error){console.error('[moli小手机] weibo refresh failed:',error);windowRef.alert?.(`刷新失败：${error?.message||error}`);}finally{publicWebGenerating.delete('weibo');renderPublicWeb();}return;}
     const weiboView=event.target?.closest?.('[data-weibo-view]'); if(weiboView){currentWeiboView=String(weiboView.dataset.weiboView||'home');panel.querySelector('[data-weibo-pinned]')?.toggleAttribute('hidden',currentWeiboView!=='pinned');panel.querySelector('[data-weibo-home]')?.toggleAttribute('hidden',currentWeiboView!=='home');panel.querySelector('[data-weibo-supertopic]')?.toggleAttribute('hidden',currentWeiboView!=='supertopic');panel.querySelector('[data-weibo-hot]')?.toggleAttribute('hidden',currentWeiboView!=='hot');panel.querySelectorAll('[data-weibo-view]').forEach(x=>x.classList.toggle('is-active',x===weiboView));return;}
     
     const follow=event.target?.closest?.('[data-action="weibo-follow"]'); if(follow){const scopeKey=getScopeKey?.();const id=String(follow.dataset.accountId||follow.dataset.accountName||'').trim(),name=String(follow.dataset.accountName||id).trim();const row=listWeiboFollows(scopeKey).find(x=>String(x.id)===id||String(x.name)===name);if(row){if(windowRef.confirm?.(`确定取关 @${row.name}？\n\n取关会删除这个关注人的持续认知记忆和私信记录，之后重新关注不会自动恢复。`)){deleteWeiboFollow(scopeKey,row.id);renderPublicWeb();}return;}saveWeiboFollow(scopeKey,{id,name,profile:'',source:'observed'});renderPublicWeb();const related=listPublicWebPosts(scopeKey,{section:'weibo'}).filter(p=>String(p.author?.id||p.author?.name||'')===id||String(p.author?.name||'')===name).slice(0,5);const evidence=related.map(p=>String(p.content||p.title||'')).filter(Boolean).join('；').slice(0,500);void summarizeWeiboAccountProfile({scopeKey,name,evidence}).then(profile=>{if(isWeiboFollowed(scopeKey,id)||isWeiboFollowed(scopeKey,name))saveWeiboFollow(scopeKey,{id,name,profile,source:'observed'});}).catch(()=>{});return;}
@@ -7542,6 +7545,38 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     const ids = [...new Set((Array.isArray(contactIds) ? contactIds : [contactIds]).map(String).filter(Boolean))];
     if (!post || !ids.length) return null;
     return recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:'system',action:'POST_SNAPSHOT_KNOWN',targetContactIds:ids,objectId:String(post.id||''),content:`你已经看过截至当时的这篇${sourceLabel(post)}内容。\n${communityPostKnowledgeText(post,snapshotAt)}`,metadata:{postId:String(post.id||''),snapshotAt:Number(snapshotAt||Date.now()),knowledgeScope:'post_snapshot',reason},awareness:'known',dedupeKey:`community-post-snapshot:${post.id}:${ids.sort().join(',')}:${Number(snapshotAt||0)}`});
+  };
+
+  const settleCommunityDiscovery = async posts => {
+    const scopeKey=getScopeKey?.();
+    const candidates=(Array.isArray(posts)?posts:[]).map(item=>getPublicWebPost(scopeKey,item?.id)||item).filter(item=>item?.id);
+    if(!candidates.length||!isPersistentScopeKey(scopeKey))return [];
+    const result=await generateCommunityDiscoveryRefresh({scopeKey,posts:candidates});
+    const notices=[];
+    for(const row of result?.actors||[]){
+      const contact=getContacts().find(item=>String(item.id)===String(row.actorId));
+      if(!contact)continue;
+      const viewed=new Set((row.viewedPostIds||[]).map(String));
+      for(const postId of viewed){
+        const post=getPublicWebPost(scopeKey,postId)||candidates.find(item=>String(item.id)===postId);
+        if(!post)continue;
+        recordCommunityPostSnapshotAwareness(scopeKey,post,[contact.id],'autonomous-browse',Date.now());
+      }
+      for(const action of row.actions||[]){
+        const post=getPublicWebPost(scopeKey,action.postId)||candidates.find(item=>String(item.id)===String(action.postId));
+        if(!post)continue;
+        if(!viewed.has(String(post.id)))recordCommunityPostSnapshotAwareness(scopeKey,post,[contact.id],'autonomous-browse',Date.now());
+        const anonymous=String(action.mode)==='REPLY_ANONYMOUS';
+        const alias=String(action.alias||'').trim()||'小号用户';
+        const author=anonymous?{type:'contact',id:contact.id,name:alias,uiName:`${alias}（${displayName(contact)}）`,anonymous:true,knownIdentityId:contact.id,identityKnownBy:[contact.id]}:{type:'contact',id:contact.id,name:displayName(contact),anonymous:false};
+        if(post.section==='zhihu')addZhihuAnswer(scopeKey,post.id,{author,content:action.content});
+        else addPublicWebComment(scopeKey,post.id,{author,content:action.content});
+        const event=recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:contact.id,action:'CHARACTER_REPLIED',targetContactIds:[contact.id],objectId:String(post.id||''),content:`你自主浏览${sourceLabel(post)}时看到了这篇内容，并决定公开${anonymous?'使用小号':'实名'}参与：“${String(action.content||'').slice(0,500)}”`,metadata:{postId:String(post.id||''),decision:String(action.mode||''),publicContent:String(action.content||''),anonymousAlias:anonymous?alias:'',discoveryMode:'autonomous-browse'},awareness:'known'});
+        if(anonymous)rememberAnonymousIdentity(scopeKey,{surface:`community.${post.section||'unknown'}`,alias,realContactId:contact.id,knownBy:[contact.id],evidenceEventId:event?.id});
+        notices.push({contactId:contact.id,postId:post.id,decision:action.mode});
+      }
+    }
+    return notices;
   };
 
   const communitySurfaceActors = post => {
