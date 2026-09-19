@@ -360,6 +360,11 @@ const DEFAULT_COMMUNITY_PROMPT_BLOCKS = [
 - 程序为了路由而知道“这个小号属于谁”，不等于其他人物知道其真实身份。公开世界只看见公开ID；人物可以依据自己真正掌握的线索自行推断。
 - 同一人物已经使用过的公开小号属于其既有网络身份，不应因为换帖子或换板块无缘无故随机改名。
 
+## 初始互动密度
+- 所有开启讨论区的 Community 内容，首次出现时应同时形成具有可参与感的初始讨论区。根据内容本身的讨论价值自然区分热度：“普通”约 5–8 条初始互动，“活跃”约 8–12 条，“热门或争议”约 12–18 条。
+- 初始互动包括“顶层回答与下级回复”“评论与下级回复”之间的互动；天涯等线性论坛则体现为楼层与楼层回复。允许自然形成作者回复、网友互相补充、反驳、追问、玩梗、争论等小型回复链。
+- 不要让所有内容拥有相同互动数量，也不要为了凑数量重复同一观点。这里仅约束内容首次生成时的初始互动，不改变用户之后手动刷新评论区/回答区时的追加规则。
+
 ## 经历与事实
 - Character真正看见、参与或被明确告知的手机事件，才可以成为其后续人物经历；没有获得的信息不能因为模型后台可见而自动知道。
 - 生成失败或未成功落地的行为不能记成已经发生。
@@ -376,7 +381,10 @@ const DEFAULT_COMMUNITY_PROMPT_BLOCKS = [
 
 帖子可为爆料、亲历、求助、地方见闻、职场社会议题、情感纠纷、怪谈、围观或争论。楼层像不同真人：有人认真分析、质疑、跑题、抬杠、跟风，也有人造谣、添油加醋、把猜测说得像真的，或自称知情人。网友说法不等于世界事实。
 
-不要让所有网友同一种语气，也不要让每层都推动剧情。` },
+不要让所有网友同一种语气，也不要让每层都推动剧情。
+
+## 初始回复规范
+初始互动遵循 Community 通用契约的热度分层。天涯以线性楼层为主，但楼层之间可以自然互相回复：允许楼主回楼、网友引用前楼、追问、抬杠、补充经历、催更、歪楼。热门或争议帖应形成若干连续楼层关系，而不是 12–18 个彼此无关的一句话。` },
   { id:'community-xhs', title:'📕 小红书', scope:'community', enabled:true, content:`# 小红书
 生成当前正文世界中的真实小红书笔记与评论。内容优先从当前剧情、人物和事件的生活侧面发散。
 
@@ -384,13 +392,19 @@ const DEFAULT_COMMUNITY_PROMPT_BLOCKS = [
 
 小红书重视视觉、生活方式和个人体验，形式可为图文、短视频或纯文字。昵称应有真实网感和生活感，避免大量“{{char}}头号粉丝”“专业黑子”之类工具型 ID。
 
-评论可共鸣、问细节、分享类似经历、质疑、玩梗、跑题，也可自然出现粉丝、CP粉、唯粉、路人或黑子。不要写成天涯盖楼、知乎分析文或统一营销腔。` },
+评论可共鸣、问细节、分享类似经历、质疑、玩梗、跑题，也可自然出现粉丝、CP粉、唯粉、路人或黑子。不要写成天涯盖楼、知乎分析文或统一营销腔。
+
+## 初始回复规范
+初始互动遵循 Community 通用契约的热度分层。评论区应混合顶层评论与下级回复：作者可以回细节，网友可以互相追问、补充同类经历、反驳、@朋友、围绕图片中的细节展开支线。不要把全部互动平铺成互不相关的顶层评论，也不要把每篇笔记都做成同样热度。` },
   { id:'community-zhihu', title:'💡 知乎', scope:'community', enabled:true, content:`# 知乎
 生成真实的知乎问题、回答与回答下评论。核心结构始终是：问题 → 多个独立回答 → 每个回答自己的评论区。
 
 问题可以由当前人物或事件引出，也可以借此延伸到行业、职业、心理、社会现象、经验或专业领域。不同回答者拥有不同的信息来源、专业程度、经历和立场，因此回答可以是专业/行业分析、个人经验、业内见闻或小号爆料、质疑问题前提、反对观点、简短独特角度或偶尔抖机灵。
 
-不要求人人像专家，也不要人人使用“谢邀”“利益相关”等刻板口头禅。评论属于具体回答，可追问、补充、质疑、争论、吃瓜或回复其他评论。问题≠帖子，回答≠评论；不要写成天涯式线性盖楼或统一口吻的百科答案。` },
+不要求人人像专家，也不要人人使用“谢邀”“利益相关”等刻板口头禅。评论属于具体回答，可追问、补充、质疑、争论、吃瓜或回复其他评论。问题≠帖子，回答≠评论；不要写成天涯式线性盖楼或统一口吻的百科答案。
+
+## 初始回复规范
+初始互动遵循 Community 通用契约的热度分层，但知乎的“互动”由多个独立回答与回答下评论共同构成，不要求 12–18 条全部都是回答。普通问题可有少量核心回答并在其中自然形成追问/反驳；活跃或争议问题可以增加回答者数量，并让高讨论回答拥有自己的评论链。不同回答必须来自不同身份、经历或立场。` },
   { id:'community-weibo', title:'🟠 微博', scope:'community', enabled:true, content:`# 微博
 微博是当前世界中的实时公共舆论场，核心是“此刻发生什么、大家正在怎样传播和讨论”，不要写成天涯长帖、小红书生活笔记或知乎回答。
 
@@ -417,6 +431,9 @@ const DEFAULT_COMMUNITY_PROMPT_BLOCKS = [
 评论即时、碎片、立场混杂，可以质疑、玩梗、补充、反驳、吃瓜、@别人或跑题，作者也可以自然回复。
 转发是传播行为，不是普通评论。转发者可以补充自己的话，也可以形成 //@账号：内容 的传播链；同一事件可随着传播出现新的解读、回应与澄清。
 
+## 初始回复规范
+初始互动遵循 Community 通用契约的热度分层。微博评论区应混合顶层评论与下级回复，允许博主回应、网友互相反驳、补充、追问、玩梗、站队和围观。首页普通微博可以相对疏一些；超话更容易形成粉丝阵营之间的小回复链；热搜/争议微博可以形成多立场争论。不要把所有互动平铺成互不相关的顶层评论。
+
 ## 关注账号
 User关注的账号是持续存在的微博账号。刷新首页时可自然出现其中一部分，不要求所有关注账号每轮都发微博。🔥持续互动账号可以保留与User已经发生的微博互动记忆，并拥有主动私信或主动@User的能力；有能力不等于每轮必须行动。
 
@@ -427,7 +444,10 @@ User关注的账号是持续存在的微博账号。刷新首页时可自然出�
 
 User 的条目决定“生成什么”；当前人物、关系、地点、时代、近期事件和世界背景决定“它如何自然存在于当前世界”。
 
-如果条目开启“需要评论区”，生成自然匹配的评论互动；如果关闭，不生成评论区。` },
+如果条目开启“需要评论区”，生成自然匹配的评论互动；如果关闭，不生成评论区。
+
+## 初始回复规范
+开启评论区时，同样遵循 Community 通用契约的初始互动热度分层；具体是线性回复、顶层评论+子回复、问答式互动或其他结构，应服从 User 对该自创条目的定义，不强行套用某个现成平台。` },
   { id:'community-tail', title:'✓ 社区最后确认', scope:'community', enabled:true, content:`# 最后确认
 输出前内部确认：
 1. 这是当前平台真正会出现的内容？
@@ -472,6 +492,18 @@ function stableTextHash(value) {
 
 function mergeSavedDefaultBlock(defaultItem, savedItem) {
   if (!savedItem) return defaultItem;
+  // v0.5.78: additive Community prompt migration. Preserve User-edited platform text,
+  // but append newly introduced runtime/reply contracts when the saved block predates them.
+  let savedContent = String(savedItem.content ?? defaultItem.content);
+  if (defaultItem.id === 'community-runtime' && !savedContent.includes('## 初始互动密度')) {
+    const section = String(defaultItem.content).match(/## 初始互动密度[\s\S]*?(?=\n## 经历与事实)/)?.[0];
+    if (section) savedContent = savedContent.replace(/\n## 经历与事实/, `\n${section}\n\n## 经历与事实`);
+  }
+  if (['community-tianya','community-xhs','community-zhihu','community-weibo','community-custom'].includes(defaultItem.id) && !savedContent.includes('## 初始回复规范')) {
+    const section = String(defaultItem.content).match(/## 初始回复规范[\s\S]*?(?=\n## |$)/)?.[0];
+    if (section) savedContent = `${savedContent.trim()}\n\n${section}`;
+  }
+  savedItem = { ...savedItem, content: savedContent };
   const legacyHash = LEGACY_DEFAULT_CONTENT_HASHES[defaultItem.id];
   const legacyHashes = Array.isArray(legacyHash) ? legacyHash : [legacyHash].filter(Boolean);
   const shouldRefreshLegacyContent = legacyHashes.includes(stableTextHash(savedItem.content));
