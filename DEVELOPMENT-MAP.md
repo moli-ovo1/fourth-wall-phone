@@ -3456,3 +3456,7 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 3. Character Batch：先建立隔离 Actor Pack，使每个 Character 只拿自己的 phone context / private memory / identity；随后把同一帖子 1–3 个角色的邀请/@压成一次 API，路人仍单独一批。知识隔离失败则不得合并。
 4. 超话持续社区状态：保存 CP 名称、双方、主要阵营、持续账号、近期公开素材/争议；不是每轮重新抽取一次性 CP。
 5. “+微信好友”继续升级为 Network Actor 与微信 Contact 的同一人物关联，继承网络经历且不扩散未获得秘密。
+
+## v0.5.79 后续
+- 继续 Community Social Network v1：Network Actor / Public Identity 统一、🔥真实互动连续性与主动机会、超话持续社区状态、网友微信双向连续性。
+- Character API batching 暂不施工；后续作为可选设置同时支持逐角色调用与合并调用。

@@ -2587,3 +2587,6 @@
 .moli-weibo-account-menu button{border:0;background:transparent;padding:9px 10px;text-align:left;border-radius:8px;font:inherit;cursor:pointer}
 .moli-weibo-account-menu button:hover{background:rgba(0,0,0,.05)}
 .moli-weibo-account-menu small{padding:8px 10px;opacity:.58}
+
+/* v0.5.79 Weibo hot keywords are a non-clickable ranking, not post entries. */
+.moli-weibo-hot-keyword{display:flex;align-items:center;gap:14px;padding:10px 4px;font-size:15px;line-height:1.4}.moli-weibo-hot-keyword b{min-width:22px;color:#ff8200;font-size:18px}.moli-weibo-hot-keyword span{font-weight:600}
