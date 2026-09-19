@@ -83,6 +83,7 @@ import {
   generateXiaohongshuCommentRefresh,
   generateZhihuAnswerCommentRefresh,
   generateZhihuDetailRefresh,
+  summarizeWeiboAccountProfile,
   summarizeProfileMomentsMemory,
 } from '../generation/generation-service.js';
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
@@ -101,11 +102,11 @@ import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBe
 import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
-import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings, togglePublicWebFavorite, togglePublicWebPinned, replacePublicWebSectionPosts, trimPublicWebSectionPosts, forceDeletePublicWebPost, deletePublicWebComment, deleteZhihuAnswerComment, deleteZhihuAnswer, addZhihuAnswerComments, addZhihuAnswer, mergeZhihuRefresh, listPublicWebFavorites, listCustomCommunities, ensureCustomCommunityPresets, deleteCustomCommunities, saveCustomCommunity, deleteCustomCommunity, getCommunityUserProfile, updateCommunityUserProfile } from '../storage/public-web-store.js';
+import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings, togglePublicWebFavorite, togglePublicWebPinned, replacePublicWebSectionPosts, trimPublicWebSectionPosts, forceDeletePublicWebPost, deletePublicWebComment, deleteZhihuAnswerComment, deleteZhihuAnswer, addZhihuAnswerComments, addZhihuAnswer, mergeZhihuRefresh, listPublicWebFavorites, listCustomCommunities, ensureCustomCommunityPresets, deleteCustomCommunities, saveCustomCommunity, deleteCustomCommunity, getCommunityUserProfile, updateCommunityUserProfile, listWeiboFollows, saveWeiboFollow, deleteWeiboFollow, isWeiboFollowed } from '../storage/public-web-store.js';
 import { getSelectedWorldContactId, getSelectedWorldTarget, setSelectedWorldTarget } from '../storage/world-context-store.js';
 import { isPersistentScopeKey } from '../storage/scope-policy.js';
 import { recordWorldEvent, markWorldEventsKnown, markWorldEventsKnownByObjectTargets, markWorldEventsConsumedByObjectTargets, summarizeWorldEventsForContext, linkWorldEventResult, listWorldEvents } from '../storage/world-event-store.js';
-import { rememberAnonymousIdentity, revealAnonymousIdentity, buildCharacterContinuity } from '../storage/character-continuity-store.js';
+import { rememberAnonymousIdentity, revealAnonymousIdentity, buildCharacterContinuity, listKnownAnonymousIdentities } from '../storage/character-continuity-store.js';
 import { buildPhoneContext } from '../generation/phone-context-builder.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
@@ -188,6 +189,7 @@ export function createPhonePanel({
         <button type="button" data-public-web-tab="tianya">天涯社区</button>
         <button type="button" data-public-web-tab="xiaohongshu">小红书</button>
         <button type="button" data-public-web-tab="zhihu">知乎</button>
+        <button type="button" data-public-web-tab="weibo">微博</button>
         <button type="button" data-public-web-tab="custom">自创</button>
       </nav>
       <div class="moli-retro-browser">
@@ -6925,11 +6927,11 @@ export function createPhonePanel({
   panel.querySelector('[data-action="phone-home"]')?.addEventListener('click', () => show('phone-home'));
   panel.querySelector('[data-action="open-xiaohongshu"]')?.addEventListener('click', () => show('xiaohongshu-home'));
   panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
-  panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => show('weibo-home'));
+  panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => { show('tianya-home'); currentPublicWebTab='weibo'; panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab==='weibo')); renderPublicWeb(); });
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
 
   let currentPublicWebTab = 'recommend';
-  const publicWebNames = { recommend:'社区推荐', tianya:'天涯社区', xiaohongshu:'小红书', zhihu:'知乎', custom:'自创' };
+  const publicWebNames = { recommend:'社区推荐', tianya:'天涯社区', xiaohongshu:'小红书', zhihu:'知乎', weibo:'微博', custom:'自创' };
   const communityCallableContacts = () => {
     const scopeKey = String(getScopeKey?.() || '');
     const bodyWorld = isTavernBodyEnvironment(scopeKey);
@@ -6951,7 +6953,7 @@ export function createPhonePanel({
     return contacts.filter(item => item?.id && allowed.has(String(item.id)));
   };
 
-  const publicWebTypeNames = { tianya:'帖子', xiaohongshu:'笔记', zhihu:'问题', custom:'帖子' };
+  const publicWebTypeNames = { tianya:'帖子', xiaohongshu:'笔记', zhihu:'问题', weibo:'微博', custom:'帖子' };
   const tianyaSubtitles = ['天涯杂谈','情感天地','娱乐八卦','煮酒论史','生活那点事'];
   let openedPublicWebPostId = '';
   const publicWebGenerating = new Set();
@@ -6960,7 +6962,7 @@ export function createPhonePanel({
   let transientCommunityPending = [];
   const communityAuthorDisplay = author => String(author?.uiName || author?.name || '网友');
   const isPostOwnerAuthor=(post,author)=>{const aid=String(author?.id||'').trim(),pid=String(post?.author?.id||'').trim();if(aid&&pid&&aid===pid&&author?.type===post?.author?.type)return true;return String(communityAuthorDisplay(author)).trim()===String(communityAuthorDisplay(post?.author)).trim();};
-  const sourceLabel = post => post?.section==='custom' ? String(post?.extra?.customCommunityName||'自创') : ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post?.section] || '社区');
+  const sourceLabel = post => post?.section==='custom' ? String(post?.extra?.customCommunityName||'自创') : ({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎',weibo:'微博'}[post?.section] || '社区');
   const communityDiscussionContext = post => {
     const rows=(post?.comments||[]).slice(-20).map((item,index)=>`${index+1}. ${item?.author?.name||'网友'}：${item?.content||''}`).filter(Boolean);
     if(post?.section==='zhihu'){
@@ -7043,7 +7045,8 @@ export function createPhonePanel({
       const privateConv=getScopeConversations(scopeKey).find(c=>String(c.conversationKey||c.id||'')===String(conversationKey));
       const proactiveEnabled=privateConv?.automation?.autoChatEnabled===true;
       const selfAuthored=communitySelfAuthoredContext(post,contactId);
-      const instruction=`【moli社区自然参与判断】\n你之前已经参与过这篇${sourceLabel(post)}讨论。现在刷新时出现了你尚未判断的新变化。\n标题：${post.title||'无标题'}\n当前讨论：\n${communityDiscussionContext(post)}\n${selfAuthored?`\n\n【你本人此前在这篇讨论中说过的话】\n${selfAuthored}\n这些是你本人真实做过/说过的事，不是陌生网友发言。延续你当时已经形成的指代、立场和人物关系；除非后续事实明确改变，不要把自己原本指向自己或已知人物的称呼重新解释成一个凭空出现的第三人。`:''}\n\n【这次真正的新变化】\n${events.map(e=>`- ${e.content||e.action}`).join('\n')}\n${continuity?`\n【你自己的手机经历/认知】\n${continuity}`:''}\n\n按照当前人物、已有经历与当前讨论自行决定。\nPUBLIC 可选 REPLY_REAL / REPLY_ANONYMOUS / SKIP。${proactiveEnabled?'PRIVATE 可独立选 SEND / SKIP。':'主动私聊权限关闭：PRIVATE 必须 SKIP。'}\n严格追加：<community_decision>REPLY_REAL|REPLY_ANONYMOUS|SKIP</community_decision><community_alias>匿名时的网名</community_alias><community_reply>公开回复；SKIP 时留空</community_reply><community_private>SEND|SKIP</community_private><community_private_reason>简短原因</community_private_reason>；PRIVATE=SEND 时再输出 2~5 个 <msg>私聊内容</msg>。`;
+      const knownAliases=listKnownAnonymousIdentities(scopeKey,contactId).filter(x=>String(x.realContactId||'')===String(contactId)&&String(x.alias||'').trim()).map(x=>String(x.alias).trim()).filter((x,i,a)=>a.indexOf(x)===i);
+      const instruction=`【moli社区自然参与判断】\n你之前已经参与过这篇${sourceLabel(post)}讨论。现在刷新时出现了你尚未判断的新变化。\n标题：${post.title||'无标题'}\n当前讨论：\n${communityDiscussionContext(post)}\n${selfAuthored?`\n\n【你本人此前在这篇讨论中说过的话】\n${selfAuthored}\n这些是你本人真实做过/说过的事，不是陌生网友发言。延续你当时已经形成的指代、立场和人物关系；除非后续事实明确改变，不要把自己原本指向自己或已知人物的称呼重新解释成一个凭空出现的第三人。`:''}\n\n【这次真正的新变化】\n${events.map(e=>`- ${e.content||e.action}`).join('\n')}\n${continuity?`\n【你自己的手机经历/认知】\n${continuity}`:''}${knownAliases.length?`\n【你已经实际使用过的公开小号】\n${knownAliases.join('、')}\n这些是你过去真实使用过的账号。若本次仍要用小号，优先延续已有账号；只有人物确实有理由创建新账号时才另取新ID。`:''}\n\n按照当前人物、已有经历与当前讨论自行决定。\nPUBLIC 可选 REPLY_REAL / REPLY_ANONYMOUS / SKIP。${proactiveEnabled?'PRIVATE 可独立选 SEND / SKIP。':'主动私聊权限关闭：PRIVATE 必须 SKIP。'}\n严格追加：<community_decision>REPLY_REAL|REPLY_ANONYMOUS|SKIP</community_decision><community_alias>匿名时的网名</community_alias><community_reply>公开回复；SKIP 时留空</community_reply><community_private>SEND|SKIP</community_private><community_private_reason>简短原因</community_private_reason>；PRIVATE=SEND 时再输出 2~5 个 <msg>私聊内容</msg>。`;
       try{
         const result=await generatePrivateReply({scopeKey,conversationKey,automationInstruction:instruction,allowNoPendingUser:true}); const raw=String(result?.text||'');
         const decision=(raw.match(/<community_decision>\s*(REPLY_ANONYMOUS|REPLY_REAL|SKIP)\s*<\/community_decision>/i)?.[1]||'SKIP').toUpperCase();
@@ -7252,6 +7255,13 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
       const xhsCard=post=>`<article class="moli-xhs-waterfall-card"><button class="moli-xhs-card-open" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><span class="moli-xhs-card-image"><em>${escapeHtml(post.extra?.imageText||'')}</em><small>${escapeHtml(post.extra?.imagePrompt||'')}</small></span><strong>${escapeHtml(post.title||'无标题')}</strong><span class="moli-xhs-card-author">${escapeHtml(post.author?.name||'网友')}</span></button></article>`;
       const cards=ordinaryPosts.map(xhsCard).join(''); const pinnedCards=pinnedPosts.map(xhsCard).join('');
       feed.innerHTML=`<div class="moli-xhs-home"><div class="moli-xhs-home-head"><span></span><span></span></div><div class="moli-xhs-waterfall">${cards||'<div class="moli-recommend-empty">这里还没有普通笔记。</div>'}</div>${pinnedCards?`<section class="moli-public-pinned-tail"><div class="moli-public-pinned-title">常驻</div><div class="moli-xhs-waterfall">${pinnedCards}</div></section>`:''}<button class="moli-xhs-compose-fab" data-action="public-web-compose" aria-label="发布笔记">＋</button></div>`;
+    } else if (currentPublicWebTab === 'weibo') {
+      const follows=listWeiboFollows(getScopeKey?.());
+      const followed=new Set(follows.flatMap(x=>[String(x.id||''),String(x.name||'')]).filter(Boolean));
+      const avatarFor=name=>{const chars=Array.from(String(name||'微')).slice(0,1).join('')||'微';return `<span class="moli-weibo-avatar">${escapeHtml(chars)}</span>`;};
+      const card=post=>{const aid=String(post.author?.id||post.author?.name||'');const name=communityAuthorDisplay(post.author);const isFollowed=followed.has(aid)||followed.has(name);const tags=(post.tags||[]).map(t=>`<span class="moli-weibo-tag">${escapeHtml(t)}</span>`).join(' ');const chain=(post.extra?.repostChain||[]).map(x=>`<div>${escapeHtml(x)}</div>`).join('');return `<article class="moli-weibo-card"><header>${avatarFor(name)}<div><b>${escapeHtml(name)}</b><small>${escapeHtml(post.extra?.weiboLane||'实时')} · 刚刚</small></div><button type="button" data-action="weibo-follow" data-account-id="${escapeHtml(aid)}" data-account-name="${escapeHtml(name)}">${isFollowed?'已关注':'+关注'}</button></header><button class="moli-weibo-open" data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><p>${tags?tags+' ':''}${escapeHtml(post.content||post.title||'')}</p>${post.extra?.imagePrompt?`<div class="moli-weibo-image-desc">[图片：${escapeHtml(post.extra.imagePrompt)}]</div>`:''}${post.extra?.repostText?`<div class="moli-weibo-repost">${escapeHtml(post.extra.repostText)}${chain}</div>`:''}</button><footer><span>↗ ${Number(post.extra?.reposts||0)}</span><span>▢ ${(post.comments||[]).length}</span><span>♡ ${(post.extra?.likes||[]).length}</span></footer></article>`;};
+      const hot=posts.slice().sort((a,b)=>Number(b.extra?.hotScore||0)-Number(a.extra?.hotScore||0)).slice(0,8);
+      feed.innerHTML=`<div class="moli-weibo-home"><div class="moli-weibo-subnav"><button class="is-active" data-weibo-view="home">首页</button><button data-weibo-view="hot">热搜</button><button class="moli-weibo-add-follow" data-action="weibo-add-follow">＋关注</button><button class="moli-weibo-refresh" data-action="public-web-refresh">↻</button></div><div data-weibo-home>${posts.map(card).join('')||'<div class="moli-recommend-empty">点一下 ↻，看看微博正在发生什么。</div>'}</div><div data-weibo-hot hidden><section class="moli-weibo-hot-list"><h3>微博热搜</h3>${hot.map((p,i)=>`<button data-action="public-web-open" data-post-id="${escapeHtml(p.id)}"><b>${i+1}</b><span>${escapeHtml((p.tags||[])[0]||p.title||String(p.content||'').slice(0,28))}</span><em>${escapeHtml(p.extra?.hotLabel||'')}</em></button>`).join('')||'<p>刷新后生成当前世界的热搜。</p>'}</section><h3 class="moli-weibo-hot-title">热门微博</h3>${hot.map(card).join('')}</div></div>`;
     } else if (currentPublicWebTab === 'zhihu') {
       const zhihuCard=post=>{const answers=Array.isArray(post.extra?.answers)?post.extra.answers:[];const first=answers[0];return `<article class="moli-zhihu-feed-card"><button data-action="public-web-open" data-post-id="${escapeHtml(post.id)}"><h3>${escapeHtml(post.title||'无标题')}</h3>${first?`<b>${escapeHtml(communityAuthorDisplay(first.author))}</b><p>${escapeHtml(String(first.content||'').slice(0,150))}${String(first.content||'').length>150?'…':''}</p><small>赞同 ${Number(first.upvotes||0)} · ${(first.comments||[]).length} 条评论</small>`:(post.content?`<p>${escapeHtml(String(post.content).slice(0,150))}</p>`:'')}</button></article>`};
       feed.innerHTML=`<div class="moli-zhihu-feed"><div class="moli-zhihu-feed-compose-row"><button type="button" class="moli-zhihu-feed-compose" data-action="zhihu-feed-compose" aria-label="发布知乎问题">＋</button></div>${ordinaryPosts.map(zhihuCard).join('')||'<div class="moli-recommend-empty">这里还没有问题。</div>'}${pinnedPosts.length?`<section class="moli-public-pinned-tail"><div class="moli-public-pinned-title">常驻</div>${pinnedPosts.map(zhihuCard).join('')}</section>`:''}</div>`;
@@ -7270,7 +7280,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
     overlay.querySelector('[data-custom-dialog-save]').onclick=()=>{const name=String(overlay.querySelector('[data-custom-dialog-name]')?.value||'').trim();const description=String(overlay.querySelector('[data-custom-dialog-content]')?.value||'').trim();if(!name){windowRef.alert?.('请写一个条目名称。');return;}const needsComments=Boolean(overlay.querySelector('[data-custom-dialog-comments]')?.checked);saveCustomCommunity(scope,{id:existing.id||undefined,name,description,needsComments});close();renderPublicWeb();};
   };
-  panel.querySelector('[data-public-web-feed]')?.addEventListener('click', event=>{
+  panel.querySelector('[data-public-web-feed]')?.addEventListener('click', async event=>{
     const scope=getScopeKey?.();
     const userHomeToggle=event.target.closest('[data-action="custom-user-home-toggle"]');if(userHomeToggle){const body=panel.querySelector('.moli-custom-user-home-body');if(body)body.hidden=!body.hidden;return;} const aliasSave=event.target.closest('[data-action="community-user-alias-save"]');if(aliasSave){const value=String(panel.querySelector('[data-community-user-alias]')?.value||'').trim();updateCommunityUserProfile(getScopeKey?.(),{anonymousAlias:value});toast('匿名账号已保存');return;} const privateMessages=event.target.closest('[data-action="community-user-private-messages"]');if(privateMessages){const rows=getCommunityUserProfile(getScopeKey?.()).privateMessages;windowRef.alert?.(rows.length?rows.slice(-20).map(x=>`${x.from?.name||'社区用户'}：${x.content}`).join('\n\n'):'暂时还没有社区私信。');return;}
     const todayToggle=event.target.closest('[data-action="recommend-today-toggle"]'); if(todayToggle){recommendTodayOpen=!recommendTodayOpen;renderPublicWeb();return;}
@@ -7294,7 +7304,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   panel.querySelector('[data-action="public-web-refresh"]')?.addEventListener('click', async event => {
     const button=event.currentTarget; const refreshSection=currentPublicWebTab; if(publicWebGenerating.has(refreshSection))return; publicWebGenerating.add(refreshSection); button.disabled=true; const old=button.textContent; button.textContent='[刷新中…]';
     try {
-      if (!['recommend','tianya','xiaohongshu'].includes(currentPublicWebTab)) { windowRef.alert?.('这个入口的专属生成规则还在打磨中。'); return; }
+      if (!['recommend','tianya','xiaohongshu','weibo'].includes(currentPublicWebTab)) { windowRef.alert?.('这个入口的专属生成规则还在打磨中。'); return; }
       const settings=getPublicWebSettings(getScopeKey?.());
       if (currentPublicWebTab === 'recommend') {
         const batchId=`recommend_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
@@ -7352,6 +7362,10 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     if(tianyaFloorReply){openCommunityComposer({postId:tianyaFloorReply.dataset.postId,replyToCommentId:tianyaFloorReply.dataset.commentId,replyLabel:`@${tianyaFloorReply.dataset.commentAuthor||'网友'} #${tianyaFloorReply.dataset.floor||''}`});return;}
     const xhsReply=event.target?.closest?.('[data-action="xhs-comment-reply"]');
     if(xhsReply){openCommunityComposer({postId:xhsReply.dataset.postId,replyToCommentId:xhsReply.dataset.commentId,replyLabel:`@${xhsReply.dataset.commentAuthor||'网友'}`});return;}
+    const weiboRefresh=event.target?.closest?.('[data-action="public-web-refresh"]'); if(weiboRefresh&&currentPublicWebTab==='weibo'){if(publicWebGenerating.has('weibo'))return;publicWebGenerating.add('weibo');renderPublicWeb();try{const items=await generatePublicWebRefresh({scopeKey:getScopeKey?.(),section:'weibo'});replacePublicWebSectionPosts(getScopeKey?.(),'weibo',items);openedPublicWebPostId='';renderPublicWeb();}catch(error){console.error('[moli小手机] weibo refresh failed:',error);windowRef.alert?.(`刷新失败：${error?.message||error}`);}finally{publicWebGenerating.delete('weibo');renderPublicWeb();}return;}
+    const weiboView=event.target?.closest?.('[data-weibo-view]'); if(weiboView){const hot=weiboView.dataset.weiboView==='hot';panel.querySelector('[data-weibo-home]')?.toggleAttribute('hidden',hot);panel.querySelector('[data-weibo-hot]')?.toggleAttribute('hidden',!hot);panel.querySelectorAll('[data-weibo-view]').forEach(x=>x.classList.toggle('is-active',x===weiboView));return;}
+    const addFollow=event.target?.closest?.('[data-action="weibo-add-follow"]'); if(addFollow){const raw=windowRef.prompt?.('添加关注账号\n格式示例：圈内侠客；知名狗仔，常能拍到各大秘辛，语言毒辣，喜欢和人吵架','')??null;if(raw===null)return;const [name,...rest]=String(raw).split(/[；;]/);if(!String(name||'').trim())return;saveWeiboFollow(getScopeKey?.(),{id:String(name).trim(),name:String(name).trim(),profile:rest.join('；').trim(),source:'manual'});renderPublicWeb();return;}
+    const follow=event.target?.closest?.('[data-action="weibo-follow"]'); if(follow){const id=String(follow.dataset.accountId||follow.dataset.accountName||'').trim(),name=String(follow.dataset.accountName||id).trim();if(isWeiboFollowed(getScopeKey?.(),id)||isWeiboFollowed(getScopeKey?.(),name)){const row=listWeiboFollows(getScopeKey?.()).find(x=>String(x.id)===id||String(x.name)===name);if(row)deleteWeiboFollow(getScopeKey?.(),row.id);}else{const related=listPublicWebPosts(getScopeKey?.(),{section:'weibo'}).filter(p=>String(p.author?.id||p.author?.name||'')===id||String(p.author?.name||'')===name).slice(0,5);const evidence=related.map(p=>String(p.content||p.title||'')).filter(Boolean).join('；').slice(0,500);const profile=await summarizeWeiboAccountProfile({scopeKey:getScopeKey?.(),name,evidence}).catch(()=>evidence?`已出现内容：${evidence.slice(0,160)}`:'微博中出现过的账号');saveWeiboFollow(getScopeKey?.(),{id,name,profile,source:'observed'});}renderPublicWeb();return;}
     const jump=event.target?.closest?.('[data-public-web-jump]'); if(jump){const target=String(jump.dataset.publicWebJump||'');const tab=panel.querySelector(`[data-public-web-tab="${target}"]`);tab?.click();return;}
     const open=event.target?.closest?.('[data-action="public-web-open"]'); if(open){openedPublicWebPostId=open.dataset.postId;renderPublicWeb();return;}
     if(event.target?.closest?.('[data-action="public-web-detail-back"]')){openedPublicWebPostId='';renderPublicWeb();return;}
