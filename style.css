@@ -2349,3 +2349,24 @@
 #moli-phone-panel .moli-community-at-hint{margin:0;padding:0;background:transparent;border-radius:0;max-width:245px;font:10.5px/1.35 system-ui,sans-serif;color:#929292;cursor:pointer;user-select:none}
 #moli-phone-panel .moli-community-composer-panel{border:0;background:rgba(232,232,232,.94);box-shadow:0 14px 36px rgba(0,0,0,.14);backdrop-filter:blur(8px) saturate(1.03);-webkit-backdrop-filter:blur(8px) saturate(1.03)}
 #moli-phone-panel .moli-community-composer-panel textarea{background:rgba(238,238,238,.72);border:0;box-shadow:none}
+
+/* v0.5.64 Weibo v1 */
+#moli-phone-panel .moli-weibo-home{min-height:100%;background:#f4f4f5;color:#222;padding-bottom:28px}
+#moli-phone-panel .moli-weibo-subnav{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:4px;padding:8px 12px;background:rgba(255,255,255,.96);border-bottom:1px solid #eee}
+#moli-phone-panel .moli-weibo-subnav button{border:0;background:transparent;padding:7px 10px;font-size:13px;color:#666}
+#moli-phone-panel .moli-weibo-subnav button.is-active{color:#111;font-weight:700;border-bottom:2px solid #ff8200}
+#moli-phone-panel .moli-weibo-subnav .moli-weibo-add-follow{margin-left:auto;color:#ff8200;border:1px solid #ffd2a6;border-radius:16px}
+#moli-phone-panel .moli-weibo-subnav .moli-weibo-refresh{font-size:20px;padding:2px 7px}
+#moli-phone-panel .moli-weibo-card{background:#fff;margin-bottom:8px;padding:12px 14px}
+#moli-phone-panel .moli-weibo-card header{display:flex;align-items:center;gap:9px}
+#moli-phone-panel .moli-weibo-avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#f0f0f2;color:#666;font-weight:700;flex:0 0 auto}
+#moli-phone-panel .moli-weibo-card header>div{display:flex;flex-direction:column;min-width:0}
+#moli-phone-panel .moli-weibo-card header b{font-size:13px}.moli-weibo-card header small{font-size:9px;color:#aaa;margin-top:2px}
+#moli-phone-panel .moli-weibo-card header button{margin-left:auto;border:1px solid #ffb568;background:#fff;color:#ff8200;border-radius:15px;padding:4px 10px;font-size:10px}
+#moli-phone-panel .moli-weibo-open{display:block;width:100%;border:0;background:transparent;text-align:left;color:inherit;padding:8px 0 4px}
+#moli-phone-panel .moli-weibo-open p{margin:0;font-size:13px;line-height:1.65;white-space:pre-wrap}
+#moli-phone-panel .moli-weibo-tag{color:#eb7350}.moli-weibo-image-desc{margin-top:8px;padding:18px 12px;background:#f2f2f2;color:#777;font-size:11px;line-height:1.5;border-radius:3px}
+#moli-phone-panel .moli-weibo-repost{margin-top:8px;padding:9px 10px;background:#f6f6f6;color:#555;font-size:11px;line-height:1.55}
+#moli-phone-panel .moli-weibo-card footer{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #f2f2f2;padding-top:8px;color:#888;font-size:10px;text-align:center}
+#moli-phone-panel .moli-weibo-hot-list{background:#fff;padding:12px 14px;margin-bottom:8px}.moli-weibo-hot-list h3,.moli-weibo-hot-title{margin:0 0 8px;font-size:14px}
+#moli-phone-panel .moli-weibo-hot-list button{width:100%;display:grid;grid-template-columns:24px 1fr 28px;gap:5px;border:0;background:transparent;padding:7px 0;text-align:left;color:#333}.moli-weibo-hot-list button b{color:#ff8200}.moli-weibo-hot-list button em{font-style:normal;color:#ff4d4f;font-size:10px}
