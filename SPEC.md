@@ -3793,7 +3793,7 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 
 - 知乎分板不再使用天涯式纯标题列表，改为知乎推荐流式问题卡：问题标题、首条回答摘要、赞同与评论信息；详情仍为问题 → 多回答 → 各回答评论。
 - 莲蓬鬼话开关从天涯板块移除，移动到「社区推荐」顶部右侧；它仍只控制莲蓬鬼话内容是否参与推荐/展示。
-- User 在天涯回复、小红书评论/回复、知乎回答评论时可选择匿名；匿名只改变公开显示名，不改变 User 身份归属。
+- User 在天涯回复、小红书评论/回复、知乎回答评论时可选择小号；小号只改变公开显示名，不改变 User 身份归属。
 - 修复 AI 评论冒用 User 名称：公共网络批量生成及天涯/小红书/知乎评论追加在解析落库前都会拦截与当前 User 显示名完全相同的 AI 作者名，并降级为普通网友名。AI 不再能通过刷新伪装成 User。
 - 天涯、小红书、知乎分板统一把常驻内容从普通流中分离，并在页面尾端增加「常驻」板块；常驻不占 10 条普通流动仓名额。
 - 保留社区推荐 4~6 条发现入口、分板屯仓、详情页生长的 moli121 架构。
@@ -3813,7 +3813,7 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 - 完成社区评论 @ 微信角色联动第一版：User 在天涯、小红书、知乎评论/回复输入 @ 时可选择微信角色。
 - User 评论先按原平台结构正常落库；被 @ 角色随后自主决定 REPLY / MESSAGE / BOTH / SKIP，不强制回应。
 - 公开回应以角色本人身份写回对应社区结构；私聊回应写回该角色微信私聊，禁止模型代 User 发言。
-- 保留评论匿名选择。
+- 保留评论小号选择。
 - 下一阶段切换到微信整体美化：先建立统一视觉规范，再按聊天列表→私聊/群聊→资料/设置→朋友圈逐页处理，不擅自改变既有交互。
 
 
@@ -3926,7 +3926,7 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 ## moli144 / v0.4.84 — 社区信息架构与朋友圈可见性重建
 - 朋友圈发表页“谁可以看”不再依赖展开/弹层/hidden toggle，联系人选择区常驻显示；旧展开交互视为废弃实现。
 - 天涯斑竹显示真实 `User ♡ 当前角色`，禁止把字面量 `{{user}}` / `{{char}}` 泄漏到界面。
-- moli社区新增“自创”；自创首页标题为 `User名小窝`，左栏只负责新增/打开编辑条目，不承担推荐选择。预置入口文案包括：当前角色黑粉匿名楼、学校论坛、同事八卦、如果回到以前、当u去世。已保存条目再次打开必须恢复原文字并可继续编辑。
+- moli社区新增“自创”；自创首页标题为 `User名小窝`，左栏只负责新增/打开编辑条目，不承担推荐选择。预置入口文案包括：当前角色黑粉小号楼、学校论坛、同事八卦、如果回到以前、当u去世。已保存条目再次打开必须恢复原文字并可继续编辑。
 - “社区推荐”新增“我只想看”：默认全选且帖子条数留空时保持既有默认；可多选天涯/小红书/知乎/自创，自创可进一步展开到已保存条目多选。该选择只决定本次/当前推荐来源，不改变自创条目本身。
 - 自创条目是 User 定义的信息环境，不得自动天涯化/小红书化/知乎化。
 
@@ -3935,7 +3935,7 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 - 社区推荐“我只想看”移动到推荐标题下方，与“莲蓬鬼话”同一层级；筛选面板改为竖向结构。
 - “自创 >”默认折叠，展开后才显示已保存自创条目，可多选；不展开时不会把大量条目铺满推荐页。
 - 自创小窝的条目库默认折叠；展开后提供“全选 / 删除 / ＋新增”。删除后的默认示例不会在下次启动复活。
-- 默认示例仅初始化一次：匿名树洞、私密日记；其可编辑原文保留 {{char}} / {{user}}，送入生成器时才解析当前角色/User。
+- 默认示例仅初始化一次：小号树洞、私密日记；其可编辑原文保留 {{char}} / {{user}}，送入生成器时才解析当前角色/User。
 - 新增/编辑不再连续弹多个 prompt：改为单个编辑弹框，名称 + 一块完整自由文本，一次写完并保存；再次打开保留上次文字。
 - 社区推荐生成的 section=custom 内容继续归档在公共网络仓，并在“自创”页的“自创内容”区域可见。
 - 天涯斑竹优先读取当前 SillyTavern 正文角色，避免 selected world 缺失时落成字面 Char。
@@ -3952,15 +3952,15 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 - 新增按 objectId 对全部目标人物批量 known/consumed 的底层能力，供现有 App Queue 与 World Event 生命周期渐进桥接。
 - 边界不变：World Event=事实；Awareness=谁知道；App Pending/Queue=执行；Consumed=某判断入口已处理；Memory/Continuity=仍可记得。禁止把 consumed 当删除或遗忘。
 - 社区 Interaction Runtime 继续 CLOSED；本版本不新增社区按钮、不改社区 UI、不改已确认 Prompt/Personality，也不改变 User-controlled“我们的墙”穿墙边界。
-- 下一阶段：继续补齐社区生成结果与匿名 identityKnownBy 的 Awareness 传播，统一更多人物 Decision consumer，并审计 Cross-App Character Continuity；在此基础上再完善 World Event 作为“我们的墙”可选 Context Source。
+- 下一阶段：继续补齐社区生成结果与小号 identityKnownBy 的 Awareness 传播，统一更多人物 Decision consumer，并审计 Cross-App Character Continuity；在此基础上再完善 World Event 作为“我们的墙”可选 Context Source。
 
 
 ## moli166 / v0.5.06 — Cross-App Character Continuity 第一阶段
 - 新增 `character-continuity-store.js`：不复制各 App 原始数据，而是从 World Event 读取同一 contactId 的“亲历事件 + 已知事件”，形成跨 App 人物经历视图。微信私聊生成现在会读取该视图，因此角色在社区公开做过、或已经明确得知的事情可以成为微信中的同一个人的经历。
-- 新增匿名身份 Awareness 小账本：系统真相(realContactId)与人物知识(knownBy)分离。角色匿名公开参与时，角色本人确定知道自己的匿名身份；不会因为数据库保存 knownIdentityId 就让其他角色自动全知。
+- 新增小号身份 Awareness 小账本：系统真相(realContactId)与人物知识(knownBy)分离。角色小号公开参与时，角色本人确定知道自己的小号身份；不会因为数据库保存 knownIdentityId 就让其他角色自动全知。
 - World Event 增加 Result/Provenance 链接：cause event 可记录 decision 与 resultEventIds，result event 反向记录 causedByEventIds。Automation 与社区 @ 的公开/私聊结果开始写回因果链。
 - Cross-App Continuity 只读取“本人亲历”或 Awareness=known 的事实；pending 事实不会因为跨 App 检索而泄露给人物。SKIP 仍不删除事实。
-- 本阶段不修改 CLOSED 的社区 UI，不新增匿名猜测机制，不自动把手机事实注入正文；“我们的墙”继续是 User-controlled bridge。
+- 本阶段不修改 CLOSED 的社区 UI，不新增小号猜测机制，不自动把手机事实注入正文；“我们的墙”继续是 User-controlled bridge。
 
 
 ### 特殊联系人单例入口与世界路由（moli172）
@@ -3996,7 +3996,7 @@ Automation 第二阶段完成后暂停朋友圈功能扩张。下一工程为 **
 ## moli175：删除语义与全局角色入口（2026-09-18）
 - 正文环境中不显示“当前角色世界”入口；正文外该入口只面向全局人物，候选包括全局 Tavern 人物与自创人物。
 - 同一 SillyTavern 角色卡允许重复添加。同步页不再显示“已添加”；每次添加都创建新的 moli Contact/Conversation 实例，但共享同一 Tavern Character Identity 来源。
-- “删除联系人”定义为：这个人物在 moli 小手机中彻底清空。删除前先清理该 Contact 绑定的非全局 World Scope：社区全部帖子/自创板块数据、朋友圈、World Event/Continuity 身份认知、我们的墙 pending/history/workspace；同时清理其他持久 scope 中以该 Contact 为作者/目标的社区、朋友圈、World Event 与匿名身份痕迹。随后删除其所有私聊、近期/长期记忆，并从群成员列表移除。
+- “删除联系人”定义为：这个人物在 moli 小手机中彻底清空。删除前先清理该 Contact 绑定的非全局 World Scope：社区全部帖子/自创板块数据、朋友圈、World Event/Continuity 身份认知、我们的墙 pending/history/workspace；同时清理其他持久 scope 中以该 Contact 为作者/目标的社区、朋友圈、World Event 与小号身份痕迹。随后删除其所有私聊、近期/长期记忆，并从群成员列表移除。
 - 对正文人物 A：删除 A 即删除 A World 的所有社区帖子，而不是只删除 A 自己发过的帖子。这里不保留“作废世界历史”。
 - 删除联系人与“只删除聊天记录”语义严格不同：若 User 仍需要社区/墙/跨 App 历史，应只清聊天，不应删除 Contact。
 - 暂不改变 Global/自创人物的“读取正文”能力；“旁观正文但明确知道正文发生在 User 与另一个角色之间”作为下一阶段单独设计，不在本版本偷偷改语义。
@@ -4096,7 +4096,7 @@ NPC 虽能读取绑定世界当前正文用于即时参与，但持久认知不�
 自建 NPC 属于明确正文 World。正文原文可以作为投影器的系统证据，但不能直接等同 NPC Knowledge。进入 NPC 手机连续性的正文事实必须经过 perspective projection：明确在场/参与、可看到、可听到、亲历或被明确告知。仅出现 NPC 名字、不在场私密事件、他人内心、上帝旁白秘密不得写入 NPC Awareness。禁止关键词窗口冒充视角过滤。
 
 ### Anonymous definite identity
-系统真实 `realContactId` 不等于人物知道。匿名人物本人可知道自己的匿名身份；其他人物只有在确定证据链结算后进入 `identityKnownBy`。v1 支持社区中 User 对明确接收者作直接等同告知，并在社区刷新结算后生效。猜测、语气相似、同帖出现均不能自动升级为 definite knowledge。
+系统真实 `realContactId` 不等于人物知道。小号人物本人可知道自己的小号身份；其他人物只有在确定证据链结算后进入 `identityKnownBy`。v1 支持社区中 User 对明确接收者作直接等同告知，并在社区刷新结算后生效。猜测、语气相似、同帖出现均不能自动升级为 definite knowledge。
 
 ### Unified Decision v1
 统一的是人物判断输入语义，不是强行合并各 App 执行 Store。第一阶段输入为：wake reason / newly known facts / relevant continuity / initiative tendency / allowed actions / recent actions。动作继续复用成熟出口。知道 ≠ 在意 ≠ 行动；先判断是否行动，再在允许出口中选择；主动程度不是 Math.random 概率门。
@@ -4120,11 +4120,11 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 知乎回答评论折叠必须可展开/收起；User 发布回答或回答下回复后立即写入 Store 并重绘。
 - 小红书评论刷新与四个社区动作同列，不使用额外灰色圆框；小红书帖子作者再次回复时显示“作者”，天涯帖子作者再次回复时继续显示“楼主”。
 - 明确邀请/@ 的刷新结算适用于所有社区板块：人物可以基于自身认知选择公开回应或 SKIP；SKIP 必须返回可见原因。社区事件引发的主动私聊是独立判断，只在该 Contact 的“主动私聊”权限开启时允许 SEND；未私聊也给出简短原因，禁止无声吞掉明确结算。
-- 邀请角色参与社区讨论时，公开决定必须在同一层选择 `REPLY_REAL / REPLY_ANONYMOUS / SKIP`。匿名不是已经决定回应后的装饰选项，而是谨慎人物参与讨论的正式替代路径；若唯一顾虑是暴露真实身份，应考虑匿名回应。只有即使匿名也不愿参与时才选择 SKIP，并说明原因。提示框应明确显示实名回应、匿名回应或未回应原因。
+- 邀请角色参与社区讨论时，公开决定必须在同一层选择 `REPLY_REAL / REPLY_ANONYMOUS / SKIP`。小号不是已经决定回应后的装饰选项，而是谨慎人物参与讨论的正式替代路径；若唯一顾虑是暴露真实身份，应考虑小号回应。只有即使小号也不愿参与时才选择 SKIP，并说明原因。提示框应明确显示实名回应、小号回应或未回应原因。
 - Community Prompt 显式注入 User Persona 身份边界：配角/女配等其他人物设定不得被当作 User 的系统事实。网友仍可造谣/误解，但必须作为未经证实的社区说法，而不是身份串线。
-- 自创页新增 `${user}主页` 产品入口：匿名账号可编辑/保存；社区私信建立持久化入口和收件箱数据结构。本轮只建立开口，不宣称私信认知闭环已完成。
+- 自创页新增 `${user}主页` 产品入口：小号账号可编辑/保存；社区私信建立持久化入口和收件箱数据结构。本轮只建立开口，不宣称私信认知闭环已完成。
 - 删除 Contact 的既有 `purgeContactPhoneFootprint` 已审计：`cleanPublicWeb` 会删除该 Contact 作为作者的社区帖子，并从其他帖子中清理其评论、知乎回答及回答评论；这一语义继续保持“删除人物 = moli 小手机中的该人物痕迹彻底清空”。
-- User 匿名昵称目前仍保留旧兼容行为；后续与 User主页/匿名Identity 一起统一，不在本轮局部改写旧昵称迁移。
+- User 小号昵称目前仍保留旧兼容行为；后续与 User主页/小号Identity 一起统一，不在本轮局部改写旧昵称迁移。
 
 ## 社区帖子转发入口与记忆隔离（v0.5.30 后增量）
 - 社区帖子转发到微信时，聊天消息保存的是指向原帖的结构化引用入口，核心字段为 `postId / section / platform / title / snapshotAt`；新转发不再复制帖子正文或完整评论区进消息数据。
@@ -4136,9 +4136,9 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 
 
 ## v0.5.31 / moli187
-- 明确社区互动（邀请评论、邀请回答、@）不再判断是否回应：角色必须回应，只在实名 / 匿名之间选择；模型缺失公开正文时视为生成失败并保留待结算，不伪装成角色 SKIP。
+- 明确社区互动（邀请评论、邀请回答、@）不再判断是否回应：角色必须回应，只在实名 / 小号之间选择；模型缺失公开正文时视为生成失败并保留待结算，不伪装成角色 SKIP。
 - 通讯录「群聊」按当前 World Instance 过滤，与聊天列表的 World 边界一致：A 正文只见 A 群，正文外只见正文外群。
-- 修复删除 Contact 时 World scope 定位：从 Contact 绑定 World + 全部私聊实例解析 scope，删除 NPC/正文人物时其所属 World 的社区、朋友圈、World Event、匿名认知与「我们的墙」scope 数据一并清除，避免 UI 仍显示旧社区帖子。
+- 修复删除 Contact 时 World scope 定位：从 Contact 绑定 World + 全部私聊实例解析 scope，删除 NPC/正文人物时其所属 World 的社区、朋友圈、World Event、小号认知与「我们的墙」scope 数据一并清除，避免 UI 仍显示旧社区帖子。
 - 知乎顶部新增「＋」发布入口，复用现有 User 发帖链。
 - Character↔Character Awareness 第一段接入社区明确互动：角色公开回答/回复后，直接相关的角色参与者获得该公开互动的已知 World Event；不是把整帖复制给所有角色。帖子转发的 snapshotAt 仍作为私聊查看“转发当时帖子内容”的受控上下文来源。
 
@@ -4205,7 +4205,7 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 
 
 ## v0.5.54 — Character Knowledge bridge (WeChat → Community cognition)
-- 微信中的明确第一人称身份披露可以成为角色认知证据：当最近转发/可解析的 Community 上下文中只有一个 User 自己的匿名身份，User 明确说“那个匿名的是我/我发的”等时，只把该事实写入当前私聊角色或群成员的 Awareness/Character Continuity。
+- 微信中的明确第一人称身份披露可以成为角色认知证据：当最近转发/可解析的 Community 上下文中只有一个 User 自己的小号身份，User 明确说“那个小号的是我/我发的”等时，只把该事实写入当前私聊角色或群成员的 Awareness/Character Continuity。
 - 不复制微信正文到 Community，不使用模型猜测身份，不因同帖参与自动泄露；指代不唯一时不落知识。
 - 已知身份通过 World Event + identity awareness 保存，后续同一角色在 Community/微信连续性中可读取；未获证据的其他角色仍不知道。
 - 保持“手机内部人物认知连续性”与“我们的墙→正文”边界独立。
@@ -4222,7 +4222,7 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 对具有明确陈述形态的 User 消息，记录 `USER_EXPLICIT_STATEMENT` World Event，仅表示当前私聊角色/在场群成员亲耳听见；不向未在场角色传播。
 - 该事件以 `epistemicStatus=user-assertion / beliefState=unresolved / worldTruth=false` 保存，并进入该角色自己的 Cross-App Character Continuity。后续 Community 角色生成可通过既有 private generation continuity 路径自然使用，但不得改写成系统真相。
 - 问句、普通寒暄、模糊聊天不提升为长期人物认知；同一明确陈述有去重键，避免重复发送造成认知膨胀。
-- moli210 的“匿名身份=User”明确披露仍属于可确定身份知识，保持原有专门闭环；普通陈述不得冒充这种确定身份事实。
+- moli210 的“小号身份=User”明确披露仍属于可确定身份知识，保持原有专门闭环；普通陈述不得冒充这种确定身份事实。
 
 ## Community natural participation invariant (moli213)
 - A character who has already participated in a Community thread may receive a decision opportunity only when a new relevant User event exists for that thread.
@@ -4233,14 +4233,14 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 ### Character Knowledge：行为经历必须保存“做了什么”而非只有“做过” (v0.5.58)
 角色在 Community 公开回答/回复后，该行为属于角色自己的跨 App 经历。World Event 应保存实际公开内容及身份方式，使同一角色稍后回到微信或其他手机入口时能够自然记得自己的发言；不得仅保存抽象的“参与了讨论”。这不是 App 文本复制：只记录该角色亲自实施的行为结果及必要 provenance。
 
-匿名身份在角色上下文中必须使用可读的人物名称，不能暴露内部 contact id。身份映射仍严格服从 knownBy：系统知道真实身份，不等于所有角色知道。
+小号身份在角色上下文中必须使用可读的人物名称，不能暴露内部 contact id。身份映射仍严格服从 knownBy：系统知道真实身份，不等于所有角色知道。
 
 ## Unified Phone Context（v0.5.59）
 跨 App 连续性的所有权属于 Character，而不是 App。微信、Community、朋友圈以及未来新增 App 只是同一人物经历发生的不同地点。
 
 统一读取规则：生成某个角色时，由 Phone Context Builder 根据 `characterId + 当前话题 + 权限/awareness` 组装该角色本人已经亲历、看过、听见或确定知道的手机世界上下文。来源 App 不构成遗忘边界。
 
-隐私/认知边界仍必须成立：角色未参加的私聊不可见；未获得的匿名真实身份不可见；系统真相不得因为帖子对象里存在真实 ID 而泄漏；User 陈述与客观事实保持认识论区分。
+隐私/认知边界仍必须成立：角色未参加的私聊不可见；未获得的小号真实身份不可见；系统真相不得因为帖子对象里存在真实 ID 而泄漏；User 陈述与客观事实保持认识论区分。
 
 **禁止 App-to-App 桥接扩散：** 后续不得为“微信→微博”“微博→Community”等组合建立专用角色认知桥。新 App 只需要：①产生规范事实/awareness/experience；②生成角色时调用 Unified Phone Context。小手机→正文仍由“我们的墙”控制，不因本规则自动注入正文。
 
@@ -4364,7 +4364,7 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 后台路由/关注/🔥状态仍不等于其他人物的认知；人物只获得自己实际经历的信息。
 
 ## Community User IDs / Weibo network UI (v0.5.73)
-- User 的公开Community身份由“全社区ID管理”统一维护，可保存多个“大号/小号”；这是跨板块公开身份池，不再以自创板块单个“匿名账号”字段表达。
+- User 的公开Community身份由“全社区ID管理”统一维护，可保存多个“大号/小号”；这是跨板块公开身份池，不再以自创板块单个“小号账号”字段表达。
 - 微博网络中心是Community全局私信/持续网友布局的试验基线：关注人/消息为顶部主分栏；账号显示不自动加@符号。
 - 私信采用“先发送、后请求回复”的显式两步交互，避免每条User消息自动消耗一次API。
 - 表情按钮仅预留UI，不在本版本引入表情包数据结构。
@@ -4380,3 +4380,12 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 网络消息页和私聊页继续压缩顶部高度；私聊返回键叠放到左上，不再为返回标题单独占一整行。🔥提示只是 ID 下方的临时提示，成为持续网友后完全消失。
 - 消息会话支持长按清空该会话；私聊中的单条消息支持长按删除。
 - 本轮为 UI 收口；后续停止继续做纯美化，回到 Community / Network Actor 功能闭环。
+
+
+## v0.5.76 · Community Social Network v1 起点
+- Community 面向 User/角色的身份术语统一为“大号 / 小号”；旧协议字段与内部键（如 `anonymous` / `REPLY_ANONYMOUS`）暂保留为兼容层，不再作为前台概念。
+- 普通“添加联系人”仍只创建 Global / NPC，不提供“网友”来源选项。网友只能从 Community 网络账号资料页进入微信联系人体系。
+- 微博持续账号资料页新增“+微信好友”。由 User 主动点击后才升级为微信联系人；不会因关注或🔥自动升级。
+- Community 升级来的联系人记录 `contactOrigin=network` 与原网络账号 ID，并在微信联系人显示名后自动显示“（网友）”；无需 User 手选来源标签。
+- 升级时带入该网络账号已有公开画像、头像与已保存的持续互动记忆作为初始人物资料；后续继续建设 Network Actor/Public Identity 统一层。
+- 下一阶段大包仍按 Community Social Network v1 推进：微博三板块一次 API 批量刷新（各3–5条、各保留15条）、安全 Character Batch 可行性与实现、Network Actor/Public Identity、🔥公共互动记忆与主动机会、超话持续状态、网友联系人完整连续性。
