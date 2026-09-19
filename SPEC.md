@@ -4258,3 +4258,13 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - A character's own anonymous Community action remains their own experience: anonymity hides the actor from other participants, not from the actor themself.
 - Community knowledge snapshots now use the public author name rather than UI-only `uiName`, so an anonymous role's UI decoration cannot leak the hidden real-name label into another character's cognition.
 - No changes to Community autonomy opportunity/candidate gating, v0.5.60 Prompt cleanup, proactive-chat tendency, or the 6–8 generation counts.
+
+
+## moli218 / v0.5.62 — Unified Context + Community 自由 @
+- Community 编辑器右上角 `@` 不再打开角色下拉框；点击只向编辑框插入 `@`。提示文字说明可直接填写角色本名、角色在当前帖子使用过的小号公开 ID、以及当前帖子出现过的路人 ID；提示点击或继续输入后消失。
+- `本名↓` / `@↓` 的箭头移除，保留 `本名` / `@`。
+- Community 各板块共用编辑器取消整页背景模糊；编辑器自身提高不透明度，保证文字不穿透，同时允许 User 边看帖子边编辑。
+- 自由 @ 解析遵守“公开身份负责显示，内部身份只负责路由”：`@角色本名` 路由真实角色并强制本名回应；`@角色已在本帖使用的小号` 路由同一真实角色但强制继续以该公开小号回应；内部 contactId 不得因此暴露给其他角色。
+- 当前帖子已出现的普通路人也可被 @。路人保持帖子内连续性：生成时携带该公开 ID 在本帖此前真实发言，不创建联系人、不进入跨 App Character Experience。
+- 明确邀请 / @ 的角色结算入口补入 Unified Phone Context，使角色在 Community 回应时可读取属于自己的微信/手机经历；不新增 WeChat→Community 专用桥。
+- 继续坚持：控制信息，不控制推理。程序只负责权限、事实与路由，不替角色建立额外的身份推理评分或认知图。
