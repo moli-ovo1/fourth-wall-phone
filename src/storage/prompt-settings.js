@@ -342,11 +342,32 @@ const DEFAULT_COMMUNITY_PROMPT_BLOCKS = [
 角色真正私密、没有公开来源的信息，网友不能作为已知事实掌握。网友可以猜测、脑补、造谣、误解、添油加醋，甚至碰巧猜中，但这些仍只是网友的说法，不因此成为世界事实。模型知道，不等于网友知道。
 
 不同社区、板块和话题可以形成自己的参与人群与内部语境；网友不必每次都像从全互联网随机抽取。` },
-  { id:'community-identity', title:'👤 本人账号与楼主身份', scope:'community', enabled:true, content:`# 本人账号与楼主身份
-{{char}} 会用本人账号或小号发布帖子、回答、评论或参与回复，语言、关注点、知识边界和行为必须符合人物状态。
-{{char}}会在评论区自主发起评论和回复。
+  { id:'community-runtime', title:'📜 Community 通用契约', scope:'community', enabled:true, content:`# Community 通用契约
+以下规则属于所有 Community 板块共同遵守的运行规则，不因天涯、小红书、知乎、微博或自创社区而改变。
 
-AI可以代User发帖，但不可以代User评论、回答、回复。
+## 历史只追加，不重写
+- 刷新主页/信息流时，只生成新的内容；已经存在的帖子、笔记、问题、微博不能因为刷新被改写、替换或清空。
+- 刷新讨论区时，只新增楼层、回答、评论或回复；已经发生的互动是永久历史。
+- 已发生内容可以被后续内容引用、质疑、澄清或推翻，但不能回头修改成“其实之前没发生”。
+
+## User 发言边界
+- AI可以代 User 生成新的帖子、笔记、问题或微博正文。
+- AI不可以代 User 生成评论、回答、楼层回复或回复别人；这些互动必须来自 User 自己的输入。
+- User 自己发布的内容一旦成功提交，就按已经发生的公开行为处理。
+
+## 身份与认知
+- @角色本名、角色已有小号、已经出现过的公开ID时，延续对应的既有人物/账号，不创建同名替身。
+- 程序为了路由而知道“这个小号属于谁”，不等于其他人物知道其真实身份。公开世界只看见公开ID；人物可以依据自己真正掌握的线索自行推断。
+- 同一人物已经使用过的公开小号属于其既有网络身份，不应因为换帖子或换板块无缘无故随机改名。
+
+## 经历与事实
+- Character真正看见、参与或被明确告知的手机事件，才可以成为其后续人物经历；没有获得的信息不能因为模型后台可见而自动知道。
+- 生成失败或未成功落地的行为不能记成已经发生。
+- 平台提供事实、身份、历史与可用动作，不替人物规定立场、情绪或行动选择。
+` },
+  { id:'community-identity', title:'👤 本人账号与楼主身份', scope:'community', enabled:true, content:`# 本人账号与楼主身份
+{{char}} 会用本人账号或已有小号发布帖子、回答、评论或参与回复，语言、关注点、知识边界和行为必须符合人物当前状态与实际经历。
+{{char}}可以在评论区自主发起评论和回复；是否参与、以什么公开身份参与，由人物自己决定。
 ` },
   { id:'community-tianya', title:'🏮 天涯社区', scope:'community', enabled:true, content:`# 天涯社区
 生成老式中文 BBS 帖子与线性楼层讨论。
@@ -370,6 +391,30 @@ AI可以代User发帖，但不可以代User评论、回答、回复。
 问题可以由当前人物或事件引出，也可以借此延伸到行业、职业、心理、社会现象、经验或专业领域。不同回答者拥有不同的信息来源、专业程度、经历和立场，因此回答可以是专业/行业分析、个人经验、业内见闻或匿名爆料、质疑问题前提、反对观点、简短独特角度或偶尔抖机灵。
 
 不要求人人像专家，也不要人人使用“谢邀”“利益相关”等刻板口头禅。评论属于具体回答，可追问、补充、质疑、争论、吃瓜或回复其他评论。问题≠帖子，回答≠评论；不要写成天涯式线性盖楼或统一口吻的百科答案。` },
+  { id:'community-weibo', title:'🟠 微博', scope:'community', enabled:true, content:`# 微博
+微博是当前世界中的实时公共舆论场，核心是“此刻发生什么、大家正在怎样传播和讨论”，不要写成天涯长帖、小红书生活笔记或知乎回答。
+
+## 首页
+首页混合已关注账号、同城动态与实时微博。内容可以来自生活碎片、公共事件、新闻消息、兴趣讨论、网络争论、吐槽和轻娱乐。根据当前世界自然取舍：校园世界自然提高校园内容，职场/都市世界提高本地与行业内容，娱乐圈世界才自然提高明星与粉圈浓度，不为填频道硬造不属于当前世界的内容。
+
+## 热搜
+热搜由当前世界正在集中讨论的事件形成，可包含突发消息、争议人物、校园/职场事件、社会话题、娱乐八卦、公共讨论和网络梗。热搜是话题聚合，不是文章分类；同一热搜下允许传闻、质疑、媒体报道、当事人回应、澄清和网友反应并存。
+
+## 账号生态
+允许普通网友、媒体/官号、大V、狗仔/爆料号、营销号、粉丝、知情人、角色本人账号与角色已有小号共同存在。不同账号有不同社会位置、信息来源和说话方式。已经持续存在的账号保持自身公开ID和已表现出的特点，不要每次刷新重新换身份。
+
+## 微博正文与媒体
+微博通常较短，但可以是一句话、吐槽、照片/视频配文、事件播报或少量长微博。可自然使用 #话题# 和 @公开ID。图片/视频在本项目中以文字描述表示现实中存在的媒体内容；描述可见/可听事实，不把媒体描述写成小说旁白。
+
+## 评论与转发
+评论即时、碎片、立场混杂，可以质疑、玩梗、补充、反驳、吃瓜、@别人或跑题，作者也可以自然回复。
+转发是传播行为，不是普通评论。转发者可以补充自己的话，也可以形成 //@账号：内容 的传播链；同一事件可随着传播出现新的解读、回应与澄清。
+
+## 关注账号
+User关注的账号是持续存在的微博账号。刷新首页时可自然出现其中一部分，不要求所有关注账号每轮都发微博。🔥持续互动账号可以保留与User已经发生的微博互动记忆，并拥有主动私信或主动@User的能力；有能力不等于每轮必须行动。
+
+微博只提供传播环境和功能，人物如何判断、是否参与、使用本名还是已有小号，仍由人物自身决定。
+` },
   { id:'community-custom', title:'🌙 自创社区', scope:'community', enabled:true, content:`# 自创社区
 当前内容形态由 User 保存的自创条目决定。优先遵循条目的名称、生成要求和特殊设定，不强行改写成天涯、小红书或知乎。
 
@@ -401,6 +446,7 @@ const LEGACY_DEFAULT_CONTENT_HASHES = {
   'context-assembly': 'e7f3deb9',
   'community-head': 'd99b0835',
   'community-world': '1be8c63e',
+  'community-identity': '50a03096',
   'community-tianya': '4f3581da',
   'community-xhs': 'cd272828',
   'community-zhihu': '9055f08a',
@@ -495,6 +541,20 @@ export function getPromptSettings() {
   for (const item of [...defaultBlocks, ...customBlocks]) {
     if (!ordered.includes(item)) ordered.push(item);
   }
+
+  // New built-in Community blocks should enter the intended default position for
+  // existing moli-default users without scrambling any order they explicitly saved.
+  const placeNewDefaultBefore = (id, beforeId) => {
+    if (savedOrder.includes(id)) return;
+    const from = ordered.findIndex(item => item.id === id);
+    const to = ordered.findIndex(item => item.id === beforeId);
+    if (from < 0 || to < 0 || from === to) return;
+    const [item] = ordered.splice(from, 1);
+    const nextTo = ordered.findIndex(row => row.id === beforeId);
+    ordered.splice(nextTo < 0 ? ordered.length : nextTo, 0, item);
+  };
+  placeNewDefaultBefore('community-runtime', 'community-identity');
+  placeNewDefaultBefore('community-weibo', 'community-custom');
 
   return {
     schemaVersion: 2,
