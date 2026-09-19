@@ -4250,3 +4250,11 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - Anonymous public identity uses data minimization: the model receives the public nickname/content it can actually observe. Local UI ownership is not character knowledge and must not be promoted into “anonymous nickname = User” truth.
 - AI may author a post as User when the generation entry permits it; AI must not author User comments, answers or replies. User-entered UI content is unaffected.
 - Machine action enums/JSON/XML-like tags are interface protocol, not behavior policy.
+
+
+## v0.5.61 / moli217 — Community self-experience anchoring
+- Community natural participation now passes the current character's own prior authored lines from the same post as an explicit self-experience block. This prevents a later refresh from re-reading the character's own earlier wording as if it came from an unrelated third party.
+- This is deliberately narrow: it does not infer or store hidden identities for other anonymous users. User anonymous comments remain public nickname + public text only unless the character actually learns more through experience.
+- A character's own anonymous Community action remains their own experience: anonymity hides the actor from other participants, not from the actor themself.
+- Community knowledge snapshots now use the public author name rather than UI-only `uiName`, so an anonymous role's UI decoration cannot leak the hidden real-name label into another character's cognition.
+- No changes to Community autonomy opportunity/candidate gating, v0.5.60 Prompt cleanup, proactive-chat tendency, or the 6–8 generation counts.

@@ -478,3 +478,11 @@
 - AI may generate a User-authored post, but must not impersonate User to generate comments, answers or replies.
 - Community private SEND protocol is 2–5 bubbles.
 - New Community page refresh batches request 6–8 new posts. Tianya/Xiaohongshu new posts request 6–8 initial interactions; Zhihu new questions request 6–8 initial answers.
+
+
+## v0.5.61 / moli217 — Community self-experience anchoring
+- Community natural participation now passes the current character's own prior authored lines from the same post as an explicit self-experience block. This prevents a later refresh from re-reading the character's own earlier wording as if it came from an unrelated third party.
+- This is deliberately narrow: it does not infer or store hidden identities for other anonymous users. User anonymous comments remain public nickname + public text only unless the character actually learns more through experience.
+- A character's own anonymous Community action remains their own experience: anonymity hides the actor from other participants, not from the actor themself.
+- Community knowledge snapshots now use the public author name rather than UI-only `uiName`, so an anonymous role's UI decoration cannot leak the hidden real-name label into another character's cognition.
+- No changes to Community autonomy opportunity/candidate gating, v0.5.60 Prompt cleanup, proactive-chat tendency, or the 6–8 generation counts.
