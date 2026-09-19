@@ -923,6 +923,9 @@ export function createCustomContact({
   customWorldBook = null,
   customRoleMode = 'global',
   boundScopeKey = '',
+  contactOrigin = '',
+  networkAccountId = '',
+  networkProfile = '',
 }) {
   const trimmedName = String(name || '').trim();
 
@@ -945,6 +948,9 @@ export function createCustomContact({
     customRoleMode: customRoleMode === 'npc' ? 'npc' : 'global',
     boundScopeKey: customRoleMode === 'npc' ? String(boundScopeKey || '').trim() : '',
     profileEntries: [],
+    contactOrigin: String(contactOrigin || '').trim(),
+    networkAccountId: String(networkAccountId || '').trim(),
+    networkProfile: String(networkProfile || '').trim(),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -1338,7 +1344,7 @@ export function appendMessage(
       platform: String(cf.platform || 'moli社区'),
       customCommunityId: String(cf.customCommunityId || ''),
       customCommunityName: String(cf.customCommunityName || ''),
-      authorName: String(cf.authorName || '匿名网友'),
+      authorName: String(cf.authorName || '小号网友'),
       title: String(cf.title || '无标题'),
       content: String(cf.content || ''),
       snapshotAt: Number(cf.snapshotAt || Date.now()),
@@ -1951,7 +1957,7 @@ function contextMessageForContact(message, conversation, contactId) {
           postId: String(message.communityForward.postId || ''),
           section: String(message.communityForward.section || ''),
           platform: String(message.communityForward.platform || 'moli社区'),
-          authorName: String(message.communityForward.authorName || '匿名网友'),
+          authorName: String(message.communityForward.authorName || '小号网友'),
           title: String(message.communityForward.title || '无标题'),
           content: String(message.communityForward.content || ''),
           snapshotAt: Number(message.communityForward.snapshotAt || message.createdAt || 0),
