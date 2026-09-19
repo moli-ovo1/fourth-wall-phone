@@ -2,6 +2,7 @@ import { getContacts, getScopeConversations } from '../storage/data-store.js';
 import { listProfileMoments, listPublicMoments, getProfileMomentMemory, getRecentMomentChatEvents } from '../storage/moments-store.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
+import { getNetworkActorByContact, listWeiboPrivateMessages } from '../storage/public-web-store.js';
 
 function label(contact){return String(contact?.remark||contact?.name||contact?.displayName||contact?.id||'角色').trim();}
 function visibleMoment(item,contactId){if(item?.visibility?.mode!=='only')return true;return (item?.visibility?.contactIds||[]).map(String).includes(String(contactId||''));}
@@ -20,6 +21,18 @@ export function buildPhoneContext(scopeKey,contactId,{query='',currentConversati
   const continuity=buildCharacterContinuity(scopeKey,cid,{limit,query,identityLabels});
   const blocks=[];
   if(continuity.text)blocks.push(`【这个人的跨 App 经历与认知】\n${continuity.text}`);
+  const networkActor=getNetworkActorByContact(scopeKey,cid);
+  if(networkActor){
+    const ids=(networkActor.publicIds||[]).map(String).filter(Boolean);
+    const networkLines=[];
+    if(networkActor.profile)networkLines.push(`公开网络画像：${networkActor.profile}`);
+    if(ids.length)networkLines.push(`持续公开ID：${ids.map(x=>'@'+x).join(' / ')}`);
+    if(Array.isArray(networkActor.memory)&&networkActor.memory.length)networkLines.push(`已经亲历的网络互动：\n${networkActor.memory.slice(-24).map(x=>`- ${x}`).join('\n')}`);
+    const dmId=ids[0]||networkActor.name||networkActor.id;
+    const dms=listWeiboPrivateMessages(scopeKey,dmId).slice(-16);
+    if(dms.length)networkLines.push(`此前网络私信：\n${dms.map(x=>`${x.role==='user'?(userName||'User'):'@'+(networkActor.name||dmId)}：${x.content}`).join('\n')}`);
+    if(networkLines.length)blocks.push(`【这个联系人在成为微信好友前后的网络经历】\n这是同一个人自己的经历，不是其他网友的知识。\n${networkLines.join('\n\n')}`);
+  }
   const known=summarizeWorldEventsForContext(scopeKey,{contactId:cid,awareness:'known',limit:20});
   if(known)blocks.push(`【这个人已经知道的手机世界事件】\n${known}`);
 
