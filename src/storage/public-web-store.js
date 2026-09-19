@@ -67,6 +67,7 @@ export function ensureCustomCommunityPresets(scopeKey){
 
 export function saveCustomCommunity(scopeKey,input={}){const state=read(scopeKey);state.customCommunities=Array.isArray(state.customCommunities)?state.customCommunities:[];const id=String(input.id||`custom_${Date.now()}_${Math.random().toString(36).slice(2,7)}`);const previous=state.customCommunities.find(x=>String(x.id)===id);const item={id,name:String(input.name||'未命名').trim(),description:String(input.description||'').trim(),needsComments:input.needsComments!==undefined?Boolean(input.needsComments):Boolean(previous?.needsComments),updatedAt:Date.now()};const i=state.customCommunities.findIndex(x=>String(x.id)===id);if(i>=0)state.customCommunities[i]=item;else state.customCommunities.push(item);write(scopeKey,state);return item;}
 export function deleteCustomCommunity(scopeKey,id){const state=read(scopeKey);state.customCommunities=(state.customCommunities||[]).filter(x=>String(x.id)!==String(id));write(scopeKey,state);}
+export function deleteCustomCommunities(scopeKey,ids=[]){const wanted=new Set((Array.isArray(ids)?ids:[ids]).map(String));if(!wanted.size)return 0;const state=read(scopeKey);const before=(state.customCommunities||[]).length;state.customCommunities=(state.customCommunities||[]).filter(x=>!wanted.has(String(x.id)));write(scopeKey,state);return before-state.customCommunities.length;}
 
 // Weibo v1: persistent followed-account directory. These are public-network accounts,
 // not WeChat contacts. A followed passerby gains Weibo continuity only.
