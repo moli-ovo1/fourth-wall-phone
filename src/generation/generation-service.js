@@ -1407,6 +1407,68 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
 }
 
 
+function parseCommunityDiscoveryBatch(rawText = '', validIds = [], validPostIds = []) {
+  const raw = String(rawText || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  let parsed = {};
+  try { parsed = JSON.parse(raw); } catch {
+    try { const match = raw.match(/\{[\s\S]*\}/); parsed = match ? JSON.parse(match[0]) : {}; } catch { parsed = {}; }
+  }
+  const idSet = new Set(validIds.map(String));
+  const postSet = new Set(validPostIds.map(String));
+  const rows = Array.isArray(parsed?.actors) ? parsed.actors : [];
+  return rows.map(item => {
+    const actorId = String(item?.actorId || '');
+    if (!idSet.has(actorId)) return null;
+    const viewedPostIds = [...new Set((Array.isArray(item?.viewedPostIds) ? item.viewedPostIds : []).map(String).filter(id => postSet.has(id)))].slice(0, 8);
+    const actions = (Array.isArray(item?.actions) ? item.actions : []).map(action => {
+      const postId = String(action?.postId || '');
+      const mode = String(action?.mode || 'SKIP').toUpperCase();
+      if (!postSet.has(postId) || !['REPLY_REAL','REPLY_ANONYMOUS'].includes(mode)) return null;
+      const content = String(action?.content || '').trim().slice(0, 1800);
+      if (!content) return null;
+      return { postId, mode, alias: String(action?.alias || '').trim().slice(0, 80), content };
+    }).filter(Boolean).slice(0, 3);
+    return viewedPostIds.length || actions.length ? { actorId, viewedPostIds, actions } : null;
+  }).filter(Boolean);
+}
+
+/**
+ * Public Community autonomous discovery. This is the public-web equivalent of Moments viewedMomentIds:
+ * contacts may independently browse posts without a User @/invite/forward, and may optionally participate.
+ * Zero browsing and zero actions are valid outcomes.
+ */
+export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], signal } = {}) {
+  if (!scopeKey || !Array.isArray(posts) || !posts.length) return { actors: [] };
+  const conversations = getScopeConversations(scopeKey);
+  const allowed = new Set(['builtin:meta','builtin:writer','builtin:guide']);
+  for (const conversation of conversations) {
+    if (conversation?.type !== 'private') continue;
+    const contactId = String(conversation.contactId || '');
+    if (!contactId) continue;
+    const bound = String(conversation.boundScopeKey || conversation.storageScopeKey || '');
+    if (conversation.scopeMode !== 'global' && bound === String(scopeKey)) allowed.add(contactId);
+  }
+  const contacts = getContacts().map(hydratedContact).filter(item => item?.id && allowed.has(String(item.id)));
+  if (!contacts.length) return { actors: [] };
+  const recentPosts = posts.filter(Boolean).slice(-12);
+  const postText = recentPosts.map(post => `postId=${post.id}｜平台=${post.section || 'community'}｜标题=${post.title || '无标题'}\n${communityPostFacts(post, Date.now()).slice(0, 3500)}`).join('\n\n');
+  const scanText = recentPosts.map(post => `${post.title || ''}\n${post.content || ''}`).join('\n');
+  const actorBlocks = [];
+  for (const item of contacts) {
+    const worldBook = item?.kind === 'custom'
+      ? await getActivatedCustomWorldBook({ contact: item, scanText })
+      : await getActivatedTavernWorldBook({ contact: item, scanText });
+    actorBlocks.push(`===== CONTACT id=${item.id}｜${contactLabel(item)} =====\n【身份】\n${batchRoleProfile(item, scanText)}\n\n【本人的世界书】\n${clipBatchText(worldBook?.text || '', 3500) || '本轮无激活条目'}\n\n【本人的统一手机经历】\n${buildPhoneContext(scopeKey, item.id, { query: scanText, userName: getTavernUserContext().name || 'User', limit: 24 }).text || '暂无'}\n===== END =====`);
+  }
+  const system = `你在结算 moli小手机 公共 Community 的“人物自主浏览”。候选人物不是等待 User 召唤的工具；他们可以像使用普通网络社区一样，自主刷到、点开、阅读当前帖子，也可以看见后仍然不参与。\n- 不要为了展示功能而让所有人都浏览或回复；0 人浏览、0 人回复完全有效。\n- 浏览资格不需要 User @、邀请、转发或明确召入。moli、皮下、小上帝与其他候选人物一样，由自身兴趣、关系、习惯和当下状态决定是否浏览。\n- viewedPostIds 只填写本轮人物实际看过的帖子。模型能看到候选帖子不等于人物全部看过。\n- 看过之后可以选择实名回复、小号回复或完全不回复。谨慎、身份敏感、职业风险等因素可以影响“用什么身份/说什么/是否沉默”，但不能被当成“没有资格浏览”的理由。\n- 公开回复必须符合人物本人已经拥有的信息；不要把其他人的私聊秘密或后台身份泄露出去。\n- 只输出严格 JSON，不要解释。`;
+  const user = `当前时间：${new Date().toString()}\n\n【本轮可浏览的公共帖子】\n${postText}\n\n【候选人物】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","viewedPostIds":["实际看过的postId"],"actions":[{"postId":"要参与的postId","mode":"REPLY_REAL|REPLY_ANONYMOUS","alias":"小号时填写","content":"公开回复"}]}]}。没有浏览或行动的人物可以省略。`;
+  const config = resolveApiRuntimeConfig(getApiSettings());
+  assertApiConfig(config);
+  const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
+  return { actors: parseCommunityDiscoveryBatch(result?.text || '', contacts.map(item => item.id), recentPosts.map(post => post.id)) };
+}
+
+
 function safeInternetName(value, userName, fallback = '网友') {
   const name = String(value || fallback).trim().slice(0, 24) || fallback;
   return name === String(userName || '').trim() ? fallback : name;
@@ -1562,7 +1624,7 @@ function communityNativeRoster(scopeKey) {
     const name = String(contact.remark || contact.displayName || contact.name || contact?.source?.originalName || '').trim();
     if (name && !names.includes(name)) names.push(name);
   }
-  return names.length ? `【当前正文世界原生人物】\n${names.join('、')}\n这些人物属于当前正文世界，可像正文角色一样被社区自然提及、发帖、评论或成为事件相关人；不要强制每次出现。moli、皮下、小上帝不是原生人物，除非 User 主动 @、邀请、转发或自创内容明确召入，否则社区不得自行把他们拉进世界。` : '';
+  return names.length ? `【当前正文世界原生人物】\n${names.join('、')}\n这些人物属于当前正文世界，可像正文角色一样被社区自然提及、发帖、评论或成为事件相关人；不要强制每次出现。` : '';
 }
 
 export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled = false, section = 'tianya', signal, recommendSources = null, recommendCount = 0, customCommunities = [], weiboQuery = '', weiboMode = 'home' } = {}) {
@@ -1653,7 +1715,7 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
 
 【评论字段】允许一级评论与评论回复；回复已有评论时使用 replyToCommentId。评论数量按内容冷热自然变化，不要求每条相同。
 
-【账号连续与扩展】已经持续存在的账号再次出现时，沿用其既有公开ID和已经表现出的特点。已有账号只是可复用的持续人物，不是本轮账号候选名单；每轮都可以根据当前话题自然出现新的普通网友、媒体、大V、营销号、兴趣用户、知情人等，并为首次出现者创建新的公开ID。已有角色本人账号或其已经实际使用过的小号，也可以在人物与当前公开事件自然相关时直接发帖或参与互动。内部路由身份不得写成其他人物自动知道的公开事实。
+【账号连续与扩展】已经持续存在的账号再次出现时，沿用其既有公开ID和已经表现出的特点。已有账号只是可复用的持续人物，不是本轮账号候选名单；每轮都可以根据当前话题自然出现新的普通网友、媒体、大V、营销号、兴趣用户、知情人等，并为首次出现者创建新的公开ID。已有角色本人账号或其已经实际使用过的小号，也可以继续直接发帖或参与互动；是否行动由人物自己的状态与动机决定，不要求每轮出现。内部路由身份不得写成其他人物自动知道的公开事实。
 
 【运行环境隔离】AI、API、Prompt、插件、SillyTavern、世界书、角色卡、调试信息、代码和生成器不属于故事世界，除非正文明确证明其存在。
 
