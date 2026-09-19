@@ -3420,3 +3420,7 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 ## v0.5.73 handoff
 - 已完成：全社区ID管理UI/存储迁移、删除自创默认测试条目、移除主屏幕独立微博App、微博关注/消息/私聊布局收口、私信两步API触发、表情入口预留。
 - 后续：将微博网络中心抽象为Community全局私信布局时复用本版结构；不要恢复自创页旧私信按钮。
+
+
+### v0.5.74 startup hotfix
+- Fixed startup import failure: `src/ui/phone-panel.js` imports `deleteCustomCommunities`, so the canonical `src/storage/public-web-store.js` now exports the matching batch-delete helper. The prior patch had the helper only in the obsolete/root duplicate store file, which does not satisfy the runtime import.

@@ -598,3 +598,7 @@
 - 微博网络中心按参考布局收口：顶部居中“关注人/消息”，返回左上、建群右上；列表头像与ID缩小、ID取消粗体与前置@。
 - 私聊页删除独立横幅，头像+ID缩小居中，小火花提示位于其下；输入区预留笑脸/表情包入口。
 - 私信发送改为两段式：第一次点击仅落地User消息，不调用API；输入为空时再次点击发送按钮才请求对方回复。
+
+
+### v0.5.74 startup hotfix
+- Fixed startup import failure: `src/ui/phone-panel.js` imports `deleteCustomCommunities`, so the canonical `src/storage/public-web-store.js` now exports the matching batch-delete helper. The prior patch had the helper only in the obsolete/root duplicate store file, which does not satisfy the runtime import.

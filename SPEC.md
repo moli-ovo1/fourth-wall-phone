@@ -4368,3 +4368,7 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 微博网络中心是Community全局私信/持续网友布局的试验基线：关注人/消息为顶部主分栏；账号显示不自动加@符号。
 - 私信采用“先发送、后请求回复”的显式两步交互，避免每条User消息自动消耗一次API。
 - 表情按钮仅预留UI，不在本版本引入表情包数据结构。
+
+
+### v0.5.74 startup hotfix
+- Fixed startup import failure: `src/ui/phone-panel.js` imports `deleteCustomCommunities`, so the canonical `src/storage/public-web-store.js` now exports the matching batch-delete helper. The prior patch had the helper only in the obsolete/root duplicate store file, which does not satisfy the runtime import.
