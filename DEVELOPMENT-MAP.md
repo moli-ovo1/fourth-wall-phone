@@ -3397,3 +3397,9 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 - 微博生成器内部 Prompt 缩减为机器执行协议（字段、JSON、路由边界），不再维护第二套微博风格，避免Preset与代码内Prompt互相打架。
 - 设计分层固定为：Community全局契约 → 板块机制/功能 → 板块风格Preset。后续新增板块不得复制共同铁律。
 - 本轮不继续美化微博私信/关注入口，也不实现“网友→微信联系人”；这些留在微博主体功能稳定后集中处理。
+
+
+## v0.5.71 / moli222 — Prompt preset built-in migration fix
+- Fixed the existing `moli 默认预设` upgrade path: newly added built-in Community blocks are now persisted into an already-saved default preset, rather than only being merged in memory.
+- Existing users should now see `📜 Community 通用契约` before `👤 本人账号与楼主身份`, and `🟠 微博` before `🌙 自创社区`.
+- This is a migration/display repair only; no Community behavior or UI semantics were changed.
