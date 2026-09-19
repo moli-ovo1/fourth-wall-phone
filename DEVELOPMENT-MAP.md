@@ -3490,3 +3490,10 @@ Still next, without splitting into UI micro-patches:
 - 微博账号生态：稳定 ID 的含义明确为“同一人再次出现时保持连续”，不再把已有持续账号当本轮候选名单；允许每轮按话题自然产生新普通网友、媒体、大V、营销号、兴趣用户、知情人等新公开 ID。
 - 微博 Character 自然参与：沿用 Community 已有世界人物上下文/Actor Pack，明确其本人账号或已有小号在自然相关时可直接发帖/互动，不要求每轮出现；明确邀请/@ 仍走角色专用调用。
 - 本轮没有修改已验证通过的社会余波和跨板块痕迹逻辑。
+
+
+## v0.5.83 / moli230 — Community autonomous discovery
+- Removed the fixed-persona summon-only gate from Community world-roster prompting. World ownership is no longer treated as an action permission boundary.
+- Added one batched autonomous-discovery pass after normal Community refreshes. Eligible world contacts plus the three builtin personas may independently return viewed post IDs and optional REAL/ANONYMOUS public participation; zero activity is valid.
+- Viewed posts are persisted through the existing post-snapshot World Event/Awareness path and therefore reach WeChat only through the canonical `buildPhoneContext()` cross-app read model.
+- Kept NPC Perspective Projection isolated to NPC body/world-book cognition; no Community dependency was added.
