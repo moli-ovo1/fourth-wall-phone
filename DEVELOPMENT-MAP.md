@@ -3449,3 +3449,10 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 4. 继续：Character Batch 可行性重构与验证；目标 1~3 角色一次 API + 路人一次 API，知识隔离为硬门槛。
 5. 继续：超话轻量持久状态（CP双方、CP名、阵营、近期公开素材、持续活跃账号、近期争议）。
 6. 继续：网友 `+微信好友` 后的跨 App 人物连续性实机验证，确保升级不失忆也不越权获得正文/他人私聊。
+
+## v0.5.78 后续施工顺序
+1. 完成 Network Actor / Public Identity 的跨 Community 归一与旧数据迁移审计；把当前微博 follow/hot/message 原型逐步改为读取同一网络人物，而不是复制人物。
+2. 完成 🔥持续网友的事件机会：真实相关事件 → 单一 Network Actor 决策 → 主动 @ / 私信 / SKIP；不做随机百分比。
+3. Character Batch：先建立隔离 Actor Pack，使每个 Character 只拿自己的 phone context / private memory / identity；随后把同一帖子 1–3 个角色的邀请/@压成一次 API，路人仍单独一批。知识隔离失败则不得合并。
+4. 超话持续社区状态：保存 CP 名称、双方、主要阵营、持续账号、近期公开素材/争议；不是每轮重新抽取一次性 CP。
+5. “+微信好友”继续升级为 Network Actor 与微信 Contact 的同一人物关联，继承网络经历且不扩散未获得秘密。

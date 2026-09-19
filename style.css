@@ -2580,3 +2580,10 @@
 #moli-phone-panel .moli-weibo-chat-spark-tip{position:absolute;left:50%;transform:translateX(-50%);top:32px;width:max-content;max-width:80%;padding:0;border:0;background:transparent;font-size:10px;line-height:14px;gap:4px}
 #moli-phone-panel .moli-weibo-chat-spark-tip button{font-size:14px;line-height:14px}
 #moli-phone-panel .moli-weibo-chat-list{padding-top:12px}
+
+/* v0.5.78: Weibo composer reuses Community ID storage without replacing the designed composer shell. */
+.moli-weibo-compose-account{display:block;border:0;background:transparent;padding:2px 0 0;color:inherit;font:inherit;font-size:12px;opacity:.68;text-align:left;cursor:pointer}
+.moli-weibo-account-menu{position:absolute;z-index:8;top:58px;left:72px;min-width:180px;max-width:70%;padding:6px;border-radius:12px;background:rgba(255,255,255,.98);box-shadow:0 8px 28px rgba(0,0,0,.16);display:grid;gap:3px}
+.moli-weibo-account-menu button{border:0;background:transparent;padding:9px 10px;text-align:left;border-radius:8px;font:inherit;cursor:pointer}
+.moli-weibo-account-menu button:hover{background:rgba(0,0,0,.05)}
+.moli-weibo-account-menu small{padding:8px 10px;opacity:.58}
