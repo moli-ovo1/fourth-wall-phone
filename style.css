@@ -2556,3 +2556,27 @@
 #moli-phone-panel .moli-weibo-chat-spark-tip button{border:0;background:transparent;font-size:17px;padding:0}
 #moli-phone-panel .moli-weibo-chat-compose{align-items:center}
 #moli-phone-panel .moli-weibo-chat-compose .moli-weibo-chat-emoji{border:0;background:transparent;font-size:24px;width:32px;height:38px}
+/* v0.5.75 final UI close-out: compact identity/network surfaces */
+#moli-phone-panel .moli-community-id-manager{width:max-content;max-width:100%;margin:0 auto;min-height:28px!important;padding:2px 4px!important;border:0!important;border-radius:0!important;background:transparent!important;text-align:center!important;text-decoration:underline;font-size:14px}
+#moli-phone-panel .moli-community-id-inline{position:relative;margin:2px auto 0;width:min(96%,390px);padding:8px 10px 6px;border-radius:12px;background:rgba(248,248,248,.9);box-shadow:0 8px 22px rgba(0,0,0,.10)}
+#moli-phone-panel .moli-community-id-inline[hidden]{display:none!important}
+#moli-phone-panel .moli-community-id-delete-tip{text-align:center!important;font-size:10px!important;color:#888!important;margin:5px 0 0!important}
+#moli-phone-panel .moli-community-id-side{position:absolute;left:100%;top:42px;width:145px;max-height:210px;overflow:auto;padding:6px;border-radius:12px;background:rgba(245,245,245,.96);box-shadow:0 10px 25px rgba(0,0,0,.18)}
+#moli-phone-panel .moli-community-id-side[hidden]{display:none!important}
+#moli-phone-panel .moli-community-id-side button{padding:9px 10px!important}
+#moli-phone-panel .moli-community-id-side small{display:block;padding:8px;color:#888;font-size:10px}
+#moli-phone-panel .moli-community-picker{overflow:visible;min-width:128px;width:128px}
+#moli-phone-panel .moli-community-alias-row{color:#777}
+#moli-phone-panel .moli-community-alias-row input{color:#777}
+#moli-phone-panel .moli-weibo-network-top{height:50px}
+#moli-phone-panel .moli-weibo-network-tabs{height:44px;align-items:end}
+#moli-phone-panel .moli-weibo-network-tabs button{padding-top:7px;padding-bottom:7px}
+#moli-phone-panel .moli-weibo-network-subhead{position:absolute;z-index:20;left:0;top:0;width:48px;height:46px;display:block;border:0;background:transparent;padding:0}
+#moli-phone-panel .moli-weibo-network-subhead>b,#moli-phone-panel .moli-weibo-network-subhead>span{display:none}
+#moli-phone-panel .moli-weibo-network-subhead button{width:46px;height:46px;padding:0;font-size:28px}
+#moli-phone-panel .moli-weibo-chat-identity{min-height:46px;padding:5px 50px 4px;position:relative;flex-wrap:wrap;align-content:center}
+#moli-phone-panel .moli-weibo-chat-identity .moli-weibo-network-avatar{width:27px;height:27px;flex-basis:27px}
+#moli-phone-panel .moli-weibo-chat-identity>b{font-size:13px;line-height:27px}
+#moli-phone-panel .moli-weibo-chat-spark-tip{position:absolute;left:50%;transform:translateX(-50%);top:32px;width:max-content;max-width:80%;padding:0;border:0;background:transparent;font-size:10px;line-height:14px;gap:4px}
+#moli-phone-panel .moli-weibo-chat-spark-tip button{font-size:14px;line-height:14px}
+#moli-phone-panel .moli-weibo-chat-list{padding-top:12px}

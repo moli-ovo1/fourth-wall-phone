@@ -3424,3 +3424,11 @@ Fallback Scope 是硬边界：只有稳定 `:chat:` scope 可以持久化正式�
 
 ### v0.5.74 startup hotfix
 - Fixed startup import failure: `src/ui/phone-panel.js` imports `deleteCustomCommunities`, so the canonical `src/storage/public-web-store.js` now exports the matching batch-delete helper. The prior patch had the helper only in the obsolete/root duplicate store file, which does not satisfy the runtime import.
+
+
+## v0.5.75 UI close-out
+- 自创主页的社区身份入口改为居中的下划线 `ID card`，ID 管理直接在主页卡内展开，不再弹独立弹窗；支持大号/小号，长按删除提示固定在展开框底部。
+- Community 评论/回复编辑器统一使用“大号 / 小号 / 楼主”；选择“小号”时在右侧展开已有小号列表，选中后以 `ID：xxx` 显示当前公开身份。
+- 网络消息页和私聊页继续压缩顶部高度；私聊返回键叠放到左上，不再为返回标题单独占一整行。🔥提示只是 ID 下方的临时提示，成为持续网友后完全消失。
+- 消息会话支持长按清空该会话；私聊中的单条消息支持长按删除。
+- 本轮为 UI 收口；后续停止继续做纯美化，回到 Community / Network Actor 功能闭环。
