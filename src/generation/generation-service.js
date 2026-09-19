@@ -31,7 +31,7 @@ import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 import { buildPhoneContext } from './phone-context-builder.js';
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
-import { getPublicWebPost } from '../storage/public-web-store.js';
+import { getPublicWebPost, listWeiboFollows } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
 
 function communityActorName(actor) {
@@ -1422,7 +1422,7 @@ function parsePublicWebBatch(text, userName = 'User') {
   }
   const posts = Array.isArray(data?.posts) ? data.posts : [];
   return posts.slice(0, 12).map(item => ({
-    section: ['tianya','xiaohongshu','zhihu','custom'].includes(item?.section) ? item.section : 'tianya',
+    section: ['tianya','xiaohongshu','zhihu','weibo','custom'].includes(item?.section) ? item.section : 'tianya',
     type: String(item?.type || ''),
     author: { type:'internet_actor', id:String(item?.authorId || ''), name:safeInternetName(item?.author, userName, '匿名网友') },
     title: String(item?.title || '').trim().slice(0,120),
@@ -1443,7 +1443,7 @@ function parsePublicWebBatch(text, userName = 'User') {
         return {id:ids[i],author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now(),replyToCommentId};
       }).filter(c=>c.content);
     })(),
-    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), imageText:String(item?.imageText || ''), answer:String(item?.answer || ''), customCommunityId:String(item?.customCommunityId||''), customCommunityName:String(item?.customCommunityName||''), answers:Array.isArray(item?.answers)?item.answers.slice(0,6).map((a,ai)=>({id:String(a?.id||`ans_${Date.now()}_${ai}`),author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author, userName, '匿名用户')},content:String(a?.content||a?.answer||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:Array.isArray(a?.comments)?a.comments.slice(0,15).map((c,ci)=>({id:String(c?.id||`zac_${Date.now()}_${ai}_${ci}`),author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:String(c?.replyToCommentId||'')})).filter(c=>c.content):[]})).filter(a=>a.content):[] }
+    extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), imageText:String(item?.imageText || ''), answer:String(item?.answer || ''), weiboLane:String(item?.lane||item?.weiboLane||'实时'), repostText:String(item?.repostText||''), repostChain:Array.isArray(item?.repostChain)?item.repostChain.map(String).slice(0,6):[], reposts:Number(item?.reposts||0), hotScore:Number(item?.hotScore||0), hotLabel:String(item?.hotLabel||''), customCommunityId:String(item?.customCommunityId||''), customCommunityName:String(item?.customCommunityName||''), answers:Array.isArray(item?.answers)?item.answers.slice(0,6).map((a,ai)=>({id:String(a?.id||`ans_${Date.now()}_${ai}`),author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author, userName, '匿名用户')},content:String(a?.content||a?.answer||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:Array.isArray(a?.comments)?a.comments.slice(0,15).map((c,ci)=>({id:String(c?.id||`zac_${Date.now()}_${ai}_${ci}`),author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:String(c?.replyToCommentId||'')})).filter(c=>c.content):[]})).filter(a=>a.content):[] }
   })).filter(item => item.title && (item.section !== 'xiaohongshu' || (item.extra?.imagePrompt && item.extra?.imageText)));
 }
 
@@ -1569,6 +1569,7 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
   context = [userIdentityBoundary, context].filter(Boolean).join('\n\n');
     const nativeRoster = communityNativeRoster(scopeKey);
   if (nativeRoster) context = [context, nativeRoster].filter(Boolean).join('\n\n');
+  if(section==='weibo'){const follows=listWeiboFollows(scopeKey);if(follows.length){const followText=follows.slice(0,40).map(x=>`- @${x.name}${x.profile?`：${x.profile}`:''}`).join('\n');context=[context,`【User 已关注的微博账号】\n这些是持续账号；刷新首页时应自然让其中一部分账号发微博，但不要强制每个账号每次都出现。\n${followText}`].filter(Boolean).join('\n\n');}}
   if (!context.trim()) context = '当前没有打开正文，也没有选择“当前角色世界”。不要读取、猜测或讨论程序代码、插件、API、Prompt、SillyTavern、模型、世界书、角色卡、调试信息；只生成自然的普通社区内容。';
   const ghostRule = ghostStoriesEnabled ? '允许在内容自然适合时选择“莲蓬鬼话”。' : '“莲蓬鬼话”关闭：不得生成莲蓬鬼话分类，也不得用其他分类绕过限制生成灵异鬼话主题。';
   const tianyaSystem = `# 天涯社区 · 杂谈板块生成器\n\n你正在模拟一个真实存在于当前故事世界中的中文老式公共论坛。这里不是剧情旁白、角色聊天室、作者讨论区或为 User 服务的信息面板。你的任务不是写“像论坛的文案”，而是截取这个世界此刻真实天涯论坛中的一页。\n\n【世界来源】\n论坛与当前故事共享同一个现实世界。可以从当前角色、人物关系、职业环境、社会背景、地点、时代、近期事件和正文剧情自然发散。当前故事世界应当成为社区内容的重要来源，而不是偶尔出现的彩蛋。可以直接讨论角色或 User，也可以只捕捉他们留下的社会痕迹：旁观者目击、匿名爆料、同行议论、熟人吐槽、职业圈传闻、地点事件、相似经历、关系猜测、由近期事件引发的话题等。不要机械复述正文，也不要让所有帖子都围绕主角；仍应保留一部分与主角无关的普通互联网内容，使这里像真实存在于故事世界里的论坛。\n\n【天涯社区气质】\n这是传统中文 BBS，不是微博、小红书、知乎或现代短视频评论区。网友身份感强，昵称比头像重要；标题承担吸引和筛选作用；既有长文也有一句话水帖；有求助、树洞、记录、连载、讨论、争论、围观、爆料、转载、考据。楼主可能更新；网友会催更、马克、插眼、占楼、歪楼。回复质量和长度高度不均，有善意、刻薄、怀疑、抬杠、冷嘲，也可能认真长评；不要求正确、不要求共识、不要求都喜欢楼主。语言可有早期中文论坛感，但不同网友必须有不同口吻。\n\n【帖子形式】\n主动变化帖型，不要连续套同一模板。可以是：求助帖、情感/树洞帖、经历帖、直播/连载帖、讨论帖、社会观察帖、本地帖、职业帖、八卦帖、爆料帖、怀旧帖、历史/煮酒式长帖、娱乐帖、闲聊/水帖、调查/投票式帖子，以及世界中自然出现的其他形式。${ghostRule}\n\n【标题】\n标题首先像真人会在论坛取的标题，其次才考虑文学性。允许朴素、啰嗦、口语、悬念、求助、818、记录、讨论。不要整页使用现代内容营销式“震惊/必看/大盘点/你绝对想不到”。\n\n【正文】\n长度自然变化：几十字、几百字、少数长帖都可以。楼主写作能力不同：有人条理清楚，有人啰嗦，有人分段混乱，有人错别字或标点习惯明显。不要统一润色成同一种写作腔。\n\n【回复生态】\n回复是线性楼层。可以认真回答、追问、质疑、支持、反对、阴阳怪气、争吵、补充个人经历、纠正事实、求后续、马克、插眼、占楼、跑题、回复另一楼、引用某句话、给专业解释或只留一句话。不同网友有不同知识、立场和表达习惯。\n\n【页面多样性】\n一次刷新是一页论坛，不是专题策划。帖子之间必须有明显差异。部分可受剧情影响，部分来自世界社会背景，部分只是普通人的日常。禁止因为运行环境出现 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、生成器、调试信息，就默认这些属于故事世界；除非正文明确证明它们存在，否则一律不可见。\n\n【常驻规则】\n帖子是否常驻由界面中的红色笑脸决定，不由你决定。你只负责生成本次新帖子。\n\n只输出严格 JSON，不要解释。`;
@@ -1623,7 +1624,28 @@ AI、API、Prompt、插件、SillyTavern、世界书、角色卡、调试信息�
 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、生成器和调试信息不属于故事世界，除非正文明确证明其存在。
 
 只输出严格 JSON，不要解释。`;
-  const genericSystem = section === 'xiaohongshu' ? xiaohongshuSystem : zhihuSystem;
+  const weiboSystem = `# 微博公共广场模拟器
+
+你正在模拟当前故事世界里真实存在的微博。微博是实时公共舆论场，不是天涯长帖、小红书生活笔记或知乎问答。
+
+【首页生态关键词】关注账号、同城动态、实时见闻、生活碎片、公共事件、吐槽、新闻消息、兴趣讨论、网络争论、轻娱乐。根据当前世界自然取舍，不要求每类都出现；校园世界不必硬造明星，娱乐圈世界则可自然提高明星与粉圈内容。
+
+【热搜生态关键词】当前世界的重要事件、突发消息、争议人物、社会话题、校园/职场事件、娱乐八卦、公共讨论、网络梗。热搜是集中讨论的话题，不是文章分类。
+
+【账号生态】允许普通网友、媒体/官号、大V、营销号、粉丝、知情人、角色本人账号与角色已有小号同时存在。不同账号必须有不同社会位置、信息来源和口吻。已有稳定账号不要无缘无故换身份。
+
+【微博正文】以短内容为主，但允许一句话、吐槽、照片配文、事件播报、长微博摘要。可自然使用 #话题# 和 @公开ID。图片不生成真实图片，只用 imageDescription 描述这条微博世界中附带的图片。
+
+【传播】转发是微博的重要结构。可用 repostText 表示本次转发者补充的话，用 repostChain 表示已有的 //@账号：内容 链；不要把转发写成普通评论。
+
+【评论】评论即时、碎片、立场不齐，可质疑、玩梗、补充、反驳、吃瓜、@别人或跑题。
+
+【人物边界】平台只决定微博的传播环境，不替角色规定立场。角色怎么想、用本名还是已有小号，由角色自身状态、经历与实际掌握的信息决定。程序内部路由身份不得泄漏成其他人物的知识。
+
+【隔离】AI、API、Prompt、插件、SillyTavern、世界书、角色卡、调试信息、代码和生成器不属于故事世界，除非正文明确证明其存在。
+
+只输出严格 JSON，不要解释。`;
+  const genericSystem = section === 'xiaohongshu' ? xiaohongshuSystem : section === 'weibo' ? weiboSystem : zhihuSystem;
   const recommendSystem = `# moli社区 · 社区推荐生成器
 
 你正在刷新同一个故事世界中的公共互联网首页。这里不是第四种社区，也没有独立的“推荐文风”。你必须在天涯社区、小红书、知乎三种真实社区语法之间自行选择并混合生成一批全新的内容。生成后，这些内容会永久归档进各自社区，因此每一条都必须从一开始就像它所属社区的原生内容。
@@ -1648,7 +1670,9 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
     ? `返回：{"posts":[{"section":"tianya","type":"thread","author":"网名","authorId":"可选稳定id","title":"帖子标题","content":"主楼正文","subtitle":"从天涯杂谈、情感天地、娱乐八卦、煮酒论史、生活那点事${ghostStoriesEnabled?'、莲蓬鬼话':''}中按内容选择","style":"tianya-classic|douban-group","comments":[{"author":"网友","content":"初始楼层回复","replyTo":"可选；回复已有楼层时填写被回复楼层序号，只能指向本条评论之前的楼层"}]}]}。生成 6~8 条；每帖生成 6~8 条初始回复。回复某楼时不要把 @用户名 #楼层号 重复写进 content，由界面根据 replyTo 展示。不要 markdown。`
     : section === 'recommend'
       ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu|custom","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","customCommunityId":"仅自创使用","customCommunityName":"仅自创使用","needsComments":"仅自创使用；true|false，严格按条目设置","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 ${recommendCount>0?recommendCount+" 条":"6~8 条"}；每条生成 6~8 条符合所属社区结构的初始互动。不要 markdown。`
-      : section === 'xiaohongshu'
+      : section === 'weibo'
+      ? `返回：{"posts":[{"section":"weibo","type":"weibo","author":"公开ID","authorId":"稳定id","title":"一句简短摘要或话题名","content":"微博正文","lane":"关注|同城|实时|热门","tags":["#话题#"],"imageDescription":"可空；附图内容描述","repostText":"可空；转发者补充","repostChain":["@账号：转发链内容"],"reposts":0,"hotScore":0,"hotLabel":"可空：新|热|沸|爆","comments":[{"author":"网友ID","authorId":"稳定id","content":"评论"}]}]}。生成 6~8 条。首页内容在关注/同城/实时之间自然混合；不要 markdown。`
+    : section === 'xiaohongshu'
         ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~8 条；每篇笔记生成 6~8 条初始评论/回复。不要 markdown。`
         : `返回：{"posts":[{"section":"zhihu","type":"question","author":"题主昵称","authorId":"可选","title":"问题标题","content":"问题补充，可为空","answers":[{"author":"回答者昵称","authorId":"可选","content":"回答正文","upvotes":0,"comments":[{"author":"评论者","content":"评论"}]}]}]}。生成 6~8 个问题；每题生成 6~8 条风格明显不同的初始回答。回答下评论按内容自然生成，不强制每个回答再达到 6~8 条。不要 markdown。`;
   const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【当前可参考的故事上下文】\n${context}\n\n${schema}`;
@@ -1760,4 +1784,13 @@ export async function generateZhihuAnswerCommentRefresh({ scopeKey, post, answer
     if(item.content){created.push(item);known.add(id);}
   }
   return created;
+}
+
+export async function summarizeWeiboAccountProfile({scopeKey,name,evidence='',signal}={}){
+  const account=String(name||'').trim(); if(!scopeKey||!account)return '';
+  const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
+  const system='你在为微博里已经实际出现过的公开账号整理一条极短的持续账号档案。只能总结证据中已经表现出来的特点、身份自述、关注领域、语言习惯和功能；不确定的不要补全，不得把猜测写成事实。只输出一段纯文本，不要标题，不要 JSON，不超过120字。';
+  const user=`账号：@${account}\n已出现的公开内容：\n${String(evidence||'（暂无更多证据）').slice(0,1800)}`;
+  const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
+  return String(result?.text||'').trim().replace(/^```[\s\S]*?\n|```$/g,'').slice(0,180);
 }
