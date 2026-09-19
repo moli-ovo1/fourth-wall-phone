@@ -2487,3 +2487,15 @@
 /* moli224 · final Weibo polish */
 #moli-phone-panel .moli-weibo-comment-actions{gap:10px}
 #moli-phone-panel .moli-weibo-compose-at-hint{position:absolute;left:42px;top:20px;margin:0;max-width:calc(100% - 64px);font-size:11px;line-height:1.35;color:#999;background:#fff;cursor:pointer;z-index:2}
+
+/* v0.5.69 — composer cleanup + Weibo persistent-account/DM UI */
+#moli-phone-panel .moli-community-at-wrap{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+#moli-phone-panel .moli-community-at-wrap .moli-community-at-hint{position:static!important;left:auto!important;top:auto!important;right:auto!important;margin:0!important;max-width:none!important;flex:1;padding:0!important;background:transparent!important;color:#999;font-size:10.5px;line-height:1.35;pointer-events:auto;white-space:normal}
+#moli-phone-panel .moli-community-textarea-wrap .moli-community-at-hint{display:none!important}
+#moli-phone-panel .moli-weibo-compose-at-hint{position:absolute!important;left:44px!important;top:20px!important;margin:0!important;max-width:calc(100% - 68px)!important;background:transparent!important;color:#999;pointer-events:auto}
+#moli-phone-panel .moli-weibo-nav-actions{gap:5px}
+#moli-phone-panel .moli-weibo-nav-actions>button:not(.moli-weibo-compose){border:0;background:transparent;color:#555;font-size:18px;padding:3px}
+#moli-phone-panel .moli-weibo-messages-dialog{width:min(92%,520px);max-height:82%;background:#fff;border-radius:18px;overflow:hidden;display:flex;flex-direction:column}
+#moli-phone-panel .moli-weibo-message-tabs{padding:12px 16px;border-bottom:1px solid #eee;display:flex;flex-direction:column;gap:3px}.moli-weibo-message-tabs small{color:#999}
+#moli-phone-panel .moli-weibo-follow-list{overflow:auto;padding:4px 0 12px}.moli-weibo-follow-row{display:flex;align-items:center;border-bottom:1px solid #f0f0f0;padding:8px 12px;gap:8px}.moli-weibo-follow-open{flex:1;text-align:left;border:0;background:transparent;display:flex;flex-direction:column;gap:3px}.moli-weibo-follow-open small{color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:360px}.moli-weibo-follow-open em{font-style:normal}.moli-weibo-follow-row>[data-follow-hot]{border:0;background:#f5f5f5;border-radius:50%;width:34px;height:34px}
+#moli-phone-panel .moli-weibo-messages-dialog.is-chat{height:min(82%,620px)}.moli-weibo-dm-profile{padding:8px 14px;background:#fafafa;color:#777;font-size:11px}.moli-weibo-dm-list{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px}.moli-weibo-dm-list>div{max-width:78%;padding:8px 10px;border-radius:12px;background:#f1f1f2}.moli-weibo-dm-list>.is-user{align-self:flex-end;background:#ffd9a6}.moli-weibo-dm-list>.is-account{align-self:flex-start}.moli-weibo-dm-compose{display:flex;gap:8px;padding:10px;border-top:1px solid #eee}.moli-weibo-dm-compose textarea{flex:1;resize:none;border:0;background:#f4f4f5;border-radius:12px;padding:9px;outline:0}.moli-weibo-dm-compose button{border:0;background:#ff8200;color:#fff;border-radius:12px;padding:0 14px}
