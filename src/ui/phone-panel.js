@@ -88,6 +88,7 @@ import {
   summarizeWeiboAccountProfile,
   generateWeiboPrivateReply,
   summarizeProfileMomentsMemory,
+  generatePrivatePhoneTraceRefresh,
 } from '../generation/generation-service.js';
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
 import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
@@ -108,9 +109,10 @@ import { getTavernUserContext } from '../core/tavern-user.js';
 import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings, togglePublicWebFavorite, togglePublicWebPinned, replacePublicWebSectionPosts, appendPublicWebSectionPosts, trimPublicWebSectionPosts, trimWeiboLanePosts, forceDeletePublicWebPost, deletePublicWebComment, deleteZhihuAnswerComment, deleteZhihuAnswer, addZhihuAnswerComments, addZhihuAnswer, mergeZhihuRefresh, listPublicWebFavorites, listCustomCommunities, ensureCustomCommunityPresets, deleteCustomCommunities, saveCustomCommunity, deleteCustomCommunity, getCommunityUserProfile, updateCommunityUserProfile, listWeiboFollows, saveWeiboFollow, deleteWeiboFollow, isWeiboFollowed, incrementWeiboRepost, setWeiboFollowHot, rememberWeiboPublicInteraction, listWeiboPrivateMessages, addWeiboPrivateMessage, deleteWeiboPrivateMessage, clearWeiboPrivateMessages, getWeiboMessageReadState, markWeiboMessageRead, listWeiboFanGroups, saveWeiboFanGroup, addWeiboFanGroupMessage, listWeiboMessagePeers, saveWeiboMessagePeer, getWeiboHotTopics, setWeiboHotTopics, settleWeiboUserPostEcology, saveNetworkActor, linkNetworkActorContact } from '../storage/public-web-store.js';
 import { getSelectedWorldContactId, getSelectedWorldTarget, setSelectedWorldTarget } from '../storage/world-context-store.js';
 import { isPersistentScopeKey } from '../storage/scope-policy.js';
-import { recordWorldEvent, markWorldEventsKnown, markWorldEventsKnownByObjectTargets, markWorldEventsConsumedByObjectTargets, summarizeWorldEventsForContext, linkWorldEventResult, listWorldEvents } from '../storage/world-event-store.js';
+import { recordWorldEvent, markWorldEventsKnown, markWorldEventsKnownByObjectTargets, markWorldEventsConsumedByObjectTargets, markWorldEventsConsumed, summarizeWorldEventsForContext, linkWorldEventResult, listWorldEvents } from '../storage/world-event-store.js';
 import { rememberAnonymousIdentity, revealAnonymousIdentity, buildCharacterContinuity, listKnownAnonymousIdentities } from '../storage/character-continuity-store.js';
 import { buildPhoneContext } from '../generation/phone-context-builder.js';
+import { getPrivatePhoneTraces, settlePrivatePhoneTraceRefresh } from '../storage/private-phone-trace-store.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -168,7 +170,26 @@ export function createPhonePanel({
             <span class="moli-app-icon-tile moli-settings-app-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.settings}" alt="" /></span>
             <small>设置</small>
           </button>
+          <button class="moli-app-icon" data-action="open-his-phone" aria-label="打开他的手机">
+            <span class="moli-app-icon-tile moli-his-phone-app-tile">他</span>
+            <small>他的手机</small>
+          </button>
         </div>
+      </main>
+    </section>
+
+
+    <section class="moli-page" data-page="his-phone">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="app-home-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">他的手机</div>
+        <div class="moli-nav-side right"><button class="moli-icon-btn moli-his-phone-refresh" data-action="his-phone-refresh" aria-label="刷新">↻</button></div>
+      </header>
+      <main class="moli-his-phone-main">
+        <label class="moli-his-phone-person"><span>人物</span><select data-his-phone-contact></select></label>
+        <div class="moli-his-phone-status" data-his-phone-status></div>
+        <section class="moli-his-phone-section"><h3>搜索记录</h3><div data-his-phone-searches></div></section>
+        <section class="moli-his-phone-section"><h3>看帖历史</h3><div data-his-phone-views></div></section>
       </main>
     </section>
 
@@ -4139,6 +4160,31 @@ export function createPhonePanel({
     }
   }
 
+  let hisPhoneContactId='';
+  const hisPhoneContacts=()=>getContacts().filter(item=>item&&!String(item.id||'').startsWith('builtin:'));
+  const formatTraceDuration=seconds=>{const n=Math.max(0,Math.round(Number(seconds)||0));if(n<60)return `${n}秒`;const m=Math.floor(n/60),s=n%60;return s?`${m}分${s}秒`:`${m}分钟`;};
+  function renderHisPhone(){
+    const scopeKey=getScopeKey?.()||'';
+    const select=panel.querySelector('[data-his-phone-contact]');
+    const contacts=hisPhoneContacts();
+    const preferred=String(hisPhoneContactId||getSelectedWorldContactId(scopeKey)||'');
+    if(!contacts.some(x=>String(x.id)===preferred))hisPhoneContactId=String(contacts[0]?.id||'');else hisPhoneContactId=preferred;
+    if(select){select.innerHTML=contacts.length?contacts.map(x=>`<option value="${escapeHtml(x.id)}" ${String(x.id)===hisPhoneContactId?'selected':''}>${escapeHtml(displayName(x))}</option>`).join(''):'<option value="">暂无人物</option>';select.disabled=!contacts.length;}
+    const data=hisPhoneContactId?getPrivatePhoneTraces(scopeKey,hisPhoneContactId):{searches:[],views:[],lastRefreshedAt:0};
+    const searches=panel.querySelector('[data-his-phone-searches]');
+    const views=panel.querySelector('[data-his-phone-views]');
+    const status=panel.querySelector('[data-his-phone-status]');
+    if(status)status.textContent=data.lastRefreshedAt?`上次刷新 ${new Date(data.lastRefreshedAt).toLocaleString()}`:'点击右上角刷新，结算这个人物近期留下的私人手机痕迹。';
+    if(searches)searches.innerHTML=data.searches.length?[...data.searches].reverse().map(x=>`<div class="moli-his-phone-search-row"><span>⌕</span><b>${escapeHtml(x.query)}</b></div>`).join(''):'<div class="moli-empty">暂无搜索记录</div>';
+    if(views)views.innerHTML=data.views.length?[...data.views].sort((a,b)=>Number(b.lastViewedAt||b.createdAt||0)-Number(a.lastViewedAt||a.createdAt||0)).map(x=>`<div class="moli-his-phone-view-row"><b>${escapeHtml(x.title)}</b><span>停留 ${escapeHtml(formatTraceDuration(x.durationSeconds))}</span><span>点击 ${Number(x.visitCount||1)} 次</span></div>`).join(''):'<div class="moli-empty">暂无看帖历史</div>';
+  }
+  async function refreshHisPhone(){
+    const scopeKey=getScopeKey?.()||'';if(!hisPhoneContactId){toast('暂无可查看的人物');return;}
+    const button=panel.querySelector('[data-action="his-phone-refresh"]');if(button?.disabled)return;button.disabled=true;
+    const status=panel.querySelector('[data-his-phone-status]');if(status)status.textContent='正在结算近期痕迹…';
+    try{const result=await generatePrivatePhoneTraceRefresh({scopeKey,contactId:hisPhoneContactId});settlePrivatePhoneTraceRefresh(scopeKey,hisPhoneContactId,result);if(result.sourceEventIds?.length)markWorldEventsConsumed(scopeKey,hisPhoneContactId,result.sourceEventIds,'his-phone');renderHisPhone();toast(result.unchanged?'没有新的经历需要结算':`刷新完成：${result.searches?.length||0} 条搜索，${result.views?.length||0} 条浏览`);}catch(error){if(status)status.textContent=`刷新失败：${error?.message||error}`;toast(error?.message||'刷新失败');}finally{if(button)button.disabled=false;}
+  }
+
   const show = name => {
     if (addMenu) addMenu.hidden = true;
     hideMessageMenu();
@@ -4161,6 +4207,7 @@ export function createPhonePanel({
     if (name === 'moments') renderMoments();
     if (name === 'contact-moments') renderContactMoments();
     if (name === 'injection-composer') renderInjectionComposer();
+    if (name === 'his-phone') renderHisPhone();
 
     if (name === 'chat') {
       applyCurrentChatWallpaper();
@@ -6926,6 +6973,9 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => { show('tianya-home'); currentPublicWebTab='weibo'; panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab==='weibo')); renderPublicWeb(); });
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
+  panel.querySelector('[data-action="open-his-phone"]')?.addEventListener('click', () => show('his-phone'));
+  panel.querySelector('[data-his-phone-contact]')?.addEventListener('change', event => { hisPhoneContactId=String(event.target?.value||''); renderHisPhone(); });
+  panel.querySelector('[data-action="his-phone-refresh"]')?.addEventListener('click', refreshHisPhone);
 
   let currentPublicWebTab = 'recommend';
   let currentWeiboView = 'home';
