@@ -3526,3 +3526,8 @@ Still next, without splitting into UI micro-patches:
 - 修复 `src/generation/generation-service.js` 的 Private Phone Trace VIEW 规范化表达式中缺失的右括号；该错误会在浏览器模块解析阶段触发 `SyntaxError: missing ) after argument list`，导致整个小手机无法启动。
 - 保留 moli235 的备忘录、性冲动、Community 原帖跳转与生成质量规则，不回滚业务功能。
 - 故障修复仅触及确定根因与版本记录，不扩展新功能。
+
+
+## moli238 / v0.5.91 — His Phone persistence compatibility hotfix
+- CLOSED bug: moli234-era Private Phone Trace rows lacked `memos`; moli235 refresh could therefore call `.push()` on undefined. Character trace rows now normalize old/new schema at the store boundary while preserving prior searches/views.
+- Scope is deliberately narrow: no Community batching/privacy architecture changes in this hotfix. Private Context Isolation remains a separate audited follow-up.

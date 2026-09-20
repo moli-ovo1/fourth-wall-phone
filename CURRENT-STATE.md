@@ -1,8 +1,9 @@
-# CURRENT STATE — moli237 / v0.5.90
+# CURRENT STATE — moli238 / v0.5.91
 
 > Updated 2026-09-20. This top block is the authoritative current handoff; older entries below are retained as history.
 
-- Current package line: moli236 / v0.5.89.
+- Current package line: moli238 / v0.5.91.
+- moli238 repairs Private Phone Trace old-schema compatibility: pre-MEMO moli234 character rows are normalized on access so searches/views are preserved while missing memos/sexualTrace/default fields are safely added before refresh writes. No Community/WeChat/Automation behavior changed.
 - moli234 adds 「他的手机」Private Phone Trace v1: User-triggered refresh only, with private SEARCH + VIEW traces stored per scope + Character. It is not a Community activity log; external viewed content stores title/duration/visit count only, and private traces do not become public Awareness.
 - Community Social Network v1 from moli228 is CLOSED and retained: Network Actor / Public Identity / Community Echo must not be rebuilt from old TODOs.
 - moli229 verified social echo, cross-board traces and existing comment-tree continuation; later work must preserve those paths.
