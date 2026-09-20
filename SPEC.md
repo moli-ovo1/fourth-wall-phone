@@ -4488,3 +4488,10 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - “浏览后的反应”与“独立主动发帖”在返回数据结构上拆开：`actors` 只负责本轮实际浏览后的公开/私聊反应；`proactivePosts` 独立表示人物主动发帖，不要求人物先在本轮刷到某篇帖子。仍可在同一次 API 中批量评估以控制调用量，但触发语义不再绑定。
 - 主动匿名发帖继续复用现有 Public Identity / Network Actor 底层写入，并补记人物自己的匿名身份连续性；不改变 User-owned identity 保护。
 - 不改 moli228 已 CLOSED 的 Network Actor/Public Identity/Community Echo 主体，不改 moli229 已验证的社会余波、跨板块痕迹和后续评论树刷新逻辑。
+
+## v0.5.86 / moli233 — Community Autonomous Continuity Closure
+- 本轮只修 moli231/232 审计确认的三个连续性缺口，不扩展 Community 新子系统，不改 moli228 已 CLOSED 的 Network Actor / Public Identity / Community Echo 主体。
+- Character 独立主动发帖成功后，除帖子认知快照外，新增既有 World Event 账本中的 `CHARACTER_POSTED` 经历；匿名主动发帖继续复用既有 anonymous identity continuity，并把该发帖事件作为身份使用证据。角色后续 Phone Context 因而能区分“我看过这帖”和“这帖是我自己发的”。
+- Community 自主浏览触发微信 `MESSAGE / SHARE` 时，把对应 `POST_SNAPSHOT_KNOWN` 浏览事件与微信行为结果通过既有 `linkWorldEventResult()` / `causedByEventIds` 连接；不新建因果字段，不改微信 Automation。
+- 知乎回答下评论的 `replyToCommentId` 落位与普通 Community 对齐：真实父评论 ID 优先；无有效 ID 时才把“回复@某网友：”作为兼容兜底反查；成功落位后剥离伪回复前缀。只补知乎缺口，不重写全平台评论树。
+- 本轮同时同步 CURRENT-STATE / DEVELOPMENT-MAP 当前索引，避免旧状态文件继续把后续窗口引向已经完成的路线。

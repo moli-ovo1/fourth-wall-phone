@@ -1,3 +1,18 @@
+# CURRENT STATE — moli233 / v0.5.86
+
+> Updated 2026-09-20. This top block is the authoritative current handoff; older entries below are retained as history.
+
+- Current package line: moli233 / v0.5.86.
+- Community Social Network v1 from moli228 is CLOSED and retained: Network Actor / Public Identity / Community Echo must not be rebuilt from old TODOs.
+- moli229 verified social echo, cross-board traces and existing comment-tree continuation; later work must preserve those paths.
+- moli230–231 added first-time autonomous Community browsing and the independent behavior exits: public participation, proactive posting, Community→WeChat MESSAGE/SHARE.
+- moli232 closed duplicate Character reply paths back into the existing natural-participation/anonymous-identity continuity.
+- moli233 closes three audited gaps only: proactive Character posts now record CHARACTER_POSTED experience; autonomous browse→WeChat actions are linked through the existing World Event cause/result chain; Zhihu answer comments normalize real replyToCommentId like other Community comments.
+- Future backlog: App「他的手机」(search history + viewed-post history), based on real Awareness/behavior records; not implemented yet.
+- Before any new work: read latest SPEC log + DEVELOPMENT-MAP, verify this file is fresh, then inspect the relevant code/call chain. Do not implement from historical TODOs or conversation memory alone.
+
+---
+
 ## v0.5.15 / moli172 — special-contact singleton routing + world-book entry editor
 
 - `moli / 皮下 / 小上帝` 改为聊天列表单例入口：无论底层存在多少正文/全局 Conversation，列表每个特殊联系人只显示一次；在正文页优先路由当前正文 scope，在酒馆主页优先跟随主屏幕“当前角色世界”，没有明确世界时优先 global/default，不删除其他世界历史。

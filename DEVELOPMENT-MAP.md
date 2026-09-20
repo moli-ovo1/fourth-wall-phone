@@ -3491,9 +3491,11 @@ Still next, without splitting into UI micro-patches:
 - 微博 Character 自然参与：沿用 Community 已有世界人物上下文/Actor Pack，明确其本人账号或已有小号在自然相关时可直接发帖/互动，不要求每轮出现；明确邀请/@ 仍走角色专用调用。
 - 本轮没有修改已验证通过的社会余波和跨板块痕迹逻辑。
 
-
-## v0.5.83 / moli230 — Community autonomous discovery
-- Removed the fixed-persona summon-only gate from Community world-roster prompting. World ownership is no longer treated as an action permission boundary.
-- Added one batched autonomous-discovery pass after normal Community refreshes. Eligible world contacts plus the three builtin personas may independently return viewed post IDs and optional REAL/ANONYMOUS public participation; zero activity is valid.
-- Viewed posts are persisted through the existing post-snapshot World Event/Awareness path and therefore reach WeChat only through the canonical `buildPhoneContext()` cross-app read model.
-- Kept NPC Perspective Projection isolated to NPC body/world-book cognition; no Community dependency was added.
+## 2026-09-20 · Current Community handoff — moli233 / v0.5.86
+- CLOSED/保留：moli228 Social Network v1（Network Actor / Public Identity / Community Echo）；不得因旧 TODO 重建。
+- 已验证并保留：moli229 社会余波、跨板块痕迹、已有评论树后续刷新。
+- moli230–231：公共 Community 补入 Character 首次自主浏览；231形成浏览后公开参与 / 独立主动发帖 / Community→微信 MESSAGE/SHARE，并保护 User-owned identity 不进入 AI 自主控制。
+- moli232：首次自主参与与旧 natural participation 共用 Character Community Reply commit；匿名身份连续性接回旧体系；proactivePosts 与浏览后 actors 语义拆开。
+- moli233：只补审计确认的连续性缺口：自主发帖写 CHARACTER_POSTED；自主浏览→微信结果接 existing World Event cause/result；知乎回答评论补真实 parent 规范化。
+- Future：独立 App「他的手机」——搜索记录、看帖历史；必须建立在人物真实 Awareness/行为记录上，允许历史指向 Community 已有内容或世界中存在但未在 Community DB 展示的内容。尚未施工。
+- 施工纪律：每次下一步规划/开发前先读 SPEC 最新日志 + DEVELOPMENT-MAP，再检查 CURRENT-STATE 新鲜度与实际调用链；旧 TODO 只作历史线索，不得直接当当前任务。
