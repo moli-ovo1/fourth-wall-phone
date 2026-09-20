@@ -1362,51 +1362,47 @@ ageMinutes 范围 0~2880。interactions 可以为空。`;
 export async function generatePublicMomentsRefresh({ scopeKey, crossContactInteraction = true, signal } = {}) {
   if (!scopeKey) throw new Error('当前朋友圈不可用');
   const allContacts = getContacts().map(hydratedContact);
-  // 公共朋友圈刷新恢复为“整个通讯录都是候选人”。每个角色仍可选择 0 次浏览、0 条动态、0 个互动；
-  // 浏览痕迹 UI 只展示本轮真正留下痕迹的最多 3 个角色。皮下不是普通通讯录社交联系人，不参与公共朋友圈轮询。
   const contacts = allContacts.filter(item => item && String(item.id || '') !== 'builtin:meta');
   if (!contacts.length) return { actors: [], consideredMomentIds: [], contacts: [] };
 
-  const feed = listPublicMoments(scopeKey).filter(item => item?.visibility?.mode !== 'only').slice(0, 10);
-  const feedText = feed.map(item => {
-    const comments = (item.comments || []).map(comment => comment.deletedAt ? `${comment.actor?.name || '未知'} 删除了评论${comment.deletionReason ? `：${comment.deletionReason}` : ''}` : `${comment.actor?.name || '未知'}：${comment.content}`).join('；');
-    return `momentId=${item.id}｜作者=${item.author?.name || '未知'}(id=${item.author?.id || ''})｜${new Date(Number(item.createdAt || Date.now())).toLocaleString()}\n${item.content}${comments ? `\n评论：${comments}` : ''}`;
-  }).join('\n\n');
-  const scanText = feed.map(item => String(item?.content || '')).join('\n');
-  const actorBlocks = [];
+  // Request-level privacy boundary: each contact is decided in a separate model request.
+  // The request receives only moments visible to that contact plus that contact's own
+  // world-book / phone continuity. No other contact's private pack is present at all.
+  const allMoments = listPublicMoments(scopeKey).slice(0, 40);
+  const config = resolveApiRuntimeConfig(getApiSettings());
+  assertApiConfig(config);
+  const userName = getTavernUserContext().name || 'User';
+  const actors = [];
+  let remainingPosts = 10;
+
   for (const item of contacts) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const visibleFeed = allMoments.filter(moment => momentVisibleToContact(moment, item.id)).slice(0, 10);
+    const feedText = visibleFeed.map(moment => {
+      const comments = (moment.comments || []).map(comment => comment.deletedAt ? `${comment.actor?.name || '未知'} 删除了评论${comment.deletionReason ? `：${comment.deletionReason}` : ''}` : `${comment.actor?.name || '未知'}：${comment.content}`).join('；');
+      return `momentId=${moment.id}｜作者=${moment.author?.name || '未知'}(id=${moment.author?.id || ''})｜${new Date(Number(moment.createdAt || Date.now())).toLocaleString()}\n${moment.content}${comments ? `\n评论：${comments}` : ''}`;
+    }).join('\n\n');
+    const scanText = visibleFeed.map(moment => String(moment?.content || '')).join('\n');
     const worldBook = item?.kind === 'custom'
       ? await getActivatedCustomWorldBook({ contact: item, scanText })
       : await getActivatedTavernWorldBook({ contact: item, scanText });
-    const privateVisibleFeed=feed.filter(moment=>moment?.visibility?.mode==='only'&&momentVisibleToContact(moment,item.id)).map(moment=>`momentId=${moment.id}｜作者=${moment.author?.name||'未知'}(id=${moment.author?.id||''})｜${new Date(Number(moment.createdAt||Date.now())).toLocaleString()}\n${moment.content}`).join('\n\n');
-    actorBlocks.push(`===== CONTACT id=${item.id}｜${contactLabel(item)} =====\n【身份】\n${batchRoleProfile(item, scanText)}\n\n【仅此联系人被允许看到的朋友圈】\n${privateVisibleFeed||'无'}\n\n【本人的世界书】\n${clipBatchText(worldBook?.text || '', 4500) || '本轮无激活条目'}\n\n【本人的统一手机经历｜微信 / Community / 朋友圈】\n${buildPhoneContext(scopeKey, item.id, { query: scanText, userName: getTavernUserContext().name || 'User', limit: 30 }).text || '暂无'}\n===== END =====`);
-  }
-
-  const system = `你在推进 moli小手机 的 User 公共朋友圈。所有候选联系人都有资格看到朋友圈，但绝不是每个人都必须点赞、评论或发动态。
-- 每个联系人必须保持自己的性格、关系与社交习惯；无动机就什么都不做。
-- 每个联系人本次最多可发布 2 条近期朋友圈，时间可为刚刚、数小时前、今天早些时候或昨天；第二条必须有自然的时间/情绪延续动机，例如昨天发过但无人回应、今天又产生了新的表达冲动。不要为了凑数强编。
-- 本次刷新所有联系人合计最多生成 10 条新朋友圈；这是本轮生成上限，不自动删除历史朋友圈。
-- 联系人可以浏览 User 的朋友圈主页，也可以实际看到某一条动态。主页访问与具体动态阅读是两件不同的事。profileVisitCount 只填写“从上一次刷新到本次刷新之间”这个角色实际进入 User 朋友圈主页的次数，0 表示这段期间没看；不要填写历史累计总数。viewedMomentIds 只填写本轮实际看到的具体 momentId。
-- 联系人始终可以点赞/评论 user(id=user) 的朋友圈；若先前已经点赞、本轮人物真实想取消，可用 UNLIKE。
-- 联系人也可以删除自己先前写下的评论：reaction.action=DELETE_COMMENT，填写 commentId，并可在 content 中写简短删除原因；删除原因会被其他人看到。只能删除自己的评论。
-- ${crossContactInteraction ? '联系人互相互动已开启：可以对其他联系人发布的朋友圈点赞/评论。' : '联系人互相互动已关闭：严禁对其他联系人发布的朋友圈点赞/评论，只能对 user 的动态互动。'}
-- 不要机械全员轮流，不要用随机替代人物动机。一次刷新可以 0 人行动。
-- 不要把私聊秘密无脑公开到朋友圈。
-- 只输出严格 JSON，不要解释。`;
-  const user = `当前时间：${new Date().toString()}\n\n【公共朋友圈最近动态】\n${feedText || '暂无动态'}\n\n【候选联系人】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"联系人id","posts":[]或最多2个{"content":"朋友圈正文","ageMinutes":0},"profileVisitCount":0,"viewedMomentIds":["本轮实际看到的momentId"],"reactions":[{"momentId":"目标momentId","action":"LIKE|UNLIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论内容；DELETE_COMMENT 时作为删除原因"}]}]}。没有行动的联系人可以省略。ageMinutes 范围 0~2880。`;
-  const config = resolveApiRuntimeConfig(getApiSettings());
-  assertApiConfig(config);
-  const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
-  const actors = parsePublicMomentsBatch(result?.text || '', contacts.map(item => item.id));
-  let remainingPosts = 10;
-  for (const actor of actors) {
+    const actorBlock = `【身份】\n${batchRoleProfile(item, scanText)}\n\n【本人的世界书】\n${clipBatchText(worldBook?.text || '', 4500) || '本轮无激活条目'}\n\n【本人的统一手机经历｜微信 / Community / 朋友圈】\n${buildPhoneContext(scopeKey, item.id, { query: scanText, userName, limit: 30 }).text || '暂无'}`;
+    const system = `你在推进 moli小手机 的 User 公共朋友圈。你只为当前这一个联系人做决定；本请求中不存在其他联系人的私有上下文。\n- 保持人物自己的性格、关系与社交习惯；无动机就什么都不做。\n- 本次最多发布 2 条近期朋友圈；不要为了凑数强编。\n- profileVisitCount 只填写从上次刷新到本次刷新之间实际进入 User 朋友圈主页的次数。viewedMomentIds 只填写本轮实际看到的 momentId。\n- 可以点赞/评论 user(id=user) 的朋友圈；先前已点赞且真实想取消时可 UNLIKE。\n- 只能删除自己先前写下的评论。\n- ${crossContactInteraction ? '联系人互相互动已开启：可以对当前可见的其他联系人朋友圈点赞/评论。' : '联系人互相互动已关闭：只能对 user 的动态互动。'}\n- 不要把私聊秘密无脑公开到朋友圈。\n- 只输出严格 JSON，不要解释。`;
+    const user = `当前时间：${new Date().toString()}\n\n【当前联系人】\nid=${item.id}｜${contactLabel(item)}\n${actorBlock}\n\n【此联系人实际可见的朋友圈最近动态】\n${feedText || '暂无动态'}\n\n返回：{"actors":[{"actorId":"${item.id}","posts":[]或最多2个{"content":"朋友圈正文","ageMinutes":0},"profileVisitCount":0,"viewedMomentIds":["本轮实际看到的momentId"],"reactions":[{"momentId":"目标momentId","action":"LIKE|UNLIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论内容；DELETE_COMMENT 时作为删除原因"}]}]}。没有行动可返回 {"actors":[]}。ageMinutes 范围 0~2880。`;
+    const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
+    const parsed = parsePublicMomentsBatch(result?.text || '', [item.id]);
+    const actor = parsed[0];
+    if (!actor) continue;
+    const allowedMomentIds = new Set(visibleFeed.map(moment => String(moment.id || '')));
+    actor.viewedMomentIds = (actor.viewedMomentIds || []).filter(id => allowedMomentIds.has(String(id)));
+    actor.reactions = (actor.reactions || []).filter(reaction => allowedMomentIds.has(String(reaction.momentId || '')));
     actor.posts = (actor.posts || (actor.post ? [actor.post] : [])).slice(0, Math.max(0, remainingPosts));
     actor.post = actor.posts[0] || null;
     remainingPosts -= actor.posts.length;
+    actors.push(actor);
   }
-  return { actors, consideredMomentIds: feed.map(item => item.id), contacts };
+  return { actors, consideredMomentIds: allMoments.map(item => item.id), contacts };
 }
-
 
 
 /**
@@ -1417,7 +1413,7 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
 export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], fixedPersonasCommunityEnabled = false, signal } = {}) {
   if (!scopeKey) throw new Error('当前社区不可用');
   const visiblePosts = (Array.isArray(posts) ? posts : []).filter(post => post?.id).slice(-12);
-  if (!visiblePosts.length) return { actors: [] };
+  if (!visiblePosts.length) return { actors: [], proactivePosts: [] };
 
   const candidates = [...communityWorldContacts(scopeKey)];
   if (fixedPersonasCommunityEnabled) {
@@ -1427,13 +1423,22 @@ export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], 
       if (contact && !candidates.some(item => String(item.id || '') === id)) candidates.push(hydratedContact(contact));
     }
   }
-  if (!candidates.length) return { actors: [] };
+  if (!candidates.length) return { actors: [], proactivePosts: [] };
 
   const userName = getTavernUserContext().name || 'User';
   const postText = visiblePosts.map(post => `postId=${post.id}｜板块=${post.section || 'community'}｜标题=${String(post.title || '').slice(0,180)}\n${communityPostFacts(post).slice(0,1800)}`).join('\n\n');
   const scanText = visiblePosts.map(post => `${post.title || ''}\n${post.content || ''}`).join('\n');
-  const actorBlocks = [];
+  const config = resolveApiRuntimeConfig(getApiSettings());
+  assertApiConfig(config);
+  const allowedPosts = new Set(visiblePosts.map(post => String(post.id || '')));
+  const actors = [];
+  const proactivePosts = [];
+
+  // Request-level privacy boundary: one actor per request. This intentionally costs
+  // additional calls when several characters are eligible, because their private phone
+  // continuity must never coexist in the same ordinary model prompt.
   for (const contact of candidates.slice(0, 12)) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     let worldBookText = '';
     try {
       const worldBook = contact?.kind === 'custom'
@@ -1442,29 +1447,30 @@ export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], 
       worldBookText = clipBatchText(worldBook?.text || '', 2600);
     } catch {}
     const builtinPrompt = contact?.kind === 'builtin' ? replaceUserPlaceholder(getBuiltinPersonaPrompt(contact.id), userName) : '';
-    actorBlocks.push(`===== ACTOR id=${contact.id}｜${contactLabel(contact)} =====\n【身份】\n${builtinPrompt || batchRoleProfile(contact, scanText)}\n${worldBookText ? `【本人的世界书】\n${worldBookText}\n` : ''}【本人的统一手机经历】\n${buildPhoneContext(scopeKey, contact.id, { query: scanText, userName, limit: 24 }).text || '暂无'}\n===== END =====`);
+    const actorBlock = `【身份】\n${builtinPrompt || batchRoleProfile(contact, scanText)}\n${worldBookText ? `【本人的世界书】\n${worldBookText}\n` : ''}【本人的统一手机经历】\n${buildPhoneContext(scopeKey, contact.id, { query: scanText, userName, limit: 24 }).text || '暂无'}`;
+    const system = `你在模拟 moli小手机 公共 Community 中当前这一个人物真实使用自己手机的一轮行为。\n- 本请求只包含当前人物自己的私有资料；不得补出其他人物的私聊或私有认知。\n- 四条决策轴彼此独立：浏览、看到后的公开参与、人物主动发帖、社区经历是否转向微信私聊。\n- 人物无需 User @、邀请或转发，也可能自己逛社区；允许什么都没看到。谨慎或身份敏感只能影响公开行动，不能自动推导为“不浏览”。\n- 公开回复和私聊只能基于 viewedPostIds 中本轮确实看到的帖子。\n- 主动发帖是独立动机，不要求本轮先看到帖子。\n- User 本人账号及 User 的社区大号/小号属于 User-controlled identity，绝不能代替 User 使用。\n- 只输出严格 JSON，不要解释。`;
+    const user = `【当前人物】\nid=${contact.id}｜${contactLabel(contact)}\n${actorBlock}\n\n【本轮新出现/刷新后的 Community 帖子】\n${postText}\n\n返回：{"actors":[{"actorId":"${contact.id}","viewedPostIds":["实际看到的postId"],"publicAction":"REPLY_REAL|REPLY_ANONYMOUS|SKIP","actionPostId":"公开参与的postId","replyToCommentId":"可空；只填真实存在的评论id","answerId":"知乎回答下回复时可填","publicAlias":"小号名","publicContent":"公开回复","privateAction":"MESSAGE|SHARE|SKIP","privatePostId":"触发微信行为的已阅postId","privateMessages":["0~5条自然微信气泡"]}],"proactivePosts":[{"actorId":"${contact.id}","section":"tianya|xiaohongshu|zhihu|weibo","anonymous":false,"alias":"小号名","title":"标题","content":"正文","tags":[],"imagePrompt":"小红书可选","imageText":"小红书可选"}]}。没有动机可返回空数组。`;
+    const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
+    const raw = String(result?.text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    let data = {};
+    try { data = JSON.parse(raw); } catch { const match = raw.match(/\{[\s\S]*\}/); if (match) try { data = JSON.parse(match[0]); } catch {} }
+    const item = (Array.isArray(data?.actors) ? data.actors : []).find(row => String(row?.actorId || '') === String(contact.id));
+    if (item) {
+      const viewedPostIds = [...new Set((Array.isArray(item?.viewedPostIds) ? item.viewedPostIds : []).map(String).filter(id => allowedPosts.has(id)))].slice(0,8);
+      if (viewedPostIds.length) {
+        const viewedSet = new Set(viewedPostIds);
+        const publicAction = ['REPLY_REAL','REPLY_ANONYMOUS'].includes(String(item?.publicAction||'').toUpperCase()) ? String(item.publicAction).toUpperCase() : 'SKIP';
+        const privateAction = ['MESSAGE','SHARE'].includes(String(item?.privateAction||'').toUpperCase()) ? String(item.privateAction).toUpperCase() : 'SKIP';
+        const actionPostId = viewedSet.has(String(item?.actionPostId||'')) ? String(item.actionPostId) : '';
+        const privatePostId = viewedSet.has(String(item?.privatePostId||'')) ? String(item.privatePostId) : '';
+        actors.push({actorId:String(contact.id),viewedPostIds,publicAction:actionPostId?publicAction:'SKIP',actionPostId,replyToCommentId:String(item?.replyToCommentId||''),answerId:String(item?.answerId||''),publicAlias:String(item?.publicAlias||'').trim().slice(0,24),publicContent:String(item?.publicContent||'').trim().slice(0,1200),privateAction:privatePostId?privateAction:'SKIP',privatePostId,privateMessages:(Array.isArray(item?.privateMessages)?item.privateMessages:[]).map(x=>String(x||'').trim().slice(0,800)).filter(Boolean).slice(0,5)});
+      }
+    }
+    for (const np of (Array.isArray(data?.proactivePosts) ? data.proactivePosts : []).slice(0,2)) {
+      if (String(np?.actorId || '') !== String(contact.id) || !String(np?.content || '').trim()) continue;
+      proactivePosts.push({actorId:String(contact.id),section:String(np?.section||''),anonymous:Boolean(np?.anonymous),alias:String(np?.alias||'').trim().slice(0,24),title:String(np?.title||'').trim().slice(0,120),content:String(np?.content||'').trim().slice(0,4000),tags:Array.isArray(np?.tags)?np.tags.map(String).slice(0,8):[],imagePrompt:String(np?.imagePrompt||'').trim().slice(0,1200),imageText:String(np?.imageText||'').trim().slice(0,500)});
+    }
   }
-
-  const system = `你在模拟 moli小手机 公共 Community 中人物真实使用自己手机的一轮行为。\n- 四条决策轴彼此独立：浏览、看到后的公开参与、人物主动发帖、社区经历是否转向微信私聊。不要用一个“参与率”把它们绑在一起。\n- 人物无需 User @、邀请或转发，也可能自己逛社区；一次刷新允许 0 人看到任何帖子。谨慎或身份敏感只能影响公开行动，不能自动推导为“不浏览”。\n- 看到帖子后可以实名回复、用自己已有/自然使用的小号回复、只看不说；不公开参与也完全可以转去微信与 User 讨论。\n- 主动发帖是独立动机：一个人可以常浏览但几乎不发帖，也可以因职业/社交习惯主动发帖。不要为了展示功能强迫发帖。\n- 私聊只表达人物自己当下的动机。可以 MESSAGE（只聊）、SHARE（把帖子真实转发给 User，可附带消息）或 SKIP。不要照抄固定话术，不要机械回应每篇帖子。\n- 公开回复和私聊只能基于 viewedPostIds 中人物本轮确实看到的帖子；后台提供但没看到的内容不能拿来行动。\n- User 本人账号及 User 的社区大号/小号都属于 User-controlled identity，绝不能由任何 AI 人物代替使用。\n- 每个人只返回自己的决定。只输出严格 JSON，不要解释。`;
-  const user = `【本轮新出现/刷新后的 Community 帖子】\n${postText}\n\n【候选人物】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"人物id","viewedPostIds":["实际看到的postId"],"publicAction":"REPLY_REAL|REPLY_ANONYMOUS|SKIP","actionPostId":"公开参与的postId","replyToCommentId":"可空；只填真实存在的评论id","answerId":"知乎回答下回复时可填","publicAlias":"小号名","publicContent":"公开回复","privateAction":"MESSAGE|SHARE|SKIP","privatePostId":"触发微信行为的已阅postId","privateMessages":["0~5条自然微信气泡"]}],"proactivePosts":[{"actorId":"人物id","section":"tianya|xiaohongshu|zhihu|weibo","anonymous":false,"alias":"小号名","title":"标题","content":"正文","tags":[],"imagePrompt":"小红书可选","imageText":"小红书可选"}]}。actors 只表示“本轮浏览后的反应”；proactivePosts 是独立主动发帖决定，不要求该人物本轮先看到任何帖子。没有动机就不要返回。`;
-  const config = resolveApiRuntimeConfig(getApiSettings());
-  assertApiConfig(config);
-  const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
-  const raw = String(result?.text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  let data = {};
-  try { data = JSON.parse(raw); } catch { const match = raw.match(/\{[\s\S]*\}/); if (match) try { data = JSON.parse(match[0]); } catch {} }
-  const allowedActors = new Set(candidates.map(item => String(item.id || '')));
-  const allowedPosts = new Set(visiblePosts.map(post => String(post.id || '')));
-  const actors = (Array.isArray(data?.actors) ? data.actors : []).map(item => {
-    const viewedPostIds=[...new Set((Array.isArray(item?.viewedPostIds) ? item.viewedPostIds : []).map(String).filter(id => allowedPosts.has(id)))].slice(0,8);
-    const viewedSet=new Set(viewedPostIds);
-    const publicAction=['REPLY_REAL','REPLY_ANONYMOUS'].includes(String(item?.publicAction||'').toUpperCase())?String(item.publicAction).toUpperCase():'SKIP';
-    const privateAction=['MESSAGE','SHARE'].includes(String(item?.privateAction||'').toUpperCase())?String(item.privateAction).toUpperCase():'SKIP';
-    const actionPostId=viewedSet.has(String(item?.actionPostId||''))?String(item.actionPostId):'';
-    const privatePostId=viewedSet.has(String(item?.privatePostId||''))?String(item.privatePostId):'';
-    return {actorId:String(item?.actorId||''),viewedPostIds,publicAction:actionPostId?publicAction:'SKIP',actionPostId,replyToCommentId:String(item?.replyToCommentId||''),answerId:String(item?.answerId||''),publicAlias:String(item?.publicAlias||'').trim().slice(0,24),publicContent:String(item?.publicContent||'').trim().slice(0,1200),privateAction:privatePostId?privateAction:'SKIP',privatePostId,privateMessages:(Array.isArray(item?.privateMessages)?item.privateMessages:[]).map(x=>String(x||'').trim().slice(0,800)).filter(Boolean).slice(0,5)};
-  }).filter(item => allowedActors.has(item.actorId) && item.viewedPostIds.length);
-  const proactivePosts=(Array.isArray(data?.proactivePosts)?data.proactivePosts:[]).map(np=>({actorId:String(np?.actorId||''),section:String(np?.section||''),anonymous:Boolean(np?.anonymous),alias:String(np?.alias||'').trim().slice(0,24),title:String(np?.title||'').trim().slice(0,120),content:String(np?.content||'').trim().slice(0,4000),tags:Array.isArray(np?.tags)?np.tags.map(String).slice(0,8):[],imagePrompt:String(np?.imagePrompt||'').trim().slice(0,1200),imageText:String(np?.imageText||'').trim().slice(0,500)})).filter(np=>allowedActors.has(np.actorId)&&np.content);
   return { actors, proactivePosts };
 }
 
@@ -1571,29 +1577,6 @@ async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
   const recentText = recent?.messages?.map(message => `${message?.role === 'user' ? userName : (message?.name || '角色')}：${String(message?.content || '')}`).join('\n') || '';
   const contacts = communityWorldContacts(scopeKey);
   const identityPack = contacts.map(communityIdentityAnchor).filter(Boolean).join('\n\n');
-  const scanText = [recentText, identityPack, ...contacts.map(contact => String(contact.name || contact?.source?.originalName || ''))].filter(Boolean).join('\n');
-
-  const worldBookBlocks = [];
-  for (const person of contacts) {
-    try {
-      const worldBook = person.kind === 'custom'
-        ? await getActivatedCustomWorldBook({ contact: person, scanText })
-        : await getActivatedTavernWorldBook({ contact: person, scanText });
-      const text = String(worldBook?.text || '').trim();
-      if (text) worldBookBlocks.push(`【${String(person.remark || person.displayName || person.name || '人物')}自己的世界书】\n${text}`);
-    } catch (error) {
-      console.warn('[moli小手机] community per-contact world-book context failed:', person?.id, error);
-    }
-  }
-  const worldBookText = worldBookBlocks.join('\n\n');
-
-  const actorPhoneBlocks = contacts.slice(0, 8).map(person => {
-    try {
-      const phone = buildPhoneContext(scopeKey, person.id, { query: scanText, userName, limit: 18 }).text;
-      return phone ? `【${String(person.remark || person.displayName || person.name || '人物')}自己的手机经历】\n${phone}` : '';
-    } catch { return ''; }
-  }).filter(Boolean).join('\n\n');
-
   let longTermText = '';
   if (String(scopeKey || '').includes(':chat:')) {
     try {
@@ -1603,13 +1586,10 @@ async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
       console.warn('[moli小手机] community long-term context failed:', error);
     }
   }
-
   return [
-    identityPack ? `【稳定人物身份 · Identity Anchor】\n以下用于确认“谁是谁”。每条人物资料只属于其标题所指的人物；职业、关系、性别、年龄、经历、称谓与社会身份都不得跨人物迁移。若某事实无法明确归属于某个人物，就省略该事实，不得借用相似人物的资料补全。\n${identityPack}` : '',
+    identityPack ? `【稳定人物身份 · Public Identity Anchor】\n以下只用于确认故事世界里“谁是谁”的稳定身份，不携带任何人物私聊、Phone Context 或人物专属世界书。公共生成器不得据此补写人物私密认知。\n${identityPack}` : '',
     recentText ? `【当前正文 · Recent World State】\n${recentText}` : '',
-    worldBookText ? `【相关世界书 · Relevant World Lore】\n${worldBookText}` : '',
-    actorPhoneBlocks ? `【人物专属 Actor Pack · Phone Continuity】\n以下每块手机经历只属于标题所指人物，只能用于该人物自己的判断与公开行为；不得把甲的私聊、记忆或认知当成乙知道的事实，也不得直接当成公共世界事实。\n${actorPhoneBlocks}` : '',
-    longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道。\n${longTermText}` : '',
+    longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道；公共生成不得把它转换成某个人物的私有知识。\n${longTermText}` : '',
   ].filter(Boolean).join('\n\n');
 }
 
@@ -1656,7 +1636,7 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
 3. 首页+超话本轮合计生成 8~10 条微博，不机械平均分配，按当前世界内容价值自然分布。
 4. 另生成 5~8 个热搜词。热搜首先代表当前整个社会今天正在发生什么，不是正文人物专题榜：允许新闻、娱乐、民生、公共事件、互联网争议、网络热点、行业话题、地方事件等自行发生。正文人物相关热搜只是其中可能的一部分，不要求固定占比，也不得为了关联 Character 强行制造热点。热搜词只是 #关键词内容# 榜单，不是微博帖子，不使用 lane=热门。
 5. Community 可以自然使用当前可用的 Character 本人账号或其已有小号参与发帖、回答、评论和回复；其公开行为应符合该 Character 当前可获得的信息、已有经历与人物状态。
-${pendingUserPosts.length?`6. 以下 User 微博尚未形成初始互动，请在 userPostComments 中各补一次初始评论生态：\n${pendingUserPosts.map(p=>`- id=${p.id}；@${p.author?.name||'User'}：${String(p.content||p.title||'').slice(0,500)}`).join('\n')}`:''}`].filter(Boolean).join('\n\n'); const follows=listWeiboFollows(scopeKey);if(follows.length){const followText=follows.slice(0,40).map(x=>`- @${x.name}${x.hot?' 🔥持续互动':''}${x.profile?`：${x.profile}`:''}${x.hot&&Array.isArray(x.memory)&&x.memory.length?`；最近互动：${x.memory.slice(-4).join(' / ')}`:''}`).join('\n');context=[context,`【User 已关注的微博账号】\n这些是持续账号；刷新首页时应自然让其中一部分账号发微博，但不要强制每个账号每次都出现。普通路人账号在确有自然动机时也可以 @User 或给 User 发一条私信；不要为了展示功能而人人私信。标记🔥的是 User 指定的持续网友：相比普通路人，可以基于与 User 已发生的互动更熟稔、更主动地 @User 或私信，但仍由账号自身和当前情境决定是否行动。\n${followText}`].filter(Boolean).join('\n\n');} const networkActors=listNetworkActors(scopeKey).filter(x=>Array.isArray(x.publicIds)&&x.publicIds.length).slice(0,50);if(networkActors.length){const conversations=getScopeConversations(scopeKey);const actorText=networkActors.map(x=>{const recentWechat=x.contactId?conversations.filter(c=>c?.type==='private'&&String(c.contactId||'')===String(x.contactId)).flatMap(c=>(c.messages||[]).slice(-6)).slice(-6).map(m=>`${m.role==='user'?userName:(x.name||'网友')}：${String(m.content||'').slice(0,180)}`).join(' / '):'';return `- ${x.publicIds.map(id=>'@'+id).join(' / ')}${x.profile?`：${x.profile}`:''}${x.memory?.length?`；已发生网络经历：${x.memory.slice(-4).join(' / ')}`:''}${recentWechat?`；成为微信好友后的近期亲历：${recentWechat}`:''}`;}).join('\n');context=[context,`【持续网络账号 · 连续性参考】\n以下公开ID已经在 Community 中真实出现过，仅用于“再次遇到同一人时继续同一人物”，不是本轮应优先使用的账号名单，也不限制生成新的网友或新账号。这里只提供该账号自己的公开经历，不代表其他人物知道其后台身份。\n${actorText}`].filter(Boolean).join('\n\n');} const activeActors=networkActors.filter(x=>x.hot||x.contactId||(x.memory||[]).length>=2).slice(0,6);if(activeActors.length){context=[context,`【持续网友行动机会】\n以下持续网友与 User 已有真实经历，本轮若当前公开事件确实触发其行动，可以选择公开 @User、私信 User 或不行动。依据各自画像与亲历自行决定，不要求每个人行动。\n${activeActors.map(x=>`- actorId=${x.id}；公开ID=${x.publicIds?.[0]||x.name}；${x.profile||''}；近期亲历=${(x.memory||[]).slice(-4).join(' / ')}`).join('\n')}`].filter(Boolean).join('\n\n');} const supertopics=getWeiboSupertopicStates(scopeKey).slice(0,12);if(supertopics.length){const st=supertopics.map(x=>`- ${x.name}${x.recentMaterials?.length?`；近期公开素材：${x.recentMaterials.slice(-3).join(' / ')}`:''}${x.activeAccounts?.length?`；持续活跃ID：${x.activeAccounts.slice(-8).map(a=>'@'+a).join('、')}`:''}`).join('\n');context=[context,`【已有超话连续状态】\n这些超话已经真实形成。生成新的超话内容时优先延续已有名称、公开素材和活跃账号；也可以在当前世界确有新关系时自然形成新超话。\n${st}`].filter(Boolean).join('\n\n');} if(String(weiboQuery||'').trim()) context=[context,`【User 本次微博搜索】\n关键词：${String(weiboQuery).trim()}\n本次生成优先围绕这个搜索意图，像用户主动搜索后看到的相关实时微博；仍保持不同账号、信息来源和立场。`].filter(Boolean).join('\n\n');}
+${pendingUserPosts.length?`6. 以下 User 微博尚未形成初始互动，请在 userPostComments 中各补一次初始评论生态：\n${pendingUserPosts.map(p=>`- id=${p.id}；@${p.author?.name||'User'}：${String(p.content||p.title||'').slice(0,500)}`).join('\n')}`:''}`].filter(Boolean).join('\n\n'); const follows=listWeiboFollows(scopeKey);if(follows.length){const followText=follows.slice(0,40).map(x=>`- @${x.name}${x.hot?' 🔥持续互动':''}${x.profile?`：${x.profile}`:''}${x.hot&&Array.isArray(x.memory)&&x.memory.length?`；最近互动：${x.memory.slice(-4).join(' / ')}`:''}`).join('\n');context=[context,`【User 已关注的微博账号】\n这些是持续账号；刷新首页时应自然让其中一部分账号发微博，但不要强制每个账号每次都出现。普通路人账号在确有自然动机时也可以 @User 或给 User 发一条私信；不要为了展示功能而人人私信。标记🔥的是 User 指定的持续网友：相比普通路人，可以基于与 User 已发生的互动更熟稔、更主动地 @User 或私信，但仍由账号自身和当前情境决定是否行动。\n${followText}`].filter(Boolean).join('\n\n');} const networkActors=listNetworkActors(scopeKey).filter(x=>Array.isArray(x.publicIds)&&x.publicIds.length).slice(0,50);if(networkActors.length){const actorText=networkActors.map(x=>`- ${x.publicIds.map(id=>'@'+id).join(' / ')}${x.profile?`：${x.profile}`:''}${x.memory?.length?`；已发生公开网络经历：${x.memory.slice(-4).join(' / ')}`:''}`).join('\n');context=[context,`【持续网络账号 · 连续性参考】\n以下公开ID已经在 Community 中真实出现过，仅用于“再次遇到同一人时继续同一人物”，不是本轮应优先使用的账号名单，也不限制生成新的网友或新账号。这里只提供该账号自己的公开经历，不代表其他人物知道其后台身份。\n${actorText}`].filter(Boolean).join('\n\n');} const activeActors=networkActors.filter(x=>x.hot||x.contactId||(x.memory||[]).length>=2).slice(0,6);if(activeActors.length){context=[context,`【持续网友行动机会】\n以下持续网友与 User 已有真实经历，本轮若当前公开事件确实触发其行动，可以选择公开 @User、私信 User 或不行动。依据各自画像与亲历自行决定，不要求每个人行动。\n${activeActors.map(x=>`- actorId=${x.id}；公开ID=${x.publicIds?.[0]||x.name}；${x.profile||''}；近期亲历=${(x.memory||[]).slice(-4).join(' / ')}`).join('\n')}`].filter(Boolean).join('\n\n');} const supertopics=getWeiboSupertopicStates(scopeKey).slice(0,12);if(supertopics.length){const st=supertopics.map(x=>`- ${x.name}${x.recentMaterials?.length?`；近期公开素材：${x.recentMaterials.slice(-3).join(' / ')}`:''}${x.activeAccounts?.length?`；持续活跃ID：${x.activeAccounts.slice(-8).map(a=>'@'+a).join('、')}`:''}`).join('\n');context=[context,`【已有超话连续状态】\n这些超话已经真实形成。生成新的超话内容时优先延续已有名称、公开素材和活跃账号；也可以在当前世界确有新关系时自然形成新超话。\n${st}`].filter(Boolean).join('\n\n');} if(String(weiboQuery||'').trim()) context=[context,`【User 本次微博搜索】\n关键词：${String(weiboQuery).trim()}\n本次生成优先围绕这个搜索意图，像用户主动搜索后看到的相关实时微博；仍保持不同账号、信息来源和立场。`].filter(Boolean).join('\n\n');}
   if (!context.trim()) context = '当前没有打开正文，也没有选择“当前角色世界”。不要读取、猜测或讨论程序代码、插件、API、Prompt、SillyTavern、模型、世界书、角色卡、调试信息；只生成自然的普通社区内容。';
   const ghostRule = ghostStoriesEnabled ? '允许在内容自然适合时选择“莲蓬鬼话”。' : '“莲蓬鬼话”关闭：不得生成莲蓬鬼话分类，也不得用其他分类绕过限制生成灵异鬼话主题。';
   const tianyaSystem = `# 天涯社区 · 杂谈板块生成器\n\n你正在模拟一个真实存在于当前故事世界中的中文老式公共论坛。这里不是剧情旁白、角色聊天室、作者讨论区或为 User 服务的信息面板。你的任务不是写“像论坛的文案”，而是截取这个世界此刻真实天涯论坛中的一页。\n\n【世界来源】\n论坛与当前故事共享同一个现实世界。可以从当前角色、人物关系、职业环境、社会背景、地点、时代、近期事件和正文剧情自然发散。当前故事世界应当成为社区内容的重要来源，而不是偶尔出现的彩蛋。可以直接讨论角色或 User，也可以只捕捉他们留下的社会痕迹：旁观者目击、小号爆料、同行议论、熟人吐槽、职业圈传闻、地点事件、相似经历、关系猜测、由近期事件引发的话题等。不要机械复述正文，也不要让所有帖子都围绕主角；仍应保留一部分与主角无关的普通互联网内容，使这里像真实存在于故事世界里的论坛。\n\n【天涯社区气质】\n这是传统中文 BBS，不是微博、小红书、知乎或现代短视频评论区。网友身份感强，昵称比头像重要；标题承担吸引和筛选作用；既有长文也有一句话水帖；有求助、树洞、记录、连载、讨论、争论、围观、爆料、转载、考据。楼主可能更新；网友会催更、马克、插眼、占楼、歪楼。回复质量和长度高度不均，有善意、刻薄、怀疑、抬杠、冷嘲，也可能认真长评；不要求正确、不要求共识、不要求都喜欢楼主。语言可有早期中文论坛感，但不同网友必须有不同口吻。\n\n【帖子形式】\n主动变化帖型，不要连续套同一模板。可以是：求助帖、情感/树洞帖、经历帖、直播/连载帖、讨论帖、社会观察帖、本地帖、职业帖、八卦帖、爆料帖、怀旧帖、历史/煮酒式长帖、娱乐帖、闲聊/水帖、调查/投票式帖子，以及世界中自然出现的其他形式。${ghostRule}\n\n【标题】\n标题首先像真人会在论坛取的标题，其次才考虑文学性。允许朴素、啰嗦、口语、悬念、求助、818、记录、讨论。不要整页使用现代内容营销式“震惊/必看/大盘点/你绝对想不到”。\n\n【正文】\n长度自然变化：几十字、几百字、少数长帖都可以。楼主写作能力不同：有人条理清楚，有人啰嗦，有人分段混乱，有人错别字或标点习惯明显。不要统一润色成同一种写作腔。\n\n【回复生态】\n回复是线性楼层。可以认真回答、追问、质疑、支持、反对、阴阳怪气、争吵、补充个人经历、纠正事实、求后续、马克、插眼、占楼、跑题、回复另一楼、引用某句话、给专业解释或只留一句话。不同网友有不同知识、立场和表达习惯。\n\n【页面多样性】\n一次刷新是一页论坛，不是专题策划。帖子之间必须有明显差异。部分可受剧情影响，部分来自世界社会背景，部分只是普通人的日常。禁止因为运行环境出现 AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色卡、聊天记录、生成器、调试信息，就默认这些属于故事世界；除非正文明确证明它们存在，否则一律不可见。\n\n【常驻规则】\n帖子是否常驻由界面中的红色笑脸决定，不由你决定。你只负责生成本次新帖子。\n\n只输出严格 JSON，不要解释。`;
