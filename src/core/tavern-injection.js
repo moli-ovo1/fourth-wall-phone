@@ -3,12 +3,15 @@ import { getCurrentScopeKey } from './tavern-scope.js';
 import { getPendingInjection, markPendingInjectionArmed, clearPendingInjection } from '../storage/injection-store.js';
 import { listPendingStoryBridgeLines, activateStoryBridgeLines, markStoryBridgeInjected } from '../storage/story-bridge-store.js';
 import { getScopeConversations, updateGroupConversation } from '../storage/data-store.js';
+import { listInjectableStoryPlans, applyStoryPlanReview } from '../storage/story-plan-store.js';
 
 const PROMPT_ID = 'moli-phone-context-once';
 const BRIDGE_PROMPT_ID = 'moli-story-bridge-active-lines';
 const LIFE_INSPIRATION_PROMPT_ID = 'moli-life-inspiration-watch';
+const STORY_PLAN_PROMPT_ID = 'moli-story-plan-watch';
 const ACTIVATION_RE = /<moli_bridge_activation>([\s\S]*?)<\/moli_bridge_activation>/gi;
 const LIFE_EVENT_RE = /<moli_life_event>([\s\S]*?)<\/moli_life_event>/gi;
+const STORY_PLAN_RE = /<moli_story_plan_review>([\s\S]*?)<\/moli_story_plan_review>/gi;
 let activeScopeKey = '';
 let activeGeneration = false;
 
@@ -64,6 +67,34 @@ function clearBridgePrompt(ctx) {
 
 function clearLifeInspirationPrompt(ctx) {
   try { ctx?.setExtensionPrompt?.(LIFE_INSPIRATION_PROMPT_ID, '', extension_prompt_types.NONE, 0, false); } catch {}
+}
+
+function clearStoryPlanPrompt(ctx) {
+  try { ctx?.setExtensionPrompt?.(STORY_PLAN_PROMPT_ID, '', extension_prompt_types.NONE, 0, false); } catch {}
+}
+
+function wrapStoryPlans(lines) {
+  if (!Array.isArray(lines) || !lines.length) return '';
+  const blocks = lines.map((line, index) => [
+    `【事件规划 ${index + 1}】`, `内部ID：${line.id}`, `标题：${line.title}`, `观察阶段：${line.stage}`, String(line.text || '').trim(), line.lastNote ? `娘家人上次观察：${line.lastNote}` : ''
+  ].filter(Boolean).join('\n'));
+  return [
+    '[娘家人 · 长线剧情规划]',
+    '这些规划只规划“可能发生/延续的事件、场景、人物事务与外部情境”，绝不能规定角色应该产生什么心理、感情、认知转变或行动结论。角色心理与选择必须由其既有人设、当下信息和正文自然产生。',
+    '你可以依据角色已经实际表现出的行动、当前心理状态与现实处境，判断某个事件规划现在是否合时；但这些信息只能用于判断时机，不能反过来要求角色朝规划期待的心理方向发展。',
+    '规划不是任务清单。若正文自然长出更好的事件路径，允许“意外生长”；若证据不足就继续观察，绝不能为了推进规划而制造角色反应。',
+    ...blocks,
+    '',
+    '【内部复查回执】只有本轮正文对某条规划产生了实质新证据时，才在回复最末尾为该条输出一行：<moli_story_plan_review>{"id":"规划ID","result":"continue|advance|adjust|end|organic","note":"一句话说明正文发生了什么，以及为什么维持/推进/需调整/结束/意外生长"}</moli_story_plan_review>。普通对话、重复情绪描写、没有改变事件条件的日常动作不要输出。标签是扩展内部回执，不属于正文。',
+    '[娘家人 · 长线剧情规划结束]'
+  ].join('\n\n');
+}
+
+function consumeStoryPlanReceipts(ctx, messageId, scopeKey) {
+  const mid=Number(messageId); if(!Number.isInteger(mid)||!Array.isArray(ctx?.chat))return; const message=ctx.chat[mid]; if(!message||message.is_user||message.is_system)return;
+  const original=String(message.mes||''); const receipts=[]; const cleaned=original.replace(STORY_PLAN_RE,(_full,body)=>{receipts.push(String(body||'').trim());return '';}).replace(/\n{3,}/g,'\n\n').trim();
+  if(cleaned!==original.trim()){message.mes=cleaned;Promise.resolve(ctx.saveChat?.()).catch(()=>{});}
+  for(const raw of receipts){try{const data=JSON.parse(raw); if(data?.id)applyStoryPlanReview(scopeKey,String(data.id),{result:String(data.result||'continue'),note:String(data.note||''),messageId:mid});}catch{}}
 }
 
 function randomLifeThreshold() { return 4 + Math.floor(Math.random() * 3); }
@@ -166,15 +197,19 @@ export function createTavernInjectionBridge() {
     clearExtensionPrompt(ctx);
     clearBridgePrompt(ctx);
     clearLifeInspirationPrompt(ctx);
+    clearStoryPlanPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
     const lifeInspiration = armLifeInspiration(scopeKey);
-    if (!pending?.text && !bridgeLines.length && !lifeInspiration) return;
+    const storyPlans = listInjectableStoryPlans(scopeKey);
+    if (!pending?.text && !bridgeLines.length && !lifeInspiration && !storyPlans.length) return;
 
     try {
       const bridgeText = wrapBridgeLines(bridgeLines);
       if (bridgeText) ctx.setExtensionPrompt(BRIDGE_PROMPT_ID, bridgeText, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
       if (lifeInspiration) ctx.setExtensionPrompt(LIFE_INSPIRATION_PROMPT_ID, lifeInspiration, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
+      const planText = wrapStoryPlans(storyPlans);
+      if (planText) ctx.setExtensionPrompt(STORY_PLAN_PROMPT_ID, planText, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
       // IN_CHAT = 1, depth 0, system role. GENERATION_STARTED is early enough for ST extension prompts.
       if (pending?.text) {
         ctx.setExtensionPrompt(PROMPT_ID, wrapContext(pending.text), extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
@@ -187,12 +222,13 @@ export function createTavernInjectionBridge() {
       clearExtensionPrompt(ctx);
       clearBridgePrompt(ctx);
       clearLifeInspirationPrompt(ctx);
+      clearStoryPlanPrompt(ctx);
     }
   };
 
   const onMessageReceived = (messageId) => {
     const scopeKey = activeScopeKey || getCurrentScopeKey();
-    if (scopeKey) { consumeActivationReceipt(ctx, messageId, scopeKey); consumeLifeEventReceipt(ctx, messageId, scopeKey); }
+    if (scopeKey) { consumeActivationReceipt(ctx, messageId, scopeKey); consumeLifeEventReceipt(ctx, messageId, scopeKey); consumeStoryPlanReceipts(ctx, messageId, scopeKey); }
   };
 
   const onGenerationEnded = () => {
@@ -201,10 +237,12 @@ export function createTavernInjectionBridge() {
     const lastMessageId = Array.isArray(ctx.chat) ? ctx.chat.length - 1 : -1;
     consumeActivationReceipt(ctx, lastMessageId, consumedScope);
     consumeLifeEventReceipt(ctx, lastMessageId, consumedScope);
+    consumeStoryPlanReceipts(ctx, lastMessageId, consumedScope);
     markStoryBridgeInjected(consumedScope, lastMessageId);
     clearExtensionPrompt(ctx);
     clearBridgePrompt(ctx);
     clearLifeInspirationPrompt(ctx);
+    clearStoryPlanPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
     if (getPendingInjection(consumedScope)) clearPendingInjection(consumedScope);
@@ -216,12 +254,13 @@ export function createTavernInjectionBridge() {
     clearExtensionPrompt(ctx);
     clearBridgePrompt(ctx);
     clearLifeInspirationPrompt(ctx);
+    clearStoryPlanPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
   };
 
   const onChatChanged = () => {
-    if (!activeGeneration) { clearExtensionPrompt(ctx); clearBridgePrompt(ctx); clearLifeInspirationPrompt(ctx); }
+    if (!activeGeneration) { clearExtensionPrompt(ctx); clearBridgePrompt(ctx); clearLifeInspirationPrompt(ctx); clearStoryPlanPrompt(ctx); }
   };
 
   eventSource.on(events.GENERATION_STARTED, onGenerationStarted);
@@ -235,6 +274,7 @@ export function createTavernInjectionBridge() {
       clearExtensionPrompt(ctx);
       clearBridgePrompt(ctx);
       clearLifeInspirationPrompt(ctx);
+      clearStoryPlanPrompt(ctx);
       eventSource.removeListener?.(events.GENERATION_STARTED, onGenerationStarted);
       if (events.MESSAGE_RECEIVED) eventSource.removeListener?.(events.MESSAGE_RECEIVED, onMessageReceived);
       eventSource.removeListener?.(events.GENERATION_ENDED, onGenerationEnded);
