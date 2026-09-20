@@ -823,7 +823,7 @@ function formatPhoneBridge(scopeKey, contact, userName = 'User') {
   return chunks.join('\n\n') || '暂无可用手机私聊连续性。';
 }
 
-function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], bubbleRange = null, targetedRegeneration = false } = {}) {
+function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], bubbleRange = null, targetedRegeneration = false, maxChars = 0 } = {}) {
   const raw = String(text || '').trim();
   let parsed = null;
   const candidates = [];
@@ -862,7 +862,8 @@ function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], 
       : String(member.id || '') === 'builtin:guide'
         ? 120
         : 180;
-    content = content.slice(0, review ? reviewHardLimit : 100);
+    const ordinaryLimit = maxChars > 0 ? Math.max(20, Math.min(600, Number(maxChars) || 100)) : 100;
+    content = content.slice(0, review ? reviewHardLimit : ordinaryLimit);
     seen.add(String(member.id));
     replies.push({ contact: member, messages: [content], text: content });
     if (replies.length >= maxReplies) break;
@@ -884,6 +885,7 @@ async function buildBatchGroupRequest({
   reviewTarget = null,
   excludeMessageId = '',
   targetedRegeneration = false,
+  studioTask = null,
 } = {}) {
   const userContext = getTavernUserContext();
   const review = Boolean(reviewTarget?.content);
@@ -961,6 +963,26 @@ async function buildBatchGroupRequest({
     ? `\n【PRIMARY REVIEW TARGET｜本轮唯一点评对象】\n签名：${String(reviewTarget.signature || '')}\n${String(reviewTarget.content || '')}\n【边界】这份正文快照是本轮围读会反应的唯一主要对象；群历史、群记忆和辅助正文只能帮助理解，绝不能取代它成为新的点评对象。成员可以回应另一个成员刚刚说的话，但最终仍应自然围绕这份触发正文。\n`
     : '';
 
+  const studio = String(conversation.systemKind || '') === 'writers-room';
+  const likedMessages = studio ? messages.filter(message => message?.likedByUser === true && !message?.recalledAt).slice(-16).map(message => {
+    const who = message?.role === 'user' ? (userContext.name || 'User') : contactLabel(membersById.get(String(message?.senderId || ''))) || '成员';
+    return `${who}：${String(message?.content || '').trim()}`;
+  }).filter(Boolean).join('\n') : '';
+  const taskType = String(studioTask?.type || '');
+  const taskNotes = String(studioTask?.notes || '').trim();
+  const studioTaskGuidance = !studio ? '' : taskType === 'cast'
+    ? `【本轮创作任务：Ta出场好少】从当前正文已经存在的人物、职责、关系、利益、承诺与正在发展的事件出发，寻找自然的配角活动机会。配角不是等待 User 点选才加载的 NPC；但不得为了增加戏份强行闯入，也不得让其获得不应知道的信息。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
+    : taskType === 'meme'
+      ? `【本轮创作任务：帮我想梗】基于当前人物关系、信息差、性格习惯、生活细节和已有伏笔自由发散好玩的梗、反差、小事件或关系玩法。不要只顺着 User 复述，也不要为了显得有创意凭空制造重大冲突。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
+      : taskType === 'plan'
+        ? `【本轮创作任务：给我规划】检查当前真正活跃的关系、事件、伏笔与被叙事惯性冻结的人物，讨论接下来可能自然发展的方向。规划不是任务清单；关系张力不等于必须升级，短时间不得强行跨越漫长进程。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
+        : taskType === 'likes'
+          ? `【本轮创作任务：整理❤️】第一版通常由小上帝负责收束：从当前讨论与❤️偏好信号中提炼 User 真正认可的创作意图，去重、处理矛盾，但不要把❤️当命令，也不要完全顺应 User；若正文证据与 User 偏好存在张力，应指出。moli 随后可以赞同、质疑或从整理结果继续发散新的玩法。不要机械复制点赞原句。`
+          : taskType === 'adopt'
+          ? `【本轮创作任务：纳取】围绕 User 指定的气泡，把其中值得保留的创作意图改写成 AI 可读的提示词。必须输出恰好3个气泡且按顺序：1) builtin:writer 以“【导演版】”开头，严谨、结构化、尊重人物动机；2) builtin:guide 以“【灵感版】”开头，保留有趣的细节、情绪、反差与可能性；3) builtin:writer 以“【二人合璧】”开头，融合前两版但主动消解冲突，不是简单拼接。${taskNotes ? `\n纳取原文：${taskNotes}` : ''}`
+          : `【编剧室自由讨论】你们是 User 的创作搭子，不是两个顺从的提示词工具。可以赞同、质疑、补充、发散或提出不同意见；不要因为 User 的偏好信号就失去独立判断。`;
+  const studioLikeGuidance = !studio ? '' : `【❤️偏好信号】下面是 User 在当前创作讨论中点过❤️的部分内容。它们只表示“值得保留/提高参考权重”，不是命令、不是永久偏好，也不是必须顺从的答案。不要逐条回应或反复告诉 User 你看见了点赞；只有累计信号与当前话题确实相关、能帮助讨论时才自然吸收。\n${likedMessages || '本轮暂无已点赞内容。'}`;
+
   const groupTimeMode = conversation.timeMode === 'real'
     ? '现实世界时间'
     : conversation.timeMode === 'none'
@@ -992,7 +1014,7 @@ ${onlinePreset}
     ? `【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮真实群聊。整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标，不要为了填满而硬说。所有群成员都只是可发言者，没有谁被强制必须出现；沉默型角色可以完全不说，爱插科打诨或此刻有话的人可以连续出现多次。同一 speakerId 可以在这一轮重复出现，允许真实的来回接话，例如 A→B→A→moli。气泡数量和分配应由人物性格、当前情绪、关系、话题价值和前一个气泡共同决定，而不是平均分配。成员不必各自从头分析正文，后发成员可以接前一个成员的话、争论、接梗、吐槽、补充或沉默。不要为了证明完成点评任务而复述正文、总结情节或强行寻找分析点。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长。`
     : targetedRegeneration
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
-      : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
+      : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n${studio ? `\n${studioTaskGuidance}\n${studioLikeGuidance}\n【编剧室长度】每个实际发言气泡以约 ${Math.max(20, Math.min(500, Number(conversation.studioReplyLength) || 80))} 个中文字符为软目标；内容需要时可略有浮动，不得为了凑字重复。` : ''}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
   const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}`;
   return { system, messages: [{ role: 'user', content: shared }] };
@@ -1003,7 +1025,7 @@ function looksLikeProviderErrorText(value = '') {
   return /The prompt could not be submitted|Generative AI Prohibited Use policy|RESOURCE_EXHAUSTED|SAFETY|blocked by.*safety|content filter/i.test(text);
 }
 
-export async function generateGroupReply({ scopeKey, conversationKey, signal, onDelta, targetMemberId = '', excludeMessageId = '' } = {}) {
+export async function generateGroupReply({ scopeKey, conversationKey, signal, onDelta, targetMemberId = '', excludeMessageId = '', studioTask = null } = {}) {
   if (!scopeKey || !conversationKey) throw new Error('当前群聊不可用');
   const conversation = getConversation(scopeKey, conversationKey);
   if (!conversation || conversation.type !== 'group') throw new Error('群聊不存在');
@@ -1014,7 +1036,8 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
   const messages = Array.isArray(conversation.messages) ? conversation.messages : [];
   let trailingUsers = 0;
   for (let i = messages.length - 1; i >= 0 && messages[i]?.role === 'user'; i -= 1) trailingUsers += 1;
-  if (!targetMemberId && !trailingUsers) throw new Error('先发送一条消息，再空输入触发群聊回复');
+  const studio = String(conversation.systemKind || '') === 'writers-room';
+  if (!targetMemberId && !trailingUsers && !(studio && studioTask)) throw new Error('先发送一条消息，再空输入触发群聊回复');
   const forcedIds = targetMemberId ? [String(targetMemberId)] : mentionedMemberIds(messages, members);
 
   // moli55：普通群聊不再“编排器1次 + 每位成员N次”。指定重答时只请求该成员。
@@ -1024,6 +1047,7 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
     members,
     excludeMessageId,
     targetedRegeneration: Boolean(targetMemberId),
+    studioTask,
   });
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
@@ -1034,6 +1058,7 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
     forcedIds,
     bubbleRange: conversation.groupReplyBubbleRange,
     targetedRegeneration: Boolean(targetMemberId),
+    maxChars: studio ? Math.max(80, Number(conversation.studioReplyLength) || 80) * 3 : 0,
   });
   if (!replies.length) throw new Error('本轮群聊批量生成没有返回可用消息');
   onDelta?.('', '', replies[0]?.contact || null);
