@@ -1,4 +1,4 @@
-# CURRENT STATE — moli236 / v0.5.89
+# CURRENT STATE — moli237 / v0.5.90
 
 > Updated 2026-09-20. This top block is the authoritative current handoff; older entries below are retained as history.
 
@@ -691,3 +691,9 @@
 - 微博账号生态：稳定 ID 的含义明确为“同一人再次出现时保持连续”，不再把已有持续账号当本轮候选名单；允许每轮按话题自然产生新普通网友、媒体、大V、营销号、兴趣用户、知情人等新公开 ID。
 - 微博 Character 自然参与：沿用 Community 已有世界人物上下文/Actor Pack，明确其本人账号或已有小号在自然相关时可直接发帖/互动，不要求每轮出现；明确邀请/@ 仍走角色专用调用。
 - 本轮没有修改已验证通过的社会余波和跨板块痕迹逻辑。
+
+
+## moli237 / v0.5.90 — 启动故障根因修复
+- 修复 `src/generation/generation-service.js` 的 Private Phone Trace VIEW 规范化表达式中缺失的右括号；该错误会在浏览器模块解析阶段触发 `SyntaxError: missing ) after argument list`，导致整个小手机无法启动。
+- 保留 moli235 的备忘录、性冲动、Community 原帖跳转与生成质量规则，不回滚业务功能。
+- 故障修复仅触及确定根因与版本记录，不扩展新功能。

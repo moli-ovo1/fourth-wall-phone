@@ -4520,3 +4520,9 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - `manifest.json` 版本从长期滞后的 `0.5.83` 同步到 `0.5.89`；以后正式 incremental package 必须同步 manifest version，避免仓库版本已前进但宿主仍把扩展识别为旧版本。
 - bootstrap 动态导入 `src/core/app.js` 时附加当前 build version query，用于降低移动端/WebView 在扩展更新后继续复用旧入口模块缓存的风险；不改变后续模块调用协议。
 - 启动失败诊断不再只保留 `error.message`：控制台与应急启动按钮保存当前 build version、error name、message、stack。若仍发生解析/加载错误，下一轮应依据真实 stack/模块位置精确修复，禁止猜测性回滚业务代码。
+
+
+## moli237 / v0.5.90 — 启动故障根因修复
+- 修复 `src/generation/generation-service.js` 的 Private Phone Trace VIEW 规范化表达式中缺失的右括号；该错误会在浏览器模块解析阶段触发 `SyntaxError: missing ) after argument list`，导致整个小手机无法启动。
+- 保留 moli235 的备忘录、性冲动、Community 原帖跳转与生成质量规则，不回滚业务功能。
+- 故障修复仅触及确定根因与版本记录，不扩展新功能。

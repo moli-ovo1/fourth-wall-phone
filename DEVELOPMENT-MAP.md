@@ -3520,3 +3520,9 @@ Still next, without splitting into UI micro-patches:
 - 只修启动版本/诊断层：manifest 正式同步当前版本，bootstrap app 入口带 build-version query，并在失败时保留 error name/message/stack。
 - 不触碰 moli235 已落地的 Private Phone Trace v2，也不重构 Community / Network Actor / Community Echo / WeChat / Injection。
 - 新开发纪律：每个正式 incremental package 同步 `manifest.json` version；若启动仍失败，先使用 bootstrap 暴露的 stack/模块位置定位，再决定业务修复，不用猜测性改代码。
+
+
+## moli237 / v0.5.90 — 启动故障根因修复
+- 修复 `src/generation/generation-service.js` 的 Private Phone Trace VIEW 规范化表达式中缺失的右括号；该错误会在浏览器模块解析阶段触发 `SyntaxError: missing ) after argument list`，导致整个小手机无法启动。
+- 保留 moli235 的备忘录、性冲动、Community 原帖跳转与生成质量规则，不回滚业务功能。
+- 故障修复仅触及确定根因与版本记录，不扩展新功能。
