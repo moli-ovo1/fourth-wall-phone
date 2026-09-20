@@ -128,6 +128,7 @@ const APP_ICON_URLS = Object.freeze({
   wall: new URL('../../assets/apps/our-wall.png', import.meta.url).href,
   settings: new URL('../../assets/apps/settings.png', import.meta.url).href,
 });
+const WRITERS_ROOM_WALLPAPER_URL = new URL('../../assets/writers-room/niangjiaren.jpg', import.meta.url).href;
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
   'builtin:writer': new URL('../../assets/avatars/little-god.png', import.meta.url).href,
@@ -473,7 +474,6 @@ export function createPhonePanel({
         <button type="button" data-studio-task="cast">Ta出场好少</button>
         <button type="button" data-studio-task="meme">帮我想梗</button>
         <button type="button" data-studio-task="plan">给我规划</button>
-        <button type="button" data-studio-task="likes">整理❤️</button>
         <button type="button" data-studio-task="length">长度 <span data-studio-length-label>80</span></button>
       </div>
       <div class="moli-chat-error" data-chat-error hidden role="alert">
@@ -511,7 +511,7 @@ export function createPhonePanel({
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="injection-back" aria-label="返回">‹</button></div>
         <div class="moli-nav-title">我们的墙</div>
-        <div class="moli-nav-side right"><button class="moli-icon-btn moli-writers-room-entry" data-action="open-writers-room" aria-label="打开编剧室" title="编剧室">♧</button></div>
+        <div class="moli-nav-side right"><button class="moli-icon-btn moli-writers-room-entry" data-action="open-writers-room" aria-label="打开娘家人" title="娘家人">♧</button></div>
       </header>
       <main class="moli-injection-page">
         <div class="moli-settings-note">从整个手机世界挑选要带进正文的素材。程序只整理与标注，不压缩、不总结；最终由你决定哪些内容跨过这面墙。</div>
@@ -1907,11 +1907,11 @@ export function createPhonePanel({
 
   registerWallSourceProvider('writers-room', ({scopeKey}) => listStudioMaterials(scopeKey).map(row => ({
     id: row.id,
-    app: 'writers-room', appLabel: '编剧室', section: 'director', sectionLabel: '导演素材', owner: row.senderName || '编剧室',
-    group: `编剧室 · ${row.senderName || '创作提示'}`,
+    app: 'writers-room', appLabel: '娘家人', section: 'director', sectionLabel: '导演素材', owner: row.senderName || '娘家人',
+    group: `娘家人 · ${row.senderName || '创作提示'}`,
     kind: 'creative-guidance',
     label: String(row.content || '').replace(/\s+/g, ' ').slice(0, 88) + (String(row.content || '').length > 88 ? '…' : ''),
-    build: () => `【创作指导 · 编剧室 · ${row.senderName || '创作提示'}】\n以下是 User 主动纳取并选择跨墙的导演层创作材料，不是故事中已经发生的事实，也不代表角色知道这些内容。\n${row.content}`,
+    build: () => `【创作指导 · 娘家人 · ${row.senderName || '创作提示'}】\n以下是 User 主动纳取并选择跨墙的导演层创作材料，不是故事中已经发生的事实，也不代表角色知道这些内容。\n${row.content}`,
   })));
 
   registerWallSourceProvider('his-phone', ({scopeKey}) => {
@@ -4228,6 +4228,8 @@ export function createPhonePanel({
     let dataUrl = '';
     try {
       if (currentContactId) dataUrl = readRaw(wallpaperStorageKey('current')) || '';
+      const conversation = currentContactId ? getConversation(getScopeKey?.(), currentContactId) : null;
+      if (!dataUrl && isWritersRoom(conversation)) dataUrl = WRITERS_ROOM_WALLPAPER_URL;
       if (!dataUrl) dataUrl = readRaw(wallpaperStorageKey('global')) || '';
     } catch {}
     if (dataUrl) {
@@ -4863,6 +4865,7 @@ export function createPhonePanel({
     }
     const conversations = allConversations.filter(conversation => {
       if (conversation?.type === 'group') {
+        if (String(conversation.systemKind || '') === 'writers-room') return false;
         const groupScope = String(conversation.storageScopeKey || conversation.boundScopeKey || '');
         // 群聊是 World Instance 数据：正文内只显示当前正文群；正文外只显示当前正文外 scope 的群。
         // 不把历史 A/B 正文群带到酒馆主页，也不把正文外群带进 A/B。
@@ -5776,7 +5779,7 @@ export function createPhonePanel({
     if (!content) return false;
     const rows = listStudioMaterials(scopeKey);
     const id = `writers-room:${String(message?.id || Date.now())}`;
-    if (!rows.some(row => row.id === id)) rows.push({ id, content, senderName: String(message?.senderSnapshot?.name || (message?.role === 'user' ? 'User' : '编剧室')), createdAt: Date.now(), conversationName: String(conversation?.name || '编剧室') });
+    if (!rows.some(row => row.id === id)) rows.push({ id, content, senderName: String(message?.senderSnapshot?.name || (message?.role === 'user' ? 'User' : '娘家人')), createdAt: Date.now(), conversationName: String(conversation?.name || '娘家人') });
     localStorage.setItem(studioMaterialKey(scopeKey), JSON.stringify(rows.slice(-80)));
     windowRef.dispatchEvent?.(new CustomEvent('moli:wall-source-changed'));
     return true;
@@ -5786,7 +5789,8 @@ export function createPhonePanel({
     const scopeKey = getScopeKey?.();
     if (!scopeKey) throw new Error('当前正文世界不可用');
     let room = getScopeConversations(scopeKey).find(item => isWritersRoom(item));
-    if (!room) room = createGroupConversation(scopeKey, { name: '编剧室', memberIds: ['builtin:writer', 'builtin:guide'], systemKind: 'writers-room', studioReplyLength: 80 });
+    if (!room) room = createGroupConversation(scopeKey, { name: '娘家人', memberIds: ['builtin:writer', 'builtin:guide'], systemKind: 'writers-room', studioReplyLength: 80 });
+    else if (String(room.name || '') !== '娘家人') room = updateGroupConversation(scopeKey, room.conversationKey || room.id, { name: '娘家人' }) || room;
     return room;
   }
 
@@ -7126,8 +7130,8 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => { show('tianya-home'); currentPublicWebTab='weibo'; panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab==='weibo')); renderPublicWeb(); });
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
-  panel.querySelector('[data-action="open-writers-room"]')?.addEventListener('click', () => { try { const room = ensureWritersRoom(); currentContactId = room.conversationKey || room.id; show('chat'); renderChat({ forceLatest: true }); } catch (error) { toast(error?.message || '编剧室打开失败'); } });
-  writersRoomToolbar?.addEventListener('click', async event => { const button = event.target.closest?.('[data-studio-task]'); if (!button) return; const conversation = currentConversation(); if (!isWritersRoom(conversation)) return; const type = button.dataset.studioTask; if (type === 'length') { const raw = windowRef.prompt?.('每个实际发言气泡希望约多少字？（20–500）', String(conversation.studioReplyLength || 80)); if (raw == null) return; const value = Math.max(20, Math.min(500, Number(raw) || 80)); updateGroupConversation(getScopeKey?.(), currentContactId, { studioReplyLength: value }); renderChat(); toast(`编剧室长度已设为约 ${value} 字/气泡`); return; } let notes = ''; if (type === 'cast') { notes = String(windowRef.prompt?.('想让谁多一点？也可以顺便写你的要求；留空则让他们从正文自己找。', '') || '').trim(); } await requestReply({ studioTask: { type, notes } }); });
+  panel.querySelector('[data-action="open-writers-room"]')?.addEventListener('click', () => { try { const room = ensureWritersRoom(); currentContactId = room.conversationKey || room.id; show('chat'); renderChat({ forceLatest: true }); } catch (error) { toast(error?.message || '娘家人打开失败'); } });
+  writersRoomToolbar?.addEventListener('click', async event => { const button = event.target.closest?.('[data-studio-task]'); if (!button) return; const conversation = currentConversation(); if (!isWritersRoom(conversation)) return; const type = button.dataset.studioTask; if (type === 'length') { const raw = windowRef.prompt?.('每个实际发言气泡希望约多少字？（20–500）', String(conversation.studioReplyLength || 80)); if (raw == null) return; const value = Math.max(20, Math.min(500, Number(raw) || 80)); updateGroupConversation(getScopeKey?.(), currentContactId, { studioReplyLength: value }); renderChat(); toast(`娘家人长度已设为约 ${value} 字/气泡`); return; } let notes = ''; if (type === 'cast') { notes = String(windowRef.prompt?.('想让谁多一点？也可以顺便写你的要求；留空则让他们从正文自己找。', '') || '').trim(); } await requestReply({ studioTask: { type, notes } }); });
   panel.querySelector('[data-action="open-his-phone"]')?.addEventListener('click', () => show('his-phone'));
   panel.querySelector('[data-his-phone-contact]')?.addEventListener('change', event => { hisPhoneContactId=String(event.target?.value||''); renderHisPhone(); });
   panel.querySelector('[data-page="his-phone"]')?.addEventListener('click', event => { const row=event.target?.closest?.('[data-his-phone-community-ref]'); if(!row)return; const post=getPublicWebPost(getScopeKey?.(),String(row.dataset.hisPhoneCommunityRef||'')); if(!post){toast('原帖已不存在');return;} openedPublicWebPostId=String(post.id); currentPublicWebTab=String(post.section||'recommend'); panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab===currentPublicWebTab)); show('tianya-home'); renderPublicWeb(); });
