@@ -190,6 +190,8 @@ export function createPhonePanel({
         <div class="moli-his-phone-status" data-his-phone-status></div>
         <section class="moli-his-phone-section"><h3>搜索记录</h3><div data-his-phone-searches></div></section>
         <section class="moli-his-phone-section"><h3>看帖历史</h3><div data-his-phone-views></div></section>
+        <section class="moli-his-phone-section"><h3>备忘录</h3><div data-his-phone-memos></div></section>
+        <section class="moli-his-phone-section"><h3>性冲动</h3><div data-his-phone-sexual></div></section>
       </main>
     </section>
 
@@ -4170,19 +4172,24 @@ export function createPhonePanel({
     const preferred=String(hisPhoneContactId||getSelectedWorldContactId(scopeKey)||'');
     if(!contacts.some(x=>String(x.id)===preferred))hisPhoneContactId=String(contacts[0]?.id||'');else hisPhoneContactId=preferred;
     if(select){select.innerHTML=contacts.length?contacts.map(x=>`<option value="${escapeHtml(x.id)}" ${String(x.id)===hisPhoneContactId?'selected':''}>${escapeHtml(displayName(x))}</option>`).join(''):'<option value="">暂无人物</option>';select.disabled=!contacts.length;}
-    const data=hisPhoneContactId?getPrivatePhoneTraces(scopeKey,hisPhoneContactId):{searches:[],views:[],lastRefreshedAt:0};
+    const data=hisPhoneContactId?getPrivatePhoneTraces(scopeKey,hisPhoneContactId):{searches:[],views:[],memos:[],sexualTrace:null,lastRefreshedAt:0};
     const searches=panel.querySelector('[data-his-phone-searches]');
     const views=panel.querySelector('[data-his-phone-views]');
+    const memos=panel.querySelector('[data-his-phone-memos]');
+    const sexual=panel.querySelector('[data-his-phone-sexual]');
     const status=panel.querySelector('[data-his-phone-status]');
     if(status)status.textContent=data.lastRefreshedAt?`上次刷新 ${new Date(data.lastRefreshedAt).toLocaleString()}`:'点击右上角刷新，结算这个人物近期留下的私人手机痕迹。';
     if(searches)searches.innerHTML=data.searches.length?[...data.searches].reverse().map(x=>`<div class="moli-his-phone-search-row"><span>⌕</span><b>${escapeHtml(x.query)}</b></div>`).join(''):'<div class="moli-empty">暂无搜索记录</div>';
-    if(views)views.innerHTML=data.views.length?[...data.views].sort((a,b)=>Number(b.lastViewedAt||b.createdAt||0)-Number(a.lastViewedAt||a.createdAt||0)).map(x=>`<div class="moli-his-phone-view-row"><b>${escapeHtml(x.title)}</b><span>停留 ${escapeHtml(formatTraceDuration(x.durationSeconds))}</span><span>点击 ${Number(x.visitCount||1)} 次</span></div>`).join(''):'<div class="moli-empty">暂无看帖历史</div>';
+    if(views)views.innerHTML=data.views.length?[...data.views].sort((a,b)=>Number(b.lastViewedAt||b.createdAt||0)-Number(a.lastViewedAt||a.createdAt||0)).map(x=>`<div class="moli-his-phone-view-row ${x.sourceType==='community'&&x.sourceRef?'is-community':''}" ${x.sourceType==='community'&&x.sourceRef?`data-his-phone-community-ref="${escapeHtml(x.sourceRef)}"`:''}><b>${escapeHtml(x.title)}</b><span>停留 ${escapeHtml(formatTraceDuration(x.durationSeconds))}</span><span>点击 ${Number(x.visitCount||1)} 次${x.sourceType==='community'&&x.sourceRef?' ›':''}</span></div>`).join(''):'<div class="moli-empty">暂无看帖历史</div>';
+    if(memos)memos.innerHTML=data.memos?.length?[...data.memos].reverse().map(x=>`<div class="moli-his-phone-memo-row ${x.status==='done'?'is-done':''}"><span>${x.status==='done'?'✓':'□'}</span><b>${escapeHtml(x.content)}</b></div>`).join(''):'<div class="moli-empty">暂无备忘</div>';
+    if(sexual){const x=data.sexualTrace;sexual.innerHTML=x?`<div class="moli-his-phone-sexual-card">${x.trigger?`<p><span>诱因</span>${escapeHtml(x.trigger)}</p>`:''}${x.outcome?`<p><span>处理</span>${escapeHtml(x.outcome)}</p>`:''}${x.stimulus?`<p><span>利用</span>${escapeHtml(x.stimulus)}</p>`:''}${x.scene?`<p><span>场景</span>${escapeHtml(x.scene)}</p>`:''}</div>`:'<div class="moli-empty">暂无记录</div>';}
+
   }
   async function refreshHisPhone(){
     const scopeKey=getScopeKey?.()||'';if(!hisPhoneContactId){toast('暂无可查看的人物');return;}
     const button=panel.querySelector('[data-action="his-phone-refresh"]');if(button?.disabled)return;button.disabled=true;
     const status=panel.querySelector('[data-his-phone-status]');if(status)status.textContent='正在结算近期痕迹…';
-    try{const result=await generatePrivatePhoneTraceRefresh({scopeKey,contactId:hisPhoneContactId});settlePrivatePhoneTraceRefresh(scopeKey,hisPhoneContactId,result);if(result.sourceEventIds?.length)markWorldEventsConsumed(scopeKey,hisPhoneContactId,result.sourceEventIds,'his-phone');renderHisPhone();toast(result.unchanged?'没有新的经历需要结算':`刷新完成：${result.searches?.length||0} 条搜索，${result.views?.length||0} 条浏览`);}catch(error){if(status)status.textContent=`刷新失败：${error?.message||error}`;toast(error?.message||'刷新失败');}finally{if(button)button.disabled=false;}
+    try{const result=await generatePrivatePhoneTraceRefresh({scopeKey,contactId:hisPhoneContactId});settlePrivatePhoneTraceRefresh(scopeKey,hisPhoneContactId,result);if(result.sourceEventIds?.length)markWorldEventsConsumed(scopeKey,hisPhoneContactId,result.sourceEventIds,'his-phone');renderHisPhone();toast(result.unchanged?'没有新的经历需要结算':`刷新完成：${result.searches?.length||0} 条搜索，${result.views?.length||0} 条浏览，${result.memos?.length||0} 条备忘`);}catch(error){if(status)status.textContent=`刷新失败：${error?.message||error}`;toast(error?.message||'刷新失败');}finally{if(button)button.disabled=false;}
   }
 
   const show = name => {
@@ -6975,6 +6982,7 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
   panel.querySelector('[data-action="open-his-phone"]')?.addEventListener('click', () => show('his-phone'));
   panel.querySelector('[data-his-phone-contact]')?.addEventListener('change', event => { hisPhoneContactId=String(event.target?.value||''); renderHisPhone(); });
+  panel.querySelector('[data-page="his-phone"]')?.addEventListener('click', event => { const row=event.target?.closest?.('[data-his-phone-community-ref]'); if(!row)return; const post=getPublicWebPost(getScopeKey?.(),String(row.dataset.hisPhoneCommunityRef||'')); if(!post){toast('原帖已不存在');return;} openedPublicWebPostId=String(post.id); currentPublicWebTab=String(post.section||'recommend'); panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab===currentPublicWebTab)); show('tianya-home'); renderPublicWeb(); });
   panel.querySelector('[data-action="his-phone-refresh"]')?.addEventListener('click', refreshHisPhone);
 
   let currentPublicWebTab = 'recommend';
