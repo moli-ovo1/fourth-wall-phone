@@ -3540,3 +3540,12 @@ Still next, without splitting into UI micro-patches:
 - 微博共享 Network Actor 连续性不再拼入“成为微信好友后的近期私聊”；公共生成只保留该网络人物已经形成的公开账号/公开网络经历。
 - 这次是 request-level isolation，不再把“Prompt 里写了不得串角色”当成数据隔离。代价是当多个 Character/联系人需要结算时会产生多次人物请求；本版优先保证认知边界，不用共享私密 Prompt 换取单次 API。
 - 不重构 phone-panel，不改 Network Actor/Public Identity/Community Echo、Private Phone Trace、正文 Injection、NPC Perspective Projection。
+
+
+## moli240 / v0.5.93 — 我们的墙 2.0 · Extensible Wall Sources v1
+- 「我们的墙」素材入口改为可扩展 source-provider registry：墙的核心 composer 不再要求未来每新增一个 App 都增加专用硬编码分支；App 可注册标准化 wall source（app/section/owner/label/build）进入同一素材篮。
+- 保留现有微信私聊/群聊、手机记忆、公共/角色朋友圈入口与 Tavern 一次性注入/直接 AI 正文/入墙历史生命周期，不重写稳定出口。
+- Community ★ 仍表示“投入我们的墙待选”，但收藏帖在墙内升级为结构化子素材：帖子正文、普通评论/回复关系、天涯楼层、知乎回答与回答评论、微博评论与转发链可分别勾选；同帖多项入墙时共享一次平台/知识边界头，避免重复堆叠。
+- Community 跨墙语义明确保持公开账号表面身份；后台小号/匿名真实身份不得因墙注入自动泄漏给正文人物。
+- 「他的手机」本轮仅开放 MEMO/备忘录作为新 wall source；SEARCH / VIEW / SEXUAL_TRACE 不自动开放。备忘录入墙保留“私人幕后事实，不自动成为 User/其他角色已知”的知识边界。
+- 兼容旧工作区：Community 帖子正文继续使用原 `community:<postId>` source id；旧草稿/勾选不会因结构化升级失去帖子正文引用。
