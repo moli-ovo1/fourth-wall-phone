@@ -1,6 +1,9 @@
-# CURRENT STATE — moli245 / v0.5.98
+# CURRENT STATE — moli246 / v0.5.99
 
 > Updated 2026-09-21. This top block is the authoritative current handoff; older entries below are retained as history.
+
+- moli246 修复娘家人工具栏 `hidden` 被 CSS `display:flex` 覆盖导致污染所有聊天页的问题；工具栏仅娘家人显示。生活灵感状态从娘家人聊天框移入正文末尾常驻「我们的墙」统一状态栏，与跨墙剧情线共栏。
+- 生活灵感观察由固定5楼改为每 4–6 个有效正文生成的随机观察窗；实际采用的扰动会回传隐藏回执并登记近期类型用于降权。连续亲密/性场景不再完全冻结外部世界，但同一连续场景最多自然采用一次外部扰动；一旦采用，进入 4–6 次“生活灵感复查机会”的亲密场景扰动冷却，避免每次亲密场景都被同类意外打断。
 
 - moli245 修复娘家人工具栏错误污染所有聊天页；四胶囊仅在 `systemKind=writers-room` 显示并作为正常流式布局占位，不再遮挡消息。
 - 「帮我想梗」改为三岔入口：你先说（娘家人直接发散）/我先说（User先输入）/都别说了系统来办（开启生活灵感观察）。主动发散升级为“生活扰动机会”合同：小上帝偏自然日常与可落地，moli 偏大胆新意。
@@ -9,7 +12,7 @@
 - moli243 adds「编剧室」v1: Wall 右上角进入独立 User + 小上帝 + moli 创作群聊，支持任务按钮、❤️偏好参考、纳取三版提示词与手动注入素材栏；不自动把讨论跨墙。
 - moli242 adds persistent Story Bridge Lines: Wall context can remain pending across multiple story turns, auto/manual activation stops injection without deleting the line, and User can edit an activated line into a new pending stage or clear it. A lightweight story-footer status UI exposes this lifecycle.
 
-- Current package line: moli245 / v0.5.98.
+- Current package line: moli246 / v0.5.99.
 - moli241 upgrades Wall → Story semantic injection: final Tavern context uses story-world facts/knowledge/identity boundaries rather than product-internal “wall” language; memo knowledge defaults to its owner, public internet existence does not imply every character has seen it, conversation memories inherit their chat participant boundary, and injected material is continuity context rather than a checklist that must be acted out this turn.
 - moli239 lands request-level Private Context Isolation v1: Community autonomous Character decisions and public Moments contact decisions no longer batch multiple actors' private Phone Context/world-book/visibility data into one model request; shared Community world generation no longer receives per-character Phone Context or per-character world-book packs; Weibo shared Network Actor context no longer includes linked private WeChat messages. Public/social continuity remains, but private knowledge is present only in the owning actor's request.
 - moli238 repairs Private Phone Trace old-schema compatibility: pre-MEMO moli234 character rows are normalized on access so searches/views are preserved while missing memos/sexualTrace/default fields are safely added before refresh writes. No Community/WeChat/Automation behavior changed.

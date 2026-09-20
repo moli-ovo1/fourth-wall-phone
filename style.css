@@ -2627,3 +2627,8 @@
 
 /* moli245 · 娘家人帮我想梗三岔入口 + 生活灵感观察状态 */
 .moli-studio-choice[hidden],.moli-studio-status[hidden]{display:none!important}.moli-studio-choice{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.18)}.moli-studio-choice-card{width:min(82%,310px);padding:10px;border-radius:18px;background:rgba(255,255,255,.96);box-shadow:0 12px 34px rgba(0,0,0,.18);display:grid;gap:7px}.moli-studio-choice-card button{border:0;border-radius:14px;padding:10px 12px;background:rgba(0,0,0,.055);font:inherit;color:inherit}.moli-studio-choice-card .moli-studio-choice-cancel{background:transparent;opacity:.58}.moli-studio-status{position:relative;z-index:2;margin:0 10px 6px;padding:7px 9px;border-radius:12px;background:rgba(255,255,255,.86);display:flex;gap:6px;align-items:center;font-size:10px;line-height:1.35}.moli-studio-status span{flex:1;min-width:0}.moli-studio-status button{border:0;border-radius:10px;padding:4px 7px;background:rgba(0,0,0,.07);font:inherit;font-size:10px;color:inherit}.moli-studio-status.is-paused{opacity:.7}
+
+/* moli246: writers-room controls must obey the HTML hidden attribute. */
+#moli-phone-panel .moli-writers-room-toolbar[hidden]{display:none!important}
+
+.moli-story-bridge-section-title{margin:4px 0 2px;font-size:11px;font-weight:700;opacity:.7}.moli-story-bridge-empty{display:block;opacity:.58}.moli-life-inspiration-row{border-top:1px solid rgba(160,160,160,.18)!important}
