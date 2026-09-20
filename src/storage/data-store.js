@@ -243,6 +243,8 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     const groupBubbleMax = Math.max(groupBubbleMin, Math.min(12, Number(conversation.groupReplyBubbleRange?.max) || 8));
     conversation.groupReplyBubbleRange = { min: groupBubbleMin, max: groupBubbleMax };
     conversation.memory = normalizeConversationMemory(conversation.memory);
+    conversation.systemKind = String(conversation.systemKind || '');
+    conversation.studioReplyLength = Math.max(20, Math.min(500, Number(conversation.studioReplyLength) || 80));
 
     const automation = conversation.automation && typeof conversation.automation === 'object'
       ? conversation.automation
@@ -1115,7 +1117,7 @@ export function syncTavernContacts(characters) {
 
 export function createGroupConversation(
   scopeKey,
-  { name, memberIds }
+  { name, memberIds, systemKind = '', studioReplyLength = 80 }
 ) {
   const trimmedName = String(name || '').trim();
   const members = [...new Set(
@@ -1151,6 +1153,9 @@ export function createGroupConversation(
     type: 'group',
     name: trimmedName,
     memberIds: validMembers,
+    systemKind: String(systemKind || ''),
+    boundScopeKey: String(scopeKey || ''),
+    studioReplyLength: Math.max(20, Math.min(500, Number(studioReplyLength) || 80)),
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -1165,7 +1170,7 @@ export function createGroupConversation(
 export function updateGroupConversation(
   scopeKey,
   groupId,
-  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval, groupMode, timeMode, bodyContextEnabled, recentChatLimit, groupReplyBubbleRange } = {}
+  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval, groupMode, timeMode, bodyContextEnabled, recentChatLimit, groupReplyBubbleRange, systemKind, studioReplyLength } = {}
 ) {
   const data = ensureBuiltins(scopeKey);
   const conversation = data.conversations[groupId];
@@ -1224,6 +1229,8 @@ export function updateGroupConversation(
     if (!Number.isFinite(value)) throw new Error('最近聊天条数必须是数字');
     conversation.recentChatLimit = Math.max(10, Math.min(9999, Math.round(value)));
   }
+  if (systemKind !== undefined) conversation.systemKind = String(systemKind || '');
+  if (studioReplyLength !== undefined) conversation.studioReplyLength = Math.max(20, Math.min(500, Number(studioReplyLength) || 80));
   if (groupReplyBubbleRange !== undefined) {
     const min = Math.max(1, Math.min(12, Number(groupReplyBubbleRange?.min) || 1));
     const max = Math.max(min, Math.min(12, Number(groupReplyBubbleRange?.max) || 8));
@@ -1257,6 +1264,19 @@ export function updateGroupReviewRuntime(scopeKey, groupId, patch = {}) {
   conversation.updatedAt = Date.now();
   saveScope(scopeKey, data);
   return conversation.automation.reviewRuntime;
+}
+
+export function updateMessageMeta(scopeKey, conversationKey, messageId, patch = {}) {
+  const located = locateConversation(scopeKey, conversationKey);
+  if (!located) return false;
+  const conv = applyConversationDefaults(located.conversation, { scopeKey });
+  const message = (conv.messages || []).find(item => String(item?.id || '') === String(messageId || ''));
+  if (!message) return false;
+  const safePatch = patch && typeof patch === 'object' ? patch : {};
+  Object.assign(message, safePatch);
+  conv.updatedAt = Date.now();
+  saveLocatedConversation(scopeKey, located);
+  return true;
 }
 
 export function appendMessage(
