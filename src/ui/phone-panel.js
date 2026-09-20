@@ -7575,7 +7575,8 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
       for(const actor of result?.actors||[]){
         const target=getContacts().find(x=>String(x.id)===String(actor.actorId)); if(!target)continue;
         const viewed=(actor.viewedPostIds||[]).map(id=>byId.get(String(id))).filter(Boolean);
-        for(const post of viewed)recordCommunityPostSnapshotAwareness(scopeKey,post,[actor.actorId],'autonomous-browse',Date.now());
+        const viewedEventByPostId=new Map();
+        for(const post of viewed){const event=recordCommunityPostSnapshotAwareness(scopeKey,post,[actor.actorId],'autonomous-browse',Date.now());if(event?.id)viewedEventByPostId.set(String(post.id||''),event);}
         const actionPost=byId.get(String(actor.actionPostId||''));
         if(actionPost&&viewed.some(p=>String(p.id)===String(actionPost.id))){
           const mode=String(actor.publicAction||'SKIP').toUpperCase(); const text=String(actor.publicContent||'').trim();
@@ -7590,7 +7591,9 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
           const conversationKey=privateConv?.conversationKey||privateConv?.id||privateConversationKeyFor(scopeKey,target.id);
           if(privateAction==='SHARE'){const snap={postId:String(privatePost.id||''),section:String(privatePost.section||''),platform:sourceLabel(privatePost),customCommunityId:String(privatePost.extra?.customCommunityId||''),customCommunityName:String(privatePost.extra?.customCommunityName||''),authorName:String(privatePost.author?.name||'小号网友'),title:String(privatePost.title||'无标题'),snapshotAt:Date.now()};appendMessage(scopeKey,conversationKey,'assistant',`转发了一篇${snap.platform}帖子：${snap.title}`,{source:'community-autonomous-share',messageType:'community-forward',communityForward:snap,senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});}
           for(const msg of (actor.privateMessages||[]).slice(0,5)){const text=String(msg||'').trim();if(text)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-autonomous-private',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});}
-          recordWorldEvent(scopeKey,{source:`community.${privatePost.section||'unknown'}`,actorId:target.id,action:privateAction==='SHARE'?'COMMUNITY_SHARED_TO_USER':'COMMUNITY_PRIVATE_CHAT',targetContactIds:[target.id],objectId:String(privatePost.id||''),content:`你自主浏览社区后${privateAction==='SHARE'?'把帖子转发给了 User':'主动在微信联系了 User'}。`,metadata:{postId:String(privatePost.id||'')},awareness:'known'});
+          const causeEvent=viewedEventByPostId.get(String(privatePost.id||''));
+          const resultEvent=recordWorldEvent(scopeKey,{source:`community.${privatePost.section||'unknown'}`,actorId:target.id,action:privateAction==='SHARE'?'COMMUNITY_SHARED_TO_USER':'COMMUNITY_PRIVATE_CHAT',targetContactIds:[target.id],objectId:String(privatePost.id||''),content:`你自主浏览社区后${privateAction==='SHARE'?'把帖子转发给了 User':'主动在微信联系了 User'}。`,metadata:{postId:String(privatePost.id||''),causedByEventIds:causeEvent?.id?[String(causeEvent.id)]:[]},awareness:'known'});
+          if(causeEvent?.id&&resultEvent?.id)linkWorldEventResult(scopeKey,{causeEventIds:[causeEvent.id],resultEventId:resultEvent.id,decision:privateAction,consumer:'community-autonomous-private',contactId:target.id});
         }
       }
       for(const item of result?.proactivePosts||[]){
@@ -7598,7 +7601,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
         const section=['tianya','xiaohongshu','zhihu','weibo'].includes(String(item.section||''))?String(item.section):'weibo';
         const anonymous=Boolean(item.anonymous); const author=anonymous?{type:'contact',id:target.id,name:String(item.alias||'小号用户').trim()||'小号用户',anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false};
         const created=createPublicWebPost(scopeKey,{section,type:section==='zhihu'?'question':section==='xiaohongshu'?'note':section==='weibo'?'weibo':'thread',author,title:String(item.title||'').trim()||String(item.content||'').trim().slice(0,36),content:String(item.content||'').trim(),tags:Array.isArray(item.tags)?item.tags:[],extra:section==='weibo'?{weiboLane:'实时',autonomousCharacterPost:true}:section==='xiaohongshu'?{imagePrompt:String(item.imagePrompt||''),imageText:String(item.imageText||''),autonomousCharacterPost:true}:{autonomousCharacterPost:true}});
-        if(created){recordCommunityPostSnapshotAwareness(scopeKey,created,[target.id],'autonomous-post',Date.now());if(anonymous)rememberAnonymousIdentity(scopeKey,{surface:`community.${section}`,alias:String(item.alias||'小号用户').trim()||'小号用户',realContactId:target.id,knownBy:[target.id]});}
+        if(created){const postEvent=recordWorldEvent(scopeKey,{source:`community.${section}`,actorId:target.id,action:'CHARACTER_POSTED',targetContactIds:[target.id],objectId:String(created.id||''),content:`你${anonymous?'使用小号':'实名'}在${sourceLabel(created)}主动发帖：“${String(created.title||created.content||'').slice(0,500)}”`,metadata:{postId:String(created.id||''),decision:'PROACTIVE_POST',anonymousAlias:anonymous?String(item.alias||'小号用户').trim()||'小号用户':''},awareness:'known'});recordCommunityPostSnapshotAwareness(scopeKey,created,[target.id],'autonomous-post',Date.now());if(anonymous)rememberAnonymousIdentity(scopeKey,{surface:`community.${section}`,alias:String(item.alias||'小号用户').trim()||'小号用户',realContactId:target.id,knownBy:[target.id],evidenceEventId:postEvent?.id});}
       }
       return result?.actors||[];
     }catch(error){console.error('[moli小手机] community autonomous discovery failed:',error);return [];}
