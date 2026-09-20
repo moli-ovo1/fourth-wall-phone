@@ -1840,8 +1840,8 @@ export function createPhonePanel({
   function wallCommunityHeader(post, platform) {
     const title = String(post?.title || post?.content || '无标题').trim();
     return [
-      `【moli社区 · ${platform} · ${title}】`,
-      '知识归属：以下是公开互联网中的实际内容。展示账号名不等于其后台真实身份；小号/匿名身份不得因此自动被正文人物识破。',
+      `【公开互联网 · ${platform} · ${title}】`,
+      '知识归属：以下内容已经公开存在于互联网，但“公开存在”不等于所有角色都已经看过或知道。正文人物只有在剧情中实际浏览、被告知或通过其他合理途径获知后，才能据此行动。展示账号名只代表公开可见身份；除非剧情中已有可靠依据，否则不得由后台信息推断小号/匿名账号的真实主人。',
     ].join('\n');
   }
 
@@ -1901,7 +1901,7 @@ export function createPhonePanel({
       for(const memo of data.memos||[]){
         const content=String(memo?.content||'').trim(); if(!content)continue;
         const status=memo.status==='done'?'已完成':'进行中';
-        rows.push({id:`his-phone:memo:${cid}:${memo.id}`,app:'his-phone',appLabel:'他的手机',section:'memo',sectionLabel:'备忘录',owner,group:`他的手机 · 备忘录 · ${owner}`,kind:'memo',kindLabel:`备忘录 · ${status}`,label:`${status}：${content.replace(/\s+/g,' ').slice(0,80)}${content.length>80?'…':''}`,build:()=>`【他的手机 · ${owner} · 备忘录】\n知识归属：这是 ${owner} 私人手机里主动留下的备忘，不因投入「我们的墙」就自动成为 User 或其他角色已知事实；仅作为正文创作可用的幕后事实。\n状态：${status}\n${content}`});
+        rows.push({id:`his-phone:memo:${cid}:${memo.id}`,app:'his-phone',appLabel:'他的手机',section:'memo',sectionLabel:'备忘录',owner,group:`他的手机 · 备忘录 · ${owner}`,kind:'memo',kindLabel:`备忘录 · ${status}`,label:`${status}：${content.replace(/\s+/g,' ').slice(0,80)}${content.length>80?'…':''}`,build:()=>`【${owner}的私人手机 · 备忘录】\n知识归属：这是 ${owner} 在自己的私人手机中主动留下的备忘。除非后续剧情中有人实际查看这部手机、被 ${owner} 告知，或通过其他合理途径获知，否则默认只有 ${owner} 本人知道其中内容；User 与其他角色不能仅因这条材料被提供给正文生成而自动知情。\n状态：${status}\n${content}`});
       }
     }
     return rows;
@@ -1926,11 +1926,11 @@ export function createPhonePanel({
       });
       const conversationKey = conversation.key || conversation.id || conversation.contactId;
       const memory = getConversationMemory(scopeKey, conversationKey);
-      (Array.isArray(memory?.recent)?memory.recent:[]).forEach((entry,index)=>{const text=String(entry?.content||'').trim();if(text)sources.push({id:`memory:${conversationKey}:recent:${entry?.id||index}`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`近期记忆：${text.replace(/\s+/g,' ').slice(0,72)}${text.length>72?'…':''}`,build:()=>`【手机近期记忆 · ${title}】\n${text}`});});
-      const longText=String(memory?.longTermSummary||'').trim(); if(longText)sources.push({id:`memory:${conversationKey}:long`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`长期记忆：${longText.replace(/\s+/g,' ').slice(0,72)}${longText.length>72?'…':''}`,build:()=>`【手机长期记忆 · ${title}】\n${longText}`});
+      (Array.isArray(memory?.recent)?memory.recent:[]).forEach((entry,index)=>{const text=String(entry?.content||'').trim();if(text)sources.push({id:`memory:${conversationKey}:recent:${entry?.id||index}`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`近期记忆：${text.replace(/\s+/g,' ').slice(0,72)}${text.length>72?'…':''}`,build:()=>`【手机关系记忆 · ${title} · 近期】\n${injectionConversationHeader(conversation)}\n记忆摘要：${text}`});});
+      const longText=String(memory?.longTermSummary||'').trim(); if(longText)sources.push({id:`memory:${conversationKey}:long`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`长期记忆：${longText.replace(/\s+/g,' ').slice(0,72)}${longText.length>72?'…':''}`,build:()=>`【手机关系记忆 · ${title} · 长期】\n${injectionConversationHeader(conversation)}\n记忆摘要：${longText}`});
     });
-    listPublicMoments(scopeKey).slice(0,40).forEach(item=>{const author=momentActorName(item.author),preview=String(item.content||'').replace(/\s+/g,' ').slice(0,72);sources.push({id:`moment:public:${item.id}`,app:'wechat',appLabel:'微信',section:'moments',sectionLabel:'朋友圈',owner:'User 公共朋友圈',group:'微信 · 朋友圈 · User 公共朋友圈',kind:'moment',label:`${author}：${preview}${String(item.content||'').length>72?'…':''}`,build:()=>`【微信朋友圈 · 公共舞台】\n知识归属：公共朋友圈的多人互动属于 User 的娱乐/展示层，不自动写入任何角色的一对一私聊世界线。\n${injectionMomentText(item)}`});});
-    getContacts().forEach(item=>{const cid=String(item?.id||'');if(!cid)return;const owner=canonicalContactName(item);listProfileMoments(scopeKey,cid).slice(0,20).forEach(moment=>{const author=momentActorName(moment.author),preview=String(moment.content||'').replace(/\s+/g,' ').slice(0,72);sources.push({id:`moment:profile:${cid}:${moment.id}`,app:'wechat',appLabel:'微信',section:'moments',sectionLabel:'朋友圈',owner,group:`微信 · 朋友圈 · ${owner}`,kind:'moment',label:`${author}：${preview}${String(moment.content||'').length>72?'…':''}`,build:()=>`【微信角色朋友圈 · ${owner}】\n知识归属：这是该角色的一对一朋友圈世界线；公共娱乐池里的其他角色互动不因此自动成为该角色已知事实。\n${injectionMomentText(moment)}`});});});
+    listPublicMoments(scopeKey).slice(0,40).forEach(item=>{const author=momentActorName(item.author),preview=String(item.content||'').replace(/\s+/g,' ').slice(0,72);sources.push({id:`moment:public:${item.id}`,app:'wechat',appLabel:'微信',section:'moments',sectionLabel:'朋友圈',owner:'User 公共朋友圈',group:'微信 · 朋友圈 · User 公共朋友圈',kind:'moment',label:`${author}：${preview}${String(item.content||'').length>72?'…':''}`,build:()=>`【微信朋友圈 · 公开动态】\n知识归属：以下内容公开存在于这条朋友圈及其互动中，但公开存在不等于所有角色都已经看过。只有实际可见且在剧情中看过、参与过或被告知的人物，才能据此获得具体知识。\n${injectionMomentText(item)}`});});
+    getContacts().forEach(item=>{const cid=String(item?.id||'');if(!cid)return;const owner=canonicalContactName(item);listProfileMoments(scopeKey,cid).slice(0,20).forEach(moment=>{const author=momentActorName(moment.author),preview=String(moment.content||'').replace(/\s+/g,' ').slice(0,72);sources.push({id:`moment:profile:${cid}:${moment.id}`,app:'wechat',appLabel:'微信',section:'moments',sectionLabel:'朋友圈',owner,group:`微信 · 朋友圈 · ${owner}`,kind:'moment',label:`${author}：${preview}${String(moment.content||'').length>72?'…':''}`,build:()=>`【微信朋友圈 · ${owner}相关记录】\n知识归属：这是与 ${owner} 对应的朋友圈记录。只有在该记录中实际可见、看过、参与过或后来被告知的人物，才能据此获得具体知识；其他朋友圈中的互动不能因此自动成为 ${owner} 或其他角色的已知事实。\n${injectionMomentText(moment)}`});});});
     sources.push(...wallCommunitySources(scopeKey));
     // Open extension point: current and future apps can contribute wall material
     // without adding another hard-coded branch to the wall composer.
