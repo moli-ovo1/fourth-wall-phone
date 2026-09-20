@@ -4495,3 +4495,12 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - Community 自主浏览触发微信 `MESSAGE / SHARE` 时，把对应 `POST_SNAPSHOT_KNOWN` 浏览事件与微信行为结果通过既有 `linkWorldEventResult()` / `causedByEventIds` 连接；不新建因果字段，不改微信 Automation。
 - 知乎回答下评论的 `replyToCommentId` 落位与普通 Community 对齐：真实父评论 ID 优先；无有效 ID 时才把“回复@某网友：”作为兼容兜底反查；成功落位后剥离伪回复前缀。只补知乎缺口，不重写全平台评论树。
 - 本轮同时同步 CURRENT-STATE / DEVELOPMENT-MAP 当前索引，避免旧状态文件继续把后续窗口引向已经完成的路线。
+
+## v0.5.87 / moli234 — 「他的手机」Private Phone Trace v1
+- 新增独立 App「他的手机」第一阶段：搜索记录 + 看帖历史。它不是 Community 活动日志，也不是检查人物公开动向的后台面板，而是人物面对正文、与 User 的微信聊天和自己已知事件时，在私人互联网使用中留下的行为痕迹。
+- 只有 User 在「他的手机」右上角主动点击刷新时才进行一次 AI 结算；不挂正文每轮、微信每轮或 Automation 后台定时触发。若近期输入与上次结算没有变化，直接提示没有新经历，不重复调用生成。
+- 新增 Private Phone Trace Store，按 scope + Character 隔离保存 SEARCH / VIEW。SEARCH 只保存搜索词；VIEW 只保存标题、累计停留时间、累计点击次数和可选真实来源引用，不生成第二套站外帖子正文/社区数据库。
+- 同一 VIEW 再次出现时累计停留时间与点击次数，不重写旧标题；搜索与浏览彼此独立，不要求一一对应。AI 允许返回 0 条，禁止为了填满页面强行生成。
+- Community 不是主体数据源：普通“看见过”不进入「他的手机」；只有人物明显反复查看/长时间停留时，模型才可把真实 Community 内容作为 VIEW。其他 VIEW 可以只是人物自己互联网世界里的页面/帖子标题，无需在 Community DB 中真实落地。
+- 刷新上下文复用人物角色资料、激活世界书、近期正文、该人物近期微信和其已知 World Event；已结算 World Event 复用现有 consumedBy，以 `his-phone` consumer 标记，不建立公共 Awareness，也不让其他人物自动知道这些私人痕迹。
+- 第一阶段不做删除搜索、无痕模式、草稿箱、相册、短信等扩展；后续是否增加必须另行确认。

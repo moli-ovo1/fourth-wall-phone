@@ -3499,3 +3499,10 @@ Still next, without splitting into UI micro-patches:
 - moli233：只补审计确认的连续性缺口：自主发帖写 CHARACTER_POSTED；自主浏览→微信结果接 existing World Event cause/result；知乎回答评论补真实 parent 规范化。
 - Future：独立 App「他的手机」——搜索记录、看帖历史；必须建立在人物真实 Awareness/行为记录上，允许历史指向 Community 已有内容或世界中存在但未在 Community DB 展示的内容。尚未施工。
 - 施工纪律：每次下一步规划/开发前先读 SPEC 最新日志 + DEVELOPMENT-MAP，再检查 CURRENT-STATE 新鲜度与实际调用链；旧 TODO 只作历史线索，不得直接当当前任务。
+
+## 2026-09-20 · 「他的手机」v1 — moli234 / v0.5.87
+- 已落地 Private Phone Trace v1：搜索记录 + 看帖历史；定位为人物私人互联网行为痕迹，不是 Community 历史/角色公开活动日志。
+- 触发方式固定为 User 点击「他的手机」右上角刷新；无后台定时生成，无正文/微信逐轮附加 API。
+- 数据层按 scope + Character 隔离；VIEW 可累计停留时间/点击次数，站外内容只存标题，不建设第二套 Community。
+- 生成材料复用现有人物资料、世界书、近期正文/微信、已知 World Event；私人痕迹不写入公共 Awareness。
+- 暂不扩展删除/无痕/草稿箱/相册/短信。后续施工前继续先查 SPEC / CURRENT-STATE / 实际调用链。

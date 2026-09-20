@@ -2590,3 +2590,21 @@
 
 /* v0.5.79 Weibo hot keywords are a non-clickable ranking, not post entries. */
 .moli-weibo-hot-keyword{display:flex;align-items:center;gap:14px;padding:10px 4px;font-size:15px;line-height:1.4}.moli-weibo-hot-keyword b{min-width:22px;color:#ff8200;font-size:18px}.moli-weibo-hot-keyword span{font-weight:600}
+
+/* moli234 · 他的手机 */
+#moli-phone-panel .moli-his-phone-app-tile{display:flex;align-items:center;justify-content:center;background:#f1eee8;color:#38332e;font-family:serif;font-size:28px;font-weight:700;}
+#moli-phone-panel .moli-his-phone-main{height:100%;overflow:auto;padding:14px 16px 28px;background:#f7f7f5;}
+#moli-phone-panel .moli-his-phone-person{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border-radius:12px;}
+#moli-phone-panel .moli-his-phone-person span{font-size:12px;color:#777;}
+#moli-phone-panel .moli-his-phone-person select{flex:1;border:0;background:transparent;font:inherit;outline:none;}
+#moli-phone-panel .moli-his-phone-status{padding:9px 3px 3px;font-size:11px;color:#888;min-height:18px;}
+#moli-phone-panel .moli-his-phone-section{margin-top:14px;background:#fff;border-radius:14px;overflow:hidden;}
+#moli-phone-panel .moli-his-phone-section h3{margin:0;padding:13px 14px 9px;font-size:14px;border-bottom:1px solid #eee;}
+#moli-phone-panel .moli-his-phone-search-row{display:flex;gap:9px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid #f0f0f0;font-size:13px;}
+#moli-phone-panel .moli-his-phone-search-row:last-child,#moli-phone-panel .moli-his-phone-view-row:last-child{border-bottom:0;}
+#moli-phone-panel .moli-his-phone-search-row span{color:#999;font-size:18px;line-height:16px;}
+#moli-phone-panel .moli-his-phone-search-row b{font-weight:500;line-height:1.45;}
+#moli-phone-panel .moli-his-phone-view-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:12px 14px;border-bottom:1px solid #f0f0f0;}
+#moli-phone-panel .moli-his-phone-view-row b{font-size:13px;font-weight:500;line-height:1.4;min-width:0;}
+#moli-phone-panel .moli-his-phone-view-row span{font-size:10px;color:#888;white-space:nowrap;}
+#moli-phone-panel .moli-his-phone-refresh:disabled{opacity:.45;}

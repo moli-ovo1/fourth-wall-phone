@@ -1,8 +1,9 @@
-# CURRENT STATE — moli233 / v0.5.86
+# CURRENT STATE — moli234 / v0.5.87
 
 > Updated 2026-09-20. This top block is the authoritative current handoff; older entries below are retained as history.
 
-- Current package line: moli233 / v0.5.86.
+- Current package line: moli234 / v0.5.87.
+- moli234 adds 「他的手机」Private Phone Trace v1: User-triggered refresh only, with private SEARCH + VIEW traces stored per scope + Character. It is not a Community activity log; external viewed content stores title/duration/visit count only, and private traces do not become public Awareness.
 - Community Social Network v1 from moli228 is CLOSED and retained: Network Actor / Public Identity / Community Echo must not be rebuilt from old TODOs.
 - moli229 verified social echo, cross-board traces and existing comment-tree continuation; later work must preserve those paths.
 - moli230–231 added first-time autonomous Community browsing and the independent behavior exits: public participation, proactive posting, Community→WeChat MESSAGE/SHARE.
