@@ -28,11 +28,12 @@ import { buildOnlinePresetPrompt, buildCommunityPresetPrompt } from '../storage/
 import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, getRecentMomentChatEvents, markMomentChatEventsDelivered , markProfileMomentsMemoryOrganized} from '../storage/moments-store.js';
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 import { getCurrentScopeKey } from '../core/tavern-scope.js';
-import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
+import { summarizeWorldEventsForContext, listWorldEvents } from '../storage/world-event-store.js';
 import { buildPhoneContext } from './phone-context-builder.js';
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
 import { getPublicWebPost, listPublicWebPosts, listWeiboFollows, listNetworkActors, getWeiboSupertopicStates, updateWeiboSupertopicStates, saveWeiboMessagePeer, addWeiboPrivateMessage, listCommunityEchoes, markCommunityEchoesConsumed, getCommunityUserProfile } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
+import { getPrivatePhoneTraces } from '../storage/private-phone-trace-store.js';
 
 function communityActorName(actor) {
   return String(actor?.uiName || actor?.name || '小号网友').trim() || '小号网友';
@@ -1908,4 +1909,37 @@ export async function generateWeiboPrivateReply({scopeKey,account,messages=[],si
   const user=`${memory?`【持续互动记忆】\n${memory}\n\n`:''}【最近私信】\n${history||'暂无'}\n\n请回复 User 最新一条私信。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
   return String(result?.text||'').trim().slice(0,1800);
+}
+
+
+export async function generatePrivatePhoneTraceRefresh({ scopeKey, contactId, signal } = {}) {
+  const id=String(contactId||'');
+  if(!scopeKey||!id) throw new Error('请选择要查看的人物');
+  const base=findContact(id);
+  if(!base||String(base.id||'').startsWith('builtin:')) throw new Error('「他的手机」只用于人物角色');
+  const contact=hydratedContact(base);
+  const userName=getTavernUserContext().name||'User';
+  const recentBody=getRecentTavernBody({messageLimit:18,charLimit:16000});
+  const conversations=getScopeConversations(scopeKey).filter(x=>x?.type==='private'&&String(x.contactId||'')===id).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
+  const chatLines=conversations.slice(0,2).flatMap(c=>(c.messages||[]).slice(-24).map(m=>`${m.role==='user'?userName:contactLabel(contact)}：${String(m.content||'').trim().slice(0,1000)}`)).filter(Boolean);
+  const events=listWorldEvents(scopeKey,{contactId:id,awareness:'known',limit:80,unconsumedBy:'his-phone'});
+  const eventText=events.map(e=>`eventId=${e.id}｜${e.content||`[${e.source}] ${e.action}`}`).join('\n');
+  const bodyText=recentBody?.available?(recentBody.messages||[]).map(m=>`${m.role==='user'?userName:(m.name||contactLabel(contact))}：${m.content}`).join('\n'):'';
+  const material=[bodyText,chatLines.join('\n'),eventText].filter(Boolean).join('\n\n');
+  const fingerprint=[bodyText.slice(-8000),chatLines.slice(-20).join('\n'),events.map(e=>e.id).join('|')].join('\n').slice(-18000);
+  const previous=getPrivatePhoneTraces(scopeKey,id);
+  if(!material.trim()||fingerprint===previous.lastContextFingerprint) return {searches:[],views:[],sourceEventIds:[],contextFingerprint:fingerprint,unchanged:true};
+  let worldBookText='';
+  try{const wb=contact.kind==='custom'?await getActivatedCustomWorldBook({contact,scanText:material}):await getActivatedTavernWorldBook({contact,scanText:material});worldBookText=clipBatchText(wb?.text||'',3000);}catch{}
+  const role=batchRoleProfile(contact,material,userName,scopeKey);
+  const system=`你在结算 moli小手机「他的手机」中某个人物真实留下的私人互联网痕迹。\n这不是 Community 活动日志，也不是心理独白，更不是向 User 解释人物动机。只判断人物面对最近正文经历、与 User 的微信聊天、自己已知的手机事件时，是否自然产生了私人搜索或网页/帖子浏览。\n- SEARCH 是人物真的会在自己手机里输入的搜索词，可以来自疑惑、好奇、工作需要、生活问题、羞于开口的问题、突发奇想等。不要把正文机械改写成搜索词。\n- VIEW 是人物自己互联网世界里看过的页面/帖子标题。绝大多数不需要对应 moli Community，也不要生成页面正文。\n- Community 内容只有人物明显反复查看或停留很久时才值得成为 VIEW；普通“看见过”不要记录。\n- 搜索与浏览彼此独立，不要求一一对应。\n- 允许完全没有新痕迹。不要为了丰富页面强行生成。\n- 只输出行为结果，不输出原因、心理分析、思维链。\n- durationSeconds 是本次新增停留秒数；visitCount 是本次新增点击/进入次数。数据应自然，多数普通记录不夸张。\n- 如果标题与旧浏览记录实质相同，沿用相同标题；存储层会累计停留和次数。\n只返回严格 JSON。`;
+  const oldViews=(previous.views||[]).slice(-40).map(x=>`- ${x.title}｜累计${x.durationSeconds||0}秒｜${x.visitCount||1}次${x.sourceRef?`｜sourceRef=${x.sourceRef}`:''}`).join('\n');
+  const user=`【人物】\n${contactLabel(contact)}\n\n【人物资料】\n${role}${worldBookText?`\n\n【本轮激活世界书】\n${worldBookText}`:''}\n\n【自上次结算以来可用于判断的近期经历】\n${material.slice(-24000)}\n\n【已有看帖历史｜仅用于判断是否重复进入同一内容】\n${oldViews||'暂无'}\n\n返回：{"searches":[{"query":"搜索词"}],"views":[{"title":"网页/帖子标题","durationSeconds":120,"visitCount":1,"sourceType":"external|community","sourceRef":"只有确实对应已知真实 Community 帖子时才填，否则空"}]}。两数组都允许为空。`;
+  const config=resolveContactApiConfig(contact);
+  const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
+  const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  let data={};try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(m)try{data=JSON.parse(m[0]);}catch{}}
+  const searches=(Array.isArray(data.searches)?data.searches:[]).map(x=>({query:String(x?.query||'').trim().slice(0,180)})).filter(x=>x.query).slice(0,12);
+  const views=(Array.isArray(data.views)?data.views:[]).map(x=>({title:String(x?.title||'').trim().slice(0,220),durationSeconds:Math.max(1,Math.min(21600,Math.round(Number(x?.durationSeconds)||60))),visitCount:Math.max(1,Math.min(20,Math.round(Number(x?.visitCount)||1))),sourceType:String(x?.sourceType||'external')==='community'?'community':'external',sourceRef:String(x?.sourceRef||'').trim().slice(0,180)})).filter(x=>x.title).slice(0,12);
+  return {searches,views,sourceEventIds:events.map(e=>e.id),contextFingerprint:fingerprint,unchanged:false};
 }
