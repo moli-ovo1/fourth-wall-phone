@@ -476,11 +476,6 @@ export function createPhonePanel({
         <button type="button" data-studio-task="plan">给我规划</button>
         <button type="button" data-studio-task="length">长度 <span data-studio-length-label>80</span></button>
       </div>
-      <div class="moli-studio-status" data-studio-status hidden>
-        <span>生活灵感观察中 · 娘家人会偶尔给正文一点世界/生活小动静</span>
-        <button type="button" data-studio-inspiration="pause">暂停</button>
-        <button type="button" data-studio-inspiration="close">关闭</button>
-      </div>
       <div class="moli-studio-choice" data-studio-choice hidden>
         <div class="moli-studio-choice-card">
           <button type="button" data-meme-choice="them">你先说</button>
@@ -1388,7 +1383,6 @@ export function createPhonePanel({
   const messageMenu = panel.querySelector('[data-message-menu]');
   const writersRoomToolbar = panel.querySelector('[data-writers-room-toolbar]');
   const studioLengthLabel = panel.querySelector('[data-studio-length-label]');
-  const studioStatus = panel.querySelector('[data-studio-status]');
   const studioChoice = panel.querySelector('[data-studio-choice]');
   const quoteDraft = panel.querySelector('[data-quote-draft]');
   const quoteDraftText = panel.querySelector('[data-quote-draft-text]');
@@ -5827,17 +5821,6 @@ export function createPhonePanel({
     const studioRoom = isWritersRoom(conversation);
     if (writersRoomToolbar) writersRoomToolbar.hidden = !studioRoom;
     if (studioLengthLabel) studioLengthLabel.textContent = String(conversation.studioReplyLength || 80);
-    if (studioStatus) {
-      const enabled = studioRoom && conversation.studioInspirationEnabled === true;
-      studioStatus.hidden = !enabled;
-      studioStatus.classList.toggle('is-paused', enabled && conversation.studioInspirationPaused === true);
-      const label = studioStatus.querySelector('span');
-      if (label && enabled) label.textContent = conversation.studioInspirationPaused === true
-        ? '生活灵感观察已暂停'
-        : '生活灵感观察中 · 娘家人会偶尔给正文一点世界/生活小动静';
-      const pause = studioStatus.querySelector('[data-studio-inspiration="pause"]');
-      if (pause) pause.textContent = conversation.studioInspirationPaused === true ? '继续' : '暂停';
-    }
     const item = isGroup
       ? null
       : contact(conversation.contactId || currentContactId);
@@ -7198,24 +7181,13 @@ export function createPhonePanel({
       studioChoice.hidden = true;
       const ok = windowRef.confirm?.('帮你在正文长期偶尔自然注入世界/生活小动静。');
       if (!ok) return;
-      updateGroupConversation(getScopeKey?.(), currentContactId, { studioInspirationEnabled: true, studioInspirationPaused: false, studioInspirationCounter: 0 });
+      updateGroupConversation(getScopeKey?.(), currentContactId, { studioInspirationEnabled: true, studioInspirationPaused: false, studioInspirationCounter: 0, studioInspirationThreshold: 4 + Math.floor(Math.random() * 3), studioInspirationNsfwCooldown: 0 });
+      try { windowRef.dispatchEvent(new CustomEvent('moli:life-inspiration-changed', { detail: { scopeKey: String(getScopeKey?.() || '') } })); } catch {}
       renderChat();
       toast('放心，我们帮你盯着呢！');
     }
   });
 
-  studioStatus?.addEventListener('click', event => {
-    const action = event.target.closest?.('[data-studio-inspiration]')?.dataset?.studioInspiration;
-    if (!action) return;
-    const conversation = currentConversation();
-    if (!isWritersRoom(conversation)) return;
-    if (action === 'pause') {
-      updateGroupConversation(getScopeKey?.(), currentContactId, { studioInspirationPaused: conversation.studioInspirationPaused !== true });
-    } else if (action === 'close') {
-      updateGroupConversation(getScopeKey?.(), currentContactId, { studioInspirationEnabled: false, studioInspirationPaused: false, studioInspirationCounter: 0 });
-    }
-    renderChat();
-  });
 
   panel.querySelector('[data-action="open-his-phone"]')?.addEventListener('click', () => show('his-phone'));
   panel.querySelector('[data-his-phone-contact]')?.addEventListener('change', event => { hisPhoneContactId=String(event.target?.value||''); renderHisPhone(); });
