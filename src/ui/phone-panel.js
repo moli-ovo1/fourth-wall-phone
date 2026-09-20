@@ -476,6 +476,19 @@ export function createPhonePanel({
         <button type="button" data-studio-task="plan">给我规划</button>
         <button type="button" data-studio-task="length">长度 <span data-studio-length-label>80</span></button>
       </div>
+      <div class="moli-studio-status" data-studio-status hidden>
+        <span>生活灵感观察中 · 娘家人会偶尔给正文一点世界/生活小动静</span>
+        <button type="button" data-studio-inspiration="pause">暂停</button>
+        <button type="button" data-studio-inspiration="close">关闭</button>
+      </div>
+      <div class="moli-studio-choice" data-studio-choice hidden>
+        <div class="moli-studio-choice-card">
+          <button type="button" data-meme-choice="them">你先说</button>
+          <button type="button" data-meme-choice="me">我先说</button>
+          <button type="button" data-meme-choice="system">都别说了系统来办</button>
+          <button type="button" class="moli-studio-choice-cancel" data-meme-choice="cancel">取消</button>
+        </div>
+      </div>
       <div class="moli-chat-error" data-chat-error hidden role="alert">
         <span data-chat-error-text></span>
         <button type="button" data-action="dismiss-chat-error" aria-label="关闭">×</button>
@@ -1375,6 +1388,8 @@ export function createPhonePanel({
   const messageMenu = panel.querySelector('[data-message-menu]');
   const writersRoomToolbar = panel.querySelector('[data-writers-room-toolbar]');
   const studioLengthLabel = panel.querySelector('[data-studio-length-label]');
+  const studioStatus = panel.querySelector('[data-studio-status]');
+  const studioChoice = panel.querySelector('[data-studio-choice]');
   const quoteDraft = panel.querySelector('[data-quote-draft]');
   const quoteDraftText = panel.querySelector('[data-quote-draft-text]');
   const multiBar = panel.querySelector('[data-multi-bar]');
@@ -4927,9 +4942,6 @@ export function createPhonePanel({
       const messages = conversation?.messages || [];
       const last = messages[messages.length - 1];
       const isGroup = conversation.type === 'group';
-    const studioRoom = isWritersRoom(conversation);
-    if (writersRoomToolbar) writersRoomToolbar.hidden = !studioRoom;
-    if (studioLengthLabel) studioLengthLabel.textContent = String(conversation.studioReplyLength || 80);
       const listIdentity = isGroup
         ? { name: conversation.name || '未命名群聊', annotation: '' }
         : privateConversationListIdentity(conversation, item);
@@ -5815,6 +5827,17 @@ export function createPhonePanel({
     const studioRoom = isWritersRoom(conversation);
     if (writersRoomToolbar) writersRoomToolbar.hidden = !studioRoom;
     if (studioLengthLabel) studioLengthLabel.textContent = String(conversation.studioReplyLength || 80);
+    if (studioStatus) {
+      const enabled = studioRoom && conversation.studioInspirationEnabled === true;
+      studioStatus.hidden = !enabled;
+      studioStatus.classList.toggle('is-paused', enabled && conversation.studioInspirationPaused === true);
+      const label = studioStatus.querySelector('span');
+      if (label && enabled) label.textContent = conversation.studioInspirationPaused === true
+        ? '生活灵感观察已暂停'
+        : '生活灵感观察中 · 娘家人会偶尔给正文一点世界/生活小动静';
+      const pause = studioStatus.querySelector('[data-studio-inspiration="pause"]');
+      if (pause) pause.textContent = conversation.studioInspirationPaused === true ? '继续' : '暂停';
+    }
     const item = isGroup
       ? null
       : contact(conversation.contactId || currentContactId);
@@ -7131,7 +7154,69 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => { show('tianya-home'); currentPublicWebTab='weibo'; panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab==='weibo')); renderPublicWeb(); });
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
   panel.querySelector('[data-action="open-writers-room"]')?.addEventListener('click', () => { try { const room = ensureWritersRoom(); currentContactId = room.conversationKey || room.id; show('chat'); renderChat({ forceLatest: true }); } catch (error) { toast(error?.message || '娘家人打开失败'); } });
-  writersRoomToolbar?.addEventListener('click', async event => { const button = event.target.closest?.('[data-studio-task]'); if (!button) return; const conversation = currentConversation(); if (!isWritersRoom(conversation)) return; const type = button.dataset.studioTask; if (type === 'length') { const raw = windowRef.prompt?.('每个实际发言气泡希望约多少字？（20–500）', String(conversation.studioReplyLength || 80)); if (raw == null) return; const value = Math.max(20, Math.min(500, Number(raw) || 80)); updateGroupConversation(getScopeKey?.(), currentContactId, { studioReplyLength: value }); renderChat(); toast(`娘家人长度已设为约 ${value} 字/气泡`); return; } let notes = ''; if (type === 'cast') { notes = String(windowRef.prompt?.('想让谁多一点？也可以顺便写你的要求；留空则让他们从正文自己找。', '') || '').trim(); } await requestReply({ studioTask: { type, notes } }); });
+  writersRoomToolbar?.addEventListener('click', async event => {
+    const button = event.target.closest?.('[data-studio-task]');
+    if (!button) return;
+    const conversation = currentConversation();
+    if (!isWritersRoom(conversation)) return;
+    const type = button.dataset.studioTask;
+    if (type === 'length') {
+      const raw = windowRef.prompt?.('每个实际发言气泡希望约多少字？（20–500）', String(conversation.studioReplyLength || 80));
+      if (raw == null) return;
+      const value = Math.max(20, Math.min(500, Number(raw) || 80));
+      updateGroupConversation(getScopeKey?.(), currentContactId, { studioReplyLength: value });
+      renderChat();
+      toast(`娘家人长度已设为约 ${value} 字/气泡`);
+      return;
+    }
+    if (type === 'meme') {
+      if (studioChoice) studioChoice.hidden = false;
+      return;
+    }
+    let notes = '';
+    if (type === 'cast') notes = String(windowRef.prompt?.('想让谁多一点？也可以顺便写你的要求；留空则让他们从正文自己找。', '') || '').trim();
+    await requestReply({ studioTask: { type, notes } });
+  });
+
+  studioChoice?.addEventListener('click', async event => {
+    const choice = event.target.closest?.('[data-meme-choice]')?.dataset?.memeChoice;
+    if (!choice) return;
+    if (choice === 'cancel') { studioChoice.hidden = true; return; }
+    const conversation = currentConversation();
+    if (!isWritersRoom(conversation)) { studioChoice.hidden = true; return; }
+    if (choice === 'me') {
+      studioChoice.hidden = true;
+      input?.focus?.();
+      return;
+    }
+    if (choice === 'them') {
+      studioChoice.hidden = true;
+      await requestReply({ studioTask: { type: 'meme', mode: 'them', notes: '' } });
+      return;
+    }
+    if (choice === 'system') {
+      studioChoice.hidden = true;
+      const ok = windowRef.confirm?.('帮你在正文长期偶尔自然注入世界/生活小动静。');
+      if (!ok) return;
+      updateGroupConversation(getScopeKey?.(), currentContactId, { studioInspirationEnabled: true, studioInspirationPaused: false, studioInspirationCounter: 0 });
+      renderChat();
+      toast('放心，我们帮你盯着呢！');
+    }
+  });
+
+  studioStatus?.addEventListener('click', event => {
+    const action = event.target.closest?.('[data-studio-inspiration]')?.dataset?.studioInspiration;
+    if (!action) return;
+    const conversation = currentConversation();
+    if (!isWritersRoom(conversation)) return;
+    if (action === 'pause') {
+      updateGroupConversation(getScopeKey?.(), currentContactId, { studioInspirationPaused: conversation.studioInspirationPaused !== true });
+    } else if (action === 'close') {
+      updateGroupConversation(getScopeKey?.(), currentContactId, { studioInspirationEnabled: false, studioInspirationPaused: false, studioInspirationCounter: 0 });
+    }
+    renderChat();
+  });
+
   panel.querySelector('[data-action="open-his-phone"]')?.addEventListener('click', () => show('his-phone'));
   panel.querySelector('[data-his-phone-contact]')?.addEventListener('change', event => { hisPhoneContactId=String(event.target?.value||''); renderHisPhone(); });
   panel.querySelector('[data-page="his-phone"]')?.addEventListener('click', event => { const row=event.target?.closest?.('[data-his-phone-community-ref]'); if(!row)return; const post=getPublicWebPost(getScopeKey?.(),String(row.dataset.hisPhoneCommunityRef||'')); if(!post){toast('原帖已不存在');return;} openedPublicWebPostId=String(post.id); currentPublicWebTab=String(post.section||'recommend'); panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab===currentPublicWebTab)); show('tianya-home'); renderPublicWeb(); });
