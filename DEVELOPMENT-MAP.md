@@ -3514,3 +3514,9 @@ Still next, without splitting into UI micro-patches:
 - Private Phone Trace 增加 MEMO（新增/完成，不静默删除）与单条 latest SEXUAL_TRACE；仍只在 User 点击右上角刷新时一次 API 结算。
 - Future / 未施工：番茄钟 App；文生图；Character → User Phone Observation。反向查看 User 手机必须建立在故事内真实接触机会与 Awareness 上，禁止后台全知。
 - 后续继续保留：独立收藏 App 尚未完整落地；「我们的墙」已有真实注入桥，只能在现有实现上审计/补素材源，不得从头重建。
+
+
+## 2026-09-20 · startup reliability hotfix — moli236 / v0.5.89
+- 只修启动版本/诊断层：manifest 正式同步当前版本，bootstrap app 入口带 build-version query，并在失败时保留 error name/message/stack。
+- 不触碰 moli235 已落地的 Private Phone Trace v2，也不重构 Community / Network Actor / Community Echo / WeChat / Injection。
+- 新开发纪律：每个正式 incremental package 同步 `manifest.json` version；若启动仍失败，先使用 bootstrap 暴露的 stack/模块位置定位，再决定业务修复，不用猜测性改代码。

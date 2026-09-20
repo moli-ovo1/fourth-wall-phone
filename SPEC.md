@@ -4513,3 +4513,10 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 增加最近一次 SEXUAL_TRACE：仅在近期经历自然形成具有记录价值的私人性冲动/自慰情况时更新；保存简短诱因、处理结果、刺激来源、场景，允许“有冲动但未处理/转移注意”和单纯生理需求，不默认归因 User，不保存露骨过程，不做历史统计流水账。
 - 一次 User 手动刷新仍只调用一次人物 AI，同时结算 SEARCH / VIEW / MEMO / SEXUAL_TRACE；四类均允许为空，不新增后台定时调用。
 - Future TODO（只登记、不施工）：手机主页番茄钟 App（具体功能后定）；文生图能力方向（用途后定）；Character → User Phone Observation（角色反向查看 User 手机，必须先有故事世界中的实际接触机会，只能获得实际可见内容，禁止后台全知）。
+
+
+## v0.5.89 / moli236 — startup version/cache diagnostics hotfix
+- 本轮只处理启动可靠性，不修改 Community、「他的手机」、微信、Automation 或正文注入业务逻辑。
+- `manifest.json` 版本从长期滞后的 `0.5.83` 同步到 `0.5.89`；以后正式 incremental package 必须同步 manifest version，避免仓库版本已前进但宿主仍把扩展识别为旧版本。
+- bootstrap 动态导入 `src/core/app.js` 时附加当前 build version query，用于降低移动端/WebView 在扩展更新后继续复用旧入口模块缓存的风险；不改变后续模块调用协议。
+- 启动失败诊断不再只保留 `error.message`：控制台与应急启动按钮保存当前 build version、error name、message、stack。若仍发生解析/加载错误，下一轮应依据真实 stack/模块位置精确修复，禁止猜测性回滚业务代码。

@@ -1,4 +1,5 @@
 const EMERGENCY_HANDLE_ID = 'moli-phone-handle';
+const MOLI_BUILD_VERSION = '0.5.89';
 
 function ensureBootstrapLauncher() {
   const existing = document.getElementById(EMERGENCY_HANDLE_ID);
@@ -58,7 +59,7 @@ async function bootMoliPhone() {
   const bootstrapHandle = ensureBootstrapLauncher();
 
   try {
-    const { initApp } = await import('./src/core/app.js');
+    const { initApp } = await import(`./src/core/app.js?v=${encodeURIComponent(MOLI_BUILD_VERSION)}`);
     await initApp();
 
     try {
@@ -70,21 +71,36 @@ async function bootMoliPhone() {
 
     console.log('[moli小手机] init success');
   } catch (error) {
-    console.error('[moli小手机] module/init failed:', error);
+    const errorName = String(error?.name || 'Error');
+    const errorMessage = String(error?.message || error || 'Unknown error');
+    const errorStack = String(error?.stack || '').trim();
+    const diagnostic = [
+      `moli小手机加载失败 [v${MOLI_BUILD_VERSION}]`,
+      `${errorName}: ${errorMessage}`,
+      errorStack ? `stack: ${errorStack}` : '',
+    ].filter(Boolean).join('\n');
+
+    console.error('[moli小手机] module/init failed:', {
+      version: MOLI_BUILD_VERSION,
+      name: errorName,
+      message: errorMessage,
+      stack: errorStack,
+      error,
+    });
 
     // If the full module graph fails before app.js can create the real launcher,
     // keep the bootstrap launcher on screen instead of disappearing silently.
     const handle = document.getElementById(EMERGENCY_HANDLE_ID) || bootstrapHandle;
     if (handle) {
       handle.dataset.moliBootFailed = '1';
-      handle.dataset.moliBootError = `moli小手机加载失败：${error?.message || error}`;
+      handle.dataset.moliBootError = diagnostic;
       handle.title = 'moli小手机加载失败（点击查看提示）';
       handle.style.background = 'rgba(170,45,45,.88)';
     }
 
     try {
       window.toastr?.error?.(
-        `moli小手机加载失败：${error?.message || error}`,
+        diagnostic,
         '',
         {
           timeOut: 7000,
