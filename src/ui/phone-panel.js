@@ -106,6 +106,7 @@ import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfi
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
 import { getPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
 import { addStoryBridgeLine, listStoryBridgeLines } from '../storage/story-bridge-store.js';
+import { addStoryPlan } from '../storage/story-plan-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
 import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings, togglePublicWebFavorite, togglePublicWebPinned, replacePublicWebSectionPosts, appendPublicWebSectionPosts, trimPublicWebSectionPosts, trimWeiboLanePosts, forceDeletePublicWebPost, deletePublicWebComment, deleteZhihuAnswerComment, deleteZhihuAnswer, addZhihuAnswerComments, addZhihuAnswer, mergeZhihuRefresh, listPublicWebFavorites, listCustomCommunities, ensureCustomCommunityPresets, deleteCustomCommunities, saveCustomCommunity, deleteCustomCommunity, getCommunityUserProfile, updateCommunityUserProfile, listWeiboFollows, saveWeiboFollow, deleteWeiboFollow, isWeiboFollowed, incrementWeiboRepost, setWeiboFollowHot, rememberWeiboPublicInteraction, listWeiboPrivateMessages, addWeiboPrivateMessage, deleteWeiboPrivateMessage, clearWeiboPrivateMessages, getWeiboMessageReadState, markWeiboMessageRead, listWeiboFanGroups, saveWeiboFanGroup, addWeiboFanGroupMessage, listWeiboMessagePeers, saveWeiboMessagePeer, getWeiboHotTopics, setWeiboHotTopics, settleWeiboUserPostEcology, saveNetworkActor, linkNetworkActorContact } from '../storage/public-web-store.js';
@@ -1257,6 +1258,7 @@ export function createPhonePanel({
       <button data-message-action="recall">撤回</button>
       <button data-message-action="adopt" hidden>纳取</button>
       <button data-message-action="inject-studio" hidden>注入素材栏</button>
+      <button data-message-action="create-story-plan" hidden>建立规划</button>
       <button data-message-action="copy">复制</button>
       <button data-message-action="forward">转发</button>
       <button data-message-action="multi">多选</button>
@@ -5056,6 +5058,7 @@ export function createPhonePanel({
     const recallButton = messageMenu.querySelector('[data-message-action="recall"]');
     const adoptButton = messageMenu.querySelector('[data-message-action="adopt"]');
     const injectStudioButton = messageMenu.querySelector('[data-message-action="inject-studio"]');
+    const createStoryPlanButton = messageMenu.querySelector('[data-message-action="create-story-plan"]');
 
     if (editButton) editButton.hidden = !selected;
     if (regenerateButton) regenerateButton.hidden = !canRegenerate;
@@ -5064,6 +5067,8 @@ export function createPhonePanel({
     const isAdoptionResult = studioRoom && /^(【导演版】|【灵感版】|【二人合璧】)/.test(String(selected?.content || '').trim());
     if (adoptButton) adoptButton.hidden = !studioRoom || !selected || isAdoptionResult;
     if (injectStudioButton) injectStudioButton.hidden = !isAdoptionResult;
+    const isPlanCandidate = studioRoom && /^【规划·(?:导演版|灵感版|二人合璧)】/.test(String(selected?.content || '').trim());
+    if (createStoryPlanButton) createStoryPlanButton.hidden = !isPlanCandidate;
 
     if (retryButton) retryButton.hidden = !(
       Boolean(error?.message)
@@ -5336,6 +5341,15 @@ export function createPhonePanel({
       hideMessageMenu();
       if (addStudioMaterial(message, conversation)) toast('已放进我们的墙素材栏');
       else toast('这条内容暂时不能注入');
+      return;
+    }
+
+    if (action === 'create-story-plan') {
+      const conversation = getConversation(scopeKey, currentContactId);
+      if (!isWritersRoom(conversation) || !/^【规划·(?:导演版|灵感版|二人合璧)】/.test(String(message.content || '').trim())) { hideMessageMenu(); return; }
+      hideMessageMenu();
+      const plan = addStoryPlan(scopeKey, { text: String(message.content || '').trim(), source: String(message.senderSnapshot?.name || '娘家人') });
+      if (plan) toast('放心，我们帮你盯着呢！'); else toast('这条内容暂时不能建立规划');
       return;
     }
 
