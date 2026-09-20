@@ -2978,6 +2978,7 @@ export function createPhonePanel({
           <label class="moli-compact-number-row moli-setting-line"><span>角色读取轮数</span><input type="number" min="10" max="9999" value="${quickRecentLimit}" data-info-recent-limit></label>
           <div class="moli-compact-range-row moli-setting-line"><span>回复气泡条数</span><label><input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.min)||1)}" data-info-bubble-min> — <input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.max)||3)}" data-info-bubble-max></label></div>
           <label class="moli-inline-slider-row"><span><input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}>主动私聊</span><div><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}"><small data-auto-chat-value>${Number(conversation.automation?.autoChatProbability ?? 30)}%</small></div></label>
+          <label class="moli-switch-row moli-setting-line"><span>允许社区触发主动私聊</span><input type="checkbox" data-community-private-enabled ${conversation.automation?.communityPrivateEnabled !== false ? 'checked' : ''}></label>
           <label class="moli-inline-slider-row"><span><input type="checkbox" data-commentary-enabled ${conversation.automation?.commentaryEnabled ? 'checked' : ''}>吐槽正文</span><div><input type="range" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}"><small data-commentary-value>${Number(conversation.automation?.commentaryProbability ?? 30)}%</small></div></label>
           <button type="button" class="moli-info-save-button" data-action="save-all-private-settings">保存设置</button>
         </div>`}
@@ -3072,6 +3073,7 @@ export function createPhonePanel({
       replyBubbleRange:{min,max},
       title:chatInfo.querySelector('[data-info-chat-title]')?.value||'',
       autoChatEnabled:Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked), autoChatProbability,
+      communityPrivateEnabled:Boolean(chatInfo.querySelector('[data-community-private-enabled]')?.checked),
       commentaryEnabled:Boolean(chatInfo.querySelector('[data-commentary-enabled]')?.checked), commentaryProbability,
     });
     saveCurrentContactInfo(); toast('设置已保存'); renderChatInfo();
@@ -3102,6 +3104,7 @@ export function createPhonePanel({
         updatePrivateConversationSettings(scopeKey, currentContactId, {
           autoChatEnabled: Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked),
           autoChatProbability,
+          communityPrivateEnabled: Boolean(chatInfo.querySelector('[data-community-private-enabled]')?.checked),
           commentaryEnabled: Boolean(chatInfo.querySelector('[data-commentary-enabled]')?.checked),
           commentaryProbability,
         });
@@ -7552,7 +7555,37 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     try{
       const result=await generateCommunityDiscoveryRefresh({scopeKey,posts:rows,fixedPersonasCommunityEnabled:Boolean(settings?.fixedPersonasCommunityEnabled)});
       const byId=new Map(rows.map(post=>[String(post.id||''),post]));
-      for(const actor of result?.actors||[]){for(const postId of actor.viewedPostIds||[]){const post=byId.get(String(postId));if(post)recordCommunityPostSnapshotAwareness(scopeKey,post,[actor.actorId],'autonomous-browse',Date.now());}}
+      for(const actor of result?.actors||[]){
+        const target=getContacts().find(x=>String(x.id)===String(actor.actorId)); if(!target)continue;
+        const viewed=(actor.viewedPostIds||[]).map(id=>byId.get(String(id))).filter(Boolean);
+        for(const post of viewed)recordCommunityPostSnapshotAwareness(scopeKey,post,[actor.actorId],'autonomous-browse',Date.now());
+        const actionPost=byId.get(String(actor.actionPostId||''));
+        if(actionPost&&viewed.some(p=>String(p.id)===String(actionPost.id))){
+          const mode=String(actor.publicAction||'SKIP').toUpperCase(); const text=String(actor.publicContent||'').trim();
+          if((mode==='REPLY_REAL'||mode==='REPLY_ANONYMOUS')&&text){
+            const author=mode==='REPLY_ANONYMOUS'?{type:'contact',id:target.id,name:String(actor.publicAlias||'小号用户').trim()||'小号用户',anonymous:true,knownIdentityId:target.id}:{type:'contact',id:target.id,name:displayName(target),anonymous:false};
+            if(actionPost.section==='zhihu'&&actor.answerId){addZhihuAnswerComments(scopeKey,actionPost.id,String(actor.answerId),[{author,content:text,replyToCommentId:String(actor.replyToCommentId||'')}]);}
+            else addPublicWebComment(scopeKey,actionPost.id,{author,content:text,replyToCommentId:String(actor.replyToCommentId||'')});
+            recordWorldEvent(scopeKey,{source:`community.${actionPost.section||'unknown'}`,actorId:target.id,action:mode==='REPLY_ANONYMOUS'?'AUTONOMOUS_REPLY_ANONYMOUS':'AUTONOMOUS_REPLY_REAL',targetContactIds:[target.id],objectId:String(actionPost.id||''),content:`你自主浏览社区后选择参与了一篇${sourceLabel(actionPost)}讨论。`,metadata:{postId:String(actionPost.id||''),identityMode:mode,alias:mode==='REPLY_ANONYMOUS'?String(actor.publicAlias||''):''},awareness:'known'});
+          }
+        }
+        const newPost=actor.newPost&&typeof actor.newPost==='object'?actor.newPost:null;
+        if(newPost&&String(newPost.content||'').trim()){
+          const section=['tianya','xiaohongshu','zhihu','weibo'].includes(String(newPost.section||''))?String(newPost.section):'weibo';
+          const anonymous=Boolean(newPost.anonymous); const author=anonymous?{type:'contact',id:target.id,name:String(newPost.alias||'小号用户').trim()||'小号用户',anonymous:true,knownIdentityId:target.id}:{type:'contact',id:target.id,name:displayName(target),anonymous:false};
+          const created=createPublicWebPost(scopeKey,{section,type:section==='zhihu'?'question':section==='xiaohongshu'?'note':section==='weibo'?'weibo':'thread',author,title:String(newPost.title||'').trim()||String(newPost.content||'').trim().slice(0,36),content:String(newPost.content||'').trim(),tags:Array.isArray(newPost.tags)?newPost.tags:[],extra:section==='weibo'?{weiboLane:'实时',autonomousCharacterPost:true}:section==='xiaohongshu'?{imagePrompt:String(newPost.imagePrompt||''),imageText:String(newPost.imageText||''),autonomousCharacterPost:true}:{autonomousCharacterPost:true}});
+          if(created)recordCommunityPostSnapshotAwareness(scopeKey,created,[target.id],'autonomous-post',Date.now());
+        }
+        const privateConv=getScopeConversations(scopeKey).filter(c=>c?.type==='private'&&String(c.contactId||'')===String(target.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
+        const canPrivate=privateConv?.automation?.autoChatEnabled===true&&privateConv?.automation?.communityPrivateEnabled!==false;
+        const privateAction=canPrivate?String(actor.privateAction||'SKIP').toUpperCase():'SKIP'; const privatePost=byId.get(String(actor.privatePostId||actor.actionPostId||''));
+        if((privateAction==='MESSAGE'||privateAction==='SHARE')&&privatePost&&viewed.some(p=>String(p.id)===String(privatePost.id))){
+          const conversationKey=privateConv?.conversationKey||privateConv?.id||privateConversationKeyFor(scopeKey,target.id);
+          if(privateAction==='SHARE'){const snap={postId:String(privatePost.id||''),section:String(privatePost.section||''),platform:sourceLabel(privatePost),customCommunityId:String(privatePost.extra?.customCommunityId||''),customCommunityName:String(privatePost.extra?.customCommunityName||''),authorName:String(privatePost.author?.name||'小号网友'),title:String(privatePost.title||'无标题'),snapshotAt:Date.now()};appendMessage(scopeKey,conversationKey,'assistant',`转发了一篇${snap.platform}帖子：${snap.title}`,{source:'community-autonomous-share',messageType:'community-forward',communityForward:snap,senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});}
+          for(const msg of (actor.privateMessages||[]).slice(0,5)){const text=String(msg||'').trim();if(text)appendMessage(scopeKey,conversationKey,'assistant',text,{source:'community-autonomous-private',senderId:target.id,senderSnapshot:{name:displayName(target),avatar:avatarUrl(target)}});}
+          recordWorldEvent(scopeKey,{source:`community.${privatePost.section||'unknown'}`,actorId:target.id,action:privateAction==='SHARE'?'COMMUNITY_SHARED_TO_USER':'COMMUNITY_PRIVATE_CHAT',targetContactIds:[target.id],objectId:String(privatePost.id||''),content:`你自主浏览社区后${privateAction==='SHARE'?'把帖子转发给了 User':'主动在微信联系了 User'}。`,metadata:{postId:String(privatePost.id||'')},awareness:'known'});
+        }
+      }
       return result?.actors||[];
     }catch(error){console.error('[moli小手机] community autonomous discovery failed:',error);return [];}
   };
