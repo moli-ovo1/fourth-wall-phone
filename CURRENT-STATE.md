@@ -1,12 +1,15 @@
-# CURRENT STATE — moli244 / v0.5.97
+# CURRENT STATE — moli245 / v0.5.98
 
-> Updated 2026-09-20. This top block is the authoritative current handoff; older entries below are retained as history.
+> Updated 2026-09-21. This top block is the authoritative current handoff; older entries below are retained as history.
 
+- moli245 修复娘家人工具栏错误污染所有聊天页；四胶囊仅在 `systemKind=writers-room` 显示并作为正常流式布局占位，不再遮挡消息。
+- 「帮我想梗」改为三岔入口：你先说（娘家人直接发散）/我先说（User先输入）/都别说了系统来办（开启生活灵感观察）。主动发散升级为“生活扰动机会”合同：小上帝偏自然日常与可落地，moli 偏大胆新意。
+- 生活灵感观察 v1：按当前正文 scope 持久开关；每累计5次有效正文生成提供一次低频、可完全不采用的生活扰动导演提示，不额外调用娘家人 API；状态栏可暂停/继续/关闭。此为低成本 v1，后续仍可升级为静滞驱动，不把固定间隔视为最终算法。
 - moli244 将「编剧室」前台收口为「娘家人」：仅从我们的墙进入、从微信列表隐藏、使用 User 指定专属壁纸、工具栏去白底并删除「整理❤️」按钮；❤️继续在下一次正常 API 请求中作为非命令式参考。剧情规划长线 / 生活灵感长线 / Q版状态入口仍为 DESIGN ONLY，本版未施工。
 - moli243 adds「编剧室」v1: Wall 右上角进入独立 User + 小上帝 + moli 创作群聊，支持任务按钮、❤️偏好参考、纳取三版提示词与手动注入素材栏；不自动把讨论跨墙。
 - moli242 adds persistent Story Bridge Lines: Wall context can remain pending across multiple story turns, auto/manual activation stops injection without deleting the line, and User can edit an activated line into a new pending stage or clear it. A lightweight story-footer status UI exposes this lifecycle.
 
-- Current package line: moli244 / v0.5.97.
+- Current package line: moli245 / v0.5.98.
 - moli241 upgrades Wall → Story semantic injection: final Tavern context uses story-world facts/knowledge/identity boundaries rather than product-internal “wall” language; memo knowledge defaults to its owner, public internet existence does not imply every character has seen it, conversation memories inherit their chat participant boundary, and injected material is continuity context rather than a checklist that must be acted out this turn.
 - moli239 lands request-level Private Context Isolation v1: Community autonomous Character decisions and public Moments contact decisions no longer batch multiple actors' private Phone Context/world-book/visibility data into one model request; shared Community world generation no longer receives per-character Phone Context or per-character world-book packs; Weibo shared Network Actor context no longer includes linked private WeChat messages. Public/social continuity remains, but private knowledge is present only in the owning actor's request.
 - moli238 repairs Private Phone Trace old-schema compatibility: pre-MEMO moli234 character rows are normalized on access so searches/views are preserved while missing memos/sexualTrace/default fields are safely added before refresh writes. No Community/WeChat/Automation behavior changed.
