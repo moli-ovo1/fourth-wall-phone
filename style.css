@@ -2618,3 +2618,6 @@
 #moli-phone-panel .moli-his-phone-sexual-card{padding:10px 14px 12px;}
 #moli-phone-panel .moli-his-phone-sexual-card p{display:grid;grid-template-columns:42px minmax(0,1fr);gap:8px;margin:7px 0;font-size:12px;line-height:1.55;}
 #moli-phone-panel .moli-his-phone-sexual-card p span{color:#999;}
+
+/* moli242 · 跨墙剧情线前台状态（v1 仅做结构，视觉后续单独打磨） */
+.moli-story-bridge-status{margin:12px 4px 6px;padding:10px;border:1px solid rgba(160,160,160,.28);border-radius:12px;background:rgba(40,40,40,.16);font-size:12px;line-height:1.45}.moli-story-bridge-status-head{font-weight:700;margin-bottom:7px;opacity:.8}.moli-story-bridge-status-row{padding:8px 0;border-top:1px solid rgba(160,160,160,.18)}.moli-story-bridge-status-row:first-of-type{border-top:0}.moli-story-bridge-status-main{display:flex;gap:8px;align-items:center;justify-content:space-between}.moli-story-bridge-state{white-space:nowrap;opacity:.72}.moli-story-bridge-state.active{font-weight:700;opacity:.95}.moli-story-bridge-status-row small{display:block;margin-top:3px;opacity:.62}.moli-story-bridge-actions{display:flex;gap:6px;margin-top:7px}.moli-story-bridge-actions button{font:inherit;padding:3px 8px;border:1px solid rgba(160,160,160,.28);border-radius:8px;background:transparent;color:inherit}

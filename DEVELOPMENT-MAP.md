@@ -3556,3 +3556,11 @@ Still next, without splitting into UI micro-patches:
 - Tavern Injection 明确“连续性依据 ≠ 本轮任务清单”，避免一次投入多项素材后正文机械逐条消费。
 - 保持 240 的可扩展 source-provider 入口；未来 App 继续注册标准 Wall Source，不为每个新 App 重写墙核心。
 - 后续候选：观察 240/241 实机效果后，再决定是否进入 Phone↔Story 反馈闭环；不得在未设计 Awareness/World Event 回流边界前自动把正文采用结果写回手机。
+
+## moli242 / v0.5.95 — 跨墙剧情线前台状态 v1
+- 「我们的墙 → 注入正文」从 one-shot 默认行为升级为持久 Story Bridge Line：新投入素材默认持续进入后续正文生成，不再因第一轮剧情无关而自动遗忘；旧版已存在的 pending one-shot 仍兼容消费。
+- 新增按 scope 隔离的剧情线状态：`未激活` / `已激活`、阶段号、最后注入楼层、激活楼层。未激活线持续注入；已激活线停止注入但保留在正文前台状态栏，等待 User「编辑续线」或「清除」。
+- 正文生成 Prompt 带内部 activation receipt 协议：只有本轮正文明确落实当前阶段时才回传对应 line id；计划、回忆、假设、仅提及未来安排均不算激活。回执由扩展在消息接收/生成结束链路消费并从正文中剥离；同时保留「手动激活」兜底。
+- 「编辑续线」会在同一剧情线内增加阶段号、替换当前阶段内容并重新回到未激活，下一轮继续持续注入；「清除」才真正停止并删除该前台线。
+- 新增朴素文尾前台状态栏，仅承担状态/操作，不在本版做视觉美化；状态栏随当前聊天 scope 隔离，不把剧情线写进正文消息本身。
+- 保留 moli240/241 的开放 Wall Source Provider、知识边界 Semantic Payload、直接作为 AI 正文插入和入墙历史；本版不做 Story→Phone Awareness 自动回流。

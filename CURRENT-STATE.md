@@ -1,8 +1,10 @@
-# CURRENT STATE — moli241 / v0.5.94
+# CURRENT STATE — moli242 / v0.5.95
 
 > Updated 2026-09-20. This top block is the authoritative current handoff; older entries below are retained as history.
 
-- Current package line: moli241 / v0.5.94.
+- moli242 adds persistent Story Bridge Lines: Wall context can remain pending across multiple story turns, auto/manual activation stops injection without deleting the line, and User can edit an activated line into a new pending stage or clear it. A lightweight story-footer status UI exposes this lifecycle.
+
+- Current package line: moli242 / v0.5.95.
 - moli241 upgrades Wall → Story semantic injection: final Tavern context uses story-world facts/knowledge/identity boundaries rather than product-internal “wall” language; memo knowledge defaults to its owner, public internet existence does not imply every character has seen it, conversation memories inherit their chat participant boundary, and injected material is continuity context rather than a checklist that must be acted out this turn.
 - moli239 lands request-level Private Context Isolation v1: Community autonomous Character decisions and public Moments contact decisions no longer batch multiple actors' private Phone Context/world-book/visibility data into one model request; shared Community world generation no longer receives per-character Phone Context or per-character world-book packs; Weibo shared Network Actor context no longer includes linked private WeChat messages. Public/social continuity remains, but private knowledge is present only in the owning actor's request.
 - moli238 repairs Private Phone Trace old-schema compatibility: pre-MEMO moli234 character rows are normalized on access so searches/views are preserved while missing memos/sexualTrace/default fields are safely added before refresh writes. No Community/WeChat/Automation behavior changed.
