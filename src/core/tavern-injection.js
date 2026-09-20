@@ -8,6 +8,7 @@ const PROMPT_ID = 'moli-phone-context-once';
 const BRIDGE_PROMPT_ID = 'moli-story-bridge-active-lines';
 const LIFE_INSPIRATION_PROMPT_ID = 'moli-life-inspiration-watch';
 const ACTIVATION_RE = /<moli_bridge_activation>([\s\S]*?)<\/moli_bridge_activation>/gi;
+const LIFE_EVENT_RE = /<moli_life_event>([\s\S]*?)<\/moli_life_event>/gi;
 let activeScopeKey = '';
 let activeGeneration = false;
 
@@ -65,26 +66,63 @@ function clearLifeInspirationPrompt(ctx) {
   try { ctx?.setExtensionPrompt?.(LIFE_INSPIRATION_PROMPT_ID, '', extension_prompt_types.NONE, 0, false); } catch {}
 }
 
+function randomLifeThreshold() { return 4 + Math.floor(Math.random() * 3); }
+function findWritersRoom(scopeKey) {
+  return getScopeConversations(scopeKey).find(item => item?.type === 'group' && String(item.systemKind || '') === 'writers-room') || null;
+}
+function updateLifeState(scopeKey, room, patch) {
+  const updated = updateGroupConversation(scopeKey, room.conversationKey || room.id, patch);
+  try { window.dispatchEvent(new CustomEvent('moli:life-inspiration-changed', { detail: { scopeKey: String(scopeKey || '') } })); } catch {}
+  return updated;
+}
 function armLifeInspiration(scopeKey) {
   try {
-    const room = getScopeConversations(scopeKey).find(item => item?.type === 'group' && String(item.systemKind || '') === 'writers-room');
+    const room = findWritersRoom(scopeKey);
     if (!room || room.studioInspirationEnabled !== true || room.studioInspirationPaused === true) return '';
+    const threshold = Math.max(4, Math.min(6, Number(room.studioInspirationThreshold) || randomLifeThreshold()));
     const next = Math.max(0, Number(room.studioInspirationCounter) || 0) + 1;
-    const due = next >= 5;
-    updateGroupConversation(scopeKey, room.conversationKey || room.id, { studioInspirationCounter: due ? 0 : next });
+    const due = next >= threshold;
+    updateLifeState(scopeKey, room, { studioInspirationCounter: due ? 0 : next, studioInspirationThreshold: due ? randomLifeThreshold() : threshold });
     if (!due) return '';
+    const cooldown = Math.max(0, Number(room.studioInspirationNsfwCooldown) || 0);
+    const recent = Array.isArray(room.studioInspirationRecentTypes) ? room.studioInspirationRecentTypes.slice(-6) : [];
+    if (cooldown > 0) updateLifeState(scopeKey, room, { studioInspirationNsfwCooldown: cooldown - 1 });
     return [
       '[娘家人 · 生活灵感观察]',
       '这是一次低频的“世界自己呼吸”机会，不是必须执行的剧情任务。先判断当前正文是否自然需要一点外部生活扰动；若当前已有充足事件、冲突或外部推动，可以完全不使用本提示。',
-      '若适合，请根据当前时间、地点、季节、环境、人物身份、社会关系、生活习惯、工作状态与既有世界事实，自然加入一个轻量小动静：可以是邻里求助、设施变化、普通偶遇、小麻烦、小幸运、意外获得、环境变化或他人的独立活动。',
+      '若适合，请根据当前时间、地点、季节、环境、人物身份、社会关系、生活习惯、工作状态与既有世界事实，自然加入至多一个轻量小动静：邻里/家人/工作来客、电话消息、设施变化、普通偶遇、小麻烦、小幸运、意外获得、环境变化或配角自己的事务都可以。',
       '生活允许只是发生：不要求推动主线、揭示秘密、促进感情或制造冲突。不要为了“有剧情”凭空制造重大人物、阴谋、事故或危机，也不要强行让无关配角闯入或获得其不应知道的信息。',
-      '优先避免近期最常见的停电、下雨、电话、偶遇等套路重复；若没有真正自然的机会，保持原剧情即可。',
+      recent.length ? `近期已经实际采用过的扰动类型：${recent.join('、')}。这些类型近期主动降权，优先换一种生活来源或保持安静。` : '近期没有登记已采用的生活扰动类型。',
+      '如果当前正处于连续亲密/性场景，不必完全冻结世界：工作来客、电话、家人、配角事务等仍可能自然发生，但一次连续场景至多实际采用一个外部扰动；不要为了打断而打断。',
+      cooldown > 0 ? `亲密场景外部扰动仍在冷却中（还需经过约 ${cooldown} 次生活灵感复查机会）：若当前仍属亲密/性场景，本次禁止再加入新的外部扰动；普通非亲密场景仍可按自然性判断。` : '亲密场景外部扰动当前不在冷却中；若本次恰处于亲密/性场景且确有自然机会，可以采用一次，但采用后会进入较长冷却。',
+      '若本轮正文确实实际写入了生活扰动，请在回复最末尾额外输出内部回执：<moli_life_event>normal|简短类型</moli_life_event>；若它发生在连续亲密/性场景中，则写 <moli_life_event>intimate|简短类型</moli_life_event>。没有实际写入就不要输出。回执不属于正文，不要解释。',
       '[娘家人 · 生活灵感观察结束]',
     ].join('\n');
   } catch (error) {
     console.warn('[moli小手机] life inspiration watch unavailable', error);
     return '';
   }
+}
+
+function consumeLifeEventReceipt(ctx, messageId, scopeKey) {
+  const mid = Number(messageId);
+  if (!Number.isInteger(mid) || !Array.isArray(ctx?.chat)) return;
+  const message = ctx.chat[mid];
+  if (!message || message.is_user || message.is_system) return;
+  const original = String(message.mes || '');
+  const receipts = [];
+  const cleaned = original.replace(LIFE_EVENT_RE, (_full, body) => { receipts.push(String(body || '').trim()); return ''; }).replace(/\n{3,}/g, '\n\n').trim();
+  if (cleaned !== original.trim()) { message.mes = cleaned; Promise.resolve(ctx.saveChat?.()).catch(() => {}); }
+  if (!receipts.length) return;
+  const room = findWritersRoom(scopeKey); if (!room) return;
+  let intimate = false; const types = [];
+  for (const receipt of receipts) {
+    const [kind, ...rest] = receipt.split('|');
+    if (String(kind || '').trim().toLowerCase() === 'intimate') intimate = true;
+    const type = rest.join('|').trim(); if (type) types.push(type.slice(0, 30));
+  }
+  const recent = [...(Array.isArray(room.studioInspirationRecentTypes) ? room.studioInspirationRecentTypes : []), ...types].slice(-6);
+  updateLifeState(scopeKey, room, { studioInspirationRecentTypes: recent, ...(intimate ? { studioInspirationNsfwCooldown: randomLifeThreshold() } : {}) });
 }
 
 function consumeActivationReceipt(ctx, messageId, scopeKey) {
@@ -154,7 +192,7 @@ export function createTavernInjectionBridge() {
 
   const onMessageReceived = (messageId) => {
     const scopeKey = activeScopeKey || getCurrentScopeKey();
-    if (scopeKey) consumeActivationReceipt(ctx, messageId, scopeKey);
+    if (scopeKey) { consumeActivationReceipt(ctx, messageId, scopeKey); consumeLifeEventReceipt(ctx, messageId, scopeKey); }
   };
 
   const onGenerationEnded = () => {
@@ -162,6 +200,7 @@ export function createTavernInjectionBridge() {
     const consumedScope = activeScopeKey;
     const lastMessageId = Array.isArray(ctx.chat) ? ctx.chat.length - 1 : -1;
     consumeActivationReceipt(ctx, lastMessageId, consumedScope);
+    consumeLifeEventReceipt(ctx, lastMessageId, consumedScope);
     markStoryBridgeInjected(consumedScope, lastMessageId);
     clearExtensionPrompt(ctx);
     clearBridgePrompt(ctx);
