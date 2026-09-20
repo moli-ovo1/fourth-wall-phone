@@ -31,7 +31,7 @@ import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { summarizeWorldEventsForContext } from '../storage/world-event-store.js';
 import { buildPhoneContext } from './phone-context-builder.js';
 import { buildCharacterContinuity } from '../storage/character-continuity-store.js';
-import { getPublicWebPost, listPublicWebPosts, listWeiboFollows, listNetworkActors, getWeiboSupertopicStates, updateWeiboSupertopicStates, saveWeiboMessagePeer, addWeiboPrivateMessage, listCommunityEchoes, markCommunityEchoesConsumed } from '../storage/public-web-store.js';
+import { getPublicWebPost, listPublicWebPosts, listWeiboFollows, listNetworkActors, getWeiboSupertopicStates, updateWeiboSupertopicStates, saveWeiboMessagePeer, addWeiboPrivateMessage, listCommunityEchoes, markCommunityEchoesConsumed, getCommunityUserProfile } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
 
 function communityActorName(actor) {
@@ -1444,8 +1444,8 @@ export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], 
     actorBlocks.push(`===== ACTOR id=${contact.id}｜${contactLabel(contact)} =====\n【身份】\n${builtinPrompt || batchRoleProfile(contact, scanText)}\n${worldBookText ? `【本人的世界书】\n${worldBookText}\n` : ''}【本人的统一手机经历】\n${buildPhoneContext(scopeKey, contact.id, { query: scanText, userName, limit: 24 }).text || '暂无'}\n===== END =====`);
   }
 
-  const system = `你在判断 moli小手机 公共 Community 中，各人物在这次刷新期间是否自己刷到了一些帖子。\n- 这是“浏览/发现”判断，不是评论任务。人物无需 User @、邀请或转发，也可能自己逛社区并看到帖子。\n- 依据人物自己的习惯、兴趣、关系、当下状态和帖子内容判断；不要为了展示功能而让所有人都看。一次刷新可以 0 人看到任何帖子。\n- 看见帖子不等于必须评论、点赞、私聊或采取任何行动。这里只记录实际看到。\n- 不要因为人物谨慎、身份敏感或不适合实名公开发言，就推导为“不会浏览”。浏览与公开行动是两回事。\n- 每个人只返回本轮实际看到的 postId；不要把所有后台提供的帖子都算作已知。\n- 只输出严格 JSON，不要解释。`;
-  const user = `【本轮新出现/刷新后的 Community 帖子】\n${postText}\n\n【候选人物】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"人物id","viewedPostIds":["本轮实际看到的postId"]}]}。没有看到任何帖的人可以省略。`;
+  const system = `你在模拟 moli小手机 公共 Community 中人物真实使用自己手机的一轮行为。\n- 四条决策轴彼此独立：浏览、看到后的公开参与、人物主动发帖、社区经历是否转向微信私聊。不要用一个“参与率”把它们绑在一起。\n- 人物无需 User @、邀请或转发，也可能自己逛社区；一次刷新允许 0 人看到任何帖子。谨慎或身份敏感只能影响公开行动，不能自动推导为“不浏览”。\n- 看到帖子后可以实名回复、用自己已有/自然使用的小号回复、只看不说；不公开参与也完全可以转去微信与 User 讨论。\n- 主动发帖是独立动机：一个人可以常浏览但几乎不发帖，也可以因职业/社交习惯主动发帖。不要为了展示功能强迫发帖。\n- 私聊只表达人物自己当下的动机。可以 MESSAGE（只聊）、SHARE（把帖子真实转发给 User，可附带消息）或 SKIP。不要照抄固定话术，不要机械回应每篇帖子。\n- 公开回复和私聊只能基于 viewedPostIds 中人物本轮确实看到的帖子；后台提供但没看到的内容不能拿来行动。\n- User 本人账号及 User 的社区大号/小号都属于 User-controlled identity，绝不能由任何 AI 人物代替使用。\n- 每个人只返回自己的决定。只输出严格 JSON，不要解释。`;
+  const user = `【本轮新出现/刷新后的 Community 帖子】\n${postText}\n\n【候选人物】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"人物id","viewedPostIds":["实际看到的postId"],"publicAction":"REPLY_REAL|REPLY_ANONYMOUS|SKIP","actionPostId":"公开参与的postId","replyToCommentId":"可空；只填真实存在的评论id","answerId":"知乎回答下回复时可填","publicAlias":"小号名","publicContent":"公开回复","privateAction":"MESSAGE|SHARE|SKIP","privatePostId":"触发微信行为的已阅postId","privateMessages":["0~5条自然微信气泡"],"newPost":{"section":"tianya|xiaohongshu|zhihu|weibo","anonymous":false,"alias":"小号名","title":"标题","content":"正文","tags":[],"imagePrompt":"小红书可选","imageText":"小红书可选"}}]}。newPost 是独立主动发帖决定，没有动机就不要返回；没有任何浏览/行动的人可以省略。`;
   const config = resolveApiRuntimeConfig(getApiSettings());
   assertApiConfig(config);
   const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
@@ -1454,16 +1454,23 @@ export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], 
   try { data = JSON.parse(raw); } catch { const match = raw.match(/\{[\s\S]*\}/); if (match) try { data = JSON.parse(match[0]); } catch {} }
   const allowedActors = new Set(candidates.map(item => String(item.id || '')));
   const allowedPosts = new Set(visiblePosts.map(post => String(post.id || '')));
-  const actors = (Array.isArray(data?.actors) ? data.actors : []).map(item => ({
-    actorId: String(item?.actorId || ''),
-    viewedPostIds: [...new Set((Array.isArray(item?.viewedPostIds) ? item.viewedPostIds : []).map(String).filter(id => allowedPosts.has(id)))].slice(0, 8),
-  })).filter(item => allowedActors.has(item.actorId) && item.viewedPostIds.length);
+  const actors = (Array.isArray(data?.actors) ? data.actors : []).map(item => {
+    const viewedPostIds=[...new Set((Array.isArray(item?.viewedPostIds) ? item.viewedPostIds : []).map(String).filter(id => allowedPosts.has(id)))].slice(0,8);
+    const viewedSet=new Set(viewedPostIds);
+    const publicAction=['REPLY_REAL','REPLY_ANONYMOUS'].includes(String(item?.publicAction||'').toUpperCase())?String(item.publicAction).toUpperCase():'SKIP';
+    const privateAction=['MESSAGE','SHARE'].includes(String(item?.privateAction||'').toUpperCase())?String(item.privateAction).toUpperCase():'SKIP';
+    const actionPostId=viewedSet.has(String(item?.actionPostId||''))?String(item.actionPostId):'';
+    const privatePostId=viewedSet.has(String(item?.privatePostId||''))?String(item.privatePostId):'';
+    const np=item?.newPost&&typeof item.newPost==='object'?item.newPost:null;
+    return {actorId:String(item?.actorId||''),viewedPostIds,publicAction:actionPostId?publicAction:'SKIP',actionPostId,replyToCommentId:String(item?.replyToCommentId||''),answerId:String(item?.answerId||''),publicAlias:String(item?.publicAlias||'').trim().slice(0,24),publicContent:String(item?.publicContent||'').trim().slice(0,1200),privateAction:privatePostId?privateAction:'SKIP',privatePostId,privateMessages:(Array.isArray(item?.privateMessages)?item.privateMessages:[]).map(x=>String(x||'').trim().slice(0,800)).filter(Boolean).slice(0,5),newPost:np?{section:String(np.section||''),anonymous:Boolean(np.anonymous),alias:String(np.alias||'').trim().slice(0,24),title:String(np.title||'').trim().slice(0,120),content:String(np.content||'').trim().slice(0,4000),tags:Array.isArray(np.tags)?np.tags.map(String).slice(0,8):[],imagePrompt:String(np.imagePrompt||'').trim().slice(0,1200),imageText:String(np.imageText||'').trim().slice(0,500)}:null};
+  }).filter(item => allowedActors.has(item.actorId) && (item.viewedPostIds.length || item.newPost?.content));
   return { actors };
 }
 
 function safeInternetName(value, userName, fallback = '网友') {
   const name = String(value || fallback).trim().slice(0, 24) || fallback;
-  return name === String(userName || '').trim() ? fallback : name;
+  const forbidden=new Set([String(userName||'').trim(),...getCommunityUserProfile(getCurrentScopeKey()).communityIds.map(x=>String(x.name||'').trim())].filter(Boolean));
+  return forbidden.has(name) ? fallback : name;
 }
 
 function parsePublicWebBatch(text, userName = 'User') {
@@ -1486,15 +1493,19 @@ function parsePublicWebBatch(text, userName = 'User') {
       const rawComments = Array.isArray(item?.comments) ? item.comments.slice(0, 18) : [];
       const ids = rawComments.map((_,i)=>`seed_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`);
       return rawComments.map((c,i)=>{
+        const rawContent=String(c?.content||'').trim();
         const replyRaw = c?.replyTo ?? c?.replyToCommentId ?? '';
         let replyToCommentId = '';
         const n = Number(replyRaw);
-        if (Number.isInteger(n) && n >= 1 && n <= ids.length) replyToCommentId = ids[n-1];
-        else if (String(replyRaw).trim()) {
-          const target = rawComments.findIndex((x,j)=>j<i && String(x?.author||'').trim()===String(replyRaw).trim());
-          if (target >= 0) replyToCommentId = ids[target];
+        if (Number.isInteger(n) && n >= 1 && n <= i) replyToCommentId = ids[n-1];
+        else {
+          const explicit=String(replyRaw||'').trim().replace(/^回复\s*@?/, '').replace(/[：:].*$/, '').trim();
+          const fromText=rawContent.match(/^\s*回复\s*@?\s*([^：:]{1,48})[：:]/)?.[1]?.trim()||'';
+          const wanted=explicit||fromText;
+          if(wanted){const target=rawComments.findIndex((x,j)=>j<i&&String(x?.author||'').trim()===wanted);if(target>=0)replyToCommentId=ids[target];}
         }
-        return {id:ids[i],author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),createdAt:Date.now(),replyToCommentId};
+        const content=replyToCommentId?rawContent.replace(/^\s*回复\s*@?\s*[^：:]{1,48}[：:]\s*/,''):rawContent;
+        return {id:ids[i],author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:content.slice(0,800),createdAt:Date.now(),replyToCommentId};
       }).filter(c=>c.content);
     })(),
     extra: { subtitle:String(item?.subtitle || ''), style:String(item?.style || ''), imagePrompt:String(item?.imagePrompt || item?.imageDescription || ''), images:(Array.isArray(item?.images)?item.images:[item?.imageDescription||item?.imagePrompt].filter(Boolean)).map(String).filter(Boolean).slice(0,9), videos:(Array.isArray(item?.videos)?item.videos:[item?.videoDescription].filter(Boolean)).map(String).filter(Boolean).slice(0,4), imageText:String(item?.imageText || ''), answer:String(item?.answer || ''), weiboLane:String(item?.lane||item?.weiboLane||'实时'), repostText:String(item?.repostText||''), repostChain:Array.isArray(item?.repostChain)?item.repostChain.map(String).slice(0,6):[], reposts:Number(item?.reposts||0), hotScore:Number(item?.hotScore||0), hotLabel:String(item?.hotLabel||''), privateMessage:String(item?.privateMessage||'').trim().slice(0,800), customCommunityId:String(item?.customCommunityId||''), customCommunityName:String(item?.customCommunityName||''), answers:Array.isArray(item?.answers)?item.answers.slice(0,6).map((a,ai)=>({id:String(a?.id||`ans_${Date.now()}_${ai}`),author:{type:'internet_actor',id:String(a?.authorId||''),name:safeInternetName(a?.author, userName, '小号用户')},content:String(a?.content||a?.answer||'').trim().slice(0,6000),upvotes:Number(a?.upvotes||0),comments:Array.isArray(a?.comments)?a.comments.slice(0,15).map((c,ci)=>({id:String(c?.id||`zac_${Date.now()}_${ai}_${ci}`),author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:String(c?.replyToCommentId||'')})).filter(c=>c.content):[]})).filter(a=>a.content):[] }
@@ -1642,7 +1653,7 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
 1. 首页：lane 只能是“关注/同城/实时”；混合已关注账号、大V、营销号、热点人物、同城实时等内容。
 2. 超话：lane 必须是“超话”；围绕当前正文世界已知人物及关系形成持续CP粉丝社区。
 3. 首页+超话本轮合计生成 8~10 条微博，不机械平均分配，按当前世界内容价值自然分布。
-4. 另生成 5~8 个热搜词。热搜词只是 #关键词内容# 榜单，不是微博帖子，不使用 lane=热门。
+4. 另生成 5~8 个热搜词。热搜首先代表当前整个社会今天正在发生什么，不是正文人物专题榜：允许新闻、娱乐、民生、公共事件、互联网争议、网络热点、行业话题、地方事件等自行发生。正文人物相关热搜只是其中可能的一部分，不要求固定占比，也不得为了关联 Character 强行制造热点。热搜词只是 #关键词内容# 榜单，不是微博帖子，不使用 lane=热门。
 5. Community 可以自然使用当前可用的 Character 本人账号或其已有小号参与发帖、回答、评论和回复；其公开行为应符合该 Character 当前可获得的信息、已有经历与人物状态。
 ${pendingUserPosts.length?`6. 以下 User 微博尚未形成初始互动，请在 userPostComments 中各补一次初始评论生态：\n${pendingUserPosts.map(p=>`- id=${p.id}；@${p.author?.name||'User'}：${String(p.content||p.title||'').slice(0,500)}`).join('\n')}`:''}`].filter(Boolean).join('\n\n'); const follows=listWeiboFollows(scopeKey);if(follows.length){const followText=follows.slice(0,40).map(x=>`- @${x.name}${x.hot?' 🔥持续互动':''}${x.profile?`：${x.profile}`:''}${x.hot&&Array.isArray(x.memory)&&x.memory.length?`；最近互动：${x.memory.slice(-4).join(' / ')}`:''}`).join('\n');context=[context,`【User 已关注的微博账号】\n这些是持续账号；刷新首页时应自然让其中一部分账号发微博，但不要强制每个账号每次都出现。普通路人账号在确有自然动机时也可以 @User 或给 User 发一条私信；不要为了展示功能而人人私信。标记🔥的是 User 指定的持续网友：相比普通路人，可以基于与 User 已发生的互动更熟稔、更主动地 @User 或私信，但仍由账号自身和当前情境决定是否行动。\n${followText}`].filter(Boolean).join('\n\n');} const networkActors=listNetworkActors(scopeKey).filter(x=>Array.isArray(x.publicIds)&&x.publicIds.length).slice(0,50);if(networkActors.length){const conversations=getScopeConversations(scopeKey);const actorText=networkActors.map(x=>{const recentWechat=x.contactId?conversations.filter(c=>c?.type==='private'&&String(c.contactId||'')===String(x.contactId)).flatMap(c=>(c.messages||[]).slice(-6)).slice(-6).map(m=>`${m.role==='user'?userName:(x.name||'网友')}：${String(m.content||'').slice(0,180)}`).join(' / '):'';return `- ${x.publicIds.map(id=>'@'+id).join(' / ')}${x.profile?`：${x.profile}`:''}${x.memory?.length?`；已发生网络经历：${x.memory.slice(-4).join(' / ')}`:''}${recentWechat?`；成为微信好友后的近期亲历：${recentWechat}`:''}`;}).join('\n');context=[context,`【持续网络账号 · 连续性参考】\n以下公开ID已经在 Community 中真实出现过，仅用于“再次遇到同一人时继续同一人物”，不是本轮应优先使用的账号名单，也不限制生成新的网友或新账号。这里只提供该账号自己的公开经历，不代表其他人物知道其后台身份。\n${actorText}`].filter(Boolean).join('\n\n');} const activeActors=networkActors.filter(x=>x.hot||x.contactId||(x.memory||[]).length>=2).slice(0,6);if(activeActors.length){context=[context,`【持续网友行动机会】\n以下持续网友与 User 已有真实经历，本轮若当前公开事件确实触发其行动，可以选择公开 @User、私信 User 或不行动。依据各自画像与亲历自行决定，不要求每个人行动。\n${activeActors.map(x=>`- actorId=${x.id}；公开ID=${x.publicIds?.[0]||x.name}；${x.profile||''}；近期亲历=${(x.memory||[]).slice(-4).join(' / ')}`).join('\n')}`].filter(Boolean).join('\n\n');} const supertopics=getWeiboSupertopicStates(scopeKey).slice(0,12);if(supertopics.length){const st=supertopics.map(x=>`- ${x.name}${x.recentMaterials?.length?`；近期公开素材：${x.recentMaterials.slice(-3).join(' / ')}`:''}${x.activeAccounts?.length?`；持续活跃ID：${x.activeAccounts.slice(-8).map(a=>'@'+a).join('、')}`:''}`).join('\n');context=[context,`【已有超话连续状态】\n这些超话已经真实形成。生成新的超话内容时优先延续已有名称、公开素材和活跃账号；也可以在当前世界确有新关系时自然形成新超话。\n${st}`].filter(Boolean).join('\n\n');} if(String(weiboQuery||'').trim()) context=[context,`【User 本次微博搜索】\n关键词：${String(weiboQuery).trim()}\n本次生成优先围绕这个搜索意图，像用户主动搜索后看到的相关实时微博；仍保持不同账号、信息来源和立场。`].filter(Boolean).join('\n\n');}
   if (!context.trim()) context = '当前没有打开正文，也没有选择“当前角色世界”。不要读取、猜测或讨论程序代码、插件、API、Prompt、SillyTavern、模型、世界书、角色卡、调试信息；只生成自然的普通社区内容。';
@@ -1740,7 +1751,7 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
     : section === 'recommend'
       ? `返回：{"posts":[{"section":"tianya|xiaohongshu|zhihu|custom","type":"thread|note|question","author":"网名","authorId":"可选稳定id","title":"标题或问题","content":"主楼/笔记正文/问题补充","subtitle":"仅天涯使用","style":"仅天涯使用","tags":["仅小红书使用"],"imageDescription":"仅小红书使用的图片内容描述","imageText":"仅小红书使用的图片内文字","answer":"仅知乎使用的初始回答","customCommunityId":"仅自创使用","customCommunityName":"仅自创使用","needsComments":"仅自创使用；true|false，严格按条目设置","comments":[{"author":"网友","content":"符合所属社区的回复/评论"}]}]}。生成 ${recommendCount>0?recommendCount+" 条":"6~8 条"}；每条按内容热度生成符合所属社区结构的初始互动：普通约5~8条、活跃约8~12条、热门或争议约12~18条。不要 markdown。`
       : section === 'weibo'
-      ? (String(weiboQuery||'').trim() ? `返回：{"posts":[{"section":"weibo","type":"weibo","author":"公开ID","authorId":"稳定id","title":"摘要","content":"与搜索关键词直接相关的微博正文","lane":"热门","tags":["#相关话题#"],"comments":[{"author":"网友ID","authorId":"稳定id","content":"评论","replyToCommentId":"可空"}]}]}。这是 User 主动搜索结果，只生成 4~8 条相关微博，统一 lane=热门，供“热门微博”结果区展示。不要 markdown。` : `返回：{"posts":[{"section":"weibo","type":"weibo","author":"公开ID","authorId":"稳定id","title":"一句简短摘要或话题名","content":"微博正文","lane":"关注|同城|实时|超话","tags":["#话题#"],"images":["可空；最多9张"],"videos":["可空；最多4个"],"repostText":"可空","repostChain":["@账号：转发链内容"],"reposts":0,"privateMessage":"可空；自然想私信User时填写，否则空字符串","comments":[{"author":"网友ID","authorId":"稳定id","content":"评论","replyToCommentId":"可空；回复此前评论时填其id"}]}],"hotTopics":["#热搜词#"],"userPostComments":[{"postId":"仅填写本次提供的待补User微博id","comments":[{"author":"网友ID","authorId":"稳定id","content":"初始评论","replyToCommentId":"可空"}]}],"actorActions":[{"actorId":"仅使用本次持续网友行动机会中的actorId","action":"PUBLIC|PRIVATE|SKIP","content":"行动内容；SKIP时可空"}]}。正常刷新：首页+超话微博总计8~10条；另外生成5~8个短、狠、醒目、辛辣抓眼的热搜词。每条微博按热度形成普通5~8、活跃8~12、热门或争议12~18条初始互动，包含顶层评论与下级回复。不要 markdown。`)
+      ? (String(weiboQuery||'').trim() ? `返回：{"posts":[{"section":"weibo","type":"weibo","author":"公开ID","authorId":"稳定id","title":"摘要","content":"与搜索关键词直接相关的微博正文","lane":"热门","tags":["#相关话题#"],"comments":[{"author":"网友ID","authorId":"稳定id","content":"评论","replyToCommentId":"可空；若回复本批前面的评论，优先填写该评论在 comments 数组中的 1-based 序号；不要只在 content 写回复@某人"}]}]}。这是 User 主动搜索结果，只生成 4~8 条相关微博，统一 lane=热门，供“热门微博”结果区展示。不要 markdown。` : `返回：{"posts":[{"section":"weibo","type":"weibo","author":"公开ID","authorId":"稳定id","title":"一句简短摘要或话题名","content":"微博正文","lane":"关注|同城|实时|超话","tags":["#话题#"],"images":["可空；最多9张"],"videos":["可空；最多4个"],"repostText":"可空","repostChain":["@账号：转发链内容"],"reposts":0,"privateMessage":"可空；自然想私信User时填写，否则空字符串","comments":[{"author":"网友ID","authorId":"稳定id","content":"评论","replyToCommentId":"可空；回复本批前面的评论时填其 1-based 序号；不要只在 content 写回复@某人"}]}],"hotTopics":["#热搜词#"],"userPostComments":[{"postId":"仅填写本次提供的待补User微博id","comments":[{"author":"网友ID","authorId":"稳定id","content":"初始评论","replyToCommentId":"可空；若回复本批前面的评论，优先填写该评论在 comments 数组中的 1-based 序号；不要只在 content 写回复@某人"}]}],"actorActions":[{"actorId":"仅使用本次持续网友行动机会中的actorId","action":"PUBLIC|PRIVATE|SKIP","content":"行动内容；SKIP时可空"}]}。正常刷新：首页+超话微博总计8~10条；另外生成5~8个来自整个当前社会的热搜词，题材可覆盖新闻、娱乐、民生、公共事件、互联网争议、行业与地方热点；正文人物相关只是其中可能的一部分。每条微博按热度形成普通5~8、活跃8~12、热门或争议12~18条初始互动，包含顶层评论与下级回复。不要 markdown。`)
     : section === 'xiaohongshu'
         ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~8 条；每篇笔记按热度生成初始互动：普通约5~8条、活跃约8~12条、热门或争议约12~18条，混合顶层评论与下级回复。不要 markdown。`
         : `返回：{"posts":[{"section":"zhihu","type":"question","author":"题主昵称","authorId":"可选","title":"问题标题","content":"问题补充，可为空","answers":[{"author":"回答者昵称","authorId":"可选","content":"回答正文","upvotes":0,"comments":[{"author":"评论者","content":"评论"}]}]}]}。生成 6~8 个问题；每题按热度形成约5~18条初始互动，由风格明显不同的独立回答与回答下评论共同构成，不要求全部都是回答。不要 markdown。`;
@@ -1757,6 +1768,9 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
   }
   let parsedEnvelope={}; try{const raw=String(text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');parsedEnvelope=JSON.parse(raw);}catch{try{const m=String(text||'').match(/\{[\s\S]*\}/);parsedEnvelope=m?JSON.parse(m[0]):{};}catch{parsedEnvelope={};}}
   let posts=parsePublicWebBatch(text, userName).filter(p=>section==='recommend' || p.section===section);
+  const userOwnedNames=new Set([userName,...getCommunityUserProfile(scopeKey).communityIds.map(x=>String(x.name||'').trim())].filter(Boolean));
+  const scrubUserOwnedAuthor=author=>{if(!author||!userOwnedNames.has(String(author.name||'').trim()))return author;return {...author,type:'internet_actor',id:'',name:'网友'};};
+  for(const post of posts){post.author=scrubUserOwnedAuthor(post.author);for(const c of post.comments||[])c.author=scrubUserOwnedAuthor(c.author);for(const a of post.extra?.answers||[]){a.author=scrubUserOwnedAuthor(a.author);for(const c of a.comments||[])c.author=scrubUserOwnedAuthor(c.author);}}
   const customById=new Map((customCommunities||[]).map(item=>[String(item.id||''),item]));
   posts=posts.map(post=>{if(post.section!=='custom')return post;const def=customById.get(String(post.extra?.customCommunityId||''));if(def?.needsComments===false)return{...post,comments:[]};return post;});
   if (!ghostStoriesEnabled) posts=posts.filter(p=>p.extra?.subtitle!=='莲蓬鬼话');
@@ -1816,7 +1830,8 @@ export async function generateXiaohongshuCommentRefresh({ scopeKey, post, signal
   for(const c of (Array.isArray(data?.comments)?data.comments:[]).slice(0,6)){
     const id=`webc_${Date.now()}_${Math.random().toString(36).slice(2,8)}_${created.length}`;
     const requested=String(c?.replyToCommentId||'');
-    const replyToCommentId=known.has(requested)?requested:'';
+    let replyToCommentId=known.has(requested)?requested:'';
+    if(!replyToCommentId){const named=String(c?.content||'').match(/^\s*回复\s*@?\s*([^：:]{1,48})[：:]/)?.[1]?.trim();if(named){const target=[...comments,...created].reverse().find(x=>String(x?.author?.name||'').trim()===named);replyToCommentId=String(target?.id||'');}}
     const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author, userName, '网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId};
     if(item.content){created.push(item);known.add(id);}
   }
@@ -1835,7 +1850,7 @@ export async function generateWeiboCommentRefresh({ scopeKey, post, signal } = {
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
   const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''); let data; try{data=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('微博评论刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
   const known=new Set(comments.map(c=>String(c.id))); const out=[];
-  for(const c of (Array.isArray(data?.comments)?data.comments:[]).slice(0,6)){const id=`webc_${Date.now()}_${Math.random().toString(36).slice(2,8)}_${out.length}`;const requested=String(c?.replyToCommentId||'');const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:String(c?.content||'').trim().slice(0,800),replyToCommentId:known.has(requested)?requested:''};if(item.content){out.push(item);known.add(id);}} return out;
+  for(const c of (Array.isArray(data?.comments)?data.comments:[]).slice(0,6)){const id=`webc_${Date.now()}_${Math.random().toString(36).slice(2,8)}_${out.length}`;const requested=String(c?.replyToCommentId||'');let replyToCommentId=known.has(requested)?requested:'';if(!replyToCommentId){const named=String(c?.content||'').match(/^\s*回复\s*@?\s*([^：:]{1,48})[：:]/)?.[1]?.trim();if(named){const target=[...comments,...out].reverse().find(x=>String(x?.author?.name||'').trim()===named);replyToCommentId=String(target?.id||'');}}const content=replyToCommentId?String(c?.content||'').replace(/^\s*回复\s*@?\s*[^：:]{1,48}[：:]\s*/,''):String(c?.content||'');const item={id,author:{type:'internet_actor',id:String(c?.authorId||''),name:safeInternetName(c?.author,userName,'网友')},content:content.trim().slice(0,800),replyToCommentId};if(item.content){out.push(item);known.add(id);}} return out;
 }
 
 export async function generateZhihuDetailRefresh({ scopeKey, post, signal } = {}) {
