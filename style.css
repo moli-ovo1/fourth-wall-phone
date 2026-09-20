@@ -2608,3 +2608,13 @@
 #moli-phone-panel .moli-his-phone-view-row b{font-size:13px;font-weight:500;line-height:1.4;min-width:0;}
 #moli-phone-panel .moli-his-phone-view-row span{font-size:10px;color:#888;white-space:nowrap;}
 #moli-phone-panel .moli-his-phone-refresh:disabled{opacity:.45;}
+#moli-phone-panel .moli-his-phone-view-row.is-community{cursor:pointer;}
+#moli-phone-panel .moli-his-phone-view-row.is-community:hover{background:#fafafa;}
+#moli-phone-panel .moli-his-phone-memo-row{display:flex;gap:9px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid #f0f0f0;font-size:13px;}
+#moli-phone-panel .moli-his-phone-memo-row:last-child{border-bottom:0;}
+#moli-phone-panel .moli-his-phone-memo-row span{color:#999;}
+#moli-phone-panel .moli-his-phone-memo-row b{font-weight:500;line-height:1.45;}
+#moli-phone-panel .moli-his-phone-memo-row.is-done b{text-decoration:line-through;color:#999;}
+#moli-phone-panel .moli-his-phone-sexual-card{padding:10px 14px 12px;}
+#moli-phone-panel .moli-his-phone-sexual-card p{display:grid;grid-template-columns:42px minmax(0,1fr);gap:8px;margin:7px 0;font-size:12px;line-height:1.55;}
+#moli-phone-panel .moli-his-phone-sexual-card p span{color:#999;}

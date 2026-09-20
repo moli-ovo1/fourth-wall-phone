@@ -3506,3 +3506,11 @@ Still next, without splitting into UI micro-patches:
 - 数据层按 scope + Character 隔离；VIEW 可累计停留时间/点击次数，站外内容只存标题，不建设第二套 Community。
 - 生成材料复用现有人物资料、世界书、近期正文/微信、已知 World Event；私人痕迹不写入公共 Awareness。
 - 暂不扩展删除/无痕/草稿箱/相册/短信。后续施工前继续先查 SPEC / CURRENT-STATE / 实际调用链。
+
+
+## 2026-09-20 · 「他的手机」v2 — moli235 / v0.5.88
+- SEARCH / VIEW 从“人设关键词联想”收紧为“近期经历产生真实信息缺口/现实需求”；人物资料只控制行为方式，不得自己成为搜索主题。真实 Community 标题例外：若 VIEW 指向真实原帖，保留原帖标题本身，不把平台标题风格误判为站外生成问题。
+- Community VIEW deep-link 只接受已知 World Event 可解析且 Community Store 真实存在的 postId；无效 sourceRef 降级站外记录。
+- Private Phone Trace 增加 MEMO（新增/完成，不静默删除）与单条 latest SEXUAL_TRACE；仍只在 User 点击右上角刷新时一次 API 结算。
+- Future / 未施工：番茄钟 App；文生图；Character → User Phone Observation。反向查看 User 手机必须建立在故事内真实接触机会与 Awareness 上，禁止后台全知。
+- 后续继续保留：独立收藏 App 尚未完整落地；「我们的墙」已有真实注入桥，只能在现有实现上审计/补素材源，不得从头重建。

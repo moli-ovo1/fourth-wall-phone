@@ -4504,3 +4504,12 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - Community 不是主体数据源：普通“看见过”不进入「他的手机」；只有人物明显反复查看/长时间停留时，模型才可把真实 Community 内容作为 VIEW。其他 VIEW 可以只是人物自己互联网世界里的页面/帖子标题，无需在 Community DB 中真实落地。
 - 刷新上下文复用人物角色资料、激活世界书、近期正文、该人物近期微信和其已知 World Event；已结算 World Event 复用现有 consumedBy，以 `his-phone` consumer 标记，不建立公共 Awareness，也不让其他人物自动知道这些私人痕迹。
 - 第一阶段不做删除搜索、无痕模式、草稿箱、相册、短信等扩展；后续是否增加必须另行确认。
+
+
+## v0.5.88 / moli235 — 「他的手机」Private Trace v2
+- 修正 SEARCH / VIEW 生成质量：人物资料和世界书只决定“会不会这样做/会如何措辞”，不得单独作为生成主题；SEARCH 必须由近期真实经历产生具体信息缺口、疑问、验证欲、现实任务、兴趣延伸或私人需要。VIEW 的站外标题必须像独立互联网中自然存在的页面，避免用“年龄+完整职务+地点”等角色卡字段拼成定制帖子。
+- 真实 Community VIEW 支持回到原帖，但 sourceRef 不再信任模型自由填写：只允许引用本次人物已知 World Event 中能够解析到、且当前 Community Store 真实存在的 postId；无效引用自动降级 external。UI 仅对有真实 sourceRef 的记录提供跳转。Community 原帖标题保持原帖本身风格，不受站外标题规则改写。
+- Private Phone Trace Store 扩展 MEMO：备忘录是人物主动写给自己的待记/待办事项，不是 Conversation Memory 或心理日记。刷新可新增备忘，也可按真实 memoId 标记完成；不允许模型静默删除旧备忘。
+- 增加最近一次 SEXUAL_TRACE：仅在近期经历自然形成具有记录价值的私人性冲动/自慰情况时更新；保存简短诱因、处理结果、刺激来源、场景，允许“有冲动但未处理/转移注意”和单纯生理需求，不默认归因 User，不保存露骨过程，不做历史统计流水账。
+- 一次 User 手动刷新仍只调用一次人物 AI，同时结算 SEARCH / VIEW / MEMO / SEXUAL_TRACE；四类均允许为空，不新增后台定时调用。
+- Future TODO（只登记、不施工）：手机主页番茄钟 App（具体功能后定）；文生图能力方向（用途后定）；Character → User Phone Observation（角色反向查看 User 手机，必须先有故事世界中的实际接触机会，只能获得实际可见内容，禁止后台全知）。

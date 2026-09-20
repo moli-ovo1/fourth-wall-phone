@@ -1,15 +1,16 @@
-# CURRENT STATE — moli234 / v0.5.87
+# CURRENT STATE — moli235 / v0.5.88
 
 > Updated 2026-09-20. This top block is the authoritative current handoff; older entries below are retained as history.
 
-- Current package line: moli234 / v0.5.87.
+- Current package line: moli235 / v0.5.88.
 - moli234 adds 「他的手机」Private Phone Trace v1: User-triggered refresh only, with private SEARCH + VIEW traces stored per scope + Character. It is not a Community activity log; external viewed content stores title/duration/visit count only, and private traces do not become public Awareness.
 - Community Social Network v1 from moli228 is CLOSED and retained: Network Actor / Public Identity / Community Echo must not be rebuilt from old TODOs.
 - moli229 verified social echo, cross-board traces and existing comment-tree continuation; later work must preserve those paths.
 - moli230–231 added first-time autonomous Community browsing and the independent behavior exits: public participation, proactive posting, Community→WeChat MESSAGE/SHARE.
 - moli232 closed duplicate Character reply paths back into the existing natural-participation/anonymous-identity continuity.
 - moli233 closes three audited gaps only: proactive Character posts now record CHARACTER_POSTED experience; autonomous browse→WeChat actions are linked through the existing World Event cause/result chain; Zhihu answer comments normalize real replyToCommentId like other Community comments.
-- Future backlog: App「他的手机」(search history + viewed-post history), based on real Awareness/behavior records; not implemented yet.
+- moli235 extends 「他的手机」 without turning it into an activity log: information-gap-driven SEARCH/VIEW generation, verified Community deep-links, MEMO, and a single latest private sexual-impulse trace.
+- Future backlog: 番茄钟 App（功能待设计）、文生图能力方向、Character → User Phone Observation（必须遵守实际接触机会与 Awareness 边界）。
 - Before any new work: read latest SPEC log + DEVELOPMENT-MAP, verify this file is fresh, then inspect the relevant code/call chain. Do not implement from historical TODOs or conversation memory alone.
 
 ---
