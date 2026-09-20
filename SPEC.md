@@ -4480,3 +4480,11 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 新增独立 App「他的手机」，用于查看人物自己手机侧留下的生活痕迹，而不是 User 的控制面板。
 - 第一阶段至少包括：搜索记录、看帖历史。历史既可以指向 Community 中真实存在的帖子，也允许记录世界中存在但当前 Community 数据库没有落地展示的站外/未保存内容。
 - 该 App 必须建立在人物真实 Awareness/行为记录上，不得为了填满页面倒推人物“看过什么”；后续再设计正式 UI、隐私边界和哪些内容允许 User 查看。
+
+## v0.5.85 / moli232 — moli231 收口 / 去重复
+- 本轮不是新增 Community 子系统，而是对 moli231 与 moli228/229 已有 Social Network / Character 自然参与链做回归收口；保留既有 Network Actor、Public Identity、Community Echo、World Event / Awareness / Phone Context，不建立第二套人物/账号/记忆系统。
+- 首次自主发现后的 Character 公开回复，与既有 `settleNaturalCommunityParticipants()` 后续自然参与，统一经过同一个 Character Community Reply commit 路径：统一实名/匿名 author 结构、真实 `replyToCommentId`、World Event、帖子认知快照与匿名身份连续性。以后修一次公开回复落地，两条入口共同生效。
+- 修正 moli231 的匿名首次参与缺口：自主发现后若 Character 使用小号/匿名身份，该身份现在与旧自然参与一样进入既有 anonymous identity continuity，不再只有评论文本而缺少身份连续性记录。
+- “浏览后的反应”与“独立主动发帖”在返回数据结构上拆开：`actors` 只负责本轮实际浏览后的公开/私聊反应；`proactivePosts` 独立表示人物主动发帖，不要求人物先在本轮刷到某篇帖子。仍可在同一次 API 中批量评估以控制调用量，但触发语义不再绑定。
+- 主动匿名发帖继续复用现有 Public Identity / Network Actor 底层写入，并补记人物自己的匿名身份连续性；不改变 User-owned identity 保护。
+- 不改 moli228 已 CLOSED 的 Network Actor/Public Identity/Community Echo 主体，不改 moli229 已验证的社会余波、跨板块痕迹和后续评论树刷新逻辑。
