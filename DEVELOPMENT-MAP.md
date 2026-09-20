@@ -3549,3 +3549,10 @@ Still next, without splitting into UI micro-patches:
 - Community 跨墙语义明确保持公开账号表面身份；后台小号/匿名真实身份不得因墙注入自动泄漏给正文人物。
 - 「他的手机」本轮仅开放 MEMO/备忘录作为新 wall source；SEARCH / VIEW / SEXUAL_TRACE 不自动开放。备忘录入墙保留“私人幕后事实，不自动成为 User/其他角色已知”的知识边界。
 - 兼容旧工作区：Community 帖子正文继续使用原 `community:<postId>` source id；旧草稿/勾选不会因结构化升级失去帖子正文引用。
+
+## moli241 / v0.5.94 — Wall → Story Semantic Injection v2
+- CLOSED：Wall → Story 的第一轮语义收口。跨墙最终 Prompt 使用故事世界可理解的“事实 / 知识归属 / 身份边界 / 创作指导”语言，不要求正文模型理解「我们的墙」等产品内部概念。
+- 备忘录默认仅记录者本人知道；Community 公开存在不等于人物已浏览；匿名/小号后台映射不等于正文识破；微信记忆继承原会话参与者知识边界。
+- Tavern Injection 明确“连续性依据 ≠ 本轮任务清单”，避免一次投入多项素材后正文机械逐条消费。
+- 保持 240 的可扩展 source-provider 入口；未来 App 继续注册标准 Wall Source，不为每个新 App 重写墙核心。
+- 后续候选：观察 240/241 实机效果后，再决定是否进入 Phone↔Story 反馈闭环；不得在未设计 Awareness/World Event 回流边界前自动把正文采用结果写回手机。
