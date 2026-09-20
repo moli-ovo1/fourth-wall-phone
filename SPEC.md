@@ -4532,3 +4532,12 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 修复 moli234 已存在人物记录升级到 moli235+ 后刷新时报 `Cannot read properties of undefined (reading 'push')`：旧 row 只有 searches/views 时，写入新 MEMO 会访问不存在的 memos 数组。
 - `private-phone-trace-store` 现在在 Character row 入口统一做 schema normalization：保留已有 searches/views，缺失或非法的 memos/searches/views 自动归一为空数组，sexualTrace/default metadata 同步补齐。
 - 不清空旧「他的手机」记录，不改 Community / WeChat / Automation / Network Actor；本包仅修 Private Phone Trace 持久化兼容。
+
+
+## moli239 / v0.5.92 — Private Context Isolation v1
+- 修复审计确认的请求级隐私边界：Community 自主浏览/参与不再把多个 Character 的 Phone Context、人物专属世界书放进同一个模型请求；现在每个 Character 的私人决策请求只包含本人私有上下文。
+- 公共朋友圈刷新同样改为联系人级请求隔离：每个联系人只收到自己可见的朋友圈、自己的世界书与自己的 Phone Context；其他联系人的私密可见动态/私聊经历在该请求中物理不存在。
+- Community 整站公共生成移除 per-character Phone Continuity Actor Pack 与人物专属世界书拼包；公共层保留稳定身份、当前正文世界状态与公共/世界历史素材。Character 的私人经历仍可在其自主决策请求中影响本人行为。
+- 微博共享 Network Actor 连续性不再拼入“成为微信好友后的近期私聊”；公共生成只保留该网络人物已经形成的公开账号/公开网络经历。
+- 这次是 request-level isolation，不再把“Prompt 里写了不得串角色”当成数据隔离。代价是当多个 Character/联系人需要结算时会产生多次人物请求；本版优先保证认知边界，不用共享私密 Prompt 换取单次 API。
+- 不重构 phone-panel，不改 Network Actor/Public Identity/Community Echo、Private Phone Trace、正文 Injection、NPC Perspective Projection。

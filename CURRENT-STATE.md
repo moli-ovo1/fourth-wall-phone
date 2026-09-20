@@ -1,8 +1,9 @@
-# CURRENT STATE — moli238 / v0.5.91
+# CURRENT STATE — moli239 / v0.5.92
 
 > Updated 2026-09-20. This top block is the authoritative current handoff; older entries below are retained as history.
 
-- Current package line: moli238 / v0.5.91.
+- Current package line: moli239 / v0.5.92.
+- moli239 lands request-level Private Context Isolation v1: Community autonomous Character decisions and public Moments contact decisions no longer batch multiple actors' private Phone Context/world-book/visibility data into one model request; shared Community world generation no longer receives per-character Phone Context or per-character world-book packs; Weibo shared Network Actor context no longer includes linked private WeChat messages. Public/social continuity remains, but private knowledge is present only in the owning actor's request.
 - moli238 repairs Private Phone Trace old-schema compatibility: pre-MEMO moli234 character rows are normalized on access so searches/views are preserved while missing memos/sexualTrace/default fields are safely added before refresh writes. No Community/WeChat/Automation behavior changed.
 - moli234 adds 「他的手机」Private Phone Trace v1: User-triggered refresh only, with private SEARCH + VIEW traces stored per scope + Character. It is not a Community activity log; external viewed content stores title/duration/visit count only, and private traces do not become public Awareness.
 - Community Social Network v1 from moli228 is CLOSED and retained: Network Actor / Public Identity / Community Echo must not be rebuilt from old TODOs.
