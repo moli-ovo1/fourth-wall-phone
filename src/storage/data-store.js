@@ -172,6 +172,7 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     conversation.automation = {
       autoChatEnabled: typeof automation.autoChatEnabled === 'boolean' ? automation.autoChatEnabled : true,
       autoChatProbability: Math.max(0, Math.min(100, Number.isFinite(Number(automation.autoChatProbability)) ? Math.round(Number(automation.autoChatProbability)) : 30)),
+      communityPrivateEnabled: typeof automation.communityPrivateEnabled === 'boolean' ? automation.communityPrivateEnabled : true,
       commentaryEnabled: Boolean(automation.commentaryEnabled),
       commentaryProbability: Math.max(0, Math.min(100, Number.isFinite(Number(automation.commentaryProbability)) ? Math.round(Number(automation.commentaryProbability)) : 30)),
       unreadAutoRounds: Math.max(0, Number.isFinite(Number(automation.unreadAutoRounds)) ? Math.round(Number(automation.unreadAutoRounds)) : 0),
@@ -1635,6 +1636,7 @@ export function updatePrivateConversationSettings(
     replyBubbleRange,
     autoChatEnabled,
     autoChatProbability,
+    communityPrivateEnabled,
     commentaryEnabled,
     commentaryProbability,
     fourthWallSettings,
@@ -1704,6 +1706,9 @@ export function updatePrivateConversationSettings(
 
   if (autoChatEnabled !== undefined) {
     conversation.automation.autoChatEnabled = Boolean(autoChatEnabled);
+  }
+  if (communityPrivateEnabled !== undefined) {
+    conversation.automation.communityPrivateEnabled = Boolean(communityPrivateEnabled);
   }
   if (autoChatProbability !== undefined) {
     const value = Number(autoChatProbability);
