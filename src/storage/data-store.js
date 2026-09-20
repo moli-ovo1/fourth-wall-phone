@@ -1170,7 +1170,7 @@ export function createGroupConversation(
 export function updateGroupConversation(
   scopeKey,
   groupId,
-  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval, groupMode, timeMode, bodyContextEnabled, recentChatLimit, groupReplyBubbleRange, systemKind, studioReplyLength, studioInspirationEnabled, studioInspirationPaused, studioInspirationCounter } = {}
+  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval, groupMode, timeMode, bodyContextEnabled, recentChatLimit, groupReplyBubbleRange, systemKind, studioReplyLength, studioInspirationEnabled, studioInspirationPaused, studioInspirationCounter, studioInspirationThreshold, studioInspirationNsfwCooldown, studioInspirationRecentTypes } = {}
 ) {
   const data = ensureBuiltins(scopeKey);
   const conversation = data.conversations[groupId];
@@ -1234,6 +1234,9 @@ export function updateGroupConversation(
   if (studioInspirationEnabled !== undefined) conversation.studioInspirationEnabled = Boolean(studioInspirationEnabled);
   if (studioInspirationPaused !== undefined) conversation.studioInspirationPaused = Boolean(studioInspirationPaused);
   if (studioInspirationCounter !== undefined) conversation.studioInspirationCounter = Math.max(0, Number(studioInspirationCounter) || 0);
+  if (studioInspirationThreshold !== undefined) conversation.studioInspirationThreshold = Math.max(4, Math.min(6, Number(studioInspirationThreshold) || 5));
+  if (studioInspirationNsfwCooldown !== undefined) conversation.studioInspirationNsfwCooldown = Math.max(0, Number(studioInspirationNsfwCooldown) || 0);
+  if (studioInspirationRecentTypes !== undefined) conversation.studioInspirationRecentTypes = Array.isArray(studioInspirationRecentTypes) ? studioInspirationRecentTypes.map(value => String(value || '').trim()).filter(Boolean).slice(-6) : [];
   if (groupReplyBubbleRange !== undefined) {
     const min = Math.max(1, Math.min(12, Number(groupReplyBubbleRange?.min) || 1));
     const max = Math.max(min, Math.min(12, Number(groupReplyBubbleRange?.max) || 8));
