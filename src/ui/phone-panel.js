@@ -26,6 +26,7 @@ import {
   incrementConversationUnread,
   getMessageById,
   updateMessageContent,
+  updateMessageMeta,
   recallMessage,
   prepareFourthWallRegeneration,
   clearFourthWallSession,
@@ -468,6 +469,13 @@ export function createPhonePanel({
           <button class="moli-icon-btn" data-action="chat-info" aria-label="聊天信息">…</button>
         </div>
       </header>
+      <div class="moli-writers-room-toolbar" data-writers-room-toolbar hidden>
+        <button type="button" data-studio-task="cast">Ta出场好少</button>
+        <button type="button" data-studio-task="meme">帮我想梗</button>
+        <button type="button" data-studio-task="plan">给我规划</button>
+        <button type="button" data-studio-task="likes">整理❤️</button>
+        <button type="button" data-studio-task="length">长度 <span data-studio-length-label>80</span></button>
+      </div>
       <div class="moli-chat-error" data-chat-error hidden role="alert">
         <span data-chat-error-text></span>
         <button type="button" data-action="dismiss-chat-error" aria-label="关闭">×</button>
@@ -503,7 +511,7 @@ export function createPhonePanel({
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="injection-back" aria-label="返回">‹</button></div>
         <div class="moli-nav-title">我们的墙</div>
-        <div class="moli-nav-side right"></div>
+        <div class="moli-nav-side right"><button class="moli-icon-btn moli-writers-room-entry" data-action="open-writers-room" aria-label="打开编剧室" title="编剧室">♧</button></div>
       </header>
       <main class="moli-injection-page">
         <div class="moli-settings-note">从整个手机世界挑选要带进正文的素材。程序只整理与标注，不压缩、不总结；最终由你决定哪些内容跨过这面墙。</div>
@@ -1239,6 +1247,8 @@ export function createPhonePanel({
       <button data-message-action="retry" hidden>重试回复</button>
       <button data-message-action="quote">引用</button>
       <button data-message-action="recall">撤回</button>
+      <button data-message-action="adopt" hidden>纳取</button>
+      <button data-message-action="inject-studio" hidden>注入素材栏</button>
       <button data-message-action="copy">复制</button>
       <button data-message-action="forward">转发</button>
       <button data-message-action="multi">多选</button>
@@ -1363,6 +1373,8 @@ export function createPhonePanel({
   const chatListMenu = panel.querySelector('[data-chat-list-menu]');
   const deleteConversationSheet = panel.querySelector('[data-delete-conversation-sheet]');
   const messageMenu = panel.querySelector('[data-message-menu]');
+  const writersRoomToolbar = panel.querySelector('[data-writers-room-toolbar]');
+  const studioLengthLabel = panel.querySelector('[data-studio-length-label]');
   const quoteDraft = panel.querySelector('[data-quote-draft]');
   const quoteDraftText = panel.querySelector('[data-quote-draft-text]');
   const multiBar = panel.querySelector('[data-multi-bar]');
@@ -1892,6 +1904,15 @@ export function createPhonePanel({
     }
     return sources;
   }
+
+  registerWallSourceProvider('writers-room', ({scopeKey}) => listStudioMaterials(scopeKey).map(row => ({
+    id: row.id,
+    app: 'writers-room', appLabel: '编剧室', section: 'director', sectionLabel: '导演素材', owner: row.senderName || '编剧室',
+    group: `编剧室 · ${row.senderName || '创作提示'}`,
+    kind: 'creative-guidance',
+    label: String(row.content || '').replace(/\s+/g, ' ').slice(0, 88) + (String(row.content || '').length > 88 ? '…' : ''),
+    build: () => `【创作指导 · 编剧室 · ${row.senderName || '创作提示'}】\n以下是 User 主动纳取并选择跨墙的导演层创作材料，不是故事中已经发生的事实，也不代表角色知道这些内容。\n${row.content}`,
+  })));
 
   registerWallSourceProvider('his-phone', ({scopeKey}) => {
     const rows=[];
@@ -4903,6 +4924,9 @@ export function createPhonePanel({
       const messages = conversation?.messages || [];
       const last = messages[messages.length - 1];
       const isGroup = conversation.type === 'group';
+    const studioRoom = isWritersRoom(conversation);
+    if (writersRoomToolbar) writersRoomToolbar.hidden = !studioRoom;
+    if (studioLengthLabel) studioLengthLabel.textContent = String(conversation.studioReplyLength || 80);
       const listIdentity = isGroup
         ? { name: conversation.name || '未命名群聊', annotation: '' }
         : privateConversationListIdentity(conversation, item);
@@ -5021,10 +5045,17 @@ export function createPhonePanel({
     const regenerateButton = messageMenu.querySelector('[data-message-action="regenerate"]');
     const retryButton = messageMenu.querySelector('[data-message-action="retry"]');
     const recallButton = messageMenu.querySelector('[data-message-action="recall"]');
+    const adoptButton = messageMenu.querySelector('[data-message-action="adopt"]');
+    const injectStudioButton = messageMenu.querySelector('[data-message-action="inject-studio"]');
 
     if (editButton) editButton.hidden = !selected;
     if (regenerateButton) regenerateButton.hidden = !canRegenerate;
     if (recallButton) recallButton.hidden = selected?.role !== 'user';
+    const studioRoom = isWritersRoom(conversation);
+    const isAdoptionResult = studioRoom && /^(【导演版】|【灵感版】|【二人合璧】)/.test(String(selected?.content || '').trim());
+    if (adoptButton) adoptButton.hidden = !studioRoom || !selected || isAdoptionResult;
+    if (injectStudioButton) injectStudioButton.hidden = !isAdoptionResult;
+
     if (retryButton) retryButton.hidden = !(
       Boolean(error?.message)
       && selected?.role === 'user'
@@ -5279,6 +5310,23 @@ export function createPhonePanel({
       hideMessageMenu();
       toast('这条消息已不存在');
       renderChat();
+      return;
+    }
+
+    if (action === 'adopt') {
+      const conversation = getConversation(scopeKey, currentContactId);
+      if (!isWritersRoom(conversation)) { hideMessageMenu(); return; }
+      hideMessageMenu();
+      toast('我开始为你写提示词咯～等我一下！');
+      await requestReply({ studioTask: { type: 'adopt', notes: String(message.content || '') } });
+      return;
+    }
+
+    if (action === 'inject-studio') {
+      const conversation = getConversation(scopeKey, currentContactId);
+      hideMessageMenu();
+      if (addStudioMaterial(message, conversation)) toast('已放进我们的墙素材栏');
+      else toast('这条内容暂时不能注入');
       return;
     }
 
@@ -5717,6 +5765,31 @@ export function createPhonePanel({
     chatHistoryWindows.set(String(currentContactId), { start, end, total: messages.length });
   }
 
+  const STUDIO_MATERIALS_PREFIX = 'moli-phone:writers-room-materials:v1:';
+  function studioMaterialKey(scopeKey = getScopeKey?.()) { return `${STUDIO_MATERIALS_PREFIX}${String(scopeKey || 'global')}`; }
+  function listStudioMaterials(scopeKey = getScopeKey?.()) {
+    try { const rows = JSON.parse(localStorage.getItem(studioMaterialKey(scopeKey)) || '[]'); return Array.isArray(rows) ? rows : []; } catch { return []; }
+  }
+  function addStudioMaterial(message, conversation) {
+    const scopeKey = getScopeKey?.();
+    const content = String(message?.content || '').trim();
+    if (!content) return false;
+    const rows = listStudioMaterials(scopeKey);
+    const id = `writers-room:${String(message?.id || Date.now())}`;
+    if (!rows.some(row => row.id === id)) rows.push({ id, content, senderName: String(message?.senderSnapshot?.name || (message?.role === 'user' ? 'User' : '编剧室')), createdAt: Date.now(), conversationName: String(conversation?.name || '编剧室') });
+    localStorage.setItem(studioMaterialKey(scopeKey), JSON.stringify(rows.slice(-80)));
+    windowRef.dispatchEvent?.(new CustomEvent('moli:wall-source-changed'));
+    return true;
+  }
+  function isWritersRoom(conversation) { return conversation?.type === 'group' && String(conversation.systemKind || '') === 'writers-room'; }
+  function ensureWritersRoom() {
+    const scopeKey = getScopeKey?.();
+    if (!scopeKey) throw new Error('当前正文世界不可用');
+    let room = getScopeConversations(scopeKey).find(item => isWritersRoom(item));
+    if (!room) room = createGroupConversation(scopeKey, { name: '编剧室', memberIds: ['builtin:writer', 'builtin:guide'], systemKind: 'writers-room', studioReplyLength: 80 });
+    return room;
+  }
+
   function renderChat({ preserveScrollAnchor = null, forceLatest = false } = {}) {
     renderGenerationErrorBanner();
     if (!currentContactId) {
@@ -5735,6 +5808,9 @@ export function createPhonePanel({
     }
 
     const isGroup = conversation.type === 'group';
+    const studioRoom = isWritersRoom(conversation);
+    if (writersRoomToolbar) writersRoomToolbar.hidden = !studioRoom;
+    if (studioLengthLabel) studioLengthLabel.textContent = String(conversation.studioReplyLength || 80);
     const item = isGroup
       ? null
       : contact(conversation.contactId || currentContactId);
@@ -5884,6 +5960,7 @@ export function createPhonePanel({
                 ` : ''}
                 ${message.forward || message.messageType === 'moment-forward' || message.messageType === 'community-forward' ? '' : escapeHtml(message.content)}
               </div>
+              ${studioRoom ? `<button type="button" class="moli-studio-heart ${message.likedByUser ? 'liked' : ''}" data-studio-like="${escapeHtml(message.id || '')}" aria-label="${message.likedByUser ? '取消喜欢' : '喜欢这个分析'}">${message.likedByUser ? '♥' : '♡'}</button>` : ''}
             </div>
           </div>
         `;
@@ -6006,6 +6083,18 @@ export function createPhonePanel({
     if (selectedMessageIds.has(id)) selectedMessageIds.delete(id);
     else selectedMessageIds.add(id);
     updateMultiSelectUi();
+    renderChat();
+  });
+
+  chatBody.addEventListener('click', event => {
+    const heart = event.target.closest?.('[data-studio-like]');
+    if (!heart) return;
+    event.preventDefault(); event.stopPropagation();
+    const scopeKey = getScopeKey?.(); const conversation = getConversation(scopeKey, currentContactId);
+    if (!isWritersRoom(conversation)) return;
+    const message = getMessageById(scopeKey, currentContactId, heart.dataset.studioLike);
+    if (!message) return;
+    updateMessageMeta(scopeKey, currentContactId, message.id, { likedByUser: message.likedByUser !== true });
     renderChat();
   });
 
@@ -6296,7 +6385,7 @@ export function createPhonePanel({
     if (clearGenerationError(scopeKey, currentContactId)) renderGenerationErrorBanner();
   }
 
-  async function requestReply({ regenerateMessageId = '', targetGroupMemberId = '' } = {}) {
+  async function requestReply({ regenerateMessageId = '', targetGroupMemberId = '', studioTask = null } = {}) {
     if (!currentContactId) return;
 
     if (generationController) {
@@ -6321,7 +6410,7 @@ export function createPhonePanel({
       ? (conversation.messages || []).length
       : trailingUserMessages;
 
-    if (!isRegeneration && !pendingCount) {
+    if (!isRegeneration && !pendingCount && !(isWritersRoom(conversation) && studioTask)) {
       toast('先发送一条消息，再空输入触发回复');
       return;
     }
@@ -6359,6 +6448,7 @@ export function createPhonePanel({
             ...commonGenerationOptions,
             targetMemberId: targetGroupMemberId,
             excludeMessageId: regenerateMessageId,
+            studioTask,
           })
         : await generatePrivateReply({
             ...commonGenerationOptions,
@@ -7036,6 +7126,8 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => { show('tianya-home'); currentPublicWebTab='weibo'; panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab==='weibo')); renderPublicWeb(); });
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
+  panel.querySelector('[data-action="open-writers-room"]')?.addEventListener('click', () => { try { const room = ensureWritersRoom(); currentContactId = room.conversationKey || room.id; show('chat'); renderChat({ forceLatest: true }); } catch (error) { toast(error?.message || '编剧室打开失败'); } });
+  writersRoomToolbar?.addEventListener('click', async event => { const button = event.target.closest?.('[data-studio-task]'); if (!button) return; const conversation = currentConversation(); if (!isWritersRoom(conversation)) return; const type = button.dataset.studioTask; if (type === 'length') { const raw = windowRef.prompt?.('每个实际发言气泡希望约多少字？（20–500）', String(conversation.studioReplyLength || 80)); if (raw == null) return; const value = Math.max(20, Math.min(500, Number(raw) || 80)); updateGroupConversation(getScopeKey?.(), currentContactId, { studioReplyLength: value }); renderChat(); toast(`编剧室长度已设为约 ${value} 字/气泡`); return; } let notes = ''; if (type === 'cast') { notes = String(windowRef.prompt?.('想让谁多一点？也可以顺便写你的要求；留空则让他们从正文自己找。', '') || '').trim(); } await requestReply({ studioTask: { type, notes } }); });
   panel.querySelector('[data-action="open-his-phone"]')?.addEventListener('click', () => show('his-phone'));
   panel.querySelector('[data-his-phone-contact]')?.addEventListener('change', event => { hisPhoneContactId=String(event.target?.value||''); renderHisPhone(); });
   panel.querySelector('[data-page="his-phone"]')?.addEventListener('click', event => { const row=event.target?.closest?.('[data-his-phone-community-ref]'); if(!row)return; const post=getPublicWebPost(getScopeKey?.(),String(row.dataset.hisPhoneCommunityRef||'')); if(!post){toast('原帖已不存在');return;} openedPublicWebPostId=String(post.id); currentPublicWebTab=String(post.section||'recommend'); panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab===currentPublicWebTab)); show('tianya-home'); renderPublicWeb(); });
