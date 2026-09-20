@@ -113,6 +113,7 @@ import { recordWorldEvent, markWorldEventsKnown, markWorldEventsKnownByObjectTar
 import { rememberAnonymousIdentity, revealAnonymousIdentity, buildCharacterContinuity, listKnownAnonymousIdentities } from '../storage/character-continuity-store.js';
 import { buildPhoneContext } from '../generation/phone-context-builder.js';
 import { getPrivatePhoneTraces, settlePrivatePhoneTraceRefresh } from '../storage/private-phone-trace-store.js';
+import { registerWallSourceProvider, listRegisteredWallSources } from '../storage/wall-source-registry.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -1831,6 +1832,81 @@ export function createPhonePanel({
     return [`【微信${conversation.type === 'group' ? '群聊' : '私聊'} · ${title}】`, injectionIdentityHeader(conversation), boundary].join('\n');
   }
 
+  function wallCommunityPlatform(post) {
+    if (post?.section === 'custom') return `自创 · ${post?.extra?.customCommunityName || '自创'}`;
+    return ({ tianya:'天涯', xiaohongshu:'小红书', zhihu:'知乎', weibo:'微博' }[post?.section] || 'moli社区');
+  }
+
+  function wallCommunityHeader(post, platform) {
+    const title = String(post?.title || post?.content || '无标题').trim();
+    return [
+      `【moli社区 · ${platform} · ${title}】`,
+      '知识归属：以下是公开互联网中的实际内容。展示账号名不等于其后台真实身份；小号/匿名身份不得因此自动被正文人物识破。',
+    ].join('\n');
+  }
+
+  function wallCommunityAuthor(author) {
+    return String(author?.uiName || author?.name || '网友').replace(/（[^）]+）$/,'').trim() || '网友';
+  }
+
+  function wallCommunitySources(scopeKey) {
+    const sources = [];
+    for (const post of listPublicWebFavorites(scopeKey,'user')) {
+      const platform = wallCommunityPlatform(post);
+      const title = String(post.title || post.content || '无标题').trim();
+      const postKey = `community:${post.id}`;
+      const group = `moli社区 · ${platform} · ${title}`;
+      const common = { app:'community', appLabel:'moli社区', section:String(post.section||'community'), sectionLabel:platform, owner:title, group, kind:'community-part', header:()=>wallCommunityHeader(post,platform) };
+      const body = String(post.content || '').trim();
+      sources.push({ ...common, id:postKey, label:`帖子正文：${title}`, body:()=>`${wallCommunityAuthor(post.author)}（发帖账号）：${body || title}`, build:()=>`${wallCommunityHeader(post,platform)}\n${wallCommunityAuthor(post.author)}（发帖账号）：${body || title}` });
+
+      if (post.section === 'zhihu') {
+        for (const answer of post.extra?.answers || []) {
+          const answerText=String(answer?.content||'').trim(); if(!answerText) continue;
+          sources.push({ ...common, id:`${postKey}:answer:${answer.id}`, label:`回答 · ${wallCommunityAuthor(answer.author)}：${answerText.replace(/\s+/g,' ').slice(0,72)}${answerText.length>72?'…':''}`, body:()=>`回答｜${wallCommunityAuthor(answer.author)}：${answerText}`, build:()=>`${wallCommunityHeader(post,platform)}\n回答｜${wallCommunityAuthor(answer.author)}：${answerText}` });
+          const answerComments=Array.isArray(answer.comments)?answer.comments:[];
+          const answerById=new Map(answerComments.map(x=>[String(x.id||''),x]));
+          for(const comment of answerComments){
+            const text=String(comment?.content||'').trim(); if(!text)continue;
+            const parent=answerById.get(String(comment.replyToCommentId||''));
+            const relation=parent?` → 回复 ${wallCommunityAuthor(parent.author)}`:'';
+            sources.push({ ...common, id:`${postKey}:answer:${answer.id}:comment:${comment.id}`, label:`回答评论 · ${wallCommunityAuthor(comment.author)}${relation}：${text.replace(/\s+/g,' ').slice(0,68)}${text.length>68?'…':''}`, body:()=>`回答评论｜${wallCommunityAuthor(comment.author)}${relation}：${text}`, build:()=>`${wallCommunityHeader(post,platform)}\n回答评论｜${wallCommunityAuthor(comment.author)}${relation}：${text}` });
+          }
+        }
+      }
+      const comments=Array.isArray(post.comments)?post.comments:[];
+      const byId=new Map(comments.map(x=>[String(x.id||''),x]));
+      comments.forEach((comment,index)=>{
+        const text=String(comment?.content||'').trim(); if(!text)return;
+        const parent=byId.get(String(comment.replyToCommentId||''));
+        const relation=parent?` → 回复 ${wallCommunityAuthor(parent.author)}`:'';
+        const noun=post.section==='tianya'?`${index+1}楼`:post.section==='weibo'?'微博评论':'评论';
+        sources.push({ ...common, id:`${postKey}:comment:${comment.id||index}`, label:`${noun} · ${wallCommunityAuthor(comment.author)}${relation}：${text.replace(/\s+/g,' ').slice(0,68)}${text.length>68?'…':''}`, body:()=>`${noun}｜${wallCommunityAuthor(comment.author)}${relation}：${text}`, build:()=>`${wallCommunityHeader(post,platform)}\n${noun}｜${wallCommunityAuthor(comment.author)}${relation}：${text}` });
+      });
+      if(post.section==='weibo'){
+        const repostText=String(post.extra?.repostText||'').trim();
+        if(repostText) sources.push({ ...common, id:`${postKey}:repost`, label:`转发内容：${repostText.replace(/\s+/g,' ').slice(0,72)}${repostText.length>72?'…':''}`, body:()=>`转发内容｜${repostText}`, build:()=>`${wallCommunityHeader(post,platform)}\n转发内容｜${repostText}` });
+        (post.extra?.repostChain||[]).forEach((row,index)=>{const text=String(row||'').trim();if(text)sources.push({ ...common,id:`${postKey}:repost-chain:${index}`,label:`转发链 ${index+1}：${text.slice(0,72)}${text.length>72?'…':''}`,body:()=>`转发链 ${index+1}｜${text}`,build:()=>`${wallCommunityHeader(post,platform)}\n转发链 ${index+1}｜${text}`});});
+      }
+    }
+    return sources;
+  }
+
+  registerWallSourceProvider('his-phone', ({scopeKey}) => {
+    const rows=[];
+    for(const item of getContacts()){
+      const cid=String(item?.id||''); if(!cid)continue;
+      const owner=canonicalContactName(item);
+      const data=getPrivatePhoneTraces(scopeKey,cid);
+      for(const memo of data.memos||[]){
+        const content=String(memo?.content||'').trim(); if(!content)continue;
+        const status=memo.status==='done'?'已完成':'进行中';
+        rows.push({id:`his-phone:memo:${cid}:${memo.id}`,app:'his-phone',appLabel:'他的手机',section:'memo',sectionLabel:'备忘录',owner,group:`他的手机 · 备忘录 · ${owner}`,kind:'memo',kindLabel:`备忘录 · ${status}`,label:`${status}：${content.replace(/\s+/g,' ').slice(0,80)}${content.length>80?'…':''}`,build:()=>`【他的手机 · ${owner} · 备忘录】\n知识归属：这是 ${owner} 私人手机里主动留下的备忘，不因投入「我们的墙」就自动成为 User 或其他角色已知事实；仅作为正文创作可用的幕后事实。\n状态：${status}\n${content}`});
+      }
+    }
+    return rows;
+  });
+
   function injectionSourceCatalog() {
     const scopeKey = getScopeKey?.();
     if (!scopeKey) return [];
@@ -1846,46 +1922,19 @@ export function createPhonePanel({
         if (!content) return;
         const sender = message?.role === 'user' ? `User（${userName}）` : messageSenderName(message, conversation);
         const id = `chat:${conversation.key || conversation.id || conversation.contactId}:${message.id || index}`;
-        sources.push({
-          id, app:'wechat', section:conversationType, owner:title, kind:'chat',
-          label: `${sender}：${content.replace(/\s+/g,' ').slice(0,72)}${content.length>72?'…':''}`,
-          group: `微信 · ${conversationType === 'group' ? '群聊' : '私聊'} · ${title}`,
-          conversationKey: String(conversation.key || conversation.id || conversation.contactId || ''),
-          messageIndex: messages.length - 1 - index,
-          header: () => injectionConversationHeader(conversation),
-          body: () => `${sender}：${content}`,
-          build: () => `${injectionConversationHeader(conversation)}\n${sender}：${content}`,
-        });
+        sources.push({ id, app:'wechat', appLabel:'微信', section:conversationType, sectionLabel:conversationType==='group'?'群聊':'私聊', owner:title, kind:'chat', label:`${sender}：${content.replace(/\s+/g,' ').slice(0,72)}${content.length>72?'…':''}`, group:`微信 · ${conversationType === 'group' ? '群聊' : '私聊'} · ${title}`, conversationKey:String(conversation.key||conversation.id||conversation.contactId||''), messageIndex:messages.length-1-index, header:()=>injectionConversationHeader(conversation), body:()=>`${sender}：${content}`, build:()=>`${injectionConversationHeader(conversation)}\n${sender}：${content}` });
       });
-      // 记忆仍保留为可选素材，但归到对应私聊/群聊名称下，不再单独铺成一大类。
       const conversationKey = conversation.key || conversation.id || conversation.contactId;
       const memory = getConversationMemory(scopeKey, conversationKey);
-      const recentMemory = Array.isArray(memory?.recent) ? memory.recent : [];
-      recentMemory.forEach((entry,index)=>{
-        const text=String(entry?.content||'').trim(); if(!text)return;
-        sources.push({id:`memory:${conversationKey}:recent:${entry?.id||index}`,app:'wechat',section:conversationType,owner:title,kind:'memory',group:`微信 · ${conversationType === 'group' ? '群聊' : '私聊'} · ${title}`,label:`近期记忆：${text.replace(/\s+/g,' ').slice(0,72)}${text.length>72?'…':''}`,build:()=>`【手机近期记忆 · ${title}】\n${text}`});
-      });
-      const longText=String(memory?.longTermSummary||'').trim();
-      if(longText) sources.push({id:`memory:${conversationKey}:long`,app:'wechat',section:conversationType,owner:title,kind:'memory',group:`微信 · ${conversationType === 'group' ? '群聊' : '私聊'} · ${title}`,label:`长期记忆：${longText.replace(/\s+/g,' ').slice(0,72)}${longText.length>72?'…':''}`,build:()=>`【手机长期记忆 · ${title}】\n${longText}`});
+      (Array.isArray(memory?.recent)?memory.recent:[]).forEach((entry,index)=>{const text=String(entry?.content||'').trim();if(text)sources.push({id:`memory:${conversationKey}:recent:${entry?.id||index}`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`近期记忆：${text.replace(/\s+/g,' ').slice(0,72)}${text.length>72?'…':''}`,build:()=>`【手机近期记忆 · ${title}】\n${text}`});});
+      const longText=String(memory?.longTermSummary||'').trim(); if(longText)sources.push({id:`memory:${conversationKey}:long`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`长期记忆：${longText.replace(/\s+/g,' ').slice(0,72)}${longText.length>72?'…':''}`,build:()=>`【手机长期记忆 · ${title}】\n${longText}`});
     });
-    const publicMoments=listPublicMoments(scopeKey).slice(0,40);
-    publicMoments.forEach(item=>{
-      const author=momentActorName(item.author), preview=String(item.content||'').replace(/\s+/g,' ').slice(0,72);
-      sources.push({id:`moment:public:${item.id}`,app:'wechat',section:'moments',owner:'User 公共朋友圈',group:'微信 · 朋友圈 · User 公共朋友圈',kind:'moment',label:`${author}：${preview}${String(item.content||'').length>72?'…':''}`,build:()=>`【微信朋友圈 · 公共舞台】\n知识归属：公共朋友圈的多人互动属于 User 的娱乐/展示层，不自动写入任何角色的一对一私聊世界线。\n${injectionMomentText(item)}`});
-    });
-    getContacts().forEach(item=>{
-      const cid=String(item?.id||''); if(!cid)return;
-      const owner=canonicalContactName(item);
-      listProfileMoments(scopeKey,cid).slice(0,20).forEach(moment=>{
-        const author=momentActorName(moment.author), preview=String(moment.content||'').replace(/\s+/g,' ').slice(0,72);
-        sources.push({id:`moment:profile:${cid}:${moment.id}`,app:'wechat',section:'moments',owner,group:`微信 · 朋友圈 · ${owner}`,kind:'moment',label:`${author}：${preview}${String(moment.content||'').length>72?'…':''}`,build:()=>`【微信角色朋友圈 · ${owner}】\n知识归属：这是该角色的一对一朋友圈世界线；公共娱乐池里的其他角色互动不因此自动成为该角色已知事实。\n${injectionMomentText(moment)}`});
-      });
-    });
-    listPublicWebFavorites(scopeKey,'user').forEach(post=>{
-      const platform=post.section==='custom'?`自创 · ${post.extra?.customCommunityName||'自创'}`:({tianya:'天涯',xiaohongshu:'小红书',zhihu:'知乎'}[post.section]||'moli社区');
-      const title=String(post.title||'无标题').trim(); const body=String(post.content||'').trim();
-      sources.push({id:`community:${post.id}`,app:'community',section:'community',owner:platform,group:`moli社区 · ${platform}`,kind:'community',label:`${title}${body?`：${body.replace(/\s+/g,' ').slice(0,60)}${body.length>60?'…':''}`:''}`,build:()=>`【moli社区 · ${platform}】\n${title}${body?`\n${body}`:''}`});
-    });
+    listPublicMoments(scopeKey).slice(0,40).forEach(item=>{const author=momentActorName(item.author),preview=String(item.content||'').replace(/\s+/g,' ').slice(0,72);sources.push({id:`moment:public:${item.id}`,app:'wechat',appLabel:'微信',section:'moments',sectionLabel:'朋友圈',owner:'User 公共朋友圈',group:'微信 · 朋友圈 · User 公共朋友圈',kind:'moment',label:`${author}：${preview}${String(item.content||'').length>72?'…':''}`,build:()=>`【微信朋友圈 · 公共舞台】\n知识归属：公共朋友圈的多人互动属于 User 的娱乐/展示层，不自动写入任何角色的一对一私聊世界线。\n${injectionMomentText(item)}`});});
+    getContacts().forEach(item=>{const cid=String(item?.id||'');if(!cid)return;const owner=canonicalContactName(item);listProfileMoments(scopeKey,cid).slice(0,20).forEach(moment=>{const author=momentActorName(moment.author),preview=String(moment.content||'').replace(/\s+/g,' ').slice(0,72);sources.push({id:`moment:profile:${cid}:${moment.id}`,app:'wechat',appLabel:'微信',section:'moments',sectionLabel:'朋友圈',owner,group:`微信 · 朋友圈 · ${owner}`,kind:'moment',label:`${author}：${preview}${String(moment.content||'').length>72?'…':''}`,build:()=>`【微信角色朋友圈 · ${owner}】\n知识归属：这是该角色的一对一朋友圈世界线；公共娱乐池里的其他角色互动不因此自动成为该角色已知事实。\n${injectionMomentText(moment)}`});});});
+    sources.push(...wallCommunitySources(scopeKey));
+    // Open extension point: current and future apps can contribute wall material
+    // without adding another hard-coded branch to the wall composer.
+    sources.push(...listRegisteredWallSources({ scopeKey }));
     return sources;
   }
 
@@ -1917,7 +1966,7 @@ export function createPhonePanel({
     });
     grouped.forEach(items => {
       const first = items[0];
-      if (first.kind === 'chat' && first.header && first.body) {
+      if (first.header && first.body) {
         blocks.push([first.header(), ...items.map(item => item.body())].join('\n'));
         return;
       }
@@ -1962,26 +2011,27 @@ export function createPhonePanel({
     const scopeKey = getScopeKey?.();
     const catalog = injectionSourceCatalog();
     if (injectionSources) {
-      const sectionLabel = { private:'私聊', group:'群聊', moments:'朋友圈' };
-      const sections = ['private','group','moments'];
-      const sectionHtml = sections.map(section => {
-        const items = catalog.filter(source => source.section === section);
-        if (!items.length) return '';
-        const owners = new Map();
-        items.forEach(source => { if(!owners.has(source.owner)) owners.set(source.owner, []); owners.get(source.owner).push(source); });
-        const ownerHtml = [...owners.entries()].map(([owner, ownerItems]) => {
-          const conversationKey = ownerItems.find(item => item.kind === 'chat')?.conversationKey || '';
-          const recentButton = section !== 'moments' && conversationKey
-            ? `<button type="button" class="moli-injection-recent-btn" data-action="injection-recent-rounds" data-conversation-key="${escapeHtml(conversationKey)}">最近 n 条</button>` : '';
-          return `
-          <details class="moli-injection-source-owner">
-            <summary><span>${escapeHtml(owner)} <small>${ownerItems.length} 项</small></span>${recentButton}</summary>
-            <div class="moli-injection-source-items">${ownerItems.map(source=>`<label class="moli-injection-source-row"><input type="checkbox" data-injection-source value="${escapeHtml(source.id)}"><span><strong>${escapeHtml(source.label)}</strong><small>${source.kind==='chat'?'原始消息':source.kind==='memory'?'手机记忆':'具体动态'}</small></span></label>`).join('')}</div>
-          </details>`;
+      const apps = new Map();
+      catalog.forEach(source => {
+        const appKey=String(source.app||'other'), appLabel=String(source.appLabel||appKey);
+        if(!apps.has(appKey)) apps.set(appKey,{label:appLabel,items:[]});
+        apps.get(appKey).items.push(source);
+      });
+      const appHtml=[...apps.values()].map(app=>{
+        const sections=new Map();
+        app.items.forEach(source=>{const key=String(source.section||'default'),label=String(source.sectionLabel||'');if(!sections.has(key))sections.set(key,{label,items:[]});sections.get(key).items.push(source);});
+        const sectionHtml=[...sections.values()].map(section=>{
+          const owners=new Map(); section.items.forEach(source=>{const owner=String(source.owner||'素材');if(!owners.has(owner))owners.set(owner,[]);owners.get(owner).push(source);});
+          const ownerHtml=[...owners.entries()].map(([owner,items])=>{
+            const conversationKey=items.find(item=>item.kind==='chat')?.conversationKey||'';
+            const recentButton=conversationKey?`<button type="button" class="moli-injection-recent-btn" data-action="injection-recent-rounds" data-conversation-key="${escapeHtml(conversationKey)}">最近 n 条</button>`:'';
+            return `<details class="moli-injection-source-owner"><summary><span>${escapeHtml(owner)} <small>${items.length} 项</small></span>${recentButton}</summary><div class="moli-injection-source-items">${items.map(source=>`<label class="moli-injection-source-row"><input type="checkbox" data-injection-source value="${escapeHtml(source.id)}"><span><strong>${escapeHtml(source.label)}</strong><small>${escapeHtml(source.kindLabel||source.sectionLabel||source.kind||'素材')}</small></span></label>`).join('')}</div></details>`;
+          }).join('');
+          return section.label?`<details class="moli-injection-source-section"><summary>${escapeHtml(section.label)} <small>${section.items.length} 项</small></summary>${ownerHtml}</details>`:ownerHtml;
         }).join('');
-        return `<details class="moli-injection-source-section"><summary>${sectionLabel[section]} <small>${items.length} 项</small></summary>${ownerHtml}</details>`;
+        return `<details class="moli-injection-source-app"><summary>${escapeHtml(app.label)} <small>${app.items.length} 项</small></summary>${sectionHtml}</details>`;
       }).join('');
-      const communityItems=catalog.filter(source=>source.app==='community'); const communityHtml=communityItems.length?`<details class="moli-injection-source-app"><summary>moli社区 <small>${communityItems.length} 项</small></summary><div class="moli-injection-source-items">${communityItems.map(source=>`<label class="moli-injection-source-row"><input type="checkbox" data-injection-source value="${escapeHtml(source.id)}"><span><strong>${escapeHtml(source.label)}</strong><small>${escapeHtml(source.owner)}</small></span></label>`).join('')}</div></details>`:''; const wechatCount=catalog.filter(source=>source.app==='wechat').length; injectionSources.innerHTML = catalog.length ? `${wechatCount?`<details class="moli-injection-source-app"><summary>微信 <small>${wechatCount} 项</small></summary>${sectionHtml}</details>`:''}${communityHtml}` : '<div class="moli-empty">手机里还没有可选素材。你仍可以直接在下方编辑框输入内容。</div>';
+      injectionSources.innerHTML=catalog.length?appHtml:'<div class="moli-empty">手机里还没有可选素材。你仍可以直接在下方编辑框输入内容。</div>';
     }
     const workspace = getInjectionWorkspace(scopeKey);
     const wanted = new Set(workspace.sourceIds || []);
