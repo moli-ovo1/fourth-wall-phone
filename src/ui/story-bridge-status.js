@@ -12,7 +12,7 @@ function emitLife(scopeKey){ try{window.dispatchEvent(new CustomEvent('moli:life
 export function createStoryBridgeStatus(){
   const ctx=getContext(); const eventSource=ctx?.eventSource; const events=ctx?.eventTypes;
   const render=()=>{
-    removeExisting(); const scopeKey=getCurrentScopeKey(); const lines=listStoryBridgeLines(scopeKey); const room=writersRoom(scopeKey);
+    removeExisting(); const scopeKey=getCurrentScopeKey(); const lines=listStoryBridgeLines(scopeKey); const plans=listActiveStoryPlans(scopeKey); const room=writersRoom(scopeKey);
     const mid=latestAssistantId(ctx); if(mid<0)return;
     const messageEl=document.querySelector(`.mes[mesid="${mid}"]`); const anchor=messageEl?.querySelector('.mes_text')||messageEl; if(!anchor)return;
     const box=document.createElement('section'); box.className='moli-story-bridge-status';
