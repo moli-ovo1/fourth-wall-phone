@@ -103,7 +103,8 @@ import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getFourthWallDefaultPromptTemplates } from '../prompts/fourth-wall.js';
 import { getMomentsSettings, updateMomentsSettings, listPublicMoments, listProfileMoments, createPublicMoment, createProfileMoment, deletePublicMoment, toggleMomentLike, addMomentComment, deleteMomentComment, markMomentSeen, importPublicMomentToProfile, exportProfileMomentToPublic, clearProfileMoments, getProfileMomentStatus, setProfileMomentStatus, getProfileMomentMemory, setMomentUserRead, recordProfileVisit, clearProfileVisitRound, getProfileVisits, getProfilePeek, setProfilePeek, recordMomentChatEvent } from '../storage/moments-store.js';
 import { notifyMomentInteractionOpportunity, notifyBehaviorOpportunity, notifyBehaviorContextEvent } from '../automation/private-automation.js';
-import { getPendingInjection, setPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
+import { getPendingInjection, clearPendingInjection, listInjectionHistory, addInjectionHistory, getInjectionWorkspace, saveInjectionWorkspace, clearInjectionWorkspace } from '../storage/injection-store.js';
+import { addStoryBridgeLine, listStoryBridgeLines } from '../storage/story-bridge-store.js';
 import { insertAssistantBody } from '../core/tavern-injection.js';
 import { getTavernUserContext } from '../core/tavern-user.js';
 import { listPublicWebPosts, createPublicWebPost, addPublicWebPosts, getPublicWebPost, addPublicWebComment, togglePublicWebLike, deletePublicWebPost, getPublicWebSettings, updatePublicWebSettings, togglePublicWebFavorite, togglePublicWebPinned, replacePublicWebSectionPosts, appendPublicWebSectionPosts, trimPublicWebSectionPosts, trimWeiboLanePosts, forceDeletePublicWebPost, deletePublicWebComment, deleteZhihuAnswerComment, deleteZhihuAnswer, addZhihuAnswerComments, addZhihuAnswer, mergeZhihuRefresh, listPublicWebFavorites, listCustomCommunities, ensureCustomCommunityPresets, deleteCustomCommunities, saveCustomCommunity, deleteCustomCommunity, getCommunityUserProfile, updateCommunityUserProfile, listWeiboFollows, saveWeiboFollow, deleteWeiboFollow, isWeiboFollowed, incrementWeiboRepost, setWeiboFollowHot, rememberWeiboPublicInteraction, listWeiboPrivateMessages, addWeiboPrivateMessage, deleteWeiboPrivateMessage, clearWeiboPrivateMessages, getWeiboMessageReadState, markWeiboMessageRead, listWeiboFanGroups, saveWeiboFanGroup, addWeiboFanGroupMessage, listWeiboMessagePeers, saveWeiboMessagePeer, getWeiboHotTopics, setWeiboHotTopics, settleWeiboUserPostEcology, saveNetworkActor, linkNetworkActorContact } from '../storage/public-web-store.js';
@@ -2039,7 +2040,10 @@ export function createPhonePanel({
     if (injectionEditor) injectionEditor.value = workspace.text || '';
     updateInjectionBasket(); renderInjectionHistory();
     const pending = getPendingInjection(scopeKey);
-    if (injectionPendingStatus) injectionPendingStatus.textContent = pending ? `当前正文已有一份等待“下一轮生成”使用的临时注入（${pending.text.length} 字符）。重新确认会替换它。` : '当前没有等待注入下一轮正文的内容。';
+    const bridgeCount = listStoryBridgeLines(scopeKey).length;
+    if (injectionPendingStatus) injectionPendingStatus.textContent = pending
+      ? `检测到旧版一次性注入仍在等待下一轮使用（${pending.text.length} 字符）；新投入内容将进入持续剧情线。`
+      : `正文前台当前有 ${bridgeCount} 条跨墙剧情线；新投入内容会持续注入，直到正文明确激活或 User 手动清除。`;
   }
 
   async function armInjectionForNextGeneration() {
@@ -2048,12 +2052,14 @@ export function createPhonePanel({
     if (!scopeKey || !text) return toast('请先填写要注入的内容');
     const selectedIds = selectedInjectionSourceIds();
     const labels = injectionSourceCatalog().filter(source => selectedIds.includes(source.id)).map(source => source.label);
+    const firstMeaningfulLine = text.split(/\n+/).map(x => x.replace(/^【|】$/g, '').trim()).find(x => x && !x.startsWith('知识归属：')) || '跨墙剧情线';
+    const title = String(labels[0] || firstMeaningfulLine).replace(/\s+/g, ' ').slice(0, 36);
     const sessionId = `wall_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
-    setPendingInjection(scopeKey, { text, sourceSummary: labels.join('；'), sourceIds: selectedIds, sessionId });
+    addStoryBridgeLine(scopeKey, { title, text, sourceSummary: labels.join('；'), sourceIds: selectedIds });
     addInjectionHistory(scopeKey, { text, sourceSummary: labels.join('；'), sourceIds: selectedIds, mode: 'context', sessionId });
     renderInjectionHistory();
-    if (injectionPendingStatus) injectionPendingStatus.textContent = `已等待下一轮正文生成 · ${text.length} 字符。生成成功后自动消费；停止/失败会保留。`;
-    toast('已准备注入下一轮正文');
+    if (injectionPendingStatus) injectionPendingStatus.textContent = `已投入正文前台 · ${title} · 未激活。将持续作为连续性背景注入，直到激活或手动清除。`;
+    toast('已投入正文前台剧情线');
   }
 
   async function insertInjectionAsAssistantBody() {
