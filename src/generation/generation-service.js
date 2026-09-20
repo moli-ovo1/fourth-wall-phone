@@ -1407,6 +1407,60 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
 }
 
 
+
+/**
+ * Public Community discovery pass. Like Moments viewedMomentIds, this records only
+ * what a character actually happened to browse during this refresh. It does not
+ * force a reply and does not turn backend-visible posts into character knowledge.
+ */
+export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], fixedPersonasCommunityEnabled = false, signal } = {}) {
+  if (!scopeKey) throw new Error('当前社区不可用');
+  const visiblePosts = (Array.isArray(posts) ? posts : []).filter(post => post?.id).slice(-12);
+  if (!visiblePosts.length) return { actors: [] };
+
+  const candidates = [...communityWorldContacts(scopeKey)];
+  if (fixedPersonasCommunityEnabled) {
+    const byId = new Map(getContacts().map(item => [String(item.id || ''), item]));
+    for (const id of ['builtin:guide', 'builtin:meta', 'builtin:writer']) {
+      const contact = byId.get(id);
+      if (contact && !candidates.some(item => String(item.id || '') === id)) candidates.push(hydratedContact(contact));
+    }
+  }
+  if (!candidates.length) return { actors: [] };
+
+  const userName = getTavernUserContext().name || 'User';
+  const postText = visiblePosts.map(post => `postId=${post.id}｜板块=${post.section || 'community'}｜标题=${String(post.title || '').slice(0,180)}\n${communityPostFacts(post).slice(0,1800)}`).join('\n\n');
+  const scanText = visiblePosts.map(post => `${post.title || ''}\n${post.content || ''}`).join('\n');
+  const actorBlocks = [];
+  for (const contact of candidates.slice(0, 12)) {
+    let worldBookText = '';
+    try {
+      const worldBook = contact?.kind === 'custom'
+        ? await getActivatedCustomWorldBook({ contact, scanText })
+        : contact?.kind === 'builtin' ? null : await getActivatedTavernWorldBook({ contact, scanText });
+      worldBookText = clipBatchText(worldBook?.text || '', 2600);
+    } catch {}
+    const builtinPrompt = contact?.kind === 'builtin' ? replaceUserPlaceholder(getBuiltinPersonaPrompt(contact.id), userName) : '';
+    actorBlocks.push(`===== ACTOR id=${contact.id}｜${contactLabel(contact)} =====\n【身份】\n${builtinPrompt || batchRoleProfile(contact, scanText)}\n${worldBookText ? `【本人的世界书】\n${worldBookText}\n` : ''}【本人的统一手机经历】\n${buildPhoneContext(scopeKey, contact.id, { query: scanText, userName, limit: 24 }).text || '暂无'}\n===== END =====`);
+  }
+
+  const system = `你在判断 moli小手机 公共 Community 中，各人物在这次刷新期间是否自己刷到了一些帖子。\n- 这是“浏览/发现”判断，不是评论任务。人物无需 User @、邀请或转发，也可能自己逛社区并看到帖子。\n- 依据人物自己的习惯、兴趣、关系、当下状态和帖子内容判断；不要为了展示功能而让所有人都看。一次刷新可以 0 人看到任何帖子。\n- 看见帖子不等于必须评论、点赞、私聊或采取任何行动。这里只记录实际看到。\n- 不要因为人物谨慎、身份敏感或不适合实名公开发言，就推导为“不会浏览”。浏览与公开行动是两回事。\n- 每个人只返回本轮实际看到的 postId；不要把所有后台提供的帖子都算作已知。\n- 只输出严格 JSON，不要解释。`;
+  const user = `【本轮新出现/刷新后的 Community 帖子】\n${postText}\n\n【候选人物】\n${actorBlocks.join('\n\n')}\n\n返回：{"actors":[{"actorId":"人物id","viewedPostIds":["本轮实际看到的postId"]}]}。没有看到任何帖的人可以省略。`;
+  const config = resolveApiRuntimeConfig(getApiSettings());
+  assertApiConfig(config);
+  const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
+  const raw = String(result?.text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  let data = {};
+  try { data = JSON.parse(raw); } catch { const match = raw.match(/\{[\s\S]*\}/); if (match) try { data = JSON.parse(match[0]); } catch {} }
+  const allowedActors = new Set(candidates.map(item => String(item.id || '')));
+  const allowedPosts = new Set(visiblePosts.map(post => String(post.id || '')));
+  const actors = (Array.isArray(data?.actors) ? data.actors : []).map(item => ({
+    actorId: String(item?.actorId || ''),
+    viewedPostIds: [...new Set((Array.isArray(item?.viewedPostIds) ? item.viewedPostIds : []).map(String).filter(id => allowedPosts.has(id)))].slice(0, 8),
+  })).filter(item => allowedActors.has(item.actorId) && item.viewedPostIds.length);
+  return { actors };
+}
+
 function safeInternetName(value, userName, fallback = '网友') {
   const name = String(value || fallback).trim().slice(0, 24) || fallback;
   return name === String(userName || '').trim() ? fallback : name;
@@ -1655,7 +1709,7 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
 
 【评论字段】允许一级评论与评论回复；回复已有评论时使用 replyToCommentId。评论数量按内容冷热自然变化，不要求每条相同。
 
-【账号连续与扩展】已经持续存在的账号再次出现时，沿用其既有公开ID和已经表现出的特点。已有账号只是可复用的持续人物，不是本轮账号候选名单；每轮都可以根据当前话题自然出现新的普通网友、媒体、大V、营销号、兴趣用户、知情人等，并为首次出现者创建新的公开ID。已有角色本人账号或其已经实际使用过的小号，也可以在人物与当前公开事件自然相关时直接发帖或参与互动。内部路由身份不得写成其他人物自动知道的公开事实。
+【账号连续与扩展】已经持续存在的账号再次出现时，沿用其既有公开ID和已经表现出的特点。已有账号只是可复用的持续人物，不是本轮账号候选名单；每轮都可以根据当前话题自然出现新的普通网友、媒体、大V、营销号、兴趣用户、知情人等，并为首次出现者创建新的公开ID。已有角色本人账号或其已经实际使用过的小号，是可持续使用的社区身份；本轮是否发帖或参与互动由人物自己的状态、动机与当轮情境决定，不要求每轮出现。内部路由身份不得写成其他人物自动知道的公开事实。
 
 【运行环境隔离】AI、API、Prompt、插件、SillyTavern、世界书、角色卡、调试信息、代码和生成器不属于故事世界，除非正文明确证明其存在。
 
