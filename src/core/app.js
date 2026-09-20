@@ -5,6 +5,7 @@ import { getCurrentScopeKey } from './tavern-scope.js';
 import { createReviewAutomation } from '../automation/review.js';
 import { createPrivateAutomation } from '../automation/private-automation.js';
 import { createTavernInjectionBridge } from './tavern-injection.js';
+import { createStoryBridgeStatus } from '../ui/story-bridge-status.js';
 import { initConversationStorage } from '../storage/conversation-db.js';
 import { cleanupLegacyTemporaryScopeStorage } from '../storage/temporary-scope-cleanup.js';
 import { initLargeStorage } from '../storage/large-storage.js';
@@ -59,6 +60,7 @@ export async function initApp() {
   const reviewAutomation = createReviewAutomation({ getScopeKey: getCurrentScopeKey });
   const privateAutomation = createPrivateAutomation({ getScopeKey: getCurrentScopeKey });
   const injectionBridge = createTavernInjectionBridge();
+  const storyBridgeStatus = createStoryBridgeStatus();
 
   const handleController = createFloatingBall({
     uiState,
@@ -159,6 +161,7 @@ export async function initApp() {
       reviewAutomation?.destroy?.();
       privateAutomation?.destroy?.();
       injectionBridge?.destroy?.();
+      storyBridgeStatus?.destroy?.();
       window.removeEventListener('moli:unread-changed', syncHandleUnread);
       window.removeEventListener('moli:conversation-updated', syncHandleUnread);
       handleController.element.remove();

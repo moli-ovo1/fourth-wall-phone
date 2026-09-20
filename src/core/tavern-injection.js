@@ -1,8 +1,11 @@
 import { extension_prompt_types, extension_prompt_roles } from '../../../../../../script.js';
 import { getCurrentScopeKey } from './tavern-scope.js';
 import { getPendingInjection, markPendingInjectionArmed, clearPendingInjection } from '../storage/injection-store.js';
+import { listPendingStoryBridgeLines, activateStoryBridgeLines, markStoryBridgeInjected } from '../storage/story-bridge-store.js';
 
 const PROMPT_ID = 'moli-phone-context-once';
+const BRIDGE_PROMPT_ID = 'moli-story-bridge-active-lines';
+const ACTIVATION_RE = /<moli_bridge_activation>([\s\S]*?)<\/moli_bridge_activation>/gi;
 let activeScopeKey = '';
 let activeGeneration = false;
 
@@ -31,6 +34,46 @@ function wrapContext(text) {
   ].join('\n');
 }
 
+
+function wrapBridgeLines(lines) {
+  if (!Array.isArray(lines) || !lines.length) return '';
+  const blocks = lines.map((line, index) => [
+    `【持续剧情线 ${index + 1}】`,
+    `内部ID：${line.id}`,
+    `标题：${line.title}`,
+    `阶段：${line.stage}`,
+    line.text,
+  ].join('\n'));
+  return [
+    '[持续剧情线 · 后台连续性]',
+    '以下条目是 User 已投入正文、但尚未确认在正文中完成当前阶段的连续性事项。它们不是本轮任务清单；只有在当前剧情自然相关时才使用。',
+    '每条会持续出现在后续生成中，直到正文明确落实其“当前阶段”，或 User 手动中断。计划、回忆、假设、提及将来要做，不算落实。宁可不判定，也不要误判。',
+    ...blocks,
+    '',
+    '【后台激活回执】仅当本轮正文已经明确落实某条“当前阶段”时，在回复最末尾额外输出一行：<moli_bridge_activation>ID1,ID2</moli_bridge_activation>。没有任何条目被明确落实时不要输出该标签。这个标签是扩展内部回执，不属于故事正文，不要解释它。',
+    '[持续剧情线结束]',
+  ].join('\n\n');
+}
+
+function clearBridgePrompt(ctx) {
+  try { ctx?.setExtensionPrompt?.(BRIDGE_PROMPT_ID, '', extension_prompt_types.NONE, 0, false); } catch {}
+}
+
+function consumeActivationReceipt(ctx, messageId, scopeKey) {
+  const mid = Number(messageId);
+  if (!Number.isInteger(mid) || !Array.isArray(ctx?.chat)) return;
+  const message = ctx.chat[mid];
+  if (!message || message.is_user || message.is_system) return;
+  const original = String(message.mes || '');
+  const ids = [];
+  const cleaned = original.replace(ACTIVATION_RE, (_full, body) => {
+    String(body || '').split(/[,，\s]+/).map(x => x.trim()).filter(Boolean).forEach(id => ids.push(id));
+    return '';
+  }).replace(/\n{3,}/g, '\n\n').trim();
+  if (cleaned !== original.trim()) { message.mes = cleaned; Promise.resolve(ctx.saveChat?.()).catch(() => {}); }
+  if (ids.length) activateStoryBridgeLines(scopeKey, ids, mid);
+}
+
 function clearExtensionPrompt(ctx) {
   try {
     // NONE = -1 in current SillyTavern; passing an empty value is also the documented way to clear a module prompt.
@@ -53,45 +96,63 @@ export function createTavernInjectionBridge() {
     if (isDryRun) return;
     const scopeKey = getCurrentScopeKey();
     const pending = getPendingInjection(scopeKey);
+    const bridgeLines = listPendingStoryBridgeLines(scopeKey);
     clearExtensionPrompt(ctx);
+    clearBridgePrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
-    if (!pending?.text) return;
+    if (!pending?.text && !bridgeLines.length) return;
 
     try {
+      const bridgeText = wrapBridgeLines(bridgeLines);
+      if (bridgeText) ctx.setExtensionPrompt(BRIDGE_PROMPT_ID, bridgeText, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
       // IN_CHAT = 1, depth 0, system role. GENERATION_STARTED is early enough for ST extension prompts.
-      ctx.setExtensionPrompt(PROMPT_ID, wrapContext(pending.text), extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
-      markPendingInjectionArmed(scopeKey);
+      if (pending?.text) {
+        ctx.setExtensionPrompt(PROMPT_ID, wrapContext(pending.text), extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
+        markPendingInjectionArmed(scopeKey);
+      }
       activeScopeKey = scopeKey;
       activeGeneration = true;
     } catch (error) {
       console.error('[moli小手机] arm one-shot injection failed', error);
       clearExtensionPrompt(ctx);
+      clearBridgePrompt(ctx);
     }
+  };
+
+  const onMessageReceived = (messageId) => {
+    const scopeKey = activeScopeKey || getCurrentScopeKey();
+    if (scopeKey) consumeActivationReceipt(ctx, messageId, scopeKey);
   };
 
   const onGenerationEnded = () => {
     if (!activeGeneration || !activeScopeKey) return;
     const consumedScope = activeScopeKey;
+    const lastMessageId = Array.isArray(ctx.chat) ? ctx.chat.length - 1 : -1;
+    consumeActivationReceipt(ctx, lastMessageId, consumedScope);
+    markStoryBridgeInjected(consumedScope, lastMessageId);
     clearExtensionPrompt(ctx);
+    clearBridgePrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
-    clearPendingInjection(consumedScope);
+    if (getPendingInjection(consumedScope)) clearPendingInjection(consumedScope);
   };
 
   const onGenerationStopped = () => {
     if (!activeGeneration) return;
     // Stop/failure keeps the pending draft so the user can retry. Only the active ST prompt is cleared.
     clearExtensionPrompt(ctx);
+    clearBridgePrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
   };
 
   const onChatChanged = () => {
-    if (!activeGeneration) clearExtensionPrompt(ctx);
+    if (!activeGeneration) { clearExtensionPrompt(ctx); clearBridgePrompt(ctx); }
   };
 
   eventSource.on(events.GENERATION_STARTED, onGenerationStarted);
+  if (events.MESSAGE_RECEIVED) eventSource.on(events.MESSAGE_RECEIVED, onMessageReceived);
   eventSource.on(events.GENERATION_ENDED, onGenerationEnded);
   eventSource.on(events.GENERATION_STOPPED, onGenerationStopped);
   eventSource.on(events.CHAT_CHANGED, onChatChanged);
@@ -99,7 +160,9 @@ export function createTavernInjectionBridge() {
   return {
     destroy() {
       clearExtensionPrompt(ctx);
+      clearBridgePrompt(ctx);
       eventSource.removeListener?.(events.GENERATION_STARTED, onGenerationStarted);
+      if (events.MESSAGE_RECEIVED) eventSource.removeListener?.(events.MESSAGE_RECEIVED, onMessageReceived);
       eventSource.removeListener?.(events.GENERATION_ENDED, onGenerationEnded);
       eventSource.removeListener?.(events.GENERATION_STOPPED, onGenerationStopped);
       eventSource.removeListener?.(events.CHAT_CHANGED, onChatChanged);
