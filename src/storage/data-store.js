@@ -1170,7 +1170,7 @@ export function createGroupConversation(
 export function updateGroupConversation(
   scopeKey,
   groupId,
-  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval, groupMode, timeMode, bodyContextEnabled, recentChatLimit, groupReplyBubbleRange, systemKind, studioReplyLength } = {}
+  { name, addMemberIds, removeMemberIds, reviewEnabled, reviewInterval, groupMode, timeMode, bodyContextEnabled, recentChatLimit, groupReplyBubbleRange, systemKind, studioReplyLength, studioInspirationEnabled, studioInspirationPaused, studioInspirationCounter } = {}
 ) {
   const data = ensureBuiltins(scopeKey);
   const conversation = data.conversations[groupId];
@@ -1231,6 +1231,9 @@ export function updateGroupConversation(
   }
   if (systemKind !== undefined) conversation.systemKind = String(systemKind || '');
   if (studioReplyLength !== undefined) conversation.studioReplyLength = Math.max(20, Math.min(500, Number(studioReplyLength) || 80));
+  if (studioInspirationEnabled !== undefined) conversation.studioInspirationEnabled = Boolean(studioInspirationEnabled);
+  if (studioInspirationPaused !== undefined) conversation.studioInspirationPaused = Boolean(studioInspirationPaused);
+  if (studioInspirationCounter !== undefined) conversation.studioInspirationCounter = Math.max(0, Number(studioInspirationCounter) || 0);
   if (groupReplyBubbleRange !== undefined) {
     const min = Math.max(1, Math.min(12, Number(groupReplyBubbleRange?.min) || 1));
     const max = Math.max(min, Math.min(12, Number(groupReplyBubbleRange?.max) || 8));
