@@ -43,22 +43,20 @@ function wrapContext(text) {
 
 function wrapBridgeLines(lines) {
   if (!Array.isArray(lines) || !lines.length) return '';
-  const blocks = lines.map((line, index) => [
-    `【持续剧情线 ${index + 1}】`,
-    `内部ID：${line.id}`,
-    `标题：${line.title}`,
-    `阶段：${line.stage}`,
-    line.text,
+  const blocks = lines.map((line) => [
+    `- ${line.title}（阶段 ${line.stage}）`,
+    `  内部ID：${line.id}`,
+    `  ${String(line.text || '').trim()}`,
   ].join('\n'));
   return [
-    '[持续剧情线 · 后台连续性]',
-    '以下条目是 User 已投入正文、但尚未确认在正文中完成当前阶段的连续性事项。它们不是本轮任务清单；只有在当前剧情自然相关时才使用。',
-    '每条会持续出现在后续生成中，直到正文明确落实其“当前阶段”，或 User 手动中断。计划、回忆、假设、提及将来要做，不算落实。宁可不判定，也不要误判。',
+    '[跨墙潜伏线]',
+    '这些是 User 选择长期保留、但尚未在正文中真正发生的事件机会。它们存在于故事后台，不是本轮任务，也不是已经发生的事实。',
+    '只在当前时间、地点、人物行动和现实条件自然接得上时，让其中某条顺势进入故事；条件不合适就继续潜伏。不要为了使用它抢走当前叙事，也不要提前规定人物收到事件后的心理、选择或结果。',
     ...blocks,
     '',
-    '【后台激活回执】仅当本轮正文已经明确落实某条“当前阶段”时，在回复最末尾额外输出一行：<moli_bridge_activation>ID1,ID2</moli_bridge_activation>。没有任何条目被明确落实时不要输出该标签。这个标签是扩展内部回执，不属于故事正文，不要解释它。',
-    '[持续剧情线结束]',
-  ].join('\n\n');
+    '内部状态回执：仅当本轮正文已经把某条当前阶段实际写成发生中的事件时，在正文末尾附加 <moli_bridge_activation>ID</moli_bridge_activation>；仅提到、想到、计划以后发生都不算。没有实际发生就不要输出。回执不是故事内容。',
+    '[跨墙潜伏线结束]',
+  ].join('\n');
 }
 
 function clearBridgePrompt(ctx) {
@@ -206,11 +204,11 @@ export function createTavernInjectionBridge() {
 
     try {
       const bridgeText = wrapBridgeLines(bridgeLines);
-      if (bridgeText) ctx.setExtensionPrompt(BRIDGE_PROMPT_ID, bridgeText, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
+      if (bridgeText) ctx.setExtensionPrompt(BRIDGE_PROMPT_ID, bridgeText, extension_prompt_types.IN_CHAT, 4, false, extension_prompt_roles.SYSTEM);
       if (lifeInspiration) ctx.setExtensionPrompt(LIFE_INSPIRATION_PROMPT_ID, lifeInspiration, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
       const planText = wrapStoryPlans(storyPlans);
       if (planText) ctx.setExtensionPrompt(STORY_PLAN_PROMPT_ID, planText, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
-      // IN_CHAT = 1, depth 0, system role. GENERATION_STARTED is early enough for ST extension prompts.
+      // Persistent bridge lines sit a few messages back as low-pressure background guidance; one-shot phone context stays closest to the current turn.
       if (pending?.text) {
         ctx.setExtensionPrompt(PROMPT_ID, wrapContext(pending.text), extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
         markPendingInjectionArmed(scopeKey);
