@@ -2,6 +2,7 @@ import { getCurrentScopeKey } from '../core/tavern-scope.js';
 import { listStoryBridgeLines, activateStoryBridgeLines, continueStoryBridgeLine, removeStoryBridgeLine } from '../storage/story-bridge-store.js';
 import { getScopeConversations, updateGroupConversation } from '../storage/data-store.js';
 import { listActiveStoryPlans, updateStoryPlan, removeStoryPlan } from '../storage/story-plan-store.js';
+import { listStoryThreads } from '../storage/story-thread-store.js';
 
 function getContext(){ try { const st=window.SillyTavern||window.parent?.SillyTavern; return typeof st?.getContext==='function'?st.getContext():null; } catch { return null; } }
 function latestAssistantId(ctx){ if(!Array.isArray(ctx?.chat))return -1; for(let i=ctx.chat.length-1;i>=0;i--){const m=ctx.chat[i];if(m&&!m.is_user&&!m.is_system)return i;} return -1; }
@@ -12,7 +13,7 @@ function emitLife(scopeKey){ try{window.dispatchEvent(new CustomEvent('moli:life
 export function createStoryBridgeStatus(){
   const ctx=getContext(); const eventSource=ctx?.eventSource; const events=ctx?.eventTypes;
   const render=()=>{
-    removeExisting(); const scopeKey=getCurrentScopeKey(); const lines=listStoryBridgeLines(scopeKey); const plans=listActiveStoryPlans(scopeKey); const room=writersRoom(scopeKey);
+    removeExisting(); const scopeKey=getCurrentScopeKey(); const lines=listStoryBridgeLines(scopeKey); const plans=listActiveStoryPlans(scopeKey); const threads=listStoryThreads(scopeKey); const room=writersRoom(scopeKey);
     const mid=latestAssistantId(ctx); if(mid<0)return;
     const messageEl=document.querySelector(`.mes[mesid="${mid}"]`); const anchor=messageEl?.querySelector('.mes_text')||messageEl; if(!anchor)return;
     const box=document.createElement('section'); box.className='moli-story-bridge-status';
@@ -33,8 +34,21 @@ export function createStoryBridgeStatus(){
       const main=document.createElement('div'); main.className='moli-story-bridge-status-main'; const title=document.createElement('strong'); title.textContent='生活灵感';
       const state=document.createElement('span'); state.className='moli-story-bridge-state'; state.textContent=room.studioInspirationPaused===true?'已暂停':'观察中'; main.append(title,state); row.appendChild(main);
       const cd=Math.max(0,Number(room.studioInspirationNsfwCooldown)||0); const counter=Math.max(0,Number(room.studioInspirationCounter)||0); const threshold=Math.max(4,Math.min(6,Number(room.studioInspirationThreshold)||5));
-      const meta=document.createElement('small'); meta.textContent=room.studioInspirationPaused===true?'先磕点瓜子再说暂时不向正文提供生活扰动机会':`低频观察 · 当前观察窗 ${counter}/${threshold}${cd>0?` · 亲密场景扰动冷却 ${cd}`:''}`; row.appendChild(meta);
+      const meta=document.createElement('small'); meta.textContent=room.studioInspirationPaused===true?'娘家人暂时不向正文提供生活扰动机会':`低频观察 · 当前观察窗 ${counter}/${threshold}${cd>0?` · 亲密场景扰动冷却 ${cd}`:''}`; row.appendChild(meta);
       const actions=document.createElement('div'); actions.className='moli-story-bridge-actions'; actions.appendChild(button(room.studioInspirationPaused===true?'继续':'暂停','life-toggle')); actions.appendChild(button('关闭','life-close')); row.appendChild(actions); box.appendChild(row);
+    }
+    if(threads.length){
+      const section=document.createElement('div'); section.className='moli-story-bridge-section-title'; section.textContent='剧情脉络'; box.appendChild(section);
+      [...threads].sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0)).slice(0,8).forEach(thread=>{
+        const row=document.createElement('div'); row.className='moli-story-bridge-status-row moli-story-thread-row';
+        const main=document.createElement('div'); main.className='moli-story-bridge-status-main';
+        const title=document.createElement('strong'); title.textContent=thread.title||'未命名剧情线';
+        const state=document.createElement('span'); state.className='moli-story-bridge-state';
+        state.textContent=thread.status==='closed'?'已结束':thread.status==='dormant'?'沉寂':'进行中';
+        main.append(title,state); row.appendChild(main);
+        const meta=document.createElement('small'); meta.textContent=[thread.fact,thread.unresolved?`悬置：${thread.unresolved}`:''].filter(Boolean).join(' · ')||'等待正文产生新的实质变化';
+        row.appendChild(meta); box.appendChild(row);
+      });
     }
     if(plans.length){
       const section=document.createElement('div'); section.className='moli-story-bridge-section-title'; section.textContent='剧情规划'; box.appendChild(section);
@@ -44,7 +58,7 @@ export function createStoryBridgeStatus(){
         const actions=document.createElement('div'); actions.className='moli-story-bridge-actions'; actions.appendChild(button(plan.status==='paused'?'继续':'暂停','plan-toggle',plan.id)); actions.appendChild(button('编辑','plan-edit',plan.id)); actions.appendChild(button('重新看看','plan-recheck',plan.id)); actions.appendChild(button('结束','plan-end',plan.id)); row.appendChild(actions); box.appendChild(row);
       });
     }
-    if(!lines.length && room?.studioInspirationEnabled!==true && !plans.length){ const empty=document.createElement('small'); empty.className='moli-story-bridge-empty'; empty.textContent='暂无进行中的跨墙事项'; box.appendChild(empty); }
+    if(!lines.length && room?.studioInspirationEnabled!==true && !plans.length && !threads.length){ const empty=document.createElement('small'); empty.className='moli-story-bridge-empty'; empty.textContent='暂无进行中的跨墙事项'; box.appendChild(empty); }
     anchor.insertAdjacentElement('afterend',box);
   };
   const click=event=>{ const btn=event.target?.closest?.('[data-bridge-action]'); if(!btn)return; const id=btn.dataset.bridgeId; const action=btn.dataset.bridgeAction; const scopeKey=getCurrentScopeKey();
@@ -62,7 +76,7 @@ export function createStoryBridgeStatus(){
     if(action==='continue'){ const next=window.prompt?.(`编辑「${line.title}」下一阶段内容。保存后会重新变为“未激活”并继续注入：`,line.text); if(next!=null&&String(next).trim()) continueStoryBridgeLine(scopeKey,id,{text:String(next).trim()}); }
     setTimeout(render,0);
   };
-  document.addEventListener('click',click); window.addEventListener('moli:story-bridge-changed',render); window.addEventListener('moli:life-inspiration-changed',render); window.addEventListener('moli:story-plan-changed',render);
+  document.addEventListener('click',click); window.addEventListener('moli:story-bridge-changed',render); window.addEventListener('moli:life-inspiration-changed',render); window.addEventListener('moli:story-plan-changed',render); window.addEventListener('moli:story-thread-changed',render);
   const rerender=()=>setTimeout(render,30); [events?.CHARACTER_MESSAGE_RENDERED,events?.MESSAGE_RECEIVED,events?.MESSAGE_UPDATED,events?.MESSAGE_SWIPED,events?.CHAT_CHANGED].filter(Boolean).forEach(e=>eventSource?.on?.(e,rerender)); setTimeout(render,100);
-  return { render, destroy(){ document.removeEventListener('click',click); window.removeEventListener('moli:story-bridge-changed',render); window.removeEventListener('moli:life-inspiration-changed',render); window.removeEventListener('moli:story-plan-changed',render); [events?.CHARACTER_MESSAGE_RENDERED,events?.MESSAGE_RECEIVED,events?.MESSAGE_UPDATED,events?.MESSAGE_SWIPED,events?.CHAT_CHANGED].filter(Boolean).forEach(e=>eventSource?.removeListener?.(e,rerender)); removeExisting(); } };
+  return { render, destroy(){ document.removeEventListener('click',click); window.removeEventListener('moli:story-bridge-changed',render); window.removeEventListener('moli:life-inspiration-changed',render); window.removeEventListener('moli:story-plan-changed',render); window.removeEventListener('moli:story-thread-changed',render); [events?.CHARACTER_MESSAGE_RENDERED,events?.MESSAGE_RECEIVED,events?.MESSAGE_UPDATED,events?.MESSAGE_SWIPED,events?.CHAT_CHANGED].filter(Boolean).forEach(e=>eventSource?.removeListener?.(e,rerender)); removeExisting(); } };
 }

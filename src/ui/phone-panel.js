@@ -529,7 +529,7 @@ export function createPhonePanel({
           <button type="button" class="moli-studio-float-bubble bubble-cast" data-studio-pick="cast">Ta出场太少啦</button>
           <button type="button" class="moli-studio-float-bubble bubble-meme" data-studio-pick="meme">帮我想梗——</button>
           <div class="moli-studio-meme-choices" data-studio-meme-choices hidden>
-            <button type="button" class="moli-studio-float-bubble bubble-meme-sub" data-studio-meme-mode="them">你先说</button>
+            <button type="button" class="moli-studio-float-bubble bubble-meme-sub" data-studio-meme-mode="them">你俩先说</button>
             <button type="button" class="moli-studio-float-bubble bubble-meme-sub" data-studio-meme-mode="me">我先说</button>
           </div>
           <button type="button" class="moli-studio-float-bubble bubble-plan" data-studio-pick="plan">剧情好难走啊</button>
@@ -564,7 +564,7 @@ export function createPhonePanel({
       </div>
       <input type="file" accept="image/*" data-chat-wallpaper-input hidden>
       <div class="moli-studio-compose-tools" data-studio-compose-tools hidden>
-        <button type="button" class="moli-studio-compose-tool" data-action="studio-quick-adopt">取纳</button>
+        <button type="button" class="moli-studio-compose-tool" data-action="studio-quick-adopt">采纳</button>
         <button type="button" class="moli-studio-compose-tool moli-studio-material-jump" data-action="studio-material-jump" hidden>瓜子磕完了，帮你放素材栏了哈！自己看着要不要改</button>
       </div>
       <div class="moli-studio-after-adopt" data-studio-after-adopt hidden>
@@ -5919,7 +5919,10 @@ export function createPhonePanel({
     if (!rows.some(row => row.id === id)) rows.push({ id, content, senderName: String(message?.senderSnapshot?.name || (message?.role === 'user' ? 'User' : '娘家人')), createdAt: Date.now(), conversationName: String(conversation?.name || '娘家人') });
     localStorage.setItem(studioMaterialKey(scopeKey), JSON.stringify(rows.slice(-80)));
     windowRef.dispatchEvent?.(new CustomEvent('moli:wall-source-changed'));
-    if (isWritersRoom(conversation) && studioAfterAdopt) studioAfterAdopt.hidden = false;
+    if (isWritersRoom(conversation)) {
+      if (studioMaterialJump) studioMaterialJump.hidden = false;
+      if (studioAfterAdopt) studioAfterAdopt.hidden = false;
+    }
     return true;
   }
   function isWritersRoom(conversation) { return conversation?.type === 'group' && String(conversation.systemKind || '') === 'writers-room'; }
@@ -6972,8 +6975,8 @@ export function createPhonePanel({
       renderChat();
 
       if (isWritersRoom(conversation)) {
-        if (/^取纳(?:\s|[，,：:。！!？?]|$)/u.test(text)) {
-          const notes = text.replace(/^取纳(?:\s|[，,：:。！!？?])*/u, '').trim();
+        if (/^(?:采纳|取纳)(?:\s|[，,：:。！!？?]|$)/u.test(text)) {
+          const notes = text.replace(/^(?:采纳|取纳)(?:\s|[，,：:。！!？?])*/u, '').trim();
           windowRef.setTimeout(() => requestReply({ studioTask: { type: 'adopt', notes } }), 0);
         } else if (pendingStudioTask) {
           const task = { ...pendingStudioTask, notes: text };
@@ -7313,7 +7316,7 @@ export function createPhonePanel({
   studioQuickAdopt?.addEventListener('click', () => {
     if (!input) return;
     const current = String(input.value || '').trim();
-    input.value = current ? `取纳，${current}` : '取纳';
+    input.value = current ? `采纳，${current}` : '采纳';
     input.focus();
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
@@ -7383,7 +7386,15 @@ export function createPhonePanel({
     if (memeMode) {
       const conversation = currentConversation();
       if (!isWritersRoom(conversation)) return;
-      focusStudioInput({ type: 'meme', mode: memeMode, notes: '' });
+      if (memeMode === 'them') {
+        if (studioChoice) studioChoice.hidden = true;
+        if (studioMemeChoices) studioMemeChoices.hidden = true;
+        if (studioPlanChoices) studioPlanChoices.hidden = true;
+        pendingStudioTask = null;
+        requestReply({ studioTask: { type: 'meme', mode: 'them', notes: '' } });
+      } else {
+        focusStudioInput({ type: 'meme', mode: memeMode, notes: '' });
+      }
       return;
     }
     const mode = event.target.closest?.('[data-studio-plan-mode]')?.dataset?.studioPlanMode;
@@ -8890,8 +8901,11 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
       '[data-action="home"]'
     )
     .forEach(button => {
-      button.onclick = () =>
-        show('home');
+      button.onclick = () => {
+        const conversation = currentConversation();
+        if (isWritersRoom(conversation)) show('injection-composer');
+        else show('home');
+      };
     });
 
   panel.querySelector(
