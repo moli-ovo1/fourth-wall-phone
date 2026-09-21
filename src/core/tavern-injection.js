@@ -87,17 +87,17 @@ function clearStoryPlanPrompt(ctx) {
 function wrapStoryPlans(lines) {
   if (!Array.isArray(lines) || !lines.length) return '';
   const blocks = lines.map((line, index) => [
-    `【事件规划 ${index + 1}】`, `内部ID：${line.id}`, `标题：${line.title}`, `观察阶段：${line.stage}`, String(line.text || '').trim(), line.lastNote ? `娘家人上次观察：${line.lastNote}` : ''
+    `【事件规划 ${index + 1}】`, `内部ID：${line.id}`, `标题：${line.title}`, `观察阶段：${line.stage}`, String(line.text || '').trim(), line.lastNote ? `先磕点瓜子再说上次观察：${line.lastNote}` : ''
   ].filter(Boolean).join('\n'));
   return [
-    '[娘家人 · 长线剧情规划]',
+    '[先磕点瓜子再说 · 长线剧情规划]',
     '这些规划只规划“可能发生/延续的事件、场景、人物事务与外部情境”，绝不能规定角色应该产生什么心理、感情、认知转变或行动结论。角色心理与选择必须由其既有人设、当下信息和正文自然产生。',
     '你可以依据角色已经实际表现出的行动、当前心理状态与现实处境，判断某个事件规划现在是否合时；但这些信息只能用于判断时机，不能反过来要求角色朝规划期待的心理方向发展。',
     '规划不是任务清单。若正文自然长出更好的事件路径，允许“意外生长”；若证据不足就继续观察，绝不能为了推进规划而制造角色反应。',
     ...blocks,
     '',
     '【内部复查回执】只有本轮正文对某条规划产生了实质新证据时，才在回复最末尾为该条输出一行：<moli_story_plan_review>{"id":"规划ID","result":"continue|advance|adjust|end|organic","note":"一句话说明正文发生了什么，以及为什么维持/推进/需调整/结束/意外生长"}</moli_story_plan_review>。普通对话、重复情绪描写、没有改变事件条件的日常动作不要输出。标签是扩展内部回执，不属于正文。',
-    '[娘家人 · 长线剧情规划结束]'
+    '[先磕点瓜子再说 · 长线剧情规划结束]'
   ].join('\n\n');
 }
 
@@ -146,7 +146,7 @@ function armLifeInspiration(scopeKey) {
     const recent = Array.isArray(room.studioInspirationRecentTypes) ? room.studioInspirationRecentTypes.slice(-6) : [];
     if (cooldown > 0) updateLifeState(scopeKey, room, { studioInspirationNsfwCooldown: cooldown - 1 });
     return [
-      '[娘家人 · 生活灵感观察]',
+      '[先磕点瓜子再说 · 生活灵感观察]',
       '这是一次低频的“世界自己呼吸”机会，不是必须执行的剧情任务。先判断当前正文是否自然需要一点外部生活扰动；若当前已有充足事件、冲突或外部推动，可以完全不使用本提示。',
       '若适合，请根据当前时间、地点、季节、环境、人物身份、社会关系、生活习惯、工作状态与既有世界事实，自然加入至多一个轻量小动静：邻里/家人/工作来客、电话消息、设施变化、普通偶遇、小麻烦、小幸运、意外获得、环境变化或配角自己的事务都可以。',
       '生活允许只是发生：不要求推动主线、揭示秘密、促进感情或制造冲突。不要为了“有剧情”凭空制造重大人物、阴谋、事故或危机，也不要强行让无关配角闯入或获得其不应知道的信息。',
@@ -154,7 +154,7 @@ function armLifeInspiration(scopeKey) {
       '如果当前正处于连续亲密/性场景，不必完全冻结世界：工作来客、电话、家人、配角事务等仍可能自然发生，但一次连续场景至多实际采用一个外部扰动；不要为了打断而打断。',
       cooldown > 0 ? `亲密场景外部扰动仍在冷却中（还需经过约 ${cooldown} 次生活灵感复查机会）：若当前仍属亲密/性场景，本次禁止再加入新的外部扰动；普通非亲密场景仍可按自然性判断。` : '亲密场景外部扰动当前不在冷却中；若本次恰处于亲密/性场景且确有自然机会，可以采用一次，但采用后会进入较长冷却。',
       '若本轮正文确实实际写入了生活扰动，请在回复最末尾额外输出内部回执：<moli_life_event>normal|简短类型</moli_life_event>；若它发生在连续亲密/性场景中，则写 <moli_life_event>intimate|简短类型</moli_life_event>。没有实际写入就不要输出。回执不属于正文，不要解释。',
-      '[娘家人 · 生活灵感观察结束]',
+      '[先磕点瓜子再说 · 生活灵感观察结束]',
     ].join('\n');
   } catch (error) {
     console.warn('[moli小手机] life inspiration watch unavailable', error);
