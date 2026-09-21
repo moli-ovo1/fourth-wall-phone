@@ -31,7 +31,7 @@ export function listInjectableStoryPlans(scopeKey) { return read(scopeKey).filte
 export function addStoryPlan(scopeKey, { text, title = '', source = '' } = {}) {
   const content = String(text || '').trim(); if (!scopeKey || !content) return null;
   const rows = read(scopeKey); const stamp = now();
-  const row = { id:`plan-${stamp}-${Math.random().toString(36).slice(2,8)}`, title:String(title||'').trim()||titleFrom(content), text:content, source:String(source||'娘家人'), status:'watching', stage:1, lastResult:'continue', lastNote:'刚建立规划，等待正文自然发展。', createdAt:stamp, updatedAt:stamp, lastObservedMessageId:null };
+  const row = { id:`plan-${stamp}-${Math.random().toString(36).slice(2,8)}`, title:String(title||'').trim()||titleFrom(content), text:content, source:String(source||'先磕点瓜子再说'), status:'watching', stage:1, lastResult:'continue', lastNote:'刚建立规划，等待正文自然发展。', createdAt:stamp, updatedAt:stamp, lastObservedMessageId:null };
   rows.push(row); write(scopeKey, rows); return { ...row };
 }
 export function updateStoryPlan(scopeKey, id, patch = {}) {
