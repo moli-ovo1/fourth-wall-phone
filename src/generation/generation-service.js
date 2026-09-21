@@ -883,7 +883,7 @@ function formatPhoneBridge(scopeKey, contact, userName = 'User') {
   return chunks.join('\n\n') || '暂无可用手机私聊连续性。';
 }
 
-function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], bubbleRange = null, targetedRegeneration = false, maxChars = 0, maxRepliesOverride = 0, unlimitedChars = false } = {}) {
+function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], bubbleRange = null, targetedRegeneration = false, maxChars = 0, maxRepliesOverride = 0, unlimitedChars = false, studioTaskType = '' } = {}) {
   const raw = String(text || '').trim();
   let parsed = null;
   const candidates = [];
@@ -928,6 +928,32 @@ function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], 
     replies.push({ contact: member, messages: [content], text: content });
     if (replies.length >= maxReplies) break;
   }
+  const structuredStudioTask = ['adopt', 'plan'].includes(String(studioTaskType || ''));
+  if (structuredStudioTask) {
+    const labels = studioTaskType === 'plan'
+      ? ['【规划·导演版】', '【规划·灵感版】', '【规划·二人合璧】']
+      : ['【导演版】', '【灵感版】', '【二人合璧】'];
+    const expectedSpeakers = ['builtin:writer', 'builtin:guide', 'builtin:writer'];
+    const mergedText = replies.map(reply => String(reply?.text || '')).join('\n');
+    const rebuilt = [];
+    for (let index = 0; index < labels.length; index += 1) {
+      const label = labels[index];
+      const start = mergedText.indexOf(label);
+      if (start < 0) continue;
+      const laterStarts = labels.slice(index + 1).map(next => mergedText.indexOf(next, start + label.length)).filter(pos => pos >= 0);
+      const end = laterStarts.length ? Math.min(...laterStarts) : mergedText.length;
+      const content = mergedText.slice(start, end).trim();
+      const member = byId.get(expectedSpeakers[index]);
+      if (member && content) rebuilt.push({ contact: member, messages: [content], text: content });
+    }
+    if (rebuilt.length !== 3 || !labels.every((label, index) => rebuilt[index]?.text?.startsWith(label))) {
+      throw new Error(studioTaskType === 'adopt'
+        ? '跨墙纳取没有返回完整的导演版、灵感版、二人合璧三份提示词；本次结果已拦截，不会写入普通聊天。请重试。'
+        : '剧情规划没有返回完整的三版候选；本次结果已拦截，不会写入普通聊天。请重试。');
+    }
+    return rebuilt;
+  }
+
   if (!review) {
     const required = forcedIds.map(String);
     const missing = required.filter(id => !seen.has(id));
@@ -1115,7 +1141,7 @@ ${onlinePreset}
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
       : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n${studio ? `\n${studioFactRule}\n${studioOpenPromptRule}\n${studioTaskGuidance}\n${studioLikeGuidance}` : ''}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
-  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜角色设定 + 既往历史 + 近期正文】\n${studioStoryFacts || '本轮没有从当前 char 角色描述、相关世界书、柏宝书长期记忆或最近正文命中相关资料；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}`;
+  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜角色设定 + 既往历史 + 近期正文】\n${studioStoryFacts || '本轮没有从当前 char 角色描述、相关世界书、柏宝书长期记忆或最近正文命中相关资料；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}${studio && ['adopt', 'plan'].includes(taskType) ? `\n\n【本轮唯一交付任务｜最高任务焦点】\n${studioTaskGuidance}\n不要继续普通正文讨论，不要复盘正文，不要回答别的问题。现在只交付上述三版候选；三版分别占一个 messages 项。` : ''}`;
   return { system, messages: [{ role: 'user', content: shared }] };
 }
 
@@ -1160,6 +1186,7 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
     maxChars: 0,
     maxRepliesOverride: studio ? 30 : 0,
     unlimitedChars: studio,
+    studioTaskType: studio ? String(studioTask?.type || '') : '',
   });
   if (!replies.length) throw new Error('本轮群聊批量生成没有返回可用消息');
   onDelta?.('', '', replies[0]?.contact || null);
