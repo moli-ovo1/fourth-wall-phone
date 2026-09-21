@@ -1,4 +1,4 @@
-import { buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
+import { buildGlobalPresetPrompt, buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
 import { buildFourthWallRequest, sanitizeFourthWallContext } from '../prompts/fourth-wall.js';
@@ -300,7 +300,9 @@ export function buildPrivateGenerationRequest({
     });
   }
 
+  const globalPreset = buildGlobalPresetPrompt();
   const systemBlocks = [
+    ...(globalPreset ? [`【moli小手机：全局预设｜最高层用户配置】\n${globalPreset}`] : []),
     `你正在 moli小手机 的私聊中作为「${name}」与「${tavernUserName}」私聊。`,
     `当前与你聊天的人叫「${tavernUserName}」。只回复当前角色本人的消息，不要替「${tavernUserName}」发言，不要输出系统说明。`,
   ];
@@ -336,7 +338,7 @@ export function buildPrivateGenerationRequest({
     systemBlocks.push(`【当前 SillyTavern User Persona】\n${clip(tavernUserDescription, 8000)}`);
   }
 
-  const onlinePreset = buildOnlinePresetPrompt();
+  const onlinePreset = buildOnlinePresetPrompt(undefined, { excludeGlobal: true });
   if (onlinePreset) {
     systemBlocks.push(`【moli小手机：线上聊天预设】\n${onlinePreset}`);
   }

@@ -24,7 +24,7 @@ import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getTavernUserContext, replaceUserPlaceholder } from '../core/tavern-user.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
-import { buildOnlinePresetPrompt, buildCommunityPresetPrompt } from '../storage/prompt-settings.js';
+import { buildGlobalPresetPrompt, buildOnlinePresetPrompt, buildCommunityPresetPrompt } from '../storage/prompt-settings.js';
 import { listProfileMoments, listPublicMoments, getProfileMomentMemory, setProfileMomentMemory, getPendingMomentChatEvents, getRecentMomentChatEvents, markMomentChatEventsDelivered , markProfileMomentsMemoryOrganized} from '../storage/moments-store.js';
 import { getSelectedWorldContactId } from '../storage/world-context-store.js';
 import { getCurrentScopeKey } from '../core/tavern-scope.js';
@@ -442,7 +442,7 @@ export async function generatePrivateReply({
   let result;
   if (config.source === 'tavern') {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const prompt = (Array.isArray(request?.messages) ? request.messages : [])
+    const prompt = (Array.isArray(effectiveRequest?.messages) ? effectiveRequest.messages : [])
       .map(item => `${item?.role === 'assistant' ? 'Assistant' : 'User'}: ${String(item?.content || '')}`)
       .join('\n\n');
     const generateRaw = getTavernContext?.()?.generateRaw;
@@ -451,7 +451,7 @@ export async function generatePrivateReply({
     }
     const text = String(await generateRaw({
       prompt,
-      systemPrompt: String(request?.system || ''),
+      systemPrompt: String(effectiveRequest?.system || ''),
     }) || '').trim();
     if (!text) throw new Error('酒馆当前 API 返回了空回复');
     if (!(isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false)) onDelta?.(text, text);
@@ -573,17 +573,25 @@ function resolveContactApiConfig(contact) {
   return config;
 }
 
-async function runGeneration(config, request, { signal, onDelta } = {}) {
+async function runGeneration(config, request, { signal, onDelta, timeoutMs } = {}) {
+  const globalPreset = buildGlobalPresetPrompt();
+  const baseSystem = String(request?.system || '');
+  const effectiveRequest = {
+    ...request,
+    system: globalPreset
+      ? `【moli小手机：全局预设｜最高层用户配置】\n${globalPreset}\n\n${baseSystem}`
+      : baseSystem,
+  };
   if (config.source !== 'tavern') {
-    return generateProviderText(config, request, { signal, onDelta });
+    return generateProviderText(config, effectiveRequest, { signal, onDelta, timeoutMs });
   }
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const generateRaw = getTavernContext?.()?.generateRaw;
   if (typeof generateRaw !== 'function') throw new Error('当前 SillyTavern 未提供 generateRaw 接口');
-  const prompt = (Array.isArray(request?.messages) ? request.messages : [])
+  const prompt = (Array.isArray(effectiveRequest?.messages) ? effectiveRequest.messages : [])
     .map(item => `${item?.role === 'assistant' ? 'Assistant' : 'User'}: ${String(item?.content || '')}`)
     .join('\n\n');
-  const text = String(await generateRaw({ prompt, systemPrompt: String(request?.system || '') }) || '').trim();
+  const text = String(await generateRaw({ prompt, systemPrompt: String(effectiveRequest?.system || '') }) || '').trim();
   if (!text) throw new Error('酒馆当前 API 返回了空回复');
   onDelta?.(text, text);
   return { text, raw: null };
@@ -1001,7 +1009,7 @@ async function buildBatchGroupRequest({
   // moli73：普通群聊继承全局“线上聊天预设”的行为规则。
   // 私聊专用 <message> 输出格式与群聊 JSON 协议冲突，因此群聊只排除系统默认的 output-protocol；
   // 其余启用条目（包括用户自定义条目）继续作为群成员共同的线上行为规则。
-  const onlinePreset = studio ? '' : buildOnlinePresetPrompt(undefined, { excludeIds: ['output-protocol'] });
+  const onlinePreset = studio ? '' : buildOnlinePresetPrompt(undefined, { excludeIds: ['output-protocol'], excludeGlobal: true });
   const onlinePresetBlock = onlinePreset
     ? `【moli小手机：线上聊天预设｜群聊内容规则】
 ${onlinePreset}
@@ -1195,16 +1203,8 @@ export async function summarizeProfileMomentsMemory({ scopeKey, contactId, momen
   const source = items.slice().reverse().map(formatMomentContinuityItem).join('\n\n');
   const system = `你在整理一个角色手机里的朋友圈长期记忆。只保留真正值得延续的关系变化、重要互动、反复出现的态度、未解决的矛盾/亲近、对 user 或熟人的明确印象。不要把每条动态逐条复述，不要凭空补剧情，不要强行赋予每件小事意义。已有长期记忆应作为底稿保留仍然有效的信息，并合并本批朋友圈的新变化。返回一段精炼中文记忆正文，不要标题、JSON或解释。`;
   const user = `角色：${contact.source?.originalName || contact.name || id}\n\n【已有朋友圈长期记忆】\n${existing || '暂无'}\n\n【本批准备清理的朋友圈】\n${source}`;
-  let text='';
-  if (config.source === 'tavern') {
-    if (signal?.aborted) throw new DOMException('Aborted','AbortError');
-    const generateRaw=getTavernContext?.()?.generateRaw;
-    if (typeof generateRaw !== 'function') throw new Error('当前 SillyTavern 未提供 generateRaw 接口');
-    text=String(await generateRaw({ prompt:`User: ${user}`, systemPrompt:system }) || '').trim();
-  } else {
-    const result=await generateProviderText(config,{system,messages:[{role:'user',content:user}]},{signal,timeoutMs:120000});
-    text=String(result?.text||'').trim();
-  }
+  const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal, timeoutMs: 120000 });
+  const text = String(result?.text || '').trim();
   if (!text) throw new Error('朋友圈记忆整理返回为空');
   setProfileMomentMemory(scopeKey,id,text);
   markProfileMomentsMemoryOrganized(scopeKey,id,items.map(item=>item.id));
@@ -1364,16 +1364,8 @@ ${proactiveEnabled ? '' : '【硬边界】主动私聊当前关闭：action 不�
 {"action":"SKIP|POST|PRIVATE_CHAT|POST+PRIVATE_CHAT","content":"POST 时填写朋友圈正文，否则空字符串","privateMessages":["仅主动私聊时填写，1~3条真实手机气泡；主动私聊关闭时必须为空"],"ageMinutes":0,"onlyUserVisible":false,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论时填写；DELETE_COMMENT 时作为 deletionReason","replyToId":"可选，回复某条评论 id"}]}。
 ageMinutes 范围 0~2880。interactions 可以为空。`;
 
-  let text = '';
-  if (config.source === 'tavern') {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const generateRaw = getTavernContext?.()?.generateRaw;
-    if (typeof generateRaw !== 'function') throw new Error('当前 SillyTavern 未提供 generateRaw 接口');
-    text = String(await generateRaw({ prompt: `User: ${user}`, systemPrompt: system }) || '').trim();
-  } else {
-    const result = await generateProviderText(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
-    text = String(result?.text || '').trim();
-  }
+  const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
+  const text = String(result?.text || '').trim();
 
   const decision = parseMomentRefreshDecision(text);
   if (!proactiveEnabled && (decision.action === 'PRIVATE_CHAT' || decision.action === 'POST+PRIVATE_CHAT')) {
@@ -1757,7 +1749,7 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
 使用问答社区语法。title 是一个值得回答的问题，content 是问题补充或背景，answer 是一条有明确个人立场/知识来源的初始回答。问题可以来自世界中的职业、关系、社会现象、历史、生活经验、公共事件等。不要把所有回答写成百科全书，也不要整齐列点。评论围绕回答继续质疑、补充或讨论。
 
 【自创信息环境】\nUser 还可以定义自己的信息环境。只有本次提供的自创条目可以参与生成；它们不是天涯、小红书或知乎的换皮，必须遵循 User 对该条目的描述。\n${(customCommunities||[]).map(x=>{const charName=getCurrentTavernCharacterSnapshot()?.name||'当前角色';const desc=String(x.description||'按名称自然理解').replace(/\{\{char\}\}/gi,charName).replace(/\{\{user\}\}/gi,userName);return `- [id=${x.id}] ${x.name}｜${x.needsComments===false?'不需要评论区':'需要评论区'}：${desc}`;}).join('\n')||'本次没有自创条目。'}\n\n【本次来源限制】\n只允许从：${(Array.isArray(recommendSources)&&recommendSources.length?recommendSources:['tianya','xiaohongshu','zhihu','custom']).join('、')} 中生成。若包含 custom，自创内容 section=custom，并且 customCommunityId/customCommunityName 必须从上面给出的自创条目中原样选择，不得自造条目名或 id。\n\n【推荐页要求】\n一次生成 ${recommendCount>0?recommendCount+' 条':'6~8 条'}，把更多注意力留给每条内容本身。不要固定平台配额，由内容自然决定。题材必须明显多样，不要整页围绕同一关键词。每条 section 必须准确标记 tianya / xiaohongshu / zhihu / custom。只输出严格 JSON，不要解释。`;
-  const communityPreset=buildCommunityPresetPrompt();
+  const communityPreset=buildCommunityPresetPrompt(undefined, { excludeGlobal: true });
   const baseSystem = section === 'tianya' ? tianyaSystem : section === 'recommend' ? recommendSystem : genericSystem;
   const system = `${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}${baseSystem}`;
   const schema = section === 'tianya'
@@ -1770,16 +1762,8 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
         ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~8 条；每篇笔记按热度生成初始互动：普通约5~8条、活跃约8~12条、热门或争议约12~18条，混合顶层评论与下级回复。不要 markdown。`
         : `返回：{"posts":[{"section":"zhihu","type":"question","author":"题主昵称","authorId":"可选","title":"问题标题","content":"问题补充，可为空","answers":[{"author":"回答者昵称","authorId":"可选","content":"回答正文","upvotes":0,"comments":[{"author":"评论者","content":"评论"}]}]}]}。生成 6~8 个问题；每题按热度形成约5~18条初始互动，由风格明显不同的独立回答与回答下评论共同构成，不要求全部都是回答。不要 markdown。`;
   const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【当前可参考的故事上下文】\n${context}\n\n${schema}`;
-  let text='';
-  if (config.source === 'tavern') {
-    if (signal?.aborted) throw new DOMException('Aborted','AbortError');
-    const generateRaw=getTavernContext?.()?.generateRaw;
-    if (typeof generateRaw !== 'function') throw new Error('当前 SillyTavern 未提供 generateRaw 接口');
-    text=String(await generateRaw({prompt:`User: ${user}`,systemPrompt:system})||'').trim();
-  } else {
-    const result=await generateProviderText(config,{system,messages:[{role:'user',content:user}]},{signal,timeoutMs:120000});
-    text=String(result?.text||'').trim();
-  }
+  const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal, timeoutMs: 120000 });
+  const text = String(result?.text || '').trim();
   let parsedEnvelope={}; try{const raw=String(text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');parsedEnvelope=JSON.parse(raw);}catch{try{const m=String(text||'').match(/\{[\s\S]*\}/);parsedEnvelope=m?JSON.parse(m[0]):{};}catch{parsedEnvelope={};}}
   let posts=parsePublicWebBatch(text, userName).filter(p=>section==='recommend' || p.section===section);
   const userOwnedNames=new Set([userName,...getCommunityUserProfile(scopeKey).communityIds.map(x=>String(x.name||'').trim())].filter(Boolean));
@@ -1799,7 +1783,7 @@ export async function generateCommunityPasserbyMentionReply({ scopeKey, post, ac
   const userName = getTavernUserContext().name || 'User';
   if (!scopeKey || !post || !actor?.name) throw new Error('当前路人 @ 上下文不可用');
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
-  const communityPreset=buildCommunityPresetPrompt();
+  const communityPreset=buildCommunityPresetPrompt(undefined, { excludeGlobal: true });
   const actorName=String(actor.name||'网友').trim();
   const actorId=String(actor.id||'').trim();
   const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续同一篇社区讨论。User 明确 @ 了已经在本帖出现过的网友“${actorName}”。你只能继续扮演这个既有网友，不得把他/她当作第一次进帖的新网友，也不得创建同名替身。请依据这个网友在本帖此前真实说过的话、被谁回复过以及当前讨论自然续接。不要替 User 发言。只输出严格 JSON。`;
@@ -1817,7 +1801,7 @@ export async function generateTianyaReplyRefresh({ scopeKey, post, signal } = {}
   if (!scopeKey || !post) throw new Error('当前帖子不可用');
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const existing=(post.comments||[]).map((c,i)=>`${i+1}楼 ${c.author?.name||'网友'}：${c.content||''}`).join('\n');
-  const communityPreset=buildCommunityPresetPrompt();
+  const communityPreset=buildCommunityPresetPrompt(undefined, { excludeGlobal: true });
   const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续一个老式天涯论坛帖子。只生成新的后续楼层回复，不改写主楼和已有楼层。回复数量自然为 1~6。网友可以认真回答、追问、质疑、支持、反对、阴阳怪气、争论、补充经历、纠正事实、催更、马克、插眼、跑题，也可以回复某个已有楼层。如果已有楼层中最新一条来自 User，本次必须至少有一条新回复回应这条 User 评论；回应者由你根据帖子生态自由决定，可以是楼主、被回复层主、已有网友或刚进帖的新 ID，不要固定某一种。天涯保持线性盖楼：回复某楼仍然产生一个新的独立楼层，不做缩进楼中楼。若回复某楼，用 replyToFloor 返回被回复楼层号；不要在 content 里重复写 @用户名 #楼层号，界面会显示。不同网友口吻、长度、立场应有差异。只输出严格 JSON。`;
   const user=`帖子标题：${post.title}\n楼主：${post.author?.name||'小号'}\n主楼：${post.content}\n\n已有楼层：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"网友昵称","authorId":"可选","content":"新楼层内容","replyToFloor":"可选，被回复的已有楼层号"}]}。不要 markdown。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
@@ -1833,7 +1817,7 @@ export async function generateXiaohongshuCommentRefresh({ scopeKey, post, signal
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const comments=Array.isArray(post.comments)?post.comments:[];
   const existing=comments.map((c,i)=>{const target=comments.find(x=>String(x.id)===String(c.replyToCommentId||''));return `${i+1}. id=${c.id}｜${c.author?.name||'网友'}${target?` 回复 ${target.author?.name||'网友'}(id=${target.id})`:''}：${c.content||''}`;}).join('\n');
-  const communityPreset=buildCommunityPresetPrompt();
+  const communityPreset=buildCommunityPresetPrompt(undefined, { excludeGlobal: true });
   const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续一篇小红书笔记的评论区。只新增评论，不改写笔记和已有评论。一次新增 1~6 条。新增内容可以是新的主评论，也可以回复已有的任意主评论或子回复；回复之间可以继续互相回复。数据关系可以有任意深度，但小红书界面会把同一主评论下的对话展示在一个回复区里。如果已有评论中最新一条来自 User，本次必须至少有一条新评论回应这条 User 评论；回应者可由作者、被回复者、已有 ID 或新 ID 自然产生，不预先写死。评论要像真实小红书用户：有人分享经历、追问、赞同、质疑、补充、提醒、玩梗，也可能作者本人回应；口吻和长度要有差异。只输出严格 JSON。`;
   const user=`笔记作者：${post.author?.name||'网友'}\n标题：${post.title||''}\n正文：${post.content||''}\n\n已有评论（可回复其中任意 id）：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"昵称","authorId":"可选","content":"新增评论","replyToCommentId":"可选；回复已有评论时填写其 id；新主评论留空"}]}。不要 markdown。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
@@ -1858,7 +1842,7 @@ export async function generateWeiboCommentRefresh({ scopeKey, post, signal } = {
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const comments=Array.isArray(post.comments)?post.comments:[];
   const existing=comments.map(c=>`id=${c.id}｜${c.author?.name||'网友'}${c.replyToCommentId?` 回复 ${c.replyToCommentId}`:''}：${c.content||''}`).join('\n');
-  const communityPreset=buildCommunityPresetPrompt();
+  const communityPreset=buildCommunityPresetPrompt(undefined, { excludeGlobal: true });
   const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续一条微博的评论区。只新增 1~6 条自然评论/回复，不改原微博。当前整个已有评论区都仍然是可继续的讨论现场：可以新增一级评论，也可以回复任意较早或较新的已有评论、继续已有楼中楼、让网友彼此接话，作者本人也可回复。User 的新回复只是其中一个可能继续发展的分支，不会让其他已有楼层失去继续讨论的机会。若已有评论区同时存在多个分支，本轮新增内容应自然覆盖不止一种去向，例如回应 User、续接其他旧楼、网友互回或新增一级评论中的若干种，而不是把全部新增回复集中到 User 最新一条。评论应有微博即时、碎片、口吻不齐的感觉。只输出严格 JSON。`;
   const user=`微博作者：${post.author?.name||'网友'}\n微博：${post.content||post.title||''}\n\n已有评论：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"公开ID","authorId":"可选稳定id","content":"评论","replyToCommentId":"可空；回复已有评论时填其id"}]}。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
@@ -1871,7 +1855,7 @@ export async function generateZhihuDetailRefresh({ scopeKey, post, signal } = {}
   const userName=getTavernUserContext().name||'User'; if(!scopeKey||!post)throw new Error('当前知乎问题不可用');
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config); const answers=Array.isArray(post.extra?.answers)?post.extra.answers:[];
   const existing=answers.map((a,i)=>`answerId=${a.id}｜${a.author?.name||'小号用户'}：${a.content||''}\n评论：${(a.comments||[]).map(c=>`[${c.id}] ${c.author?.name||'网友'}：${c.content||''}`).join('；')||'暂无'}`).join('\n\n');
-  const communityPreset=buildCommunityPresetPrompt();
+  const communityPreset=buildCommunityPresetPrompt(undefined, { excludeGlobal: true });
   const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在刷新同一个知乎问题。已有回答和评论是永久历史，绝对不能改写、替换或删除。一次刷新可以：新增 0~3 个独立回答；给任意已有回答新增 0~4 条评论/回复；或者两者同时发生。不要重复已有内容。只输出严格 JSON。`;
   const user=`问题：${post.title||''}\n问题补充：${post.content||''}\n\n已有回答与评论：\n${existing||'暂无回答'}\n\n返回：{"answers":[{"author":"回答者","authorId":"可选","content":"新增回答","upvotes":0}],"commentAdditions":[{"answerId":"必须是已有 answerId","comments":[{"author":"昵称","authorId":"可选","content":"新增评论","replyToCommentId":"可选已有评论id"}]}]}。允许 answers 或 commentAdditions 为空；不要 markdown。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal}); const raw=String(result?.text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''); let data;try{data=JSON.parse(raw)}catch{const m=raw.match(/\{[\s\S]*\}/);if(!m)throw new Error('知乎刷新没有返回可解析 JSON');data=JSON.parse(m[0]);}
@@ -1887,7 +1871,7 @@ export async function generateZhihuAnswerCommentRefresh({ scopeKey, post, answer
   const config=resolveApiRuntimeConfig(getApiSettings()); assertApiConfig(config);
   const comments=Array.isArray(answer.comments)?answer.comments:[];
   const existing=comments.map((c,i)=>{const target=comments.find(x=>String(x.id)===String(c.replyToCommentId||''));return `${i+1}. id=${c.id}｜${c.author?.name||'网友'}${target?` 回复 ${target.author?.name||'网友'}(id=${target.id})`:''}：${c.content||''}`;}).join('\n');
-  const communityPreset=buildCommunityPresetPrompt();
+  const communityPreset=buildCommunityPresetPrompt(undefined, { excludeGlobal: true });
   const system=`${communityPreset?`【moli社区预设】\n${communityPreset}\n\n`:''}你正在继续一条知乎回答下面的评论区。只新增评论，不改写问题、回答和已有评论。一次新增 1~6 条。可以新增主评论，也可以回复已有任意评论；评论之间可以继续互相回复。如果已有评论中最新一条来自 User，本次必须至少有一条新评论回应这条 User 评论；回应者可由回答者、被回复者、已有 ID 或新 ID 自然产生，不预先写死。评论要比回答更口语、更短，可以赞同、质疑、追问、补充、纠错、分享经历、抬杠或要求来源。不同网友口吻与立场要有差异。只输出严格 JSON。`;
   const user=`问题：${post.title||''}\n回答者：${answer.author?.name||'小号用户'}\n回答：${answer.content||''}\n\n已有评论（可回复任意 id）：\n${existing||'暂无'}\n\n返回：{"comments":[{"author":"昵称","authorId":"可选","content":"新增评论","replyToCommentId":"可选；回复已有评论时填写其 id；新主评论留空"}]}。不要 markdown。`;
   const result=await runGeneration(config,{system,messages:[{role:'user',content:user}]},{signal});
