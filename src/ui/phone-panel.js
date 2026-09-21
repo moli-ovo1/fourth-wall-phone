@@ -525,6 +525,10 @@ export function createPhonePanel({
         <div class="moli-studio-bubble-menu" data-studio-choice hidden>
           <button type="button" class="moli-studio-float-bubble bubble-cast" data-studio-pick="cast">Ta出场太少啦</button>
           <button type="button" class="moli-studio-float-bubble bubble-meme" data-studio-pick="meme">帮我想梗——</button>
+          <div class="moli-studio-meme-choices" data-studio-meme-choices hidden>
+            <button type="button" class="moli-studio-float-bubble bubble-meme-sub" data-studio-meme-mode="them">你先说</button>
+            <button type="button" class="moli-studio-float-bubble bubble-meme-sub" data-studio-meme-mode="me">我先说</button>
+          </div>
           <button type="button" class="moli-studio-float-bubble bubble-plan" data-studio-pick="plan">剧情好难走啊</button>
           <div class="moli-studio-plan-choices" data-studio-plan-choices hidden>
             <button type="button" class="moli-studio-float-bubble bubble-plan-sub" data-studio-plan-mode="idea">我有想法</button>
@@ -1438,6 +1442,7 @@ export function createPhonePanel({
   const studioNavEntry = panel.querySelector('[data-studio-menu-toggle]');
   const studioChoice = panel.querySelector('[data-studio-choice]');
   const studioPlanChoices = panel.querySelector('[data-studio-plan-choices]');
+  const studioMemeChoices = panel.querySelector('[data-studio-meme-choices]');
   let pendingStudioTask = null;
   const studioComposeTools = panel.querySelector('[data-studio-compose-tools]');
   const studioQuickAdopt = panel.querySelector('[data-action="studio-quick-adopt"]');
@@ -6516,6 +6521,7 @@ export function createPhonePanel({
     pendingStudioTask = task || null;
     if (studioChoice) studioChoice.hidden = true;
     if (studioPlanChoices) studioPlanChoices.hidden = true;
+    if (studioMemeChoices) studioMemeChoices.hidden = true;
     if (!input) return;
     input.classList.remove('moli-studio-input-flash');
     void input.offsetWidth;
@@ -7293,6 +7299,7 @@ export function createPhonePanel({
     if (!isWritersRoom(conversation)) return;
     if (studioChoice) studioChoice.hidden = !studioChoice.hidden;
     if (studioPlanChoices) studioPlanChoices.hidden = true;
+    if (studioMemeChoices) studioMemeChoices.hidden = true;
   });
 
   writersRoomToolbar?.addEventListener('click', event => {
@@ -7300,14 +7307,27 @@ export function createPhonePanel({
     if (!isWritersRoom(conversation)) return;
     const pick = event.target.closest?.('[data-studio-pick]')?.dataset?.studioPick;
     if (!pick) return;
+    if (pick === 'meme') {
+      if (studioMemeChoices) studioMemeChoices.hidden = false;
+      if (studioPlanChoices) studioPlanChoices.hidden = true;
+      return;
+    }
     if (pick === 'plan') {
       if (studioPlanChoices) studioPlanChoices.hidden = false;
+      if (studioMemeChoices) studioMemeChoices.hidden = true;
       return;
     }
     focusStudioInput({ type: pick, notes: '' });
   });
 
   studioChoice?.addEventListener('click', event => {
+    const memeMode = event.target.closest?.('[data-studio-meme-mode]')?.dataset?.studioMemeMode;
+    if (memeMode) {
+      const conversation = currentConversation();
+      if (!isWritersRoom(conversation)) return;
+      focusStudioInput({ type: 'meme', mode: memeMode, notes: '' });
+      return;
+    }
     const mode = event.target.closest?.('[data-studio-plan-mode]')?.dataset?.studioPlanMode;
     if (!mode) return;
     const conversation = currentConversation();
