@@ -117,6 +117,7 @@ import { rememberAnonymousIdentity, revealAnonymousIdentity, buildCharacterConti
 import { buildPhoneContext } from '../generation/phone-context-builder.js';
 import { getPrivatePhoneTraces, settlePrivatePhoneTraceRefresh } from '../storage/private-phone-trace-store.js';
 import { registerWallSourceProvider, listRegisteredWallSources } from '../storage/wall-source-registry.js';
+import { listCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalendarEvent } from '../storage/calendar-store.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -211,10 +212,26 @@ export function createPhonePanel({
             <span class="moli-app-icon-tile moli-his-phone-app-tile">他</span>
             <small>他的手机</small>
           </button>
+          <button class="moli-app-icon" data-action="open-calendar" aria-label="打开日历">
+            <span class="moli-app-icon-tile moli-calendar-app-tile">21</span>
+            <small>日历</small>
+          </button>
         </div>
       </main>
     </section>
 
+
+    <section class="moli-page" data-page="calendar">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="app-home-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">日历</div>
+        <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="calendar-add" aria-label="添加日程">＋</button></div>
+      </header>
+      <main class="moli-calendar-main">
+        <div class="moli-calendar-note">这里只保存人物世界里已经存在的安排，不负责替剧情规划未来。日程可加入「我们的墙」，但“有安排”不等于“未来一定发生”。</div>
+        <div data-calendar-list></div>
+      </main>
+    </section>
 
     <section class="moli-page" data-page="his-phone">
       <header class="moli-nav">
@@ -1956,6 +1973,18 @@ export function createPhonePanel({
     label: String(row.content || '').replace(/\s+/g, ' ').slice(0, 88) + (String(row.content || '').length > 88 ? '…' : ''),
     build: () => `【创作指导 · 娘家人 · ${row.senderName || '创作提示'}】\n以下是 User 主动纳取并选择跨墙的开放式导演素材，不是故事中已经发生的事实，也不代表角色知道这些内容。它只能提供事件条件、外部机会和人物自身已有依据的行动空间；不得把素材里对角色心理、情绪、判断、选择、台词、反应或事件结果的推测当成正文要求。若素材中仍残留此类结论，必须忽略这些结论，让人物依据当下真实状态自然演算；事件也允许最终没有重要影响。\n${row.content}`,
   })));
+
+  registerWallSourceProvider('calendar', ({scopeKey}) => listCalendarEvents(scopeKey).filter(row => row.status !== 'done').map(row => {
+    const when = formatCalendarDateTime(row.startAt);
+    const status = row.status === 'cancelled' ? '已取消' : row.status === 'missed' ? '未完成' : '已安排';
+    const owner = String(row.ownerName || '未指定人物');
+    return {
+      id:`calendar:${row.id}`, app:'calendar', appLabel:'日历', section:'schedule', sectionLabel:'既定日程', owner,
+      group:`日历 · ${owner}`, kind:'calendar-event', kindLabel:`${status} · ${when}`,
+      label:`${when} · ${owner}：${row.title}`,
+      build:()=>`【世界内日历 · ${owner}】\n这是人物世界中已经存在的安排，不是编剧对未来剧情的要求，也不是已经发生的事实。正文可以把它作为时间与生活连续性的现实约束；是否准时发生、取消、改期、迟到、被打断或最终未完成，应由实际剧情与人物当下状态自然决定。不要为了展示日程而强行切场。\n时间：${when}\n状态：${status}\n安排：${row.title}${row.note?`\n备注：${row.note}`:''}`,
+    };
+  }));
 
   registerWallSourceProvider('his-phone', ({scopeKey}) => {
     const rows=[];
@@ -4314,6 +4343,39 @@ export function createPhonePanel({
     try{const result=await generatePrivatePhoneTraceRefresh({scopeKey,contactId:hisPhoneContactId});settlePrivatePhoneTraceRefresh(scopeKey,hisPhoneContactId,result);if(result.sourceEventIds?.length)markWorldEventsConsumed(scopeKey,hisPhoneContactId,result.sourceEventIds,'his-phone');renderHisPhone();toast(result.unchanged?'没有新的经历需要结算':`刷新完成：${result.searches?.length||0} 条搜索，${result.views?.length||0} 条浏览，${result.memos?.length||0} 条备忘`);}catch(error){if(status)status.textContent=`刷新失败：${error?.message||error}`;toast(error?.message||'刷新失败');}finally{if(button)button.disabled=false;}
   }
 
+  function formatCalendarDateTime(value){
+    const date=new Date(String(value||''));
+    if(Number.isNaN(date.getTime()))return String(value||'未定时间');
+    return date.toLocaleString([], {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  }
+  function calendarOwnerOptions(selected=''){
+    const rows=[{id:'user',name:getTavernUserContext().name||'User'},...getContacts().map(c=>({id:String(c.id||''),name:canonicalContactName(c)}))];
+    return rows.filter(x=>x.id&&x.name).map(x=>`<option value="${escapeHtml(x.id)}" ${String(x.id)===String(selected)?'selected':''}>${escapeHtml(x.name)}</option>`).join('');
+  }
+  function renderCalendar(){
+    const box=panel.querySelector('[data-calendar-list]'); if(!box)return;
+    const scopeKey=getScopeKey?.(); const rows=listCalendarEvents(scopeKey);
+    if(!rows.length){box.innerHTML='<div class="moli-calendar-empty">还没有日程。右上角 ＋ 可以记录已经确定的安排。</div>';return;}
+    box.innerHTML=rows.map(row=>{const status=row.status==='cancelled'?'已取消':row.status==='done'?'已完成':row.status==='missed'?'未完成':'已安排';return `<article class="moli-calendar-card ${row.status!=='scheduled'?'is-muted':''}" data-calendar-id="${escapeHtml(row.id)}"><time>${escapeHtml(formatCalendarDateTime(row.startAt))}</time><div><b>${escapeHtml(row.title)}</b><span>${escapeHtml(row.ownerName||'未指定人物')} · ${status}</span>${row.note?`<p>${escapeHtml(row.note)}</p>`:''}</div><button data-calendar-menu="${escapeHtml(row.id)}">•••</button></article>`;}).join('');
+  }
+  function addCalendarFromUi(){
+    const scopeKey=getScopeKey?.(); if(!scopeKey)return;
+    const title=windowRef.prompt?.('日程内容（只记录已经存在的安排）',''); if(title===null||!String(title).trim())return;
+    const defaultDate=new Date(Date.now()+60*60*1000); defaultDate.setSeconds(0,0);
+    const local=`${defaultDate.getFullYear()}-${String(defaultDate.getMonth()+1).padStart(2,'0')}-${String(defaultDate.getDate()).padStart(2,'0')}T${String(defaultDate.getHours()).padStart(2,'0')}:${String(defaultDate.getMinutes()).padStart(2,'0')}`;
+    const startAt=windowRef.prompt?.('时间（例如 2026-09-22T16:00）',local); if(startAt===null||!String(startAt).trim())return;
+    const contacts=[{id:'user',name:getTavernUserContext().name||'User'},...getContacts().map(c=>({id:String(c.id||''),name:canonicalContactName(c)}))].filter(x=>x.id&&x.name);
+    const ownerInput=windowRef.prompt?.(`属于谁的日程？输入名字\n${contacts.slice(0,20).map(x=>x.name).join(' / ')}`,contacts[0]?.name||'User'); if(ownerInput===null)return;
+    const owner=contacts.find(x=>x.name===String(ownerInput).trim())||{id:'',name:String(ownerInput).trim()||'未指定人物'};
+    const note=windowRef.prompt?.('备注（可留空）',''); if(note===null)return;
+    const saved=addCalendarEvent(scopeKey,{title,startAt,ownerId:owner.id,ownerName:owner.name,note}); if(!saved){toast('日程保存失败，请检查时间');return;} renderCalendar(); toast('已加入日历');
+  }
+  function calendarMenu(id){
+    const scopeKey=getScopeKey?.(); const row=listCalendarEvents(scopeKey).find(x=>String(x.id)===String(id)); if(!row)return;
+    const choice=windowRef.prompt?.('输入操作：1 已完成 / 2 已取消 / 3 未完成 / 4 恢复已安排 / 5 删除','1'); if(choice===null)return;
+    if(String(choice).trim()==='5'){if(windowRef.confirm?.(`删除日程“${row.title}”？`))removeCalendarEvent(scopeKey,id);}else{const map={'1':'done','2':'cancelled','3':'missed','4':'scheduled'};const status=map[String(choice).trim()];if(!status)return;updateCalendarEvent(scopeKey,id,{status});} renderCalendar();
+  }
+
   const show = name => {
     if (addMenu) addMenu.hidden = true;
     hideMessageMenu();
@@ -4337,6 +4399,7 @@ export function createPhonePanel({
     if (name === 'contact-moments') renderContactMoments();
     if (name === 'injection-composer') renderInjectionComposer();
     if (name === 'his-phone') renderHisPhone();
+    if (name === 'calendar') renderCalendar();
 
     if (name === 'chat') {
       applyCurrentChatWallpaper();
@@ -7954,6 +8017,9 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   panel.querySelectorAll('[data-action="app-home-back"]').forEach(button => {
     button.onclick = () => show('phone-home');
   });
+  panel.querySelector('[data-action="open-calendar"]')?.addEventListener('click',()=>show('calendar'));
+  panel.querySelector('[data-action="calendar-add"]')?.addEventListener('click',addCalendarFromUi);
+  panel.querySelector('[data-calendar-list]')?.addEventListener('click',event=>{const btn=event.target.closest('[data-calendar-menu]');if(btn)calendarMenu(btn.dataset.calendarMenu);});
 
   panel.querySelectorAll('[data-action="tab-home"]').forEach(button => button.onclick = () => show('home'));
   panel.querySelectorAll('[data-action="tab-contacts"]').forEach(button => button.onclick = () => show('contacts-tab'));
