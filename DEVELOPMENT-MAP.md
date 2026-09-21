@@ -3652,3 +3652,10 @@ Still next, without splitting into UI micro-patches:
 - `generation-service.js::runGeneration()` 统一把 global 预设置于 system 最前；Community、朋友圈、编辑室、他的手机等经统一入口的 AI 请求自动继承。
 - `prompt-builder.js` 私聊请求同样把 global 放在 systemBlocks 第一位；微信专属预设随后注入且排除 global。
 - 未来新增 AI App 必须复用统一生成入口或等价的 global-first 构建器，不得把全局预设当成微信专属设置。
+
+
+## v0.6.09 / moli256 — 创作搭子人物事实锚定
+- 「先磕点瓜子再说」在讨论、Ta出场好少、想梗、规划和纳取时，会用本轮提到的人名 + 当前正文 + 编辑室讨论触发当前故事角色的世界书相关条目。
+- 触发到的人物身份、职业、家世、经济状况、关系和既有经历作为创作事实层提供给编辑室；已有答案的事实不得为了想梗重新脑补。
+- 未触发/未记载的部分仍可作为“可能/如果”的创作设想，但不得伪装成既定设定。
+- 不整本灌入世界书，仍按相关关键词触发，避免无关条目和未触发信息泛滥。
