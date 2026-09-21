@@ -930,11 +930,19 @@ function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], 
   }
   const structuredStudioTask = ['adopt', 'plan'].includes(String(studioTaskType || ''));
   if (structuredStudioTask) {
-    const labels = studioTaskType === 'plan'
-      ? ['【规划·导演版】', '【规划·灵感版】', '【规划·二人合璧】']
-      : ['【导演版】', '【灵感版】', '【二人合璧】'];
-    const expectedSpeakers = ['builtin:writer', 'builtin:guide', 'builtin:writer'];
     const mergedText = replies.map(reply => String(reply?.text || '')).join('\n');
+    if (studioTaskType === 'adopt') {
+      const label = '【取纳】';
+      const start = mergedText.indexOf(label);
+      const member = byId.get('builtin:writer');
+      const content = start >= 0 ? mergedText.slice(start).trim() : '';
+      if (!member || !content.startsWith(label)) {
+        throw new Error('取纳没有返回可用的最终素材；本次结果已拦截，请重试。');
+      }
+      return [{ contact: member, messages: [content], text: content }];
+    }
+    const labels = ['【规划·导演版】', '【规划·灵感版】', '【规划·二人合璧】'];
+    const expectedSpeakers = ['builtin:writer', 'builtin:guide', 'builtin:writer'];
     const rebuilt = [];
     for (let index = 0; index < labels.length; index += 1) {
       const label = labels[index];
@@ -947,9 +955,7 @@ function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], 
       if (member && content) rebuilt.push({ contact: member, messages: [content], text: content });
     }
     if (rebuilt.length !== 3 || !labels.every((label, index) => rebuilt[index]?.text?.startsWith(label))) {
-      throw new Error(studioTaskType === 'adopt'
-        ? '跨墙纳取没有返回完整的导演版、灵感版、二人合璧三份提示词；本次结果已拦截，不会写入普通聊天。请重试。'
-        : '剧情规划没有返回完整的三版候选；本次结果已拦截，不会写入普通聊天。请重试。');
+      throw new Error('剧情规划没有返回完整的三版候选；本次结果已拦截，不会写入普通聊天。请重试。');
     }
     return rebuilt;
   }
@@ -1021,6 +1027,22 @@ async function buildBatchGroupRequest({
   const bodyText = recentBody?.messages?.map(message => `${message?.name || (message?.role === 'user' ? (userContext.name || 'User') : '正文角色')}：${String(message?.content || '').trim()}`).filter(Boolean).join('\n') || '';
   const scanText = [groupHistory, recentMemory, longMemory, bodyText, reviewTarget?.content || ''].filter(Boolean).join('\n');
 
+  const studioPersonaOverlay = member => {
+    if (!studio) return '';
+    const id = String(member?.id || '');
+    if (id === 'builtin:writer') return `【编辑室专属人格覆盖｜只在“先磕点瓜子再说”生效】
+你现在是编辑室里的“小上帝”，不是围读会评论员。你的工作是帮助 User 把创作想法做得逻辑成立：检查事实、因果、时间、身份、现实条件与世界连续性，发现漏洞并给出能落地的改法。
+正文、人设、世界书、柏宝书只是后台资料库，不是你每轮必须讨论的主题。User 当前说什么就讨论什么；User 换话题，你立刻跟着换，禁止自顾自继续上一轮正文分析。
+你可以在后台查人物事实，但严禁向 User 罗列、复述、总结“硬设定锚点”、角色卡、世界书、柏宝书或资料来源。需要纠错时，只说与当前创作决策直接相关的最少事实，例如“这个点不成立，她现在还是学生”，然后继续解决问题。
+你的点子取向：逻辑合理、条件自然、因果扎实、能真正发生。`;
+    if (id === 'builtin:guide') return `【编辑室专属人格覆盖｜只在“先磕点瓜子再说”生效】
+你现在是编辑室里的“moli”，不是围读会读者。你服务的是创作编辑室：跟着 User 当前正在讨论的问题走，不要因为你能看到正文就自动把话题拖回正文剧情。
+正文、人设、世界书、柏宝书只作为后台依据；严禁把后台人物档案、设定条目或资料来源成段颁给 User。
+你的创意取向比小上帝更爱搞事：偏争吵、碰撞、修罗场、意外、把事情闹大，喜欢刺激和精彩；可以大胆拱火、提出更凶的玩法，但不能篡改已经存在的硬事实，也不能把未确定的猜测冒充既定设定。
+User 换话题就跟着换；User 只是闲聊、追问或修改要求时，先回应那句话本身，不得自顾自继续上一轮正文分析。`;
+    return '';
+  };
+
   const memberBlocks = [];
   for (const member of members) {
     assertContactReady(member);
@@ -1030,6 +1052,7 @@ async function buildBatchGroupRequest({
     memberBlocks.push(
       `===== MEMBER PRIVATE ZONE: ${contactLabel(member)} | id=${member.id} =====\n`
       + `【身份资料】\n${batchRoleProfile(member, scanText, userContext.name, scopeKey)}\n\n`
+      + `${studioPersonaOverlay(member) ? `${studioPersonaOverlay(member)}\n\n` : ''}`
       + `${String(member?.userProfile || '').trim() ? `【这个成员保存的 User 设定】\n${clipBatchText(member.userProfile, 5000)}\n\n` : ''}`
       + `${String(userContext.description || '').trim() ? `【当前 SillyTavern User Persona】\n${clipBatchText(userContext.description, 5000)}\n\n` : ''}`
       + `【本成员自己的世界书】\n${clipBatchText(worldBook?.text || '', 6000) || '本轮无激活条目。'}\n\n`
@@ -1088,8 +1111,8 @@ async function buildBatchGroupRequest({
   }).filter(Boolean).join('\n') : '';
   const taskType = String(studioTask?.type || '');
   const taskNotes = String(studioTask?.notes || '').trim();
-  const studioFactRule = !studio ? '' : `【当前故事事实优先】先查事实，再发散。角色设定是语义概念，不按存储位置拆成“人设/世界背景”：SillyTavern 当前 char 的角色描述与相关世界书都可能包含人物设定，二者命中的内容共同构成角色设定；柏宝书用于确认既往历史；最近正文用于判断当前阶段。下方资料一旦明确人物身份、职业、家庭背景、经济状况、关系或既有经历，就把它当作硬事实。资料没有说明的部分可以提出“可能/如果”的创作设想，但不能冒充既定设定。若创意与已知事实冲突，改创意，不改人物。不得用可单独编辑的微信联系人资料反向定义故事 NPC。`;
-  const studioOpenPromptRule = `【创作搭子跨墙写法】跨墙候选只写可供正文使用的事件种子：已经存在的外部条件、可能出现的机会、人物本人基于既有人设/职责/关系可采取的行动入口。把讨论中的心理猜测留在创作搭子聊天里，不带进候选；不要替任何角色写心理结论、情绪结论、认知转折、关系走向、必选动作、台词或结果。灵感版负责把事件种子想得更意外，导演版负责让条件更自然可落地，二人合璧负责把两者压成同一个开放事件入口。`;
+  const studioFactRule = !studio ? '' : `【后台事实使用规则】先查事实，再发散。角色设定可能存放在当前 char 角色描述、相关世界书、柏宝书历史与近期正文中；这些资料只供你们后台校验，不得向 User 罗列、复述、总结人物档案、设定锚点、原文条目或资料来源。创作时直接使用事实即可。若某个点与硬事实冲突，只指出解决当前问题所需的最少冲突事实，然后改创意，不改人物。资料没有说明的部分只能作为提案，不能冒充既定设定。不得用可单独编辑的微信联系人资料反向定义故事 NPC。`;
+  const studioOpenPromptRule = `【投入我们的墙时的写法】最终素材只写事件本身：必要的外部条件、发生入口、人物基于既有事实可采取的行动。不要在素材里写规则解释、免责声明、自我辩护、“仅提供/不预设/允许/可以被无视”等说明文字。后台可以用边界规则约束生成，但最终素材必须干净、直接、可用。`;
   const studioTaskGuidance = !studio ? '' : taskType === 'cast'
     ? `【本轮创作任务：Ta出场好少】目标不是“下一场硬塞 Ta 出来一次”，而是恢复指定配角作为独立人物在世界中的自然活动与持续存在感。只从 Ta 自己已经存在的人设、职业/职责、关系、利益、承诺、日程、事务与当前环境出发，为 Ta 提供近期可以自然联系、出现、场外活动或推进自身事务的开放机会；允许这些活动最终没有影响主角或主线。不得为了刺激主角而安排 Ta 精准撞上关键场面，不得为了增加戏份强闯，也不得让 Ta 获得不应知道的信息。尤其禁止规划“Ta 的出现将导致其他角色怎样想、怎样选、怎样回应”；规划配角，不规划配角造成的结果。若本轮随后被纳取为三版提示词，三版都必须遵守下面的提示词硬边界。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
     : taskType === 'meme'
@@ -1099,7 +1122,8 @@ async function buildBatchGroupRequest({
         : taskType === 'likes'
           ? `【本轮创作任务：整理❤️】第一版通常由小上帝负责收束：从当前讨论与❤️偏好信号中提炼 User 真正认可的创作意图，去重、处理矛盾，但不要把❤️当命令，也不要完全顺应 User；若正文证据与 User 偏好存在张力，应指出。moli 随后可以赞同、质疑或从整理结果继续发散新的玩法。不要机械复制点赞原句。`
           : taskType === 'adopt'
-          ? `【本轮创作任务：纳取】围绕 User 指定的气泡，把值得保留的创作意图改写成 AI 可读的开放式提示词，而不是替正文写摘要或导演角色反应。必须输出恰好3个彼此独立的 JSON messages 项，绝不能把三版合并进同一个 content；按顺序：1) builtin:writer 以“【导演版】”开头，偏现实条件、事件入口、外部机会与被规划人物自身可采取的行动空间；2) builtin:guide 以“【灵感版】”开头，事件创意可以更大胆、更意外，但仍不得预定任何角色的心理/反应/结果；3) builtin:writer 以“【二人合璧】”开头，融合自然性约束与事件创意，主动删除前两版里任何角色结论，不是简单拼接。三版都必须能允许正文中的角色拒绝、无视、误解、采取完全不同反应，甚至让事件最终没有重要影响。纳取原文里若含有对任何角色心理、欲望、情绪、判断、选择或后续反应的断言，只能把它当讨论中的猜测，生成三版时必须删除，不能换一种说法保留下来；尤其不要把‘某人的掌控欲/嫉妒/冲动处于某状态’写成事件前提。${taskNotes ? `\n纳取原文：${taskNotes}` : ''}`
+          ? `【本轮创作任务：取纳】User 已经用“取纳”暗号要求把当前编辑室讨论收成一份可投入“我们的墙”的最终素材。结合最近群聊里已经讨论过的点子，以及 User 在“取纳”后追加的要求，协作收束成一个最终版本。小上帝负责检查逻辑、事实与落地条件；moli负责保留冲突、刺激、争吵、修罗场或更精彩的可能性；两者发生冲突时，以不篡改硬事实为底线，尽量把精彩保留下来。
+最终只输出 1 个 messages 项，由 builtin:writer 发言，content 必须以“【取纳】”开头。正文只写最终事件素材本身，不写分析过程，不复述人物设定，不写资料来源，不写“该设定仅提供/不预设/允许角色/可以被忽略/开放事件入口”等解释性保护语。${taskNotes ? `\nUser在取纳后的补充要求：${taskNotes}` : ''}`
           : `【创作搭子自由讨论】你们是 User 的创作搭子，不是两个顺从的提示词工具。可以赞同、质疑、补充、发散或提出不同意见；不要因为 User 的偏好信号就失去独立判断。`;
   const studioLikeGuidance = !studio ? '' : `【❤️偏好信号】下面是 User 在当前创作讨论中点过❤️的部分内容。它们只表示“值得保留/提高参考权重”，不是命令、不是永久偏好，也不是必须顺从的答案。不要逐条回应或反复告诉 User 你看见了点赞；只有累计信号与当前话题确实相关、能帮助讨论时才自然吸收。\n${likedMessages || '本轮暂无已点赞内容。'}`;
 
@@ -1134,14 +1158,14 @@ ${onlinePreset}
     : '';
 
   const system = `${studio ? '你是 moli小手机 的“创作搭子协作器”。一次请求完成本轮创作任务。' : '你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择、气泡分配与发言生成，禁止再请求第二个编排器。'}\n\n${onlinePresetBlock}${studio ? studioContract : `【群模式】${modeText}\n${groupTimeBlock}`}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${studio
-    ? `【创作搭子任务完成制】不要读取或遵守下面普通群聊的 ${groupBubbleMin}～${groupBubbleMax} 气泡范围；本轮输出多少气泡只由完成当前创作任务所需的真实协作决定。固定三版任务必须恰好返回任务要求的3个独立候选，三个候选必须分别占一个 messages 项，禁止塞进同一气泡；其他任务不设固定数量，也不设创作字数上限。`
+    ? `【创作搭子任务完成制】不要读取或遵守下面普通群聊的 ${groupBubbleMin}～${groupBubbleMax} 气泡范围；本轮输出多少气泡只由完成当前创作任务所需的真实协作决定。“给我规划”仍必须恰好返回3个独立候选；“取纳”必须只返回1份最终素材；其他任务不设固定数量，也不设创作字数上限。`
     : review
     ? `【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮真实群聊。整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标，不要为了填满而硬说。所有群成员都只是可发言者，没有谁被强制必须出现；沉默型角色可以完全不说，爱插科打诨或此刻有话的人可以连续出现多次。同一 speakerId 可以在这一轮重复出现，允许真实的来回接话，例如 A→B→A→moli。气泡数量和分配应由人物性格、当前情绪、关系、话题价值和前一个气泡共同决定，而不是平均分配。成员不必各自从头分析正文，后发成员可以接前一个成员的话、争论、接梗、吐槽、补充或沉默。不要为了证明完成点评任务而复述正文、总结情节或强行寻找分析点。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长。`
     : targetedRegeneration
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
       : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n${studio ? `\n${studioFactRule}\n${studioOpenPromptRule}\n${studioTaskGuidance}\n${studioLikeGuidance}` : ''}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
-  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜角色设定 + 既往历史 + 近期正文】\n${studioStoryFacts || '本轮没有从当前 char 角色描述、相关世界书、柏宝书长期记忆或最近正文命中相关资料；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}${studio && ['adopt', 'plan'].includes(taskType) ? `\n\n【本轮唯一交付任务｜最高任务焦点】\n${studioTaskGuidance}\n不要继续普通正文讨论，不要复盘正文，不要回答别的问题。现在只交付上述三版候选；三版分别占一个 messages 项。` : ''}`;
+  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜角色设定 + 既往历史 + 近期正文】\n${studioStoryFacts || '本轮没有从当前 char 角色描述、相关世界书、柏宝书长期记忆或最近正文命中相关资料；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}${studio && ['adopt', 'plan'].includes(taskType) ? `\n\n【本轮唯一交付任务｜最高任务焦点】\n${studioTaskGuidance}\n不要继续普通讨论或复盘。严格完成本轮指定交付格式。` : ''}`;
   return { system, messages: [{ role: 'user', content: shared }] };
 }
 
