@@ -297,11 +297,27 @@ export function createTavernInjectionBridge() {
     }
   };
 
+  // Persistent wall/plan slots must be mounted while SillyTavern is idle.
+  // GENERATION_STARTED can be too late for providers that have already assembled the request,
+  // so react to storage changes immediately instead of waiting for the next generation event.
+  const onStoryBridgeChanged = event => {
+    const changedScope = String(event?.detail?.scopeKey || '');
+    const currentScope = getCurrentScopeKey();
+    if (!activeGeneration && (!changedScope || changedScope === currentScope)) refreshBridgePrompt(ctx, currentScope);
+  };
+  const onStoryPlanChanged = event => {
+    const changedScope = String(event?.detail?.scopeKey || '');
+    const currentScope = getCurrentScopeKey();
+    if (!activeGeneration && (!changedScope || changedScope === currentScope)) refreshStoryPlanPrompt(ctx, currentScope);
+  };
+
   eventSource.on(events.GENERATION_STARTED, onGenerationStarted);
   if (events.MESSAGE_RECEIVED) eventSource.on(events.MESSAGE_RECEIVED, onMessageReceived);
   eventSource.on(events.GENERATION_ENDED, onGenerationEnded);
   eventSource.on(events.GENERATION_STOPPED, onGenerationStopped);
   eventSource.on(events.CHAT_CHANGED, onChatChanged);
+  window.addEventListener('moli:story-bridge-changed', onStoryBridgeChanged);
+  window.addEventListener('moli:story-plan-changed', onStoryPlanChanged);
 
   // ST setExtensionPrompt slots are persistent. Mount persistent state once while idle;
   // later generations inherit it until the same key is overwritten or explicitly cleared.
@@ -319,6 +335,8 @@ export function createTavernInjectionBridge() {
       eventSource.removeListener?.(events.GENERATION_ENDED, onGenerationEnded);
       eventSource.removeListener?.(events.GENERATION_STOPPED, onGenerationStopped);
       eventSource.removeListener?.(events.CHAT_CHANGED, onChatChanged);
+      window.removeEventListener('moli:story-bridge-changed', onStoryBridgeChanged);
+      window.removeEventListener('moli:story-plan-changed', onStoryPlanChanged);
       activeScopeKey = '';
       activeGeneration = false;
     },
