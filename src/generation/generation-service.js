@@ -1026,6 +1026,7 @@ async function buildBatchGroupRequest({
   }
   const bodyText = recentBody?.messages?.map(message => `${message?.name || (message?.role === 'user' ? (userContext.name || 'User') : '正文角色')}：${String(message?.content || '').trim()}`).filter(Boolean).join('\n') || '';
   const scanText = [groupHistory, recentMemory, longMemory, bodyText, reviewTarget?.content || ''].filter(Boolean).join('\n');
+  const studio = String(conversation.systemKind || '') === 'writers-room';
 
   const studioPersonaOverlay = member => {
     if (!studio) return '';
@@ -1071,8 +1072,6 @@ User 换话题就跟着换；User 只是闲聊、追问或修改要求时，先�
   const reviewBlock = review
     ? `\n【PRIMARY REVIEW TARGET｜本轮唯一点评对象】\n签名：${String(reviewTarget.signature || '')}\n${String(reviewTarget.content || '')}\n【边界】这份正文快照是本轮围读会反应的唯一主要对象；群历史、群记忆和辅助正文只能帮助理解，绝不能取代它成为新的点评对象。成员可以回应另一个成员刚刚说的话，但最终仍应自然围绕这份触发正文。\n`
     : '';
-
-  const studio = String(conversation.systemKind || '') === 'writers-room';
 
   // 创作搭子事实链：只读当前正文世界的 SillyTavern 角色卡 + 相关世界书 + 柏宝书长期历史 + 最近正文。
   // 不读取/信任可由 User 单独编辑的微信联系人资料来定义 NPC。
