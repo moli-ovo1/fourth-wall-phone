@@ -534,8 +534,8 @@ export function createPhonePanel({
           </div>
           <button type="button" class="moli-studio-float-bubble bubble-plan" data-studio-pick="plan">剧情好难走啊</button>
           <div class="moli-studio-plan-choices" data-studio-plan-choices hidden>
-            <button type="button" class="moli-studio-float-bubble bubble-plan-sub" data-studio-plan-mode="idea">我有想法</button>
-            <button type="button" class="moli-studio-float-bubble bubble-plan-sub" data-studio-plan-mode="help">你帮我想</button>
+            <button type="button" class="moli-studio-float-bubble bubble-plan-sub" data-studio-plan-mode="rescue">救救眼前</button>
+            <button type="button" class="moli-studio-float-bubble bubble-plan-sub" data-studio-plan-mode="future">看看以后</button>
           </div>
         </div>
       </div>
