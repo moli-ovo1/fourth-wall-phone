@@ -522,7 +522,7 @@ export function createPhonePanel({
       </header>
       <div class="moli-writers-room-toolbar" data-writers-room-toolbar hidden>
         <button type="button" data-studio-task="cast">Ta出场好少</button>
-        <button type="button" data-studio-task="meme">先磕点瓜子再说</button>
+        <button type="button" data-studio-task="meme">给我想梗</button>
         <button type="button" data-studio-task="plan">给我规划</button>
         
       </div>
