@@ -62,25 +62,38 @@ function clearBridgePrompt(ctx = getContext()) {
   try { ctx?.setExtensionPrompt?.(BRIDGE_PROMPT_ID, ''); } catch {}
 }
 
-function refreshBridgePrompt(scopeKey = getCurrentScopeKey()) {
-  const ctx = getContext();
+function armBridgePromptForGeneration(ctx, scopeKey = getCurrentScopeKey()) {
   try {
-    if (!ctx || typeof ctx.setExtensionPrompt !== 'function') {
-      console.warn('[moli小手机][跨墙注入] 当前 SillyTavern context 不可用');
-      return 0;
-    }
     const lines = listPendingStoryBridgeLines(scopeKey);
     const text = wrapBridgeLines(lines);
     if (!text) {
       clearBridgePrompt(ctx);
-      console.info('[moli小手机][跨墙注入] slot cleared', { scopeKey, pending: 0 });
+      console.info('[moli小手机][跨墙注入] 本轮无 pending 线', { scopeKey });
       return 0;
     }
-    ctx.setExtensionPrompt(BRIDGE_PROMPT_ID, text, extension_prompt_types.IN_CHAT ?? 1, 4, false, extension_prompt_roles.SYSTEM ?? 0);
-    console.info('[moli小手机][跨墙注入] slot mounted', { scopeKey, pending: lines.length, chars: text.length, key: BRIDGE_PROMPT_ID, depth: 4 });
+    // Deliberately reuse the same one-shot injection pattern that is already
+    // proven by moli's “注入下一轮上下文”: arm during GENERATION_STARTED at
+    // IN_CHAT depth 0, then clear only the prompt slot after the generation.
+    // The bridge line itself remains in storage, so the next generation arms it again.
+    ctx.setExtensionPrompt(
+      BRIDGE_PROMPT_ID,
+      text,
+      extension_prompt_types.IN_CHAT,
+      0,
+      false,
+      extension_prompt_roles.SYSTEM,
+    );
+    console.info('[moli小手机][跨墙注入] 本轮已重新武装', {
+      scopeKey,
+      pending: lines.length,
+      chars: text.length,
+      key: BRIDGE_PROMPT_ID,
+      depth: 0,
+    });
     return lines.length;
   } catch (error) {
-    console.warn('[moli小手机][跨墙注入] refresh failed', error);
+    console.warn('[moli小手机][跨墙注入] 本轮武装失败', error);
+    clearBridgePrompt(ctx);
     return 0;
   }
 }
@@ -206,7 +219,7 @@ function consumeActivationReceipt(ctx, messageId, scopeKey) {
   if (cleaned !== original.trim()) { message.mes=cleaned; Promise.resolve(ctx.saveChat?.()).catch(()=>{}); }
   if (ids.length) {
     activateStoryBridgeLines(scopeKey, ids, mid);
-    refreshBridgePrompt(scopeKey);
+    clearBridgePrompt(ctx);
   }
 }
 
@@ -232,19 +245,20 @@ export function createTavernInjectionBridge() {
     const scopeKey = getCurrentScopeKey();
     const pending = getPendingInjection(scopeKey);
 
-    // Persistent prompts are ST-owned slots: refresh/overwrite them, never clear them
-    // merely because a generation starts or ends.
-    refreshBridgePrompt(scopeKey);
+    // Cross-wall bridge deliberately follows the already-proven one-shot path:
+    // every正文 generation arms the current pending lines again.
+    const bridgeCount = armBridgePromptForGeneration(ctx, scopeKey);
     refreshStoryPlanPrompt(ctx, scopeKey);
 
     // Ephemeral prompts belong only to this generation.
     clearExtensionPrompt(ctx);
+    clearBridgePrompt(ctx);
     clearLifeInspirationPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
 
     const lifeInspiration = armLifeInspiration(scopeKey);
-    if (!pending?.text && !lifeInspiration && !listPendingStoryBridgeLines(scopeKey).length && !listInjectableStoryPlans(scopeKey).length) return;
+    if (!pending?.text && !lifeInspiration && !bridgeCount && !listInjectableStoryPlans(scopeKey).length) return;
 
     try {
       if (lifeInspiration) ctx.setExtensionPrompt(LIFE_INSPIRATION_PROMPT_ID, lifeInspiration, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
@@ -282,6 +296,7 @@ export function createTavernInjectionBridge() {
     // Only one-shot / observation prompts are consumed by a generation.
     // Persistent bridge/plan slots remain mounted until their underlying state changes.
     clearExtensionPrompt(ctx);
+    clearBridgePrompt(ctx);
     clearLifeInspirationPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
@@ -292,6 +307,7 @@ export function createTavernInjectionBridge() {
     if (!activeGeneration) return;
     // Stop/failure keeps persistent prompts untouched and preserves the pending one-shot draft.
     clearExtensionPrompt(ctx);
+    clearBridgePrompt(ctx);
     clearLifeInspirationPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
@@ -300,20 +316,15 @@ export function createTavernInjectionBridge() {
   const onChatChanged = () => {
     if (!activeGeneration) {
       clearExtensionPrompt(ctx);
+      clearBridgePrompt(ctx);
       clearLifeInspirationPrompt(ctx);
-      refreshBridgePrompt(getCurrentScopeKey());
       refreshStoryPlanPrompt(ctx, getCurrentScopeKey());
     }
   };
 
-  // Persistent wall/plan slots must be mounted while SillyTavern is idle.
-  // GENERATION_STARTED can be too late for providers that have already assembled the request,
-  // so react to storage changes immediately instead of waiting for the next generation event.
-  const onStoryBridgeChanged = event => {
-    const changedScope = String(event?.detail?.scopeKey || '');
-    const currentScope = getCurrentScopeKey();
-    if (!activeGeneration && (!changedScope || changedScope === currentScope)) refreshBridgePrompt(currentScope);
-  };
+  // Story plans remain persistent. Cross-wall bridge lines are intentionally NOT
+  // mounted while idle; they are re-armed on every正文 generation via the proven
+  // one-shot path above.
   const onStoryPlanChanged = event => {
     const changedScope = String(event?.detail?.scopeKey || '');
     const currentScope = getCurrentScopeKey();
@@ -325,12 +336,10 @@ export function createTavernInjectionBridge() {
   eventSource.on(events.GENERATION_ENDED, onGenerationEnded);
   eventSource.on(events.GENERATION_STOPPED, onGenerationStopped);
   eventSource.on(events.CHAT_CHANGED, onChatChanged);
-  window.addEventListener('moli:story-bridge-changed', onStoryBridgeChanged);
   window.addEventListener('moli:story-plan-changed', onStoryPlanChanged);
 
   // ST setExtensionPrompt slots are persistent. Mount persistent state once while idle;
   // later generations inherit it until the same key is overwritten or explicitly cleared.
-  refreshBridgePrompt(getCurrentScopeKey());
   refreshStoryPlanPrompt(ctx, getCurrentScopeKey());
 
   return {
@@ -344,7 +353,6 @@ export function createTavernInjectionBridge() {
       eventSource.removeListener?.(events.GENERATION_ENDED, onGenerationEnded);
       eventSource.removeListener?.(events.GENERATION_STOPPED, onGenerationStopped);
       eventSource.removeListener?.(events.CHAT_CHANGED, onChatChanged);
-      window.removeEventListener('moli:story-bridge-changed', onStoryBridgeChanged);
       window.removeEventListener('moli:story-plan-changed', onStoryPlanChanged);
       activeScopeKey = '';
       activeGeneration = false;
