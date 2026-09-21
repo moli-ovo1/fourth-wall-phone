@@ -3669,3 +3669,8 @@ Still next, without splitting into UI micro-patches:
 - writers-room 的 adopt/plan 固定三版任务不再允许退化成普通讨论：请求末尾再次声明唯一交付任务，正文上下文只作为事实依据。
 - 解析器验证三版完整性；合并输出可按标签恢复为三个独立气泡，缺版则报错并阻止写入。
 - 从本版起不再新增逐版本 MOLIxxx-NOTES.md；版本记录累计到项目既有状态/规格/开发地图文档。
+
+
+## moli259 — 持久跨墙 Prompt 挂载时序
+- “我们的墙”新增/续写/删除跨墙剧情线后，持久 `setExtensionPrompt` 必须在生成前的空闲期立即与当前 scope 同步；不得仅依赖 `GENERATION_STARTED`。
+- `GENERATION_STARTED` 只作为生成前兜底刷新。这样 Provider 组装最终 API 请求时，跨墙潜伏线已经存在于 SillyTavern 的 extension prompt slot。

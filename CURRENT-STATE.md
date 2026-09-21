@@ -1,3 +1,10 @@
+# CURRENT STATE — moli259 / v0.6.12
+- 修复“我们的墙”持续跨墙线实际进入 SillyTavern 最终请求的时序：新增剧情线/修改剧情规划时，立即在空闲期同步 `setExtensionPrompt`，不再等到 `GENERATION_STARTED` 才挂载。
+- 原因：墙内存储与预览此前已经成功，但持久 Prompt 只在生成开始事件刷新；部分 SillyTavern/Provider 在该事件前已经组装最终请求，因此 Termux 看得到正文请求却看不到跨墙 Prompt。
+- 保留生成开始时的二次刷新作为兜底；切换聊天、激活剧情线、规划状态变化仍按当前 scope 同步。
+
+> Updated 2026-09-21. This top block is the authoritative current handoff; older entries below are retained as history.
+
 # CURRENT STATE — moli258 / v0.6.11
 - 「先磕点瓜子再说」NPC 事实链改为：当前 SillyTavern char 角色描述 + 相关世界书 → 柏宝书长期记忆 → 当前正文上下文；按 User/任务关键词抽取相关片段，不再用可单独编辑的微信联系人资料定义故事 NPC。
 - 角色设定语义统一：角色卡与世界书只是不同存储来源，不再把“角色卡=人设、世界书=世界背景”写成固定语义；两边命中的人物信息共同属于角色设定。
