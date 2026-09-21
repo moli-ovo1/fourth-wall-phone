@@ -516,12 +516,12 @@ export function createPhonePanel({
           <button class="moli-icon-btn moli-back" data-action="home" aria-label="返回">‹</button>
         </div>
         <div class="moli-nav-title" data-chat-title></div>
+        <button type="button" class="moli-studio-nav-entry" data-studio-menu-toggle hidden>来嗑瓜子</button>
         <div class="moli-nav-side right">
           <button class="moli-icon-btn" data-action="chat-info" aria-label="聊天信息">…</button>
         </div>
       </header>
       <div class="moli-writers-room-toolbar" data-writers-room-toolbar hidden>
-        <button type="button" class="moli-studio-main-bubble" data-studio-menu-toggle>给我规划</button>
         <div class="moli-studio-bubble-menu" data-studio-choice hidden>
           <button type="button" class="moli-studio-float-bubble bubble-cast" data-studio-pick="cast">Ta出场太少啦</button>
           <button type="button" class="moli-studio-float-bubble bubble-meme" data-studio-pick="meme">帮我想梗——</button>
@@ -531,7 +531,6 @@ export function createPhonePanel({
             <button type="button" class="moli-studio-float-bubble bubble-plan-sub" data-studio-plan-mode="help">你帮我想</button>
           </div>
         </div>
-      </div>
       </div>
       <div class="moli-chat-error" data-chat-error hidden role="alert">
         <span data-chat-error-text></span>
@@ -1436,6 +1435,7 @@ export function createPhonePanel({
   const deleteConversationSheet = panel.querySelector('[data-delete-conversation-sheet]');
   const messageMenu = panel.querySelector('[data-message-menu]');
   const writersRoomToolbar = panel.querySelector('[data-writers-room-toolbar]');
+  const studioNavEntry = panel.querySelector('[data-studio-menu-toggle]');
   const studioChoice = panel.querySelector('[data-studio-choice]');
   const studioPlanChoices = panel.querySelector('[data-studio-plan-choices]');
   let pendingStudioTask = null;
@@ -5936,7 +5936,8 @@ export function createPhonePanel({
     const isGroup = conversation.type === 'group';
     const studioRoom = isWritersRoom(conversation);
     if (writersRoomToolbar) writersRoomToolbar.hidden = !studioRoom;
-    if (studioLengthLabel) studioLengthLabel.textContent = String(conversation.studioReplyLength || 80);
+    if (studioNavEntry) studioNavEntry.hidden = !studioRoom;
+    if (studioComposeTools) studioComposeTools.hidden = !studioRoom;
     const item = isGroup
       ? null
       : contact(conversation.contactId || currentContactId);
@@ -5948,7 +5949,7 @@ export function createPhonePanel({
 
     const isFourthWall = !isGroup && isFourthWallContact(item);
 
-    chatTitle.textContent = isGroup ? conversation.name || '未命名群聊' : privateConversationTitle(conversation, item);
+    chatTitle.textContent = studioRoom ? '' : (isGroup ? conversation.name || '未命名群聊' : privateConversationTitle(conversation, item));
     if (wallpaperCurrentLabel) wallpaperCurrentLabel.textContent = isGroup ? (conversation.name || '当前群聊') : (canonicalContactName(item) || '当前聊天');
     if (sendButton) {
       const busy = isGenerationActive(scopeKey, currentContactId);
@@ -7287,15 +7288,16 @@ export function createPhonePanel({
   });
   studioMaterialJump?.addEventListener('click', () => show('injection-composer'));
   panel.querySelector('[data-action="open-writers-room"]')?.addEventListener('click', () => { try { const room = ensureWritersRoom(); currentContactId = room.conversationKey || room.id; show('chat'); renderChat({ forceLatest: true }); } catch (error) { toast(error?.message || '娘家人打开失败'); } });
+  studioNavEntry?.addEventListener('click', () => {
+    const conversation = currentConversation();
+    if (!isWritersRoom(conversation)) return;
+    if (studioChoice) studioChoice.hidden = !studioChoice.hidden;
+    if (studioPlanChoices) studioPlanChoices.hidden = true;
+  });
+
   writersRoomToolbar?.addEventListener('click', event => {
     const conversation = currentConversation();
     if (!isWritersRoom(conversation)) return;
-    const toggle = event.target.closest?.('[data-studio-menu-toggle]');
-    if (toggle) {
-      if (studioChoice) studioChoice.hidden = !studioChoice.hidden;
-      if (studioPlanChoices) studioPlanChoices.hidden = true;
-      return;
-    }
     const pick = event.target.closest?.('[data-studio-pick]')?.dataset?.studioPick;
     if (!pick) return;
     if (pick === 'plan') {
