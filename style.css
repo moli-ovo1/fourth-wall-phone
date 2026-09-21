@@ -2660,3 +2660,60 @@
 #moli-phone-panel .moli-studio-compose-tool{appearance:none;-webkit-appearance:none;border:0;background:transparent;padding:4px 2px;font:inherit;font-size:12px;line-height:1.35;text-decoration:underline;cursor:pointer;opacity:.82}
 #moli-phone-panel .moli-studio-material-jump{flex:1;text-align:left}
 #moli-phone-panel .moli-studio-material-jump[hidden]{display:none!important}
+
+/* moli270 · 编辑室顶部入口与同款液态玻璃 */
+#moli-phone-panel [data-page="chat"]>.moli-nav{position:relative}
+#moli-phone-panel .moli-studio-nav-entry{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  z-index:6;border:1px solid rgba(255,255,255,.84);border-radius:24px;
+  min-width:112px;min-height:38px;padding:7px 20px;
+  background:rgba(242,242,242,.54);
+  -webkit-backdrop-filter:blur(22px) saturate(165%);backdrop-filter:blur(22px) saturate(165%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.22),0 6px 20px rgba(0,0,0,.10);
+  font:inherit;font-size:12px;color:inherit;white-space:nowrap;
+}
+#moli-phone-panel.moli-has-chat-wallpaper .moli-studio-nav-entry{background:rgba(255,255,255,.25)}
+#moli-phone-panel .moli-studio-nav-entry[hidden]{display:none!important}
+
+#moli-phone-panel .moli-writers-room-toolbar{
+  position:absolute!important;left:0;right:0;top:52px;z-index:44;
+  height:0!important;min-height:0!important;padding:0!important;margin:0!important;
+  overflow:visible!important;background:transparent!important;pointer-events:none;
+}
+#moli-phone-panel .moli-studio-bubble-menu{
+  position:absolute;left:50%;top:8px;bottom:auto;
+  transform:translateX(-50%);width:min(350px,calc(100vw - 34px));height:126px;
+  pointer-events:none;
+}
+#moli-phone-panel .moli-studio-float-bubble{
+  min-width:104px;min-height:48px;padding:12px 18px;
+  border:1px solid rgba(255,255,255,.84);
+  background:rgba(242,242,242,.54);
+  -webkit-backdrop-filter:blur(22px) saturate(165%);backdrop-filter:blur(22px) saturate(165%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.22),0 6px 20px rgba(0,0,0,.10);
+  font-size:12px!important;
+}
+#moli-phone-panel.moli-has-chat-wallpaper .moli-studio-float-bubble{background:rgba(255,255,255,.25)}
+#moli-phone-panel .bubble-cast{left:0;top:52px}
+#moli-phone-panel .bubble-meme{left:50%;top:8px;transform:translateX(-50%)}
+#moli-phone-panel .bubble-plan{right:0;top:52px}
+#moli-phone-panel .moli-studio-plan-choices{right:2px;top:108px;width:220px;height:54px}
+#moli-phone-panel .bubble-plan-sub{min-width:98px;min-height:44px;top:0}
+#moli-phone-panel .bubble-plan-sub:first-child{left:0}
+#moli-phone-panel .bubble-plan-sub:last-child{right:0}
+
+/* 取纳 / 素材栏提示：和输入框外层使用同一块玻璃底板。 */
+#moli-phone-panel .moli-studio-compose-tools{
+  position:relative;z-index:4;flex:0 0 auto;
+  display:flex;align-items:center;gap:8px;
+  margin:0 10px 7px;padding:6px 10px;
+  min-height:40px;border:1px solid rgba(255,255,255,.84);border-radius:24px;
+  background:rgba(242,242,242,.54);
+  -webkit-backdrop-filter:blur(22px) saturate(165%);backdrop-filter:blur(22px) saturate(165%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.22),0 6px 20px rgba(0,0,0,.10);
+}
+#moli-phone-panel.moli-has-chat-wallpaper .moli-studio-compose-tools{background:rgba(255,255,255,.25)}
+#moli-phone-panel .moli-studio-compose-tool{
+  border:0!important;background:transparent!important;box-shadow:none!important;
+  padding:5px 8px!important;text-decoration:none!important;font-size:12px!important;
+}
