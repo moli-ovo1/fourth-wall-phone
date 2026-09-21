@@ -1106,8 +1106,6 @@ async function buildBatchGroupRequest({
   }).filter(Boolean).join('\n') : '';
   const taskType = String(studioTask?.type || '');
   const taskNotes = String(studioTask?.notes || '').trim();
-  const studioFactRule = !studio ? '' : `【后台事实使用规则】先查事实，再发散。角色设定可能存放在当前 char 角色描述、相关世界书、柏宝书历史与近期正文中；这些资料只供你们后台校验，不得向 User 罗列、复述、总结人物档案、设定锚点、原文条目或资料来源。创作时直接使用事实即可。若某个点与硬事实冲突，只指出解决当前问题所需的最少冲突事实，然后改创意，不改人物。资料没有说明的部分只能作为提案，不能冒充既定设定。不得用可单独编辑的微信联系人资料反向定义故事 NPC。`;
-  const studioOpenPromptRule = `【投入我们的墙时的写法】最终素材只写事件本身：必要的外部条件、发生入口、人物基于既有事实可采取的行动。不要在素材里写规则解释、免责声明、自我辩护、“仅提供/不预设/允许/可以被无视”等说明文字。后台可以用边界规则约束生成，但最终素材必须干净、直接、可用。`;
   const studioLikedMessages = studio
     ? (conversation.messages || []).filter(message => message?.role === 'assistant' && message?.likedByUser === true)
     : [];
@@ -1116,7 +1114,7 @@ async function buildBatchGroupRequest({
     : '';
 
   const studioTaskGuidance = !studio ? '' : taskType === 'cast'
-    ? `【本轮创作任务：Ta出场好少】目标不是“下一场硬塞 Ta 出来一次”，而是恢复指定配角作为独立人物在世界中的自然活动与持续存在感。只从 Ta 自己已经存在的人设、职业/职责、关系、利益、承诺、日程、事务与当前环境出发，为 Ta 提供近期可以自然联系、出现、场外活动或推进自身事务的开放机会；允许这些活动最终没有影响主角或主线。不得为了刺激主角而安排 Ta 精准撞上关键场面，不得为了增加戏份强闯，也不得让 Ta 获得不应知道的信息。尤其禁止规划“Ta 的出现将导致其他角色怎样想、怎样选、怎样回应”；规划配角，不规划配角造成的结果。若本轮随后被纳取为三版提示词，三版都必须遵守下面的提示词硬边界。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
+    ? `【本轮创作任务：Ta出场好少】目标不是“下一场硬塞 Ta 出来一次”，而是恢复指定配角作为独立人物在世界中的自然活动与持续存在感。只从 Ta 自己已经存在的人设、职业/职责、关系、利益、承诺、日程、事务与当前环境出发，为 Ta 提供近期可以自然联系、出现、场外活动或推进自身事务的开放机会；允许这些活动最终没有影响主角或主线。不得为了刺激主角而安排 Ta 精准撞上关键场面，不得为了增加戏份强闯，也不得让 Ta 获得不应知道的信息。尤其禁止规划“Ta 的出现将导致其他角色怎样想、怎样选、怎样回应”；规划配角，不规划配角造成的结果。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
     : taskType === 'meme'
       ? `【本轮创作任务：先磕点瓜子再说】你们要留意当前故事中自然出现的“生活扰动机会”，避免故事只能依靠 User 主动提出剧情才能继续活动。根据当前时间、地点、季节、环境、人物身份、社会关系、生活习惯、工作状态和已经存在的世界信息，寻找可能自然发生的小事、偶遇、麻烦、便利、插曲、意外获得、环境变化或他人的独立活动。可以平淡、荒诞、温柔、扫兴、麻烦、幸运、尴尬，甚至没有主线意义；生活允许只是发生。优先使用当前世界本来就可能存在的东西，不要为了“有剧情”凭空制造重大人物、阴谋、事故或危机。小事件若自然碰到人物已有矛盾、关系或欲望，可以产生后续，但不要预先规定它必须承担戏剧功能；近期已反复使用的停电、偶遇、电话、下雨等同类机关应主动降权。${String(studioTask?.mode || '') === 'them' ? '\n【这次由创作搭子先说】User没有先给点子。小上帝优先从真实日常、社会环境与人物生活逻辑里找自然可落地的小动静；moli可以更大胆、更意外、更有新意地发散，但仍须服从已经建立的世界事实与人物边界。两人不必得出同一种答案。' : '\n【这次由User先说】把User的新话当作创作起点而不是答案。小上帝帮助把点子向自然、可落地、符合当前正文的方向展开；moli允许走得更远、更意外，提出变体或替代玩法。不要只顺着User复述。'}${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
       : taskType === 'plan'
@@ -1132,7 +1130,7 @@ ${taskNotes ? `\n【User本次取纳追加要求】\n${taskNotes}` : ''}
 
 最终只输出 1 个 messages 项，由 builtin:writer 发言，content 必须以“【取纳】”开头。
 正文只写最终事件素材本身，不写分析过程，不复述人物设定，不写资料来源，不写“该设定仅提供/不预设/允许角色/可以被忽略/开放事件入口”等解释性保护语。`
-          : `【创作搭子自由讨论】你们是 User 的创作搭子，不是两个顺从的提示词工具。可以赞同、质疑、补充、发散或提出不同意见；不要因为 User 的偏好信号就失去独立判断。`;
+          : '';
   const studioLikeGuidance = !studio ? '' : `【❤️偏好信号】下面是 User 在当前创作讨论中点过❤️的部分内容。它们只表示“值得保留/提高参考权重”，不是命令、不是永久偏好，也不是必须顺从的答案。不要逐条回应或反复告诉 User 你看见了点赞；只有累计信号与当前话题确实相关、能帮助讨论时才自然吸收。\n${likedMessages || '本轮暂无已点赞内容。'}`;
 
   const groupTimeMode = conversation.timeMode === 'real'
@@ -1161,19 +1159,20 @@ ${onlinePreset}
 
 `
     : '';
-  const studioContract = studio
-    ? `【创作搭子工作方式】这里是创作搭子工作台，不是微信普通群聊，也不是围读会。不要套用普通群聊的气泡数量、短消息轮次、全员机会或“像真人群聊”的配额规则。一次请求内由小上帝与 moli 围绕当前任务自然协作，谁有必要谁说，可以连续接话、补充、反驳或合并；以“把本轮任务真正做完”为停止条件，而不是达到某个气泡数。简单任务可以很短，复杂任务允许多轮来回；没有内容时不要凑气泡。除明确要求固定三版的任务外，不要求两人都必须发言。`
-    : '';
 
-  const system = `${studio ? '你是 moli小手机 的“创作搭子协作器”。一次请求完成本轮创作任务。' : '你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择、气泡分配与发言生成，禁止再请求第二个编排器。'}\n\n${onlinePresetBlock}${studio ? studioContract : `【群模式】${modeText}\n${groupTimeBlock}`}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${studio
-    ? `【创作搭子任务完成制】不要读取或遵守下面普通群聊的 ${groupBubbleMin}～${groupBubbleMax} 气泡范围；本轮输出多少气泡只由完成当前创作任务所需的真实协作决定。“给我规划”仍必须恰好返回3个独立候选；“取纳”必须只返回1份最终素材；其他任务不设固定数量，也不设创作字数上限。`
+  const system = `${studio ? '你是 moli小手机 的编辑室对话生成器。' : '你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择、气泡分配与发言生成，禁止再请求第二个编排器。'}\n\n${onlinePresetBlock}${studio ? '' : `【群模式】${modeText}\n${groupTimeBlock}`}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${studio
+    ? (taskType === 'plan'
+      ? '【本轮格式】“给我规划”必须返回3个独立候选。'
+      : taskType === 'adopt'
+        ? '【本轮格式】“取纳”只返回1份最终素材。'
+        : '')
     : review
     ? `【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮真实群聊。整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标，不要为了填满而硬说。所有群成员都只是可发言者，没有谁被强制必须出现；沉默型角色可以完全不说，爱插科打诨或此刻有话的人可以连续出现多次。同一 speakerId 可以在这一轮重复出现，允许真实的来回接话，例如 A→B→A→moli。气泡数量和分配应由人物性格、当前情绪、关系、话题价值和前一个气泡共同决定，而不是平均分配。成员不必各自从头分析正文，后发成员可以接前一个成员的话、争论、接梗、吐槽、补充或沉默。不要为了证明完成点评任务而复述正文、总结情节或强行寻找分析点。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长。`
     : targetedRegeneration
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
-      : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n${studio ? `\n${studioFactRule}\n${studioOpenPromptRule}\n${studioTaskGuidance}\n${studioLikeGuidance}` : ''}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
+      : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n${studio ? `\n${studioTaskGuidance ? `${studioTaskGuidance}\n` : ''}${studioLikeGuidance}` : ''}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
-  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜角色设定 + 既往历史 + 近期正文】\n${studioStoryFacts || '本轮没有从当前 char 角色描述、相关世界书、柏宝书长期记忆或最近正文命中相关资料；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}${studio && ['adopt', 'plan'].includes(taskType) ? `\n\n【本轮唯一交付任务｜最高任务焦点】\n${studioTaskGuidance}\n不要继续普通讨论或复盘。严格完成本轮指定交付格式。` : ''}`;
+  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜角色设定 + 既往历史 + 近期正文】\n${studioStoryFacts || '本轮没有从当前 char 角色描述、相关世界书、柏宝书长期记忆或最近正文命中相关资料；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}`;
   return { system, messages: [{ role: 'user', content: shared }] };
 }
 
