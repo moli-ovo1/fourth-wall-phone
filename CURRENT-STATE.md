@@ -1,3 +1,10 @@
+# CURRENT STATE — moli264 / v0.6.17
+- 修复 moli263 编辑室启动时报错 `Cannot access 'studio' before initialization`：`studioPersonaOverlay()` 在 `const studio` 初始化前被调用，形成 JavaScript temporal dead zone。现将 `studio` 判定提前到 overlay 创建/调用之前，并删除后面的重复声明。
+- 编辑室工具栏中间按钮显示文字恢复为“给我想梗”；“先磕点瓜子再说”仍是编辑室页面/系统名称，不再误占该功能按钮文案。
+- 不改动 moli263 的“取纳”暗号、编辑室专属人格、自动入墙和 moli262 跨墙注入生命周期。
+
+> Updated 2026-09-21. This top block is authoritative; older entries below are retained as history.
+
 # CURRENT STATE — moli263 / v0.6.16
 - “先磕点瓜子再说”改为编辑室专属人格覆盖，不修改小上帝/moli 的微信内置人格：小上帝负责逻辑、事实、因果与落地；moli 偏争吵、碰撞、修罗场、意外和把事情闹大，但不得篡改硬事实。
 - 编辑室后台事实（char 描述、世界书、柏宝书、近期正文）只用于内部校验，禁止向 User 成段复述人物档案、硬设定锚点或资料来源；User 当前说什么就讨论什么，不得自顾自回到正文分析。

@@ -4686,3 +4686,5 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 跨墙 per-generation 生命周期顺序必须为：`GENERATION_STARTED` 先清上一轮 prompt slot，再 arm 当前 pending bridge；禁止 arm 后在同一生成开始阶段再次 clear。生成结束/停止后才清本轮 bridge prompt，pending store 状态继续保留至实际激活。
 
 - 编辑室“取纳”采用自然语言暗号而非长按按钮：User 消息以“取纳”开头即触发一次收束，可附加自由要求；每次取纳生成一份干净最终素材并自动进入“我们的墙”。编辑室人物使用 writers-room 专属人格覆盖，不改变其微信人格。后台事实只用于校验，不向 User 复述档案。
+
+- 编辑室工具栏固定显示：`Ta出场好少` / `给我想梗` / `给我规划`；“先磕点瓜子再说”是编辑室名称，不替代“给我想梗”按钮文案。
