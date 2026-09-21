@@ -1,3 +1,4 @@
+import { getStudioPromptSettings, saveStudioPromptSettings, resetStudioPrompt } from '../storage/studio-prompt-store.js';
 import { getLargeStorageStats } from '../storage/large-storage.js';
 import { readRaw, writeRaw } from '../storage/storage-adapter.js';
 import {
@@ -522,7 +523,19 @@ export function createPhonePanel({
         </div>
       </header>
       <div class="moli-studio-more-menu" data-studio-more-menu hidden>
+        <button type="button" data-studio-prompt-lab-open>编辑室提示词</button>
         <button type="button" data-studio-clear-chat>清空聊天记录</button>
+      </div>
+      <div class="moli-studio-prompt-lab" data-studio-prompt-lab hidden>
+        <div class="moli-studio-prompt-lab-card">
+          <div class="moli-studio-prompt-lab-head"><strong>编辑室提示词</strong><button type="button" data-studio-prompt-lab-close>×</button></div>
+          <div class="moli-studio-prompt-lab-scroll">
+            <label>编辑室公共提示词</label><textarea data-studio-prompt-field="common"></textarea><button type="button" data-studio-prompt-reset="common">恢复默认</button>
+            <label>Ta出场太少啦</label><textarea data-studio-prompt-field="cast"></textarea><button type="button" data-studio-prompt-reset="cast">恢复默认</button>
+            <label>帮我想梗</label><textarea data-studio-prompt-field="meme"></textarea><button type="button" data-studio-prompt-reset="meme">恢复默认</button>
+          </div>
+          <button type="button" class="moli-studio-prompt-save" data-studio-prompt-save>保存</button>
+        </div>
       </div>
       <div class="moli-writers-room-toolbar" data-writers-room-toolbar hidden>
         <div class="moli-studio-bubble-menu" data-studio-choice hidden>
@@ -1445,6 +1458,10 @@ export function createPhonePanel({
   const studioMoreMenu = panel.querySelector('[data-studio-more-menu]');
   const studioClearChat = panel.querySelector('[data-studio-clear-chat]');
   const studioAfterAdopt = panel.querySelector('[data-studio-after-adopt]');
+  const studioPromptLab = panel.querySelector('[data-studio-prompt-lab]');
+  const studioPromptLabOpen = panel.querySelector('[data-studio-prompt-lab-open]');
+  const studioPromptLabClose = panel.querySelector('[data-studio-prompt-lab-close]');
+  const studioPromptSave = panel.querySelector('[data-studio-prompt-save]');
   const studioChoice = panel.querySelector('[data-studio-choice]');
   const studioMemeChoices = panel.querySelector('[data-studio-meme-choices]');
   let pendingStudioTask = null;
@@ -7328,6 +7345,23 @@ export function createPhonePanel({
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   studioMaterialJump?.addEventListener('click', () => show('injection-composer'));
+  const refreshStudioPromptLab = () => {
+    const settings = getStudioPromptSettings();
+    panel.querySelectorAll('[data-studio-prompt-field]').forEach(field => { field.value = settings[field.dataset.studioPromptField] || ''; });
+  };
+  studioPromptLabOpen?.addEventListener('click', () => { refreshStudioPromptLab(); if (studioMoreMenu) studioMoreMenu.hidden = true; if (studioPromptLab) studioPromptLab.hidden = false; });
+  studioPromptLabClose?.addEventListener('click', () => { studioPromptLab.hidden = true; });
+  studioPromptSave?.addEventListener('click', () => {
+    const next = {};
+    panel.querySelectorAll('[data-studio-prompt-field]').forEach(field => { next[field.dataset.studioPromptField] = field.value; });
+    saveStudioPromptSettings(next);
+    toast('编辑室提示词已保存，下次生成立即生效');
+  });
+  panel.querySelectorAll('[data-studio-prompt-reset]').forEach(button => button.addEventListener('click', () => {
+    const name = button.dataset.studioPromptReset; const value = resetStudioPrompt(name);
+    const field = panel.querySelector(`[data-studio-prompt-field="${name}"]`); if (field) field.value = value;
+  }));
+
   studioClearChat?.addEventListener('click', () => {
     const conversation = currentConversation();
     if (!isWritersRoom(conversation)) return;
