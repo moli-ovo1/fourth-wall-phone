@@ -130,6 +130,38 @@ const APP_ICON_URLS = Object.freeze({
   settings: new URL('../../assets/apps/settings.png', import.meta.url).href,
 });
 const WRITERS_ROOM_WALLPAPER_URL = new URL('../../assets/writers-room/niangjiaren.jpg', import.meta.url).href;
+
+const STICKER_URLS = Object.freeze({
+  '哈哈哈': new URL('../../assets/stickers/puppy-v3/01_hahaha.png', import.meta.url).href,
+  '喜欢／心动': new URL('../../assets/stickers/puppy-v3/02_xihuan_xindong_bixin.png', import.meta.url).href,
+  '气鼓鼓': new URL('../../assets/stickers/puppy-v3/03_qigugu.png', import.meta.url).href,
+  '震惊': new URL('../../assets/stickers/puppy-v3/04_zhenjing.png', import.meta.url).href,
+  '疑惑': new URL('../../assets/stickers/puppy-v3/05_yihuo.png', import.meta.url).href,
+  '帅一下': new URL('../../assets/stickers/puppy-v3/06_shuaiyixia.png', import.meta.url).href,
+  '跑回来': new URL('../../assets/stickers/puppy-v3/07_paohuilai.png', import.meta.url).href,
+  '扑过来': new URL('../../assets/stickers/puppy-v3/08_puguolai.png', import.meta.url).href,
+  '摸摸头': new URL('../../assets/stickers/puppy-v3/09_momotou.png', import.meta.url).href,
+  '敲你脑袋': new URL('../../assets/stickers/puppy-v3/10_qiaoninaodai.png', import.meta.url).href,
+  '捏脸': new URL('../../assets/stickers/puppy-v3/11_nielian.png', import.meta.url).href,
+  '吃东西': new URL('../../assets/stickers/puppy-v3/12_chidongxi.png', import.meta.url).href,
+  '探头': new URL('../../assets/stickers/puppy-v3/13_tantou.png', import.meta.url).href,
+  '送你一朵': new URL('../../assets/stickers/puppy-v3/14_songniyiduo.png', import.meta.url).href,
+  '磕头求饶': new URL('../../assets/stickers/puppy-v3/15_ketouqiurao.png', import.meta.url).href,
+  '睡觉': new URL('../../assets/stickers/puppy-v3/16_shuijiao.png', import.meta.url).href,
+  '急眼': new URL('../../assets/stickers/puppy-v3/17_jiyan.png', import.meta.url).href,
+  '发呆': new URL('../../assets/stickers/puppy-v3/18_fadai.png', import.meta.url).href,
+  '比心': new URL('../../assets/stickers/puppy-v3/19_bixin.png', import.meta.url).href,
+});
+function stickerNameFromContent(content) {
+  const match = String(content || '').trim().match(/^\[表情\]\s*(.+)$/);
+  return match ? String(match[1] || '').trim() : '';
+}
+function stickerMarkup(content) {
+  const name = stickerNameFromContent(content);
+  const url = STICKER_URLS[name];
+  return url ? `<img class="moli-chat-sticker" src="${escapeHtml(url)}" alt="${escapeHtml(name)}" title="${escapeHtml(name)}">` : '';
+}
+
 const BUILTIN_AVATAR_URLS = Object.freeze({
   'builtin:meta': new URL('../../assets/avatars/under-the-skin.png', import.meta.url).href,
   'builtin:writer': new URL('../../assets/avatars/little-god.png', import.meta.url).href,
@@ -5935,7 +5967,7 @@ export function createPhonePanel({
                   <div>${escapeHtml(message.thinking)}</div>
                 </details>
               ` : ''}
-              <div class="moli-bubble">
+              <div class="moli-bubble${stickerMarkup(message.content) ? ' moli-sticker-bubble' : ''}">
                 ${message.messageType === 'community-forward' && message.communityForward ? `
                   <button type="button" class="moli-moment-forward-card moli-community-forward-card">
                     <div class="moli-moment-forward-title">${escapeHtml(message.communityForward.platform || 'moli社区')} · 帖子分享</div>
@@ -5982,7 +6014,7 @@ export function createPhonePanel({
                     <div>${escapeHtml(message.quote.content || '')}</div>
                   </div>
                 ` : ''}
-                ${message.forward || message.messageType === 'moment-forward' || message.messageType === 'community-forward' ? '' : escapeHtml(message.content)}
+                ${message.forward || message.messageType === 'moment-forward' || message.messageType === 'community-forward' ? '' : (stickerMarkup(message.content) || escapeHtml(message.content))}
               </div>
               ${studioRoom ? `<button type="button" class="moli-studio-heart ${message.likedByUser ? 'liked' : ''}" data-studio-like="${escapeHtml(message.id || '')}" aria-label="${message.likedByUser ? '取消喜欢' : '喜欢这个分析'}">${message.likedByUser ? '♥' : '♡'}</button>` : ''}
             </div>
@@ -6505,6 +6537,7 @@ export function createPhonePanel({
           const actionEntry = rawEntry && typeof rawEntry === 'object' ? rawEntry : { type: 'message', content: rawEntry };
           flatItems.push({
             content: String(actionEntry.content || ''),
+            quoteContent: String(actionEntry.quoteContent || ''),
             recallAfterSend: actionEntry.type === 'recall',
             contact: batch.contact,
             thinking: batch.thinking || '',
@@ -6571,6 +6604,18 @@ export function createPhonePanel({
         }
       }
 
+      const resolveGeneratedQuote = quoteContent => {
+        const wanted = String(quoteContent || '').trim();
+        if (!wanted) return null;
+        const current = getConversation(requestScopeKey, requestConversationKey);
+        const matched = [...(current?.messages || [])].reverse().find(message => !message?.recalledAt && String(message?.content || '').trim() === wanted);
+        if (!matched) return null;
+        const sender = matched.role === 'user'
+          ? 'User'
+          : String(matched.senderSnapshot?.name || (conversation.type === 'private' ? displayName(requestContact) : '联系人'));
+        return { messageId: String(matched.id || ''), senderName: sender, content: String(matched.content || '') };
+      };
+
       let savedCount = 0;
       try {
         for (const entry of flatItems) {
@@ -6587,6 +6632,7 @@ export function createPhonePanel({
               messageType: entry.messageType,
               senderId: entry.senderId,
               senderSnapshot: entry.senderSnapshot,
+              ...(entry.quoteContent ? { quote: resolveGeneratedQuote(entry.quoteContent) } : {}),
             }
           );
           if (entry.recallAfterSend) {
