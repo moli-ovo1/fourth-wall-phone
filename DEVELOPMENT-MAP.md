@@ -3663,3 +3663,9 @@ Still next, without splitting into UI micro-patches:
 ## moli257 / v0.6.10
 - Writers-room NPC fact retrieval: current Tavern char card description + relevant World Book entries, then BaiBaiBook long-term history, then recent body context. WeChat editable contact profile is excluded as an NPC identity authority.
 - Semantic rule: Character Setting is content semantics; Character Card and World Book are storage sources, not fixed semantic categories.
+
+
+## moli258 / v0.6.11 — 纳取任务硬隔离与日志收口
+- writers-room 的 adopt/plan 固定三版任务不再允许退化成普通讨论：请求末尾再次声明唯一交付任务，正文上下文只作为事实依据。
+- 解析器验证三版完整性；合并输出可按标签恢复为三个独立气泡，缺版则报错并阻止写入。
+- 从本版起不再新增逐版本 MOLIxxx-NOTES.md；版本记录累计到项目既有状态/规格/开发地图文档。
