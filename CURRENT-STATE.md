@@ -1,3 +1,11 @@
+# CURRENT STATE — moli251 / v0.6.04
+- 微信默认预设升级为“持续生活 → 有限注意力 → 自然聊天”的行为模型：时间经过身体、事件阶段连续、记得≠想起≠说出口、情绪影响打字但不套统一公式、关系不使用统一升级模板。
+- 补齐 Character 主动引用真实闭环：模型使用 `<quote>原消息完整原文</quote>` 紧接 `<message>`，解析后匹配当前真实聊天历史并落入现有 quote UI；不存在的引用原文不会伪造引用卡片。
+- 保留并强化现有 `<recall>` 主动撤回语义：发送后撤回 ≠ 没说出口。
+- 加入 Emoji Core v2（覆盖 v1 语义）与 puppy stickers v3；角色可按人设自然使用 Emoji，表情包仅允许 `[表情]名称` 调用现有 19 张本地图片并在微信气泡中渲染。
+
+> Updated 2026-09-21. This top block is the authoritative current handoff; older entries below are retained as history.
+
 # CURRENT STATE — moli250 / v0.6.03
 - moli250 修复跨墙潜伏线只首轮注入：未激活线在生成结束/停止、切换聊天和扩展初始化时立即重新挂载，下一轮构造 Prompt 前已经存在；同时移除正文注入提示里的“User选择长期保留”来源措辞。
 - moli249 修复正文「我们的墙」状态栏运行期崩溃，并把跨墙持续线改成低压力潜伏注入（SYSTEM/IN_CHAT/depth 4）；同时强化纳取时删除讨论中的角色心理结论。

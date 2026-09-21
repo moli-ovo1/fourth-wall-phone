@@ -1,3 +1,8 @@
+## moli251 / v0.6.04 — 微信活人预设 + Emoji/表情包 + 主动引用
+- 默认微信 Prompt 改为生活连续性模型，避免把 User 输入当逐项答题任务；时间、身体、事件阶段、有限注意力、记忆表达、情绪声纹、关系非对称均服从角色自身而非统一真人模板。
+- Character 主动引用使用 `<quote>` + `<message>` 结构并复用既有 quote 数据/UI；主动撤回继续使用 `<recall>`。
+- Emoji 采用 Core v2 作为当前语义基线（覆盖 v1 文本）；puppy stickers v3 作为首个本地表情包库，调用格式 `[表情]名称`，禁止模型编造库外表情包。
+
 
 ### Character Identity × Conversation / World Instance 边界（v0.5.14 固化）
 

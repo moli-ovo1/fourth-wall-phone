@@ -2632,3 +2632,8 @@
 #moli-phone-panel .moli-writers-room-toolbar[hidden]{display:none!important}
 
 .moli-story-bridge-section-title{margin:4px 0 2px;font-size:11px;font-weight:700;opacity:.7}.moli-story-bridge-empty{display:block;opacity:.58}.moli-life-inspiration-row{border-top:1px solid rgba(160,160,160,.18)!important}
+
+
+/* moli251: character sticker messages */
+#moli-phone-panel .moli-chat-sticker{display:block;width:min(148px,38vw);height:auto;max-height:168px;object-fit:contain}
+#moli-phone-panel .moli-bubble.moli-sticker-bubble{padding:4px;background:transparent;border-color:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
