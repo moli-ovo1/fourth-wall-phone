@@ -245,17 +245,17 @@ export function createTavernInjectionBridge() {
     const scopeKey = getCurrentScopeKey();
     const pending = getPendingInjection(scopeKey);
 
-    // Cross-wall bridge deliberately follows the already-proven one-shot path:
-    // every正文 generation arms the current pending lines again.
-    const bridgeCount = armBridgePromptForGeneration(ctx, scopeKey);
-    refreshStoryPlanPrompt(ctx, scopeKey);
-
-    // Ephemeral prompts belong only to this generation.
+    // Clear leftovers from the previous generation BEFORE arming this one.
     clearExtensionPrompt(ctx);
     clearBridgePrompt(ctx);
     clearLifeInspirationPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
+
+    // Cross-wall bridge follows the proven one-shot path. Pending bridge state
+    // remains in storage, so each正文 generation re-arms it after cleanup.
+    const bridgeCount = armBridgePromptForGeneration(ctx, scopeKey);
+    refreshStoryPlanPrompt(ctx, scopeKey);
 
     const lifeInspiration = armLifeInspiration(scopeKey);
     if (!pending?.text && !lifeInspiration && !bridgeCount && !listInjectableStoryPlans(scopeKey).length) return;
@@ -293,8 +293,8 @@ export function createTavernInjectionBridge() {
     consumeStoryPlanReceipts(ctx, lastMessageId, consumedScope);
     markStoryBridgeInjected(consumedScope, lastMessageId);
 
-    // Only one-shot / observation prompts are consumed by a generation.
-    // Persistent bridge/plan slots remain mounted until their underlying state changes.
+    // Per-generation prompts are cleared only after this generation is finished.
+    // Bridge pending state remains in storage and will be re-armed next generation.
     clearExtensionPrompt(ctx);
     clearBridgePrompt(ctx);
     clearLifeInspirationPrompt(ctx);
@@ -305,7 +305,7 @@ export function createTavernInjectionBridge() {
 
   const onGenerationStopped = () => {
     if (!activeGeneration) return;
-    // Stop/failure keeps persistent prompts untouched and preserves the pending one-shot draft.
+    // Stop/failure clears only this generation's prompt slots; stored pending bridge state remains.
     clearExtensionPrompt(ctx);
     clearBridgePrompt(ctx);
     clearLifeInspirationPrompt(ctx);
@@ -338,8 +338,7 @@ export function createTavernInjectionBridge() {
   eventSource.on(events.CHAT_CHANGED, onChatChanged);
   window.addEventListener('moli:story-plan-changed', onStoryPlanChanged);
 
-  // ST setExtensionPrompt slots are persistent. Mount persistent state once while idle;
-  // later generations inherit it until the same key is overwritten or explicitly cleared.
+  // Story-plan prompt remains independently mounted while idle.
   refreshStoryPlanPrompt(ctx, getCurrentScopeKey());
 
   return {
