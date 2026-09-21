@@ -823,7 +823,7 @@ function formatPhoneBridge(scopeKey, contact, userName = 'User') {
   return chunks.join('\n\n') || '暂无可用手机私聊连续性。';
 }
 
-function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], bubbleRange = null, targetedRegeneration = false, maxChars = 0 } = {}) {
+function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], bubbleRange = null, targetedRegeneration = false, maxChars = 0, maxRepliesOverride = 0 } = {}) {
   const raw = String(text || '').trim();
   let parsed = null;
   const candidates = [];
@@ -849,7 +849,7 @@ function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], 
   const replies = [];
   const rangeMin = Math.max(1, Math.min(12, Number(bubbleRange?.min) || 1));
   const rangeMax = Math.max(rangeMin, Math.min(12, Number(bubbleRange?.max) || 8));
-  const maxReplies = targetedRegeneration ? 1 : rangeMax;
+  const maxReplies = targetedRegeneration ? 1 : (maxRepliesOverride > 0 ? Math.max(1, Math.min(30, Number(maxRepliesOverride) || 0)) : rangeMax);
   for (const item of items) {
     const id = String(item?.speakerId ?? item?.id ?? '').trim();
     const name = String(item?.speaker ?? item?.name ?? '').trim();
@@ -970,18 +970,18 @@ async function buildBatchGroupRequest({
   }).filter(Boolean).join('\n') : '';
   const taskType = String(studioTask?.type || '');
   const taskNotes = String(studioTask?.notes || '').trim();
-  const studioOpenPromptRule = `【娘家人提示词硬边界】讨论阶段可以分析、猜测角色可能的心理与反应；但一旦输出【导演版】/【灵感版】/【二人合璧】或【规划·…】这类可跨墙提示词，就必须把推测剥离，只留下开放的事件条件、外部机会，以及被规划人物本人已有依据的行动空间。提示词不得替任何角色预定心理、情绪、认知、感情走向、判断、选择、台词、反应或事件结果；不得用“重点刻画某人如何”“让某人意识到/吃醋/受挫/失控”等方式导演正文。灵感版可以让事件创意更大胆，但没有操纵角色的豁免权。二人合璧是自然性约束与事件创意的融合，不是正文摘要。`;
+  const studioOpenPromptRule = `【娘家人跨墙写法】跨墙候选只写可供正文使用的事件种子：已经存在的外部条件、可能出现的机会、人物本人基于既有人设/职责/关系可采取的行动入口。把讨论中的心理猜测留在娘家人聊天里，不带进候选；不要替任何角色写心理结论、情绪结论、认知转折、关系走向、必选动作、台词或结果。灵感版负责把事件种子想得更意外，导演版负责让条件更自然可落地，二人合璧负责把两者压成同一个开放事件入口。`;
   const studioTaskGuidance = !studio ? '' : taskType === 'cast'
     ? `【本轮创作任务：Ta出场好少】目标不是“下一场硬塞 Ta 出来一次”，而是恢复指定配角作为独立人物在世界中的自然活动与持续存在感。只从 Ta 自己已经存在的人设、职业/职责、关系、利益、承诺、日程、事务与当前环境出发，为 Ta 提供近期可以自然联系、出现、场外活动或推进自身事务的开放机会；允许这些活动最终没有影响主角或主线。不得为了刺激主角而安排 Ta 精准撞上关键场面，不得为了增加戏份强闯，也不得让 Ta 获得不应知道的信息。尤其禁止规划“Ta 的出现将导致其他角色怎样想、怎样选、怎样回应”；规划配角，不规划配角造成的结果。若本轮随后被纳取为三版提示词，三版都必须遵守下面的提示词硬边界。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
     : taskType === 'meme'
-      ? `【本轮创作任务：帮我想梗】你们要留意当前故事中自然出现的“生活扰动机会”，避免故事只能依靠 User 主动提出剧情才能继续活动。根据当前时间、地点、季节、环境、人物身份、社会关系、生活习惯、工作状态和已经存在的世界信息，寻找可能自然发生的小事、偶遇、麻烦、便利、插曲、意外获得、环境变化或他人的独立活动。可以平淡、荒诞、温柔、扫兴、麻烦、幸运、尴尬，甚至没有主线意义；生活允许只是发生。优先使用当前世界本来就可能存在的东西，不要为了“有剧情”凭空制造重大人物、阴谋、事故或危机。小事件若自然碰到人物已有矛盾、关系或欲望，可以产生后续，但不要预先规定它必须承担戏剧功能；近期已反复使用的停电、偶遇、电话、下雨等同类机关应主动降权。${String(studioTask?.mode || '') === 'them' ? '\n【这次由娘家人先说】User没有先给点子。小上帝优先从真实日常、社会环境与人物生活逻辑里找自然可落地的小动静；moli可以更大胆、更意外、更有新意地发散，但仍须服从已经建立的世界事实与人物边界。两人不必得出同一种答案。' : '\n【这次由User先说】把User的新话当作创作起点而不是答案。小上帝帮助把点子向自然、可落地、符合当前正文的方向展开；moli允许走得更远、更意外，提出变体或替代玩法。不要只顺着User复述。'}${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
+      ? `【本轮创作任务：先磕点瓜子再说】你们要留意当前故事中自然出现的“生活扰动机会”，避免故事只能依靠 User 主动提出剧情才能继续活动。根据当前时间、地点、季节、环境、人物身份、社会关系、生活习惯、工作状态和已经存在的世界信息，寻找可能自然发生的小事、偶遇、麻烦、便利、插曲、意外获得、环境变化或他人的独立活动。可以平淡、荒诞、温柔、扫兴、麻烦、幸运、尴尬，甚至没有主线意义；生活允许只是发生。优先使用当前世界本来就可能存在的东西，不要为了“有剧情”凭空制造重大人物、阴谋、事故或危机。小事件若自然碰到人物已有矛盾、关系或欲望，可以产生后续，但不要预先规定它必须承担戏剧功能；近期已反复使用的停电、偶遇、电话、下雨等同类机关应主动降权。${String(studioTask?.mode || '') === 'them' ? '\n【这次由娘家人先说】User没有先给点子。小上帝优先从真实日常、社会环境与人物生活逻辑里找自然可落地的小动静；moli可以更大胆、更意外、更有新意地发散，但仍须服从已经建立的世界事实与人物边界。两人不必得出同一种答案。' : '\n【这次由User先说】把User的新话当作创作起点而不是答案。小上帝帮助把点子向自然、可落地、符合当前正文的方向展开；moli允许走得更远、更意外，提出变体或替代玩法。不要只顺着User复述。'}${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
       : taskType === 'plan'
         ? `【本轮创作任务：给我规划】根据当前真实正文提出“事件层”的后续规划候选。只规划可能发生/延续的事件、场景、人物事务、外部情境与时间安排；禁止规划角色应该产生什么心理、感情、认知转变或预设行动结论。可以读取角色已经实际表现出的行动和当前心理来判断某个事件现在是否合时，但只能用于判断时机，不能反向引导角色朝某种心理走向发展。规划不是任务清单；若角色后续自然选择与候选不同，应让规划适应正文，而不是让角色适应规划。必须输出恰好3个候选气泡并按顺序：1) builtin:writer 以“【规划·导演版】”开头，偏现实条件、事件因果、配角事务与时间安排；2) builtin:guide 以“【规划·灵感版】”开头，可以更大胆、更意外地提出事件玩法，但仍遵守世界事实与人物边界；3) builtin:writer 以“【规划·二人合璧】”开头，融合两版并主动消解冲突。每版都写成可长期观察、可调整的事件方向，不得写成角色心理目标。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
         : taskType === 'likes'
           ? `【本轮创作任务：整理❤️】第一版通常由小上帝负责收束：从当前讨论与❤️偏好信号中提炼 User 真正认可的创作意图，去重、处理矛盾，但不要把❤️当命令，也不要完全顺应 User；若正文证据与 User 偏好存在张力，应指出。moli 随后可以赞同、质疑或从整理结果继续发散新的玩法。不要机械复制点赞原句。`
           : taskType === 'adopt'
           ? `【本轮创作任务：纳取】围绕 User 指定的气泡，把值得保留的创作意图改写成 AI 可读的开放式提示词，而不是替正文写摘要或导演角色反应。必须输出恰好3个气泡且按顺序：1) builtin:writer 以“【导演版】”开头，偏现实条件、事件入口、外部机会与被规划人物自身可采取的行动空间；2) builtin:guide 以“【灵感版】”开头，事件创意可以更大胆、更意外，但仍不得预定任何角色的心理/反应/结果；3) builtin:writer 以“【二人合璧】”开头，融合自然性约束与事件创意，主动删除前两版里任何角色结论，不是简单拼接。三版都必须能允许正文中的角色拒绝、无视、误解、采取完全不同反应，甚至让事件最终没有重要影响。纳取原文里若含有对任何角色心理、欲望、情绪、判断、选择或后续反应的断言，只能把它当讨论中的猜测，生成三版时必须删除，不能换一种说法保留下来；尤其不要把‘某人的掌控欲/嫉妒/冲动处于某状态’写成事件前提。${taskNotes ? `\n纳取原文：${taskNotes}` : ''}`
-          : `【编剧室自由讨论】你们是 User 的创作搭子，不是两个顺从的提示词工具。可以赞同、质疑、补充、发散或提出不同意见；不要因为 User 的偏好信号就失去独立判断。`;
+          : `【娘家人自由讨论】你们是 User 的创作搭子，不是两个顺从的提示词工具。可以赞同、质疑、补充、发散或提出不同意见；不要因为 User 的偏好信号就失去独立判断。`;
   const studioLikeGuidance = !studio ? '' : `【❤️偏好信号】下面是 User 在当前创作讨论中点过❤️的部分内容。它们只表示“值得保留/提高参考权重”，不是命令、不是永久偏好，也不是必须顺从的答案。不要逐条回应或反复告诉 User 你看见了点赞；只有累计信号与当前话题确实相关、能帮助讨论时才自然吸收。\n${likedMessages || '本轮暂无已点赞内容。'}`;
 
   const groupTimeMode = conversation.timeMode === 'real'
@@ -1001,7 +1001,7 @@ async function buildBatchGroupRequest({
   // moli73：普通群聊继承全局“线上聊天预设”的行为规则。
   // 私聊专用 <message> 输出格式与群聊 JSON 协议冲突，因此群聊只排除系统默认的 output-protocol；
   // 其余启用条目（包括用户自定义条目）继续作为群成员共同的线上行为规则。
-  const onlinePreset = buildOnlinePresetPrompt(undefined, { excludeIds: ['output-protocol'] });
+  const onlinePreset = studio ? '' : buildOnlinePresetPrompt(undefined, { excludeIds: ['output-protocol'] });
   const onlinePresetBlock = onlinePreset
     ? `【moli小手机：线上聊天预设｜群聊内容规则】
 ${onlinePreset}
@@ -1010,8 +1010,13 @@ ${onlinePreset}
 
 `
     : '';
+  const studioContract = studio
+    ? `【娘家人工作方式】这里是创作搭子工作台，不是微信普通群聊，也不是围读会。不要套用普通群聊的气泡数量、短消息轮次、全员机会或“像真人群聊”的配额规则。一次请求内由小上帝与 moli 围绕当前任务自然协作，谁有必要谁说，可以连续接话、补充、反驳或合并；以“把本轮任务真正做完”为停止条件，而不是达到某个气泡数。简单任务可以很短，复杂任务允许多轮来回；没有内容时不要凑气泡。除明确要求固定三版的任务外，不要求两人都必须发言。`
+    : '';
 
-  const system = `你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择、气泡分配与发言生成，禁止再请求第二个编排器。\n\n${onlinePresetBlock}【群模式】${modeText}\n${groupTimeBlock}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${review
+  const system = `${studio ? '你是 moli小手机 的“娘家人创作协作器”。一次请求完成本轮创作任务。' : '你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择、气泡分配与发言生成，禁止再请求第二个编排器。'}\n\n${onlinePresetBlock}${studio ? studioContract : `【群模式】${modeText}\n${groupTimeBlock}`}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${studio
+    ? `【娘家人任务完成制】不要读取或遵守下面普通群聊的 ${groupBubbleMin}～${groupBubbleMax} 气泡范围；本轮输出多少气泡只由完成当前创作任务所需的真实协作决定。固定三版任务必须恰好返回任务要求的3个候选；其他任务不设固定数量。`
+    : review
     ? `【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮真实群聊。整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标，不要为了填满而硬说。所有群成员都只是可发言者，没有谁被强制必须出现；沉默型角色可以完全不说，爱插科打诨或此刻有话的人可以连续出现多次。同一 speakerId 可以在这一轮重复出现，允许真实的来回接话，例如 A→B→A→moli。气泡数量和分配应由人物性格、当前情绪、关系、话题价值和前一个气泡共同决定，而不是平均分配。成员不必各自从头分析正文，后发成员可以接前一个成员的话、争论、接梗、吐槽、补充或沉默。不要为了证明完成点评任务而复述正文、总结情节或强行寻找分析点。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长。`
     : targetedRegeneration
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
@@ -1060,6 +1065,7 @@ export async function generateGroupReply({ scopeKey, conversationKey, signal, on
     bubbleRange: conversation.groupReplyBubbleRange,
     targetedRegeneration: Boolean(targetMemberId),
     maxChars: studio ? Math.max(80, Number(conversation.studioReplyLength) || 80) * 3 : 0,
+    maxRepliesOverride: studio ? 24 : 0,
   });
   if (!replies.length) throw new Error('本轮群聊批量生成没有返回可用消息');
   onDelta?.('', '', replies[0]?.contact || null);
