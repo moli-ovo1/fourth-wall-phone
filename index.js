@@ -1,5 +1,5 @@
 const EMERGENCY_HANDLE_ID = 'moli-phone-handle';
-const MOLI_BUILD_VERSION = '0.6.04';
+const MOLI_BUILD_VERSION = '0.6.05';
 
 function ensureBootstrapLauncher() {
   const existing = document.getElementById(EMERGENCY_HANDLE_ID);
@@ -88,8 +88,6 @@ async function bootMoliPhone() {
       error,
     });
 
-    // If the full module graph fails before app.js can create the real launcher,
-    // keep the bootstrap launcher on screen instead of disappearing silently.
     const handle = document.getElementById(EMERGENCY_HANDLE_ID) || bootstrapHandle;
     if (handle) {
       handle.dataset.moliBootFailed = '1';
