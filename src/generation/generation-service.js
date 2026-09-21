@@ -772,6 +772,37 @@ function clipBatchTail(value, max = 4000) {
   return text.length <= max ? text : `[较早内容已截断]\n${text.slice(-max)}`;
 }
 
+// 编辑室读取“故事发生了什么”，而不是把正文生成器自己的思维链/控制提示词搬进来。
+// 优先取 <content> 正文；没有 <content> 时只做保守清洗，避免误删真实剧情。
+function studioStoryOnlyText(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const contentBlocks = [...raw.matchAll(/<content(?:\s[^>]*)?>([\s\S]*?)<\/content>/gi)]
+    .map(match => String(match?.[1] || '').trim())
+    .filter(Boolean);
+  if (contentBlocks.length) return contentBlocks.join('\n\n');
+
+  return raw
+    .replace(/<(?:thinking|think|analysis|reasoning)(?:\s[^>]*)?>[\s\S]*?<\/(?:thinking|think|analysis|reasoning)>/gi, '')
+    .replace(/<details(?:\s[^>]*)?>[\s\S]*?<\/details>/gi, '')
+    .replace(/```(?:thinking|analysis|reasoning)[\s\S]*?```/gi, '')
+    .trim();
+}
+
+function studioStoryBodyText(recentBody, userName = '用户') {
+  return (recentBody?.messages || [])
+    .filter(message => message?.role !== 'system')
+    .map(message => {
+      const content = studioStoryOnlyText(message?.content);
+      if (!content) return '';
+      const name = message?.name || (message?.role === 'user' ? userName : '正文角色');
+      return `${name}：${content}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
 function studioFactKeywords(query = '') {
   const raw = String(query || '').trim();
   if (!raw) return [];
@@ -983,14 +1014,18 @@ async function buildBatchGroupRequest({
   const review = Boolean(reviewTarget?.content);
   const groupBubbleMin = Math.max(1, Math.min(12, Number(conversation.groupReplyBubbleRange?.min) || 1));
   const groupBubbleMax = Math.max(groupBubbleMin, Math.min(12, Number(conversation.groupReplyBubbleRange?.max) || 8));
+  const studio = String(conversation.systemKind || '') === 'writers-room';
   const groupMode = conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading';
   if (review && groupMode === 'role-chat') throw new Error('角色闲聊模式不运行正文自动点评');
-  const readingMode = groupMode === 'reading';
+  // writers-room 是独立编辑室，不是“围读会换皮”。它可以后台读取故事事实，
+  // 但绝不能继承围读会的共享正文块、点评语义或正文扫描链。
+  const readingMode = !studio && groupMode === 'reading';
   const boundGroupScope = String(conversation.boundScopeKey || conversation.storageScopeKey || scopeKey || '');
   const currentTavernScope = String(getCurrentScopeKey() || '');
   const concreteGroupScope = boundGroupScope.includes(':chat:');
   // 围读会只能读取它自己绑定的正文。即使未来从后台/Automation 误触发，也不得偷读当前屏幕的另一正文。
   const mayReadBoundBody = readingMode && concreteGroupScope && currentTavernScope === boundGroupScope;
+  const studioMayReadStory = studio && concreteGroupScope && currentTavernScope === boundGroupScope;
   const messages = resolveCommunityForwardEntries(scopeKey, { messages: Array.isArray(conversation.messages) ? conversation.messages : [] }).messages
     .filter(message => !excludeMessageId || String(message?.id || '') !== String(excludeMessageId));
   const membersById = new Map(members.map(item => [String(item.id), item]));
@@ -1011,10 +1046,10 @@ async function buildBatchGroupRequest({
     : String(groupMemory.longTermByMode?.roleChat || '');
 
   let recentBody = null;
-  if (mayReadBoundBody && conversation.bodyContextEnabled !== false) {
+  if ((mayReadBoundBody || studioMayReadStory) && conversation.bodyContextEnabled !== false) {
     recentBody = getRecentTavernBody({
-      messageLimit: review ? 4 : 10,
-      charLimit: review ? 6000 : 12000,
+      messageLimit: studio ? 18 : (review ? 4 : 10),
+      charLimit: studio ? 24000 : (review ? 6000 : 12000),
     });
   }
   if (review && reviewTarget?.content && recentBody?.messages?.length) {
@@ -1024,9 +1059,14 @@ async function buildBatchGroupRequest({
       messages: recentBody.messages.filter(message => !(message.role === 'assistant' && String(message.content || '').trim() === target)),
     };
   }
-  const bodyText = recentBody?.messages?.map(message => `${message?.name || (message?.role === 'user' ? (userContext.name || 'User') : '正文角色')}：${String(message?.content || '').trim()}`).filter(Boolean).join('\n') || '';
-  const scanText = [groupHistory, recentMemory, longMemory, bodyText, reviewTarget?.content || ''].filter(Boolean).join('\n');
-  const studio = String(conversation.systemKind || '') === 'writers-room';
+  const bodyText = studio
+    ? studioStoryBodyText(recentBody, userContext.name || '用户')
+    : (recentBody?.messages?.map(message => `${message?.name || (message?.role === 'user' ? (userContext.name || 'User') : '正文角色')}：${String(message?.content || '').trim()}`).filter(Boolean).join('\n') || '');
+  // 编辑室的成员人格/世界书扫描只吃聊天主题；故事事实另走 studioStoryFacts 专线。
+  // 这样正文 COT/格式命令不会先污染世界书激活，再绕回编辑室。
+  const scanText = studio
+    ? [groupHistory, recentMemory, longMemory].filter(Boolean).join('\n')
+    : [groupHistory, recentMemory, longMemory, bodyText, reviewTarget?.content || ''].filter(Boolean).join('\n');
 
   const studioPersonaOverlay = member => {
     if (!studio || !['builtin:writer', 'builtin:guide'].includes(String(member?.id || ''))) return '';
@@ -1181,7 +1221,7 @@ ${onlinePreset}
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
       : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n${studio ? `\n${studioTaskGuidance ? `${studioTaskGuidance}\n` : ''}${studioLikeGuidance}` : ''}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
-  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜角色设定 + 既往历史 + 近期正文】\n${studioStoryFacts || '本轮没有从当前 char 角色描述、相关世界书、柏宝书长期记忆或最近正文命中相关资料；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}`;
+  const shared = `【群聊】${String(conversation.name || '群聊')}\n${studio ? '当前用户' : '当前 User'}：${userContext.name || (studio ? '用户' : 'User')}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜角色设定 + 既往历史 + 近期正文】\n${studioStoryFacts || '本轮没有从当前 char 角色描述、相关世界书、柏宝书长期记忆或最近正文命中相关资料；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}`;
   return { system, messages: [{ role: 'user', content: shared }] };
 }
 
