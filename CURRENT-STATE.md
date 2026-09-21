@@ -1,3 +1,13 @@
+# CURRENT STATE — moli268 / v0.6.21
+- 编辑室 writers-room 从普通围读会 reading 上下文链正式分流：它不再继承“共享当前正文辅助上下文”、围读会点评语义或围读会正文扫描链。
+- 编辑室保留独立的“前情提要”读取能力：当前 char 角色描述 + 相关世界书 + 柏宝书长期记忆 + 清洗后的近期故事正文。
+- 新增编辑室 story-only 正文提取：优先读取 `<content>`，并保守排除 thinking/analysis/reasoning/details 等生成控制块，避免正文 COT、Phase、格式命令进入编辑室。
+- 编辑室成员人格/世界书的通用 scanText 不再直接包含正文 bodyText；故事事实只通过 studioStoryFacts 专线进入，避免污染先参与世界书激活再绕回 Prompt。
+- 编辑室可见 shared header 使用“当前用户”，不再暴露 `当前 User`。普通群聊保持原行为。
+- 不改普通围读会、角色闲聊、微信私聊、跨墙注入、Community 与 UI。
+
+> Updated 2026-09-21. This top block is authoritative; older entries below are retained as history.
+
 # CURRENT STATE — moli267 / v0.6.20
 - 编辑室专属人格提示词改为 User 本轮确认的 ①–⑦ 版本：正文/人设/世界书/柏宝书明确只是“前情提要”，不是谈资。
 - 连续讨论时明确沿用户最新一句继续，不因每轮重新看到正文前情而擅自把话题拉回当前正文场景。

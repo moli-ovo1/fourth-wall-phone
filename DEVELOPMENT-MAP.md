@@ -3690,3 +3690,9 @@ Still next, without splitting into UI micro-patches:
 - moli266：writers-room Prompt 清债；删除自由讨论、后台事实重复层、投入墙写法、最高任务焦点与一次请求完成制等废案/催促层；普通聊天恢复最小提示结构。
 
 - moli267：编辑室人格收口为User确认的①–⑦版本，明确“前情提要不是谈资”和连续讨论承接用户最新发言；不恢复已清理废案。
+
+
+## moli268 / v0.6.21 — 编辑室与围读会上下文正式分流（2026-09-21）
+- writers-room 不再复用 readingMode 的共享正文注入。
+- 新增编辑室 story-only 正文提取，并将故事事实限制在 studioStoryFacts 专线。
+- 普通围读会/角色闲聊保持不变。
