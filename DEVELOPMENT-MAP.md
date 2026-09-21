@@ -3646,3 +3646,9 @@ Still next, without splitting into UI micro-patches:
 - 创作搭子不再使用普通群聊的条数/字数限制；删除「长度」按钮。普通讨论以任务完成为停止条件，仅保留 30 条异常防失控技术上限。
 - 固定三版任务要求三个候选分别作为独立 JSON messages 项完整返回，禁止合并到一个气泡。
 - 创作搭子消息解析不再按 100/600 字符裁切，避免候选末尾被腰斩。
+
+### v0.6.08 全局预设统一入口
+- `prompt-settings.js` 新增 `buildGlobalPresetPrompt()`；scope 构建器支持 `excludeGlobal`，避免全局内容在 App 预设中重复。
+- `generation-service.js::runGeneration()` 统一把 global 预设置于 system 最前；Community、朋友圈、编辑室、他的手机等经统一入口的 AI 请求自动继承。
+- `prompt-builder.js` 私聊请求同样把 global 放在 systemBlocks 第一位；微信专属预设随后注入且排除 global。
+- 未来新增 AI App 必须复用统一生成入口或等价的 global-first 构建器，不得把全局预设当成微信专属设置。
