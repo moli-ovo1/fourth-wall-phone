@@ -532,11 +532,6 @@ export function createPhonePanel({
             <button type="button" class="moli-studio-float-bubble bubble-meme-sub" data-studio-meme-mode="them">你俩先说</button>
             <button type="button" class="moli-studio-float-bubble bubble-meme-sub" data-studio-meme-mode="me">我先说</button>
           </div>
-          <button type="button" class="moli-studio-float-bubble bubble-plan" data-studio-pick="plan">剧情好难走啊</button>
-          <div class="moli-studio-plan-choices" data-studio-plan-choices hidden>
-            <button type="button" class="moli-studio-float-bubble bubble-plan-sub" data-studio-plan-mode="rescue">救救眼前</button>
-            <button type="button" class="moli-studio-float-bubble bubble-plan-sub" data-studio-plan-mode="future">看看以后</button>
-          </div>
         </div>
       </div>
       <div class="moli-chat-error" data-chat-error hidden role="alert">
@@ -1451,7 +1446,6 @@ export function createPhonePanel({
   const studioClearChat = panel.querySelector('[data-studio-clear-chat]');
   const studioAfterAdopt = panel.querySelector('[data-studio-after-adopt]');
   const studioChoice = panel.querySelector('[data-studio-choice]');
-  const studioPlanChoices = panel.querySelector('[data-studio-plan-choices]');
   const studioMemeChoices = panel.querySelector('[data-studio-meme-choices]');
   let pendingStudioTask = null;
   const studioComposeTools = panel.querySelector('[data-studio-compose-tools]');
@@ -6492,9 +6486,11 @@ export function createPhonePanel({
   function setGenerationBusy(busy) {
     const scopeKey = getScopeKey?.();
     const conversation = currentConversation();
-    if (chatTitle && conversation) chatTitle.textContent = busy
-      ? '对方正在输入中…'
-      : (conversation.type === 'group' ? (conversation.name || '未命名群聊') : privateConversationTitle(conversation, contact(conversation.contactId || currentContactId)));
+    if (chatTitle && conversation) chatTitle.textContent = isWritersRoom(conversation)
+      ? ''
+      : (busy
+        ? '对方正在输入中…'
+        : (conversation.type === 'group' ? (conversation.name || '未命名群聊') : privateConversationTitle(conversation, contact(conversation.contactId || currentContactId))));
     chatTitle?.classList.toggle('moli-generation-title', Boolean(busy));
     if (!sendButton) return;
     sendButton.textContent = busy ? '■' : '♥';
@@ -6537,7 +6533,6 @@ export function createPhonePanel({
   function focusStudioInput(task) {
     pendingStudioTask = task || null;
     if (studioChoice) studioChoice.hidden = true;
-    if (studioPlanChoices) studioPlanChoices.hidden = true;
     if (studioMemeChoices) studioMemeChoices.hidden = true;
     if (!input) return;
     input.classList.remove('moli-studio-input-flash');
@@ -6770,6 +6765,18 @@ export function createPhonePanel({
       }
 
       clearGenerationError(requestScopeKey, requestConversationKey);
+
+      if (isWritersRoom(conversation) && String(studioTask?.type || '') === 'adopt') {
+        const latestStudio = getConversation(requestScopeKey, requestConversationKey);
+        const adoptedMessage = [...(latestStudio?.messages || [])].reverse().find(message =>
+          message?.role === 'assistant'
+          && String(message?.generationTurnId || '') === String(generationTurnId)
+          && !message?.recalledAt
+        );
+        if (adoptedMessage) {
+          addStudioMaterial(adoptedMessage, conversation);
+        }
+      }
 
       if (conversation.type === 'private' && !isRegeneration && requestContact && String(requestContact.id || '') !== 'builtin:meta') {
         void maybeTriggerMomentFromChat(requestScopeKey, requestConversationKey, requestContact);
@@ -7359,7 +7366,6 @@ export function createPhonePanel({
     const conversation = currentConversation();
     if (!isWritersRoom(conversation)) return;
     if (studioChoice) studioChoice.hidden = !studioChoice.hidden;
-    if (studioPlanChoices) studioPlanChoices.hidden = true;
     if (studioMemeChoices) studioMemeChoices.hidden = true;
   });
 
@@ -7370,13 +7376,7 @@ export function createPhonePanel({
     if (!pick) return;
     if (pick === 'meme') {
       if (studioMemeChoices) studioMemeChoices.hidden = false;
-      if (studioPlanChoices) studioPlanChoices.hidden = true;
-      return;
-    }
-    if (pick === 'plan') {
-      if (studioPlanChoices) studioPlanChoices.hidden = false;
-      if (studioMemeChoices) studioMemeChoices.hidden = true;
-      return;
+        return;
     }
     focusStudioInput({ type: pick, notes: '' });
   });
@@ -7389,19 +7389,13 @@ export function createPhonePanel({
       if (memeMode === 'them') {
         if (studioChoice) studioChoice.hidden = true;
         if (studioMemeChoices) studioMemeChoices.hidden = true;
-        if (studioPlanChoices) studioPlanChoices.hidden = true;
-        pendingStudioTask = null;
+            pendingStudioTask = null;
         requestReply({ studioTask: { type: 'meme', mode: 'them', notes: '' } });
       } else {
         focusStudioInput({ type: 'meme', mode: memeMode, notes: '' });
       }
       return;
     }
-    const mode = event.target.closest?.('[data-studio-plan-mode]')?.dataset?.studioPlanMode;
-    if (!mode) return;
-    const conversation = currentConversation();
-    if (!isWritersRoom(conversation)) return;
-    focusStudioInput({ type: 'plan', mode, notes: '' });
   });
 
 
