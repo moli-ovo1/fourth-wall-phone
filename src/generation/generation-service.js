@@ -959,36 +959,17 @@ function parseBatchGroupOutput(text, members, { review = false, forcedIds = [], 
     replies.push({ contact: member, messages: [content], text: content });
     if (replies.length >= maxReplies) break;
   }
-  const structuredStudioTask = ['adopt', 'plan'].includes(String(studioTaskType || ''));
+  const structuredStudioTask = String(studioTaskType || '') === 'adopt';
   if (structuredStudioTask) {
     const mergedText = replies.map(reply => String(reply?.text || '')).join('\n');
-    if (studioTaskType === 'adopt') {
-      const label = '【取纳】';
-      const start = mergedText.indexOf(label);
-      const member = byId.get('builtin:writer');
-      const content = start >= 0 ? mergedText.slice(start).trim() : '';
-      if (!member || !content.startsWith(label)) {
-        throw new Error('取纳没有返回可用的最终素材；本次结果已拦截，请重试。');
-      }
-      return [{ contact: member, messages: [content], text: content }];
+    const label = '【取纳】';
+    const start = mergedText.indexOf(label);
+    const member = byId.get('builtin:writer');
+    const content = start >= 0 ? mergedText.slice(start).trim() : '';
+    if (!member || !content.startsWith(label)) {
+      throw new Error('取纳没有返回可用的最终素材；本次结果已拦截，请重试。');
     }
-    const labels = ['【规划·导演版】', '【规划·灵感版】', '【规划·二人合璧】'];
-    const expectedSpeakers = ['builtin:writer', 'builtin:guide', 'builtin:writer'];
-    const rebuilt = [];
-    for (let index = 0; index < labels.length; index += 1) {
-      const label = labels[index];
-      const start = mergedText.indexOf(label);
-      if (start < 0) continue;
-      const laterStarts = labels.slice(index + 1).map(next => mergedText.indexOf(next, start + label.length)).filter(pos => pos >= 0);
-      const end = laterStarts.length ? Math.min(...laterStarts) : mergedText.length;
-      const content = mergedText.slice(start, end).trim();
-      const member = byId.get(expectedSpeakers[index]);
-      if (member && content) rebuilt.push({ contact: member, messages: [content], text: content });
-    }
-    if (rebuilt.length !== 3 || !labels.every((label, index) => rebuilt[index]?.text?.startsWith(label))) {
-      throw new Error('剧情规划没有返回完整的三版候选；本次结果已拦截，不会写入普通聊天。请重试。');
-    }
-    return rebuilt;
+    return [{ contact: member, messages: [content], text: content }];
   }
 
   if (!review) {
@@ -1086,7 +1067,9 @@ async function buildBatchGroupRequest({
 ⑥ 如果用户需要继续讨论，就沿着用户最新说的话继续聊，重复②③④。不要因为重新看到了前情提要，就擅自把话题拉回正文当前场景。
 
 ⑦ 用户点亮爱心的气泡，代表用户挺感兴趣。
-当用户使用“取纳”暗号，我们可以将讨论的结果结合用户的偏好，交出可投入素材栏的最终提示词。`;
+当用户使用“取纳”暗号，我们可以将讨论的结果结合用户的偏好，交出可投入素材栏的最终提示词。
+
+每次发言尽量控制在150字以内；确实需要展开时可以稍长，复杂情况尽量不要超过200字。不要一次把所有想法讲完，留给另外两个人继续讨论。`;
   };
 
   const memberBlocks = [];
@@ -1163,11 +1146,17 @@ async function buildBatchGroupRequest({
     : '';
 
   const studioTaskGuidance = !studio ? '' : taskType === 'cast'
-    ? `【本轮创作任务：Ta出场好少】目标不是“下一场硬塞 Ta 出来一次”，而是恢复指定配角作为独立人物在世界中的自然活动与持续存在感。只从 Ta 自己已经存在的人设、职业/职责、关系、利益、承诺、日程、事务与当前环境出发，为 Ta 提供近期可以自然联系、出现、场外活动或推进自身事务的开放机会；允许这些活动最终没有影响主角或主线。不得为了刺激主角而安排 Ta 精准撞上关键场面，不得为了增加戏份强闯，也不得让 Ta 获得不应知道的信息。尤其禁止规划“Ta 的出现将导致其他角色怎样想、怎样选、怎样回应”；规划配角，不规划配角造成的结果。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
+    ? `【本轮创作任务：Ta出场太少啦】目标不是“下一场硬塞 Ta 出来一次”，而是恢复指定配角作为独立人物在世界中的自然活动与持续存在感。只从 Ta 自己已经存在的人设、职业/职责、关系、利益、承诺、日程、事务与当前环境出发，为 Ta 提供近期可以自然联系、出现、场外活动或推进自身事务的开放机会；允许这些活动最终没有影响主角或主线。不得为了刺激主角而安排 Ta 精准撞上关键场面，不得为了增加戏份强闯，也不得让 Ta 获得不应知道的信息。尤其禁止规划“Ta 的出现将导致其他角色怎样想、怎样选、怎样回应”；规划配角，不规划配角造成的结果。${taskNotes ? `\n用户补充：${taskNotes}` : ''}`
     : taskType === 'meme'
-      ? `【本轮创作任务：先磕点瓜子再说】你们要留意当前故事中自然出现的“生活扰动机会”，避免故事只能依靠 User 主动提出剧情才能继续活动。根据当前时间、地点、季节、环境、人物身份、社会关系、生活习惯、工作状态和已经存在的世界信息，寻找可能自然发生的小事、偶遇、麻烦、便利、插曲、意外获得、环境变化或他人的独立活动。可以平淡、荒诞、温柔、扫兴、麻烦、幸运、尴尬，甚至没有主线意义；生活允许只是发生。优先使用当前世界本来就可能存在的东西，不要为了“有剧情”凭空制造重大人物、阴谋、事故或危机。小事件若自然碰到人物已有矛盾、关系或欲望，可以产生后续，但不要预先规定它必须承担戏剧功能；近期已反复使用的停电、偶遇、电话、下雨等同类机关应主动降权。${String(studioTask?.mode || '') === 'them' ? '\n【这次由创作搭子先说】User没有先给点子。小上帝优先从真实日常、社会环境与人物生活逻辑里找自然可落地的小动静；moli可以更大胆、更意外、更有新意地发散，但仍须服从已经建立的世界事实与人物边界。两人不必得出同一种答案。' : '\n【这次由User先说】把User的新话当作创作起点而不是答案。小上帝帮助把点子向自然、可落地、符合当前正文的方向展开；moli允许走得更远、更意外，提出变体或替代玩法。不要只顺着User复述。'}${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
+      ? `【本轮创作任务：帮我想梗】
+正文AI真是太无聊啦！当用户点击这个入口时，你们帮她想想梗吧！
+有什么可能自然发生的小事、偶遇、麻烦、便利、插曲、意外获得、环境变化或他人的独立活动？可以平淡、荒诞、温柔、扫兴、麻烦、幸运、尴尬，甚至没有主线意义；生活允许只是发生。近期已反复使用的同类机关应主动降权。提供事件入口，不预设各角色的心理，不预设后续发展。${taskNotes ? `\n用户补充：${taskNotes}` : ''}`
       : taskType === 'plan'
-        ? `【本轮创作任务：给我规划】根据当前真实正文提出“事件层”的后续规划候选。只规划可能发生/延续的事件、场景、人物事务、外部情境与时间安排；禁止规划角色应该产生什么心理、感情、认知转变或预设行动结论。可以读取角色已经实际表现出的行动和当前心理来判断某个事件现在是否合时，但只能用于判断时机，不能反向引导角色朝某种心理走向发展。规划不是任务清单；若角色后续自然选择与候选不同，应让规划适应正文，而不是让角色适应规划。必须输出恰好3个彼此独立的 JSON messages 项，绝不能把三版合并进同一个 content；按顺序：1) builtin:writer 以“【规划·导演版】”开头，偏现实条件、事件因果、配角事务与时间安排；2) builtin:guide 以“【规划·灵感版】”开头，可以更大胆、更意外地提出事件玩法，但仍遵守世界事实与人物边界；3) builtin:writer 以“【规划·二人合璧】”开头，融合两版并主动消解冲突。每版都写成可长期观察、可调整的事件方向，不得写成角色心理目标。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
+        ? `【本轮创作任务：剧情好难走啊】
+正文AI总是要用户自己走剧情，走一步动一步！当用户点击这个入口时，你们帮她规划一条路线吧！根据前情提要，看看路线可以怎么走？不止是当下，可以扩散到长期，不用用户自己来想剧情，不预设各角色的心理和行动结论，我们只提供事件入口。
+${String(studioTask?.mode || '') === 'idea'
+  ? '【当前模式：我有想法】用户已经有自己的想法。以用户这次输入的想法为起点，和她一起把这条路线往下讨论、展开。'
+  : '【当前模式：你帮我想】用户现在希望你们主动想路线。结合前情提要和用户这次输入的问题，主动提出剧情可以往哪里发展。'}${taskNotes ? `\n用户补充：${taskNotes}` : ''}`
         : taskType === 'likes'
           ? `【本轮创作任务：整理❤️】第一版通常由小上帝负责收束：从当前讨论与❤️偏好信号中提炼 User 真正认可的创作意图，去重、处理矛盾，但不要把❤️当命令，也不要完全顺应 User；若正文证据与 User 偏好存在张力，应指出。moli 随后可以赞同、质疑或从整理结果继续发散新的玩法。不要机械复制点赞原句。`
           : taskType === 'adopt'
@@ -1210,11 +1199,9 @@ ${onlinePreset}
     : '';
 
   const system = `${studio ? '你是 moli小手机 的编辑室对话生成器。' : '你是 moli小手机 的“单次群聊批量生成器”。一次请求同时完成本轮发言者选择、气泡分配与发言生成，禁止再请求第二个编排器。'}\n\n${onlinePresetBlock}${studio ? '' : `【群模式】${modeText}\n${groupTimeBlock}`}\n【隐私铁律】每个 MEMBER PRIVATE ZONE 只属于该成员本人。A 的私聊连续性绝不能被 B/C 引用、暗示、泄露或当作共同知识；只有已经出现在当前群历史/用户明确转发到群里的信息才是全员共同知识。\n【角色隔离】每位成员必须保持自己的身份、措辞、认知边界，绝不能互相代写。\n${selfRules ? `【Tavern 本人视角】\n${selfRules}\n` : ''}${studio
-    ? (taskType === 'plan'
-      ? '【本轮格式】“给我规划”必须返回3个独立候选。'
-      : taskType === 'adopt'
-        ? '【本轮格式】“取纳”只返回1份最终素材。'
-        : '')
+    ? (taskType === 'adopt'
+      ? '【本轮格式】“取纳”只返回1份最终素材。'
+      : '')
     : review
     ? `【围读会自动反应】这不是全员分别提交点评报告，而是这段新剧情自然惊动围读会后产生的一轮真实群聊。整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标，不要为了填满而硬说。所有群成员都只是可发言者，没有谁被强制必须出现；沉默型角色可以完全不说，爱插科打诨或此刻有话的人可以连续出现多次。同一 speakerId 可以在这一轮重复出现，允许真实的来回接话，例如 A→B→A→moli。气泡数量和分配应由人物性格、当前情绪、关系、话题价值和前一个气泡共同决定，而不是平均分配。成员不必各自从头分析正文，后发成员可以接前一个成员的话、争论、接梗、吐槽、补充或沉默。不要为了证明完成点评任务而复述正文、总结情节或强行寻找分析点。moli 更容易先产生普通读者的情绪、直觉、喜恶与关系判断；小上帝更有能力发现深层人物逻辑、信息差、伏笔、关系位移和攻略节点，但这只是倾向而不是固定分工。保持微信气泡感：moli 通常不超过100个中文字符；小上帝通常不超过160个中文字符，真正需要分析时可稍长。`
     : targetedRegeneration
