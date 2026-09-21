@@ -773,14 +773,15 @@ export function deletePromptPreset(presetId) {
   writeJson(PRESETS_KEY,next); if(getActivePromptPresetId()===id)writeJson(ACTIVE_PRESET_KEY,DEFAULT_PRESET_ID); return true;
 }
 
-export function buildPresetPrompt(scope = 'wechat', settings = getPromptSettings(), { excludeIds = [] } = {}) {
+export function buildPresetPrompt(scope = 'wechat', settings = getPromptSettings(), { excludeIds = [], excludeGlobal = false } = {}) {
   const excluded = new Set((Array.isArray(excludeIds) ? excludeIds : []).map(String));
   const wanted = String(scope || 'wechat');
   return (settings?.blocks || [])
-    .filter(item => { const itemScope=String(item?.scope || 'wechat'); return item?.enabled !== false && (itemScope==='global' || itemScope===wanted) && !excluded.has(String(item?.id || '')) && String(item?.content || '').trim(); })
+    .filter(item => { const itemScope=String(item?.scope || 'wechat'); return item?.enabled !== false && (!excludeGlobal && itemScope==='global' || itemScope===wanted) && !excluded.has(String(item?.id || '')) && String(item?.content || '').trim(); })
     .map(item => String(item.content).trim())
     .join('\n\n');
 }
 
+export function buildGlobalPresetPrompt(settings = getPromptSettings(), options = {}) { return buildPresetPrompt('__global_only__', settings, options); }
 export function buildOnlinePresetPrompt(settings = getPromptSettings(), options = {}) { return buildPresetPrompt('wechat', settings, options); }
 export function buildCommunityPresetPrompt(settings = getPromptSettings(), options = {}) { return buildPresetPrompt('community', settings, options); }
