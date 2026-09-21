@@ -1,3 +1,11 @@
+# CURRENT STATE — moli262 / v0.6.15
+- 修复 moli261 跨墙注入的确定性生命周期错误：此前 `GENERATION_STARTED` 先 arm 跨墙 prompt，随后同一函数立即 `clearBridgePrompt()`，导致最终 API 请求永远看不到 `[跨墙潜伏线]`。
+- 当前顺序改为：生成开始先清上一轮残留 → 再读取 pending bridge → arm 本轮 prompt → 保持到本轮生成结束/停止后再清。
+- story-bridge store 中的 pending 状态不因本轮 prompt 清理而删除，因此未激活时下一轮会再次 arm。
+- 未扩大功能范围；同步修正了与旧 persistent-slot 方案不一致的注释。
+
+> Updated 2026-09-21. This top block is the authoritative current handoff; older entries below are retained as history.
+
 # CURRENT STATE — moli261 / v0.6.14
 - 跨墙注入回退到已被实机验证成功的“一次性注入”路径：每次正文 `GENERATION_STARTED` 都把当前 pending 跨墙线重新写入 extension prompt，使用 `IN_CHAT + depth 0 + SYSTEM`。
 - “持续注入”不再依赖持久 slot：持久的是 story-bridge store 中的 pending 状态；每一轮正文都重新武装一次，生成结束/停止只清 prompt slot，不删除 pending 线。

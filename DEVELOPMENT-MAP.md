@@ -3678,3 +3678,5 @@ Still next, without splitting into UI micro-patches:
 - moli260：跨墙 injection controller 改为实时获取 SillyTavern context + 固定 slot 持续挂载，并增加诊断日志；不要求手动激活。
 
 - moli261：放弃260的 idle persistent-slot 方案，恢复最早已实机成功的一次性 generation-start 注入模式，并通过每轮重新武装 pending bridge line 实现持续注入。
+
+- moli262：修复261确定性 bug——跨墙 prompt 曾在 generation-start 中“arm 后立即 clear”。现改为“先清旧 → 再 arm 新 → generation end/stop 再清”。
