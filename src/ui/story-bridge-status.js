@@ -33,7 +33,7 @@ export function createStoryBridgeStatus(){
       const main=document.createElement('div'); main.className='moli-story-bridge-status-main'; const title=document.createElement('strong'); title.textContent='生活灵感';
       const state=document.createElement('span'); state.className='moli-story-bridge-state'; state.textContent=room.studioInspirationPaused===true?'已暂停':'观察中'; main.append(title,state); row.appendChild(main);
       const cd=Math.max(0,Number(room.studioInspirationNsfwCooldown)||0); const counter=Math.max(0,Number(room.studioInspirationCounter)||0); const threshold=Math.max(4,Math.min(6,Number(room.studioInspirationThreshold)||5));
-      const meta=document.createElement('small'); meta.textContent=room.studioInspirationPaused===true?'娘家人暂时不向正文提供生活扰动机会':`低频观察 · 当前观察窗 ${counter}/${threshold}${cd>0?` · 亲密场景扰动冷却 ${cd}`:''}`; row.appendChild(meta);
+      const meta=document.createElement('small'); meta.textContent=room.studioInspirationPaused===true?'先磕点瓜子再说暂时不向正文提供生活扰动机会':`低频观察 · 当前观察窗 ${counter}/${threshold}${cd>0?` · 亲密场景扰动冷却 ${cd}`:''}`; row.appendChild(meta);
       const actions=document.createElement('div'); actions.className='moli-story-bridge-actions'; actions.appendChild(button(room.studioInspirationPaused===true?'继续':'暂停','life-toggle')); actions.appendChild(button('关闭','life-close')); row.appendChild(actions); box.appendChild(row);
     }
     if(plans.length){

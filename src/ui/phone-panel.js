@@ -524,7 +524,7 @@ export function createPhonePanel({
         <button type="button" data-studio-task="cast">Ta出场好少</button>
         <button type="button" data-studio-task="meme">先磕点瓜子再说</button>
         <button type="button" data-studio-task="plan">给我规划</button>
-        <button type="button" data-studio-task="length">长度 <span data-studio-length-label>80</span></button>
+        
       </div>
       <div class="moli-studio-choice" data-studio-choice hidden>
         <div class="moli-studio-choice-card">
@@ -569,7 +569,7 @@ export function createPhonePanel({
       <header class="moli-nav">
         <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="injection-back" aria-label="返回">‹</button></div>
         <div class="moli-nav-title">我们的墙</div>
-        <div class="moli-nav-side right"><button class="moli-icon-btn moli-writers-room-entry" data-action="open-writers-room" aria-label="打开娘家人" title="娘家人">♧</button></div>
+        <div class="moli-nav-side right"><button class="moli-icon-btn moli-writers-room-entry" data-action="open-writers-room" aria-label="打开先磕点瓜子再说" title="先磕点瓜子再说">♧</button></div>
       </header>
       <main class="moli-injection-page">
         <div class="moli-settings-note">从整个手机世界挑选要带进正文的素材。程序只整理与标注，不压缩、不总结；最终由你决定哪些内容跨过这面墙。</div>
@@ -1967,11 +1967,11 @@ export function createPhonePanel({
 
   registerWallSourceProvider('writers-room', ({scopeKey}) => listStudioMaterials(scopeKey).map(row => ({
     id: row.id,
-    app: 'writers-room', appLabel: '娘家人', section: 'director', sectionLabel: '导演素材', owner: row.senderName || '娘家人',
-    group: `娘家人 · ${row.senderName || '创作提示'}`,
+    app: 'writers-room', appLabel: '先磕点瓜子再说', section: 'director', sectionLabel: '导演素材', owner: row.senderName || '先磕点瓜子再说',
+    group: `先磕点瓜子再说 · ${row.senderName || '创作提示'}`,
     kind: 'creative-guidance',
     label: String(row.content || '').replace(/\s+/g, ' ').slice(0, 88) + (String(row.content || '').length > 88 ? '…' : ''),
-    build: () => `【创作指导 · 娘家人 · ${row.senderName || '创作提示'}】\n这是尚未发生的开放事件种子。只把其中可成立的外部条件、事件机会与人物本人已有依据的行动入口作为创作材料；角色当下如何理解、感受、选择和回应，继续由正文依据真实状态自然演算。事件可以被错过、拒绝、改变，也可以最终没有重要影响。\n${row.content}`,
+    build: () => `【创作指导 · 先磕点瓜子再说 · ${row.senderName || '创作提示'}】\n这是尚未发生的开放事件种子。只把其中可成立的外部条件、事件机会与人物本人已有依据的行动入口作为创作材料；角色当下如何理解、感受、选择和回应，继续由正文依据真实状态自然演算。事件可以被错过、拒绝、改变，也可以最终没有重要影响。\n${row.content}`,
   })));
 
   registerWallSourceProvider('calendar', ({scopeKey}) => listCalendarEvents(scopeKey).filter(row => row.status !== 'done').map(row => {
@@ -5443,7 +5443,7 @@ export function createPhonePanel({
       const conversation = getConversation(scopeKey, currentContactId);
       if (!isWritersRoom(conversation) || !/^【规划·(?:导演版|灵感版|二人合璧)】/.test(String(message.content || '').trim())) { hideMessageMenu(); return; }
       hideMessageMenu();
-      const plan = addStoryPlan(scopeKey, { text: String(message.content || '').trim(), source: String(message.senderSnapshot?.name || '娘家人') });
+      const plan = addStoryPlan(scopeKey, { text: String(message.content || '').trim(), source: String(message.senderSnapshot?.name || '先磕点瓜子再说') });
       if (plan) toast('放心，我们帮你盯着呢！'); else toast('这条内容暂时不能建立规划');
       return;
     }
@@ -5894,7 +5894,7 @@ export function createPhonePanel({
     if (!content) return false;
     const rows = listStudioMaterials(scopeKey);
     const id = `writers-room:${String(message?.id || Date.now())}`;
-    if (!rows.some(row => row.id === id)) rows.push({ id, content, senderName: String(message?.senderSnapshot?.name || (message?.role === 'user' ? 'User' : '娘家人')), createdAt: Date.now(), conversationName: String(conversation?.name || '娘家人') });
+    if (!rows.some(row => row.id === id)) rows.push({ id, content, senderName: String(message?.senderSnapshot?.name || (message?.role === 'user' ? 'User' : '先磕点瓜子再说')), createdAt: Date.now(), conversationName: String(conversation?.name || '先磕点瓜子再说') });
     localStorage.setItem(studioMaterialKey(scopeKey), JSON.stringify(rows.slice(-80)));
     windowRef.dispatchEvent?.(new CustomEvent('moli:wall-source-changed'));
     return true;
@@ -5904,8 +5904,8 @@ export function createPhonePanel({
     const scopeKey = getScopeKey?.();
     if (!scopeKey) throw new Error('当前正文世界不可用');
     let room = getScopeConversations(scopeKey).find(item => isWritersRoom(item));
-    if (!room) room = createGroupConversation(scopeKey, { name: '娘家人', memberIds: ['builtin:writer', 'builtin:guide'], systemKind: 'writers-room', studioReplyLength: 80 });
-    else if (String(room.name || '') !== '娘家人') room = updateGroupConversation(scopeKey, room.conversationKey || room.id, { name: '娘家人' }) || room;
+    if (!room) room = createGroupConversation(scopeKey, { name: '先磕点瓜子再说', memberIds: ['builtin:writer', 'builtin:guide'], systemKind: 'writers-room' });
+    else if (String(room.name || '') !== '先磕点瓜子再说') room = updateGroupConversation(scopeKey, room.conversationKey || room.id, { name: '先磕点瓜子再说' }) || room;
     return room;
   }
 
@@ -5929,7 +5929,6 @@ export function createPhonePanel({
     const isGroup = conversation.type === 'group';
     const studioRoom = isWritersRoom(conversation);
     if (writersRoomToolbar) writersRoomToolbar.hidden = !studioRoom;
-    if (studioLengthLabel) studioLengthLabel.textContent = String(conversation.studioReplyLength || 80);
     const item = isGroup
       ? null
       : contact(conversation.contactId || currentContactId);
@@ -7259,22 +7258,13 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => { show('tianya-home'); currentPublicWebTab='weibo'; panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab==='weibo')); renderPublicWeb(); });
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
-  panel.querySelector('[data-action="open-writers-room"]')?.addEventListener('click', () => { try { const room = ensureWritersRoom(); currentContactId = room.conversationKey || room.id; show('chat'); renderChat({ forceLatest: true }); } catch (error) { toast(error?.message || '娘家人打开失败'); } });
+  panel.querySelector('[data-action="open-writers-room"]')?.addEventListener('click', () => { try { const room = ensureWritersRoom(); currentContactId = room.conversationKey || room.id; show('chat'); renderChat({ forceLatest: true }); } catch (error) { toast(error?.message || '先磕点瓜子再说打开失败'); } });
   writersRoomToolbar?.addEventListener('click', async event => {
     const button = event.target.closest?.('[data-studio-task]');
     if (!button) return;
     const conversation = currentConversation();
     if (!isWritersRoom(conversation)) return;
     const type = button.dataset.studioTask;
-    if (type === 'length') {
-      const raw = windowRef.prompt?.('每个实际发言气泡希望约多少字？（20–500）', String(conversation.studioReplyLength || 80));
-      if (raw == null) return;
-      const value = Math.max(20, Math.min(500, Number(raw) || 80));
-      updateGroupConversation(getScopeKey?.(), currentContactId, { studioReplyLength: value });
-      renderChat();
-      toast(`娘家人长度已设为约 ${value} 字/气泡`);
-      return;
-    }
     if (type === 'meme') {
       if (studioChoice) studioChoice.hidden = false;
       return;
