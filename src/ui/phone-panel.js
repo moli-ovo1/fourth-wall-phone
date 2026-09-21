@@ -520,6 +520,9 @@ export function createPhonePanel({
         <span class="moli-studio-first-guide" data-studio-first-guide hidden aria-hidden="true">➜</span>
         <div class="moli-nav-side right">
           <button class="moli-icon-btn" data-action="chat-info" aria-label="聊天信息">…</button>
+          <div class="moli-studio-clear-menu" data-studio-clear-menu hidden>
+            <button type="button" data-action="studio-clear-chat">清空聊天记录</button>
+          </div>
         </div>
       </header>
       <div class="moli-writers-room-toolbar" data-writers-room-toolbar hidden>
@@ -1447,6 +1450,7 @@ export function createPhonePanel({
   const studioNavEntry = panel.querySelector('[data-studio-menu-toggle]');
   const studioFirstGuide = panel.querySelector('[data-studio-first-guide]');
   const studioAfterAdopt = panel.querySelector('[data-studio-after-adopt]');
+  const studioClearMenu = panel.querySelector('[data-studio-clear-menu]');
   const studioChoice = panel.querySelector('[data-studio-choice]');
   const studioPlanChoices = panel.querySelector('[data-studio-plan-choices]');
   const studioMemeChoices = panel.querySelector('[data-studio-meme-choices]');
@@ -5953,6 +5957,7 @@ export function createPhonePanel({
     if (studioFirstGuide) studioFirstGuide.hidden = !studioRoom || studioGuideSeen();
     panel.classList.toggle('moli-studio-room-active', studioRoom);
     if (!studioRoom && studioAfterAdopt) studioAfterAdopt.hidden = true;
+    if (!studioRoom && studioClearMenu) studioClearMenu.hidden = true;
     if (studioComposeTools) studioComposeTools.hidden = !studioRoom;
     const item = isGroup
       ? null
@@ -7356,6 +7361,7 @@ export function createPhonePanel({
     const conversation = currentConversation();
     if (!isWritersRoom(conversation)) return;
     markStudioGuideSeen();
+    if (studioClearMenu) studioClearMenu.hidden = true;
     if (studioChoice) studioChoice.hidden = !studioChoice.hidden;
     if (studioPlanChoices) studioPlanChoices.hidden = true;
     if (studioMemeChoices) studioMemeChoices.hidden = true;
@@ -8897,7 +8903,34 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
 
   panel.querySelector(
     '[data-action="chat-info"]'
-  ).onclick = () => { infoEntrySource = 'chat'; show('info'); };
+  ).onclick = () => {
+    const conversation = currentConversation();
+    if (isWritersRoom(conversation)) {
+      if (studioClearMenu) studioClearMenu.hidden = !studioClearMenu.hidden;
+      return;
+    }
+    infoEntrySource = 'chat';
+    show('info');
+  };
+
+  studioClearMenu?.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-action="studio-clear-chat"]');
+    if (!button) return;
+    const conversation = currentConversation();
+    if (!isWritersRoom(conversation)) return;
+    const scopeKey = conversationRuntimeScopeKey(conversation);
+    if (!scopeKey) return;
+    clearConversationMessages(scopeKey, conversation.conversationKey || conversation.id);
+    pendingStudioTask = null;
+    studioClearMenu.hidden = true;
+    if (studioAfterAdopt) studioAfterAdopt.hidden = true;
+    if (studioMaterialJump) studioMaterialJump.hidden = true;
+    if (studioChoice) studioChoice.hidden = true;
+    if (studioPlanChoices) studioPlanChoices.hidden = true;
+    if (studioMemeChoices) studioMemeChoices.hidden = true;
+    renderChat({ forceLatest: true });
+    toast('聊天记录已清空');
+  });
 
   chatInfo.addEventListener('click', event => {
     const action = event.target.closest?.('[data-action]')?.dataset?.action;
