@@ -50,7 +50,7 @@ function wrapBridgeLines(lines) {
   ].join('\n'));
   return [
     '[跨墙潜伏线]',
-    '这些是 User 选择长期保留、但尚未在正文中真正发生的事件机会。它们存在于故事后台，不是本轮任务，也不是已经发生的事实。',
+    '以下是尚未在正文中真正发生的潜伏事件机会。它们存在于故事后台，不是本轮任务，也不是已经发生的事实。',
     '只在当前时间、地点、人物行动和现实条件自然接得上时，让其中某条顺势进入故事；条件不合适就继续潜伏。不要为了使用它抢走当前叙事，也不要提前规定人物收到事件后的心理、选择或结果。',
     ...blocks,
     '',
@@ -61,6 +61,20 @@ function wrapBridgeLines(lines) {
 
 function clearBridgePrompt(ctx) {
   try { ctx?.setExtensionPrompt?.(BRIDGE_PROMPT_ID, '', extension_prompt_types.NONE, 0, false); } catch {}
+}
+
+function refreshBridgePrompt(ctx, scopeKey = getCurrentScopeKey()) {
+  try {
+    const lines = listPendingStoryBridgeLines(scopeKey);
+    const text = wrapBridgeLines(lines);
+    if (text) ctx?.setExtensionPrompt?.(BRIDGE_PROMPT_ID, text, extension_prompt_types.IN_CHAT, 4, false, extension_prompt_roles.SYSTEM);
+    else clearBridgePrompt(ctx);
+    return lines.length;
+  } catch (error) {
+    console.warn('[moli小手机] refresh persistent bridge prompt failed', error);
+    clearBridgePrompt(ctx);
+    return 0;
+  }
 }
 
 function clearLifeInspirationPrompt(ctx) {
@@ -193,7 +207,9 @@ export function createTavernInjectionBridge() {
     const pending = getPendingInjection(scopeKey);
     const bridgeLines = listPendingStoryBridgeLines(scopeKey);
     clearExtensionPrompt(ctx);
-    clearBridgePrompt(ctx);
+    // Keep pending bridge lines mounted between generations. GENERATION_STARTED can be too late
+    // for some SillyTavern prompt-build paths, so the next turn must already have the persistent prompt.
+    refreshBridgePrompt(ctx, consumedScope);
     clearLifeInspirationPrompt(ctx);
     clearStoryPlanPrompt(ctx);
     activeScopeKey = '';
@@ -203,8 +219,7 @@ export function createTavernInjectionBridge() {
     if (!pending?.text && !bridgeLines.length && !lifeInspiration && !storyPlans.length) return;
 
     try {
-      const bridgeText = wrapBridgeLines(bridgeLines);
-      if (bridgeText) ctx.setExtensionPrompt(BRIDGE_PROMPT_ID, bridgeText, extension_prompt_types.IN_CHAT, 4, false, extension_prompt_roles.SYSTEM);
+      if (bridgeLines.length) refreshBridgePrompt(ctx, scopeKey);
       if (lifeInspiration) ctx.setExtensionPrompt(LIFE_INSPIRATION_PROMPT_ID, lifeInspiration, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
       const planText = wrapStoryPlans(storyPlans);
       if (planText) ctx.setExtensionPrompt(STORY_PLAN_PROMPT_ID, planText, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
@@ -238,7 +253,8 @@ export function createTavernInjectionBridge() {
     consumeStoryPlanReceipts(ctx, lastMessageId, consumedScope);
     markStoryBridgeInjected(consumedScope, lastMessageId);
     clearExtensionPrompt(ctx);
-    clearBridgePrompt(ctx);
+    // Re-arm any still-pending line immediately, before the next prompt build begins.
+    refreshBridgePrompt(ctx, consumedScope);
     clearLifeInspirationPrompt(ctx);
     clearStoryPlanPrompt(ctx);
     activeScopeKey = '';
@@ -250,7 +266,7 @@ export function createTavernInjectionBridge() {
     if (!activeGeneration) return;
     // Stop/failure keeps the pending draft so the user can retry. Only the active ST prompt is cleared.
     clearExtensionPrompt(ctx);
-    clearBridgePrompt(ctx);
+    refreshBridgePrompt(ctx, activeScopeKey || getCurrentScopeKey());
     clearLifeInspirationPrompt(ctx);
     clearStoryPlanPrompt(ctx);
     activeScopeKey = '';
@@ -258,7 +274,12 @@ export function createTavernInjectionBridge() {
   };
 
   const onChatChanged = () => {
-    if (!activeGeneration) { clearExtensionPrompt(ctx); clearBridgePrompt(ctx); clearLifeInspirationPrompt(ctx); clearStoryPlanPrompt(ctx); }
+    if (!activeGeneration) {
+      clearExtensionPrompt(ctx);
+      clearLifeInspirationPrompt(ctx);
+      clearStoryPlanPrompt(ctx);
+      refreshBridgePrompt(ctx, getCurrentScopeKey());
+    }
   };
 
   eventSource.on(events.GENERATION_STARTED, onGenerationStarted);
@@ -266,6 +287,10 @@ export function createTavernInjectionBridge() {
   eventSource.on(events.GENERATION_ENDED, onGenerationEnded);
   eventSource.on(events.GENERATION_STOPPED, onGenerationStopped);
   eventSource.on(events.CHAT_CHANGED, onChatChanged);
+
+  // Persistent lines must already be mounted while idle; relying only on GENERATION_STARTED
+  // can miss the prompt-build window in SillyTavern.
+  refreshBridgePrompt(ctx, getCurrentScopeKey());
 
   return {
     destroy() {
