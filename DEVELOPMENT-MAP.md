@@ -3686,3 +3686,5 @@ Still next, without splitting into UI micro-patches:
 - moli264：修复263的 `studio` TDZ 初始化错误；恢复编辑室中间工具按钮文案“给我想梗”。
 
 - moli265：采用User确认的编辑室提示词；取纳接入真实爱心气泡；修复爱心白框；补齐输入框上方两个入口。
+
+- moli266：writers-room Prompt 清债；删除自由讨论、后台事实重复层、投入墙写法、最高任务焦点与一次请求完成制等废案/催促层；普通聊天恢复最小提示结构。
