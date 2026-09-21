@@ -558,7 +558,10 @@ export function createPhonePanel({
         <button type="button" data-action="chat-wallpaper-current" data-wallpaper-current-label>当前聊天</button>
       </div>
       <input type="file" accept="image/*" data-chat-wallpaper-input hidden>
-      <button type="button" class="moli-studio-material-jump" data-action="studio-material-jump" hidden>瓜子磕完了，帮你放素材栏了哈！自己看着要不要改</button>
+      <div class="moli-studio-compose-tools" data-studio-compose-tools hidden>
+        <button type="button" class="moli-studio-compose-tool" data-action="studio-quick-adopt">取纳</button>
+        <button type="button" class="moli-studio-compose-tool moli-studio-material-jump" data-action="studio-material-jump" hidden>瓜子磕完了，帮你放素材栏了哈！自己看着要不要改</button>
+      </div>
       <footer class="moli-compose">
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
         <button class="moli-send" data-action="send" aria-label="发送">♡</button>
@@ -1434,6 +1437,8 @@ export function createPhonePanel({
   const writersRoomToolbar = panel.querySelector('[data-writers-room-toolbar]');
   const studioLengthLabel = panel.querySelector('[data-studio-length-label]');
   const studioChoice = panel.querySelector('[data-studio-choice]');
+  const studioComposeTools = panel.querySelector('[data-studio-compose-tools]');
+  const studioQuickAdopt = panel.querySelector('[data-action="studio-quick-adopt"]');
   const studioMaterialJump = panel.querySelector('[data-action="studio-material-jump"]');
   const quoteDraft = panel.querySelector('[data-quote-draft]');
   const quoteDraftText = panel.querySelector('[data-quote-draft-text]');
@@ -5900,10 +5905,9 @@ export function createPhonePanel({
       currentContactId
     );
 
-    if (studioMaterialJump) {
-      const roomIsStudio = isWritersRoom(conversation);
-      studioMaterialJump.hidden = !roomIsStudio || studioMaterialJump.dataset.ready !== '1';
-    }
+    const roomIsStudio = isWritersRoom(conversation);
+    if (studioComposeTools) studioComposeTools.hidden = !roomIsStudio;
+    if (studioMaterialJump) studioMaterialJump.hidden = !roomIsStudio || studioMaterialJump.dataset.ready !== '1';
 
     if (!conversation) {
       show('home');
@@ -7264,6 +7268,14 @@ export function createPhonePanel({
   panel.querySelector('[data-action="open-tianya"]')?.addEventListener('click', () => show('tianya-home'));
   panel.querySelector('[data-action="open-weibo"]')?.addEventListener('click', () => { show('tianya-home'); currentPublicWebTab='weibo'; panel.querySelectorAll('[data-public-web-tab]').forEach(item=>item.classList.toggle('active',item.dataset.publicWebTab==='weibo')); renderPublicWeb(); });
   panel.querySelector('[data-action="open-wall"]')?.addEventListener('click', () => show('injection-composer'));
+  studioQuickAdopt?.addEventListener('click', () => {
+    const input = panel.querySelector('.moli-input');
+    if (!input) return;
+    const current = String(input.value || '').trim();
+    input.value = current ? `取纳，${current}` : '取纳';
+    input.focus();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
   studioMaterialJump?.addEventListener('click', () => {
     show('injection-composer');
   });
