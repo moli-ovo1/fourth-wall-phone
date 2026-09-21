@@ -2621,3 +2621,10 @@
 
 #moli-phone-panel .moli-studio-material-jump{flex:0 0 auto;margin:0 14px 6px;padding:7px 10px;border:0;background:transparent;text-align:center;font-size:12px;line-height:1.35;text-decoration:underline;cursor:pointer;opacity:.78}
 #moli-phone-panel .moli-studio-material-jump[hidden]{display:none!important}
+
+#moli-phone-panel .moli-studio-heart{appearance:none!important;-webkit-appearance:none!important;border:0!important;outline:0!important;box-shadow:none!important;background:transparent!important;padding:0!important;margin:0!important;min-width:0!important;width:auto!important;height:auto!important;border-radius:0!important;color:inherit;font:inherit;line-height:1;cursor:pointer}
+#moli-phone-panel .moli-studio-compose-tools{flex:0 0 auto;display:flex;align-items:center;gap:10px;margin:0 14px 6px}
+#moli-phone-panel .moli-studio-compose-tools[hidden]{display:none!important}
+#moli-phone-panel .moli-studio-compose-tool{appearance:none;-webkit-appearance:none;border:0;background:transparent;padding:4px 2px;font:inherit;font-size:12px;line-height:1.35;text-decoration:underline;cursor:pointer;opacity:.82}
+#moli-phone-panel .moli-studio-material-jump{flex:1;text-align:left}
+#moli-phone-panel .moli-studio-material-jump[hidden]{display:none!important}

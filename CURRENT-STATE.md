@@ -1,3 +1,12 @@
+# CURRENT STATE — moli265 / v0.6.18
+- 编辑室采用 User 确认的人格提示词：先后台看正文/人设/世界书/柏宝书，只说创意不复述设定；小上帝按自身人格判断，moli偏刺激、拱火、修罗场、碰撞和意外；每轮说完停下来等User，后续围绕User最新话题继续。
+- 取纳时读取当前编辑室真实 `likedByUser` 爱心气泡并作为优先参考，结合讨论和“取纳”后的追加要求生成一份最终素材。
+- 仅修复编辑室爱心按钮的浏览器默认白色按钮框，不改其它UI按钮。
+- 编辑室输入框上方补齐两个入口：`取纳`（点击把暗号填入输入框，仍可继续写要求）和取纳完成后出现的“瓜子磕完了，帮你放素材栏了哈！自己看着要不要改”（点击进入我们的墙）。
+- 保留“Ta出场好少 / 给我想梗 / 给我规划”，不改微信人格，不改已验证成功的跨墙注入生命周期。
+
+> Updated 2026-09-21. This top block is authoritative; older entries below are retained as history.
+
 # CURRENT STATE — moli264 / v0.6.17
 - 修复 moli263 编辑室启动时报错 `Cannot access 'studio' before initialization`：`studioPersonaOverlay()` 在 `const studio` 初始化前被调用，形成 JavaScript temporal dead zone。现将 `studio` 判定提前到 overlay 创建/调用之前，并删除后面的重复声明。
 - 编辑室工具栏中间按钮显示文字恢复为“给我想梗”；“先磕点瓜子再说”仍是编辑室页面/系统名称，不再误占该功能按钮文案。
