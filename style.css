@@ -2863,3 +2863,94 @@
 #moli-phone-panel.moli-has-chat-wallpaper .moli-studio-after-adopt button{
   background:rgba(255,255,255,.25);
 }
+
+/* moli274 · 编辑室透明层/晃动最终修正
+   原则：nav / compose 只从 flex 文档流中浮起；绝不把 chat-body 改成 absolute。 */
+
+/* 顶部导航浮在聊天内容上，不再占 52px 高度，因此不会把聊天气泡“截断”。 */
+#moli-phone-panel.moli-studio-room-active [data-page="chat"]>.moli-nav{
+  position:absolute!important;
+  left:0!important;right:0!important;top:0!important;
+  width:100%!important;
+  z-index:30!important;
+  flex:none!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+}
+/* 返回键恢复无框，仅保留原按钮本身的点击区域。 */
+#moli-phone-panel.moli-studio-room-active .moli-back{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+}
+/* 编辑室右上角 ... 完全不显示，也不占可点击区域。 */
+#moli-phone-panel.moli-studio-room-active [data-action="chat-info"]{
+  display:none!important;
+}
+#moli-phone-panel.moli-studio-room-active .moli-nav-side.right{
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+
+/* 底部输入框也浮在内容上，不再作为一整条区域把最后一个聊天气泡截断。
+   注意：这里只浮起 compose，本轮不改变 chat-body 的 position。 */
+#moli-phone-panel.moli-studio-room-active .moli-compose{
+  position:absolute!important;
+  left:10px!important;
+  right:10px!important;
+  bottom:9px!important;
+  z-index:30!important;
+  width:auto!important;
+  margin:0!important;
+}
+/* 聊天主体仍然是原来的 flex 滚动层，只增加滚动留白，避免首尾内容被按钮遮住。 */
+#moli-phone-panel.moli-studio-room-active .moli-chat-body{
+  padding-top:78px!important;
+  padding-bottom:96px!important;
+}
+/* 取纳/注入后选择也浮在输入框上方，不再占掉聊天主体高度。 */
+#moli-phone-panel.moli-studio-room-active .moli-studio-compose-tools{
+  position:absolute!important;
+  left:10px!important;
+  bottom:70px!important;
+  z-index:31!important;
+  margin:0!important;
+}
+#moli-phone-panel.moli-studio-room-active .moli-studio-after-adopt{
+  position:absolute!important;
+  left:10px!important;
+  bottom:118px!important;
+  z-index:31!important;
+  margin:0!important;
+}
+
+/* 三个一级气泡改为直接动画 top/left/right，避免 transform 被历史 CSS 覆盖后“看起来不动”。 */
+#moli-phone-panel .bubble-meme{
+  left:0!important;top:52px!important;transform:none!important;
+  animation:moli274-meme-drift 1.9s ease-in-out infinite!important;
+}
+#moli-phone-panel .bubble-cast{
+  left:calc(50% - 58px)!important;top:8px!important;margin-left:0!important;transform:none!important;
+  animation:moli274-cast-drift 2.05s ease-in-out infinite!important;
+}
+#moli-phone-panel .bubble-plan{
+  right:0!important;top:52px!important;transform:none!important;
+  animation:moli274-plan-drift 1.95s ease-in-out infinite!important;
+}
+@keyframes moli274-meme-drift{
+  0%,100%{left:0;top:52px}
+  50%{left:5px;top:46px}
+}
+@keyframes moli274-cast-drift{
+  0%,100%{left:calc(50% - 58px);top:8px}
+  50%{left:calc(50% - 62px);top:2px}
+}
+@keyframes moli274-plan-drift{
+  0%,100%{right:0;top:52px}
+  50%{right:5px;top:46px}
+}
