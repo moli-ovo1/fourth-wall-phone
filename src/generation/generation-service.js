@@ -772,6 +772,58 @@ function clipBatchTail(value, max = 4000) {
   return text.length <= max ? text : `[较早内容已截断]\n${text.slice(-max)}`;
 }
 
+function studioFactKeywords(query = '') {
+  const raw = String(query || '').trim();
+  if (!raw) return [];
+  const stop = new Set(['出场','好少','不是','能不能','可以','怎么','什么','这个','那个','他们','她们','我们','你们','角色','人物','固定','长期','非短期','机会','理由','新宠','当前','故事','正文','安排','关于','因为','所以']);
+  const runs = raw.match(/[\p{Script=Han}A-Za-z0-9_·]{2,24}/gu) || [];
+  const out = new Set();
+  for (const run of runs) {
+    if (!stop.has(run)) out.add(run);
+    const max = Math.min(6, run.length);
+    for (let n = max; n >= 2; n -= 1) {
+      for (let i = 0; i + n <= run.length; i += 1) {
+        const part = run.slice(i, i + n);
+        if (!stop.has(part)) out.add(part);
+      }
+    }
+  }
+  return [...out].sort((a, b) => b.length - a.length).slice(0, 80);
+}
+
+function studioRelevantSnippets(source = '', query = '', max = 7000) {
+  const text = String(source || '').trim();
+  if (!text) return '';
+  const keywords = studioFactKeywords(query);
+  if (!keywords.length) return clipBatchText(text, max);
+  const chunks = text.split(/\n{2,}|(?<=[。！？!?])\s*/u).map(x => x.trim()).filter(Boolean);
+  const scored = chunks.map((chunk, index) => {
+    let score = 0;
+    for (const key of keywords) if (chunk.includes(key)) score += Math.max(2, key.length * key.length);
+    return { chunk, index, score };
+  }).filter(x => x.score > 0).sort((a, b) => b.score - a.score || a.index - b.index);
+  if (!scored.length) return '';
+  const selected = [];
+  let used = 0;
+  for (const item of scored) {
+    if (selected.some(x => x.chunk === item.chunk)) continue;
+    if (used + item.chunk.length > max && selected.length) break;
+    selected.push(item);
+    used += item.chunk.length + 2;
+  }
+  selected.sort((a, b) => a.index - b.index);
+  return selected.map(x => x.chunk).join('\n\n').slice(0, max);
+}
+
+function tavernCardFactText(character) {
+  const fidelity = character?.roleFidelity || {};
+  return [
+    fidelity.description ? `【Description】\n${fidelity.description}` : '',
+    fidelity.personality ? `【Personality】\n${fidelity.personality}` : '',
+    fidelity.scenario ? `【Scenario】\n${fidelity.scenario}` : '',
+  ].filter(Boolean).join('\n\n');
+}
+
 function batchRoleProfile(contact, scanText = '', userName = 'User', scopeKey = '') {
   const fidelity = contact?.source?.roleFidelity || {};
   const sources = contact?.roleSources || {};
@@ -973,18 +1025,32 @@ async function buildBatchGroupRequest({
 
   const studio = String(conversation.systemKind || '') === 'writers-room';
 
-  // 创作搭子读取当前故事的相关事实，而不是拿两个搭子自身的资料去猜 NPC。
+  // 创作搭子事实链：只读当前正文世界的 SillyTavern 角色卡 + 相关世界书 + 柏宝书长期历史 + 最近正文。
+  // 不读取/信任可由 User 单独编辑的微信联系人资料来定义 NPC。
   let studioStoryFacts = '';
   if (studio) {
     try {
-      const currentCharacter = getCurrentTavernCharacterSnapshot();
+      const factQuery = [String(studioTask?.notes || ''), groupHistory].filter(Boolean).join('\n');
+      const currentCharacter = await hydrateTavernCharacterSnapshot(getCurrentTavernCharacterSnapshot());
+      const blocks = [];
+      if (currentCharacter) {
+        const cardFacts = studioRelevantSnippets(tavernCardFactText(currentCharacter), factQuery, 7000);
+        if (cardFacts) blocks.push(`【角色设定来源：SillyTavern 当前 char 角色描述｜按关键词命中】\n${cardFacts}`);
+      }
       if (currentCharacter?.sourceId) {
         const storedContact = getContacts().find(item => item?.kind === 'tavern' && String(item?.source?.sourceId || '') === String(currentCharacter.sourceId));
         const storyContact = storedContact || { kind: 'tavern', source: { sourceId: String(currentCharacter.sourceId) }, roleSources: { worldBook: true } };
-        const factScanText = [String(studioTask?.notes || ''), groupHistory, bodyText, recentMemory, longMemory].filter(Boolean).join('\n');
+        const factScanText = [factQuery, bodyText, recentMemory, longMemory].filter(Boolean).join('\n');
         const storyWorldBook = await getActivatedTavernWorldBook({ contact: storyContact, scanText: factScanText });
-        studioStoryFacts = clipBatchText(storyWorldBook?.text || '', 9000);
+        const worldFacts = studioRelevantSnippets(storyWorldBook?.text || '', factQuery, 8000);
+        if (worldFacts) blocks.push(`【角色设定来源：SillyTavern 世界书｜按关键词/原触发规则命中】\n${worldFacts}`);
       }
+      const baiBai = getBaiBaiLongTermMemory();
+      const historyFacts = studioRelevantSnippets(baiBai?.text || '', factQuery, 7000);
+      if (historyFacts) blocks.push(`【既往历史来源：柏宝书长期记忆｜按关键词命中】\n${historyFacts}`);
+      const bodyFacts = studioRelevantSnippets(bodyText, factQuery, 7000);
+      if (bodyFacts) blocks.push(`【近期事实来源：当前正文上下文｜按关键词命中】\n${bodyFacts}`);
+      studioStoryFacts = clipBatchText(blocks.join('\n\n'), 24000);
     } catch (error) {
       console.warn('[moli小手机] 创作搭子读取当前故事事实失败', error);
     }
@@ -996,7 +1062,7 @@ async function buildBatchGroupRequest({
   }).filter(Boolean).join('\n') : '';
   const taskType = String(studioTask?.type || '');
   const taskNotes = String(studioTask?.notes || '').trim();
-  const studioFactRule = !studio ? '' : `【当前故事事实优先】可以大胆发散事件，但不得改写已经有答案的人物基础事实。下方“当前故事相关设定”一旦明确人物身份、职业、家庭背景、经济状况、关系或既有经历，就把它当作硬事实。资料没有说明的部分可以提出“可能/如果”的创作设想，但不能冒充既定设定。若创意与已知事实冲突，改创意，不改人物。`;
+  const studioFactRule = !studio ? '' : `【当前故事事实优先】先查事实，再发散。角色设定是语义概念，不按存储位置拆成“人设/世界背景”：SillyTavern 当前 char 的角色描述与相关世界书都可能包含人物设定，二者命中的内容共同构成角色设定；柏宝书用于确认既往历史；最近正文用于判断当前阶段。下方资料一旦明确人物身份、职业、家庭背景、经济状况、关系或既有经历，就把它当作硬事实。资料没有说明的部分可以提出“可能/如果”的创作设想，但不能冒充既定设定。若创意与已知事实冲突，改创意，不改人物。不得用可单独编辑的微信联系人资料反向定义故事 NPC。`;
   const studioOpenPromptRule = `【创作搭子跨墙写法】跨墙候选只写可供正文使用的事件种子：已经存在的外部条件、可能出现的机会、人物本人基于既有人设/职责/关系可采取的行动入口。把讨论中的心理猜测留在创作搭子聊天里，不带进候选；不要替任何角色写心理结论、情绪结论、认知转折、关系走向、必选动作、台词或结果。灵感版负责把事件种子想得更意外，导演版负责让条件更自然可落地，二人合璧负责把两者压成同一个开放事件入口。`;
   const studioTaskGuidance = !studio ? '' : taskType === 'cast'
     ? `【本轮创作任务：Ta出场好少】目标不是“下一场硬塞 Ta 出来一次”，而是恢复指定配角作为独立人物在世界中的自然活动与持续存在感。只从 Ta 自己已经存在的人设、职业/职责、关系、利益、承诺、日程、事务与当前环境出发，为 Ta 提供近期可以自然联系、出现、场外活动或推进自身事务的开放机会；允许这些活动最终没有影响主角或主线。不得为了刺激主角而安排 Ta 精准撞上关键场面，不得为了增加戏份强闯，也不得让 Ta 获得不应知道的信息。尤其禁止规划“Ta 的出现将导致其他角色怎样想、怎样选、怎样回应”；规划配角，不规划配角造成的结果。若本轮随后被纳取为三版提示词，三版都必须遵守下面的提示词硬边界。${taskNotes ? `\nUser补充：${taskNotes}` : ''}`
@@ -1049,7 +1115,7 @@ ${onlinePreset}
       ? '【指定成员重答】这里只重答当前列出的唯一成员。其他成员已经有满意回复，严禁代替他们发言或重新选择发言者。必须只输出这个成员 1 条新气泡。'
       : `【普通群聊】整轮允许自然产生 ${groupBubbleMin}～${groupBubbleMax} 个气泡；上限不是目标。所有群成员都有机会发言，但绝不机械全员轮流；无话可说的人可以完全不出现。被 @ 的成员必须至少出现一次。允许同一 speakerId 在同一轮重复出现，形成真实的来回讨论，例如 A→B→A→C；不要按人数平均分配气泡。谁说几句、谁沉默，由人物性格、当前情绪、彼此关系、话题价值与前一条消息自然决定。每个普通气泡尽量保持短消息感，通常不超过100个中文字符。`}\n${studio ? `\n${studioFactRule}\n${studioOpenPromptRule}\n${studioTaskGuidance}\n${studioLikeGuidance}` : ''}\n【输出格式】只输出严格 JSON，不要 Markdown，不要解释：{"messages":[{"speakerId":"成员id","content":"气泡正文"}]}。messages 按真实发送顺序排列；speakerId 可以重复，但必须逐字使用下方提供的 id。${reviewBlock}`;
 
-  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜硬事实】\n${studioStoryFacts || '本轮没有触发到额外世界书设定；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}`;
+  const shared = `【群聊】${String(conversation.name || '群聊')}\n当前 User：${userContext.name || 'User'}\n成员：${members.map(member => `${contactLabel(member)}(id=${member.id})`).join('、')}\n\n【最近群聊】\n${clipBatchTail(groupHistory, 12000) || '暂无'}\n\n【群近期记忆】\n${clipBatchText(recentMemory, 5000) || '暂无'}\n\n【群长期记忆】\n${clipBatchText(longMemory, 5000) || '暂无'}${studio ? `\n\n【当前故事相关设定｜角色设定 + 既往历史 + 近期正文】\n${studioStoryFacts || '本轮没有从当前 char 角色描述、相关世界书、柏宝书长期记忆或最近正文命中相关资料；不要因此自行补造人物身份、职业、家世或经济背景。'}` : ''}${readingMode ? `\n\n【共享当前正文辅助上下文】\n${clipBatchText(bodyText, review ? 6000 : 12000) || (concreteGroupScope ? '当前不在本群绑定的正文页面，不得读取其他正文。' : '本群属于正文外，不读取任何正文。')}` : ''}\n\n${memberBlocks.join('\n\n')}`;
   return { system, messages: [{ role: 'user', content: shared }] };
 }
 

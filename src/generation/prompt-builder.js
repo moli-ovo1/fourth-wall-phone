@@ -119,7 +119,7 @@ function roleFidelityBlocks(contact) {
   const fidelity = contact?.source?.roleFidelity;
   if (!fidelity || typeof fidelity !== 'object') return [];
 
-  // 酒馆角色的角色卡属于 Character Identity 本身，必须进入 Role Fidelity；不再受旧 UI 开关影响。
+  // 角色设定是语义概念：角色卡与世界书只是不同存储来源。这里先装载角色卡来源，相关世界书会在后续合并。
   const blocks = [];
 
   const identityParts = [
@@ -136,7 +136,7 @@ function roleFidelityBlocks(contact) {
 
   if (identityParts.length) {
     blocks.push(
-      '【Role Fidelity Pack：角色身份与硬设定】\n'
+      '【角色设定｜角色卡来源】\n'
       + identityParts.join('\n\n')
     );
   }
@@ -414,7 +414,7 @@ export function buildPrivateGenerationRequest({
 
   if (clean(worldBookText)) {
     systemBlocks.push(
-      '【本轮激活的世界书】\n以下条目已根据当前聊天/可用正文触发，并通过该 Contact 的世界书白名单。只把它们当作相关世界事实，不要为了展示世界书而强行改变当前话题。\n\n'
+      '【角色设定｜世界书来源（本轮相关条目）】\n角色设定是语义概念，角色卡与世界书只是不同存储位置；世界书条目既可能描述人物，也可能描述地点、关系、组织或其他世界事实。以下条目已根据当前聊天/可用正文触发并通过该 Contact 的白名单；按条目实际内容理解，不要因为它存放在世界书就把人物设定降格成纯背景，也不要为了展示条目而强行改变当前话题。\n\n'
       + clip(worldBookText, 18000)
     );
   }
