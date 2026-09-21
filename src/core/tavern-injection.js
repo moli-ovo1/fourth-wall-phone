@@ -40,7 +40,6 @@ function wrapContext(text) {
   ].join('\n');
 }
 
-
 function wrapBridgeLines(lines) {
   if (!Array.isArray(lines) || !lines.length) return '';
   const blocks = lines.map((line) => [
@@ -102,11 +101,27 @@ function wrapStoryPlans(lines) {
   ].join('\n\n');
 }
 
+function refreshStoryPlanPrompt(ctx, scopeKey = getCurrentScopeKey()) {
+  try {
+    const plans = listInjectableStoryPlans(scopeKey);
+    const text = wrapStoryPlans(plans);
+    if (text) ctx?.setExtensionPrompt?.(STORY_PLAN_PROMPT_ID, text, extension_prompt_types.IN_CHAT, 4, false, extension_prompt_roles.SYSTEM);
+    else clearStoryPlanPrompt(ctx);
+    return plans.length;
+  } catch (error) {
+    console.warn('[moli小手机] refresh persistent story-plan prompt failed', error);
+    clearStoryPlanPrompt(ctx);
+    return 0;
+  }
+}
+
 function consumeStoryPlanReceipts(ctx, messageId, scopeKey) {
   const mid=Number(messageId); if(!Number.isInteger(mid)||!Array.isArray(ctx?.chat))return; const message=ctx.chat[mid]; if(!message||message.is_user||message.is_system)return;
   const original=String(message.mes||''); const receipts=[]; const cleaned=original.replace(STORY_PLAN_RE,(_full,body)=>{receipts.push(String(body||'').trim());return '';}).replace(/\n{3,}/g,'\n\n').trim();
   if(cleaned!==original.trim()){message.mes=cleaned;Promise.resolve(ctx.saveChat?.()).catch(()=>{});}
-  for(const raw of receipts){try{const data=JSON.parse(raw); if(data?.id)applyStoryPlanReview(scopeKey,String(data.id),{result:String(data.result||'continue'),note:String(data.note||''),messageId:mid});}catch{}}
+  let changed = false;
+  for(const raw of receipts){try{const data=JSON.parse(raw); if(data?.id){applyStoryPlanReview(scopeKey,String(data.id),{result:String(data.result||'continue'),note:String(data.note||''),messageId:mid});changed=true;}}catch{}}
+  if (changed) refreshStoryPlanPrompt(ctx, scopeKey);
 }
 
 function randomLifeThreshold() { return 4 + Math.floor(Math.random() * 3); }
@@ -154,7 +169,7 @@ function consumeLifeEventReceipt(ctx, messageId, scopeKey) {
   if (!message || message.is_user || message.is_system) return;
   const original = String(message.mes || '');
   const receipts = [];
-  const cleaned = original.replace(LIFE_EVENT_RE, (_full, body) => { receipts.push(String(body || '').trim()); return ''; }).replace(/\n{3,}/g, '\n\n').trim();
+  const cleaned = original.replace(LIFE_EVENT_RE, (_full, body) => { receipts.push(String(body || '').trim()); return ''; }).replace(/\n{3,}/g,'\n\n').trim();
   if (cleaned !== original.trim()) { message.mes = cleaned; Promise.resolve(ctx.saveChat?.()).catch(() => {}); }
   if (!receipts.length) return;
   const room = findWritersRoom(scopeKey); if (!room) return;
@@ -178,14 +193,16 @@ function consumeActivationReceipt(ctx, messageId, scopeKey) {
   const cleaned = original.replace(ACTIVATION_RE, (_full, body) => {
     String(body || '').split(/[,，\s]+/).map(x => x.trim()).filter(Boolean).forEach(id => ids.push(id));
     return '';
-  }).replace(/\n{3,}/g, '\n\n').trim();
-  if (cleaned !== original.trim()) { message.mes = cleaned; Promise.resolve(ctx.saveChat?.()).catch(() => {}); }
-  if (ids.length) activateStoryBridgeLines(scopeKey, ids, mid);
+  }).replace(/\n{3,}/g,'\n\n').trim();
+  if (cleaned !== original.trim()) { message.mes=cleaned; Promise.resolve(ctx.saveChat?.()).catch(()=>{}); }
+  if (ids.length) {
+    activateStoryBridgeLines(scopeKey, ids, mid);
+    refreshBridgePrompt(ctx, scopeKey);
+  }
 }
 
 function clearExtensionPrompt(ctx) {
   try {
-    // NONE = -1 in current SillyTavern; passing an empty value is also the documented way to clear a module prompt.
     ctx?.setExtensionPrompt?.(PROMPT_ID, '', extension_prompt_types.NONE, 0, false);
   } catch (error) {
     console.warn('[moli小手机] clear one-shot injection prompt failed', error);
@@ -205,25 +222,23 @@ export function createTavernInjectionBridge() {
     if (isDryRun) return;
     const scopeKey = getCurrentScopeKey();
     const pending = getPendingInjection(scopeKey);
-    const bridgeLines = listPendingStoryBridgeLines(scopeKey);
+
+    // Persistent prompts are ST-owned slots: refresh/overwrite them, never clear them
+    // merely because a generation starts or ends.
+    refreshBridgePrompt(ctx, scopeKey);
+    refreshStoryPlanPrompt(ctx, scopeKey);
+
+    // Ephemeral prompts belong only to this generation.
     clearExtensionPrompt(ctx);
-    // Keep pending bridge lines mounted between generations. GENERATION_STARTED can be too late
-    // for some SillyTavern prompt-build paths, so the next turn must already have the persistent prompt.
-    refreshBridgePrompt(ctx, consumedScope);
     clearLifeInspirationPrompt(ctx);
-    clearStoryPlanPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
+
     const lifeInspiration = armLifeInspiration(scopeKey);
-    const storyPlans = listInjectableStoryPlans(scopeKey);
-    if (!pending?.text && !bridgeLines.length && !lifeInspiration && !storyPlans.length) return;
+    if (!pending?.text && !lifeInspiration && !listPendingStoryBridgeLines(scopeKey).length && !listInjectableStoryPlans(scopeKey).length) return;
 
     try {
-      if (bridgeLines.length) refreshBridgePrompt(ctx, scopeKey);
       if (lifeInspiration) ctx.setExtensionPrompt(LIFE_INSPIRATION_PROMPT_ID, lifeInspiration, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
-      const planText = wrapStoryPlans(storyPlans);
-      if (planText) ctx.setExtensionPrompt(STORY_PLAN_PROMPT_ID, planText, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
-      // Persistent bridge lines sit a few messages back as low-pressure background guidance; one-shot phone context stays closest to the current turn.
       if (pending?.text) {
         ctx.setExtensionPrompt(PROMPT_ID, wrapContext(pending.text), extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
         markPendingInjectionArmed(scopeKey);
@@ -231,17 +246,19 @@ export function createTavernInjectionBridge() {
       activeScopeKey = scopeKey;
       activeGeneration = true;
     } catch (error) {
-      console.error('[moli小手机] arm one-shot injection failed', error);
+      console.error('[moli小手机] arm ephemeral injection failed', error);
       clearExtensionPrompt(ctx);
-      clearBridgePrompt(ctx);
       clearLifeInspirationPrompt(ctx);
-      clearStoryPlanPrompt(ctx);
     }
   };
 
   const onMessageReceived = (messageId) => {
     const scopeKey = activeScopeKey || getCurrentScopeKey();
-    if (scopeKey) { consumeActivationReceipt(ctx, messageId, scopeKey); consumeLifeEventReceipt(ctx, messageId, scopeKey); consumeStoryPlanReceipts(ctx, messageId, scopeKey); }
+    if (scopeKey) {
+      consumeActivationReceipt(ctx, messageId, scopeKey);
+      consumeLifeEventReceipt(ctx, messageId, scopeKey);
+      consumeStoryPlanReceipts(ctx, messageId, scopeKey);
+    }
   };
 
   const onGenerationEnded = () => {
@@ -252,11 +269,11 @@ export function createTavernInjectionBridge() {
     consumeLifeEventReceipt(ctx, lastMessageId, consumedScope);
     consumeStoryPlanReceipts(ctx, lastMessageId, consumedScope);
     markStoryBridgeInjected(consumedScope, lastMessageId);
+
+    // Only one-shot / observation prompts are consumed by a generation.
+    // Persistent bridge/plan slots remain mounted until their underlying state changes.
     clearExtensionPrompt(ctx);
-    // Re-arm any still-pending line immediately, before the next prompt build begins.
-    refreshBridgePrompt(ctx, consumedScope);
     clearLifeInspirationPrompt(ctx);
-    clearStoryPlanPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
     if (getPendingInjection(consumedScope)) clearPendingInjection(consumedScope);
@@ -264,11 +281,9 @@ export function createTavernInjectionBridge() {
 
   const onGenerationStopped = () => {
     if (!activeGeneration) return;
-    // Stop/failure keeps the pending draft so the user can retry. Only the active ST prompt is cleared.
+    // Stop/failure keeps persistent prompts untouched and preserves the pending one-shot draft.
     clearExtensionPrompt(ctx);
-    refreshBridgePrompt(ctx, activeScopeKey || getCurrentScopeKey());
     clearLifeInspirationPrompt(ctx);
-    clearStoryPlanPrompt(ctx);
     activeScopeKey = '';
     activeGeneration = false;
   };
@@ -277,8 +292,8 @@ export function createTavernInjectionBridge() {
     if (!activeGeneration) {
       clearExtensionPrompt(ctx);
       clearLifeInspirationPrompt(ctx);
-      clearStoryPlanPrompt(ctx);
       refreshBridgePrompt(ctx, getCurrentScopeKey());
+      refreshStoryPlanPrompt(ctx, getCurrentScopeKey());
     }
   };
 
@@ -288,9 +303,10 @@ export function createTavernInjectionBridge() {
   eventSource.on(events.GENERATION_STOPPED, onGenerationStopped);
   eventSource.on(events.CHAT_CHANGED, onChatChanged);
 
-  // Persistent lines must already be mounted while idle; relying only on GENERATION_STARTED
-  // can miss the prompt-build window in SillyTavern.
+  // ST setExtensionPrompt slots are persistent. Mount persistent state once while idle;
+  // later generations inherit it until the same key is overwritten or explicitly cleared.
   refreshBridgePrompt(ctx, getCurrentScopeKey());
+  refreshStoryPlanPrompt(ctx, getCurrentScopeKey());
 
   return {
     destroy() {
