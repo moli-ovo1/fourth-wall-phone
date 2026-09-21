@@ -58,20 +58,29 @@ function wrapBridgeLines(lines) {
   ].join('\n');
 }
 
-function clearBridgePrompt(ctx) {
-  try { ctx?.setExtensionPrompt?.(BRIDGE_PROMPT_ID, '', extension_prompt_types.NONE, 0, false); } catch {}
+function clearBridgePrompt(ctx = getContext()) {
+  try { ctx?.setExtensionPrompt?.(BRIDGE_PROMPT_ID, ''); } catch {}
 }
 
-function refreshBridgePrompt(ctx, scopeKey = getCurrentScopeKey()) {
+function refreshBridgePrompt(scopeKey = getCurrentScopeKey()) {
+  const ctx = getContext();
   try {
+    if (!ctx || typeof ctx.setExtensionPrompt !== 'function') {
+      console.warn('[moli小手机][跨墙注入] 当前 SillyTavern context 不可用');
+      return 0;
+    }
     const lines = listPendingStoryBridgeLines(scopeKey);
     const text = wrapBridgeLines(lines);
-    if (text) ctx?.setExtensionPrompt?.(BRIDGE_PROMPT_ID, text, extension_prompt_types.IN_CHAT, 4, false, extension_prompt_roles.SYSTEM);
-    else clearBridgePrompt(ctx);
+    if (!text) {
+      clearBridgePrompt(ctx);
+      console.info('[moli小手机][跨墙注入] slot cleared', { scopeKey, pending: 0 });
+      return 0;
+    }
+    ctx.setExtensionPrompt(BRIDGE_PROMPT_ID, text, extension_prompt_types.IN_CHAT ?? 1, 4, false, extension_prompt_roles.SYSTEM ?? 0);
+    console.info('[moli小手机][跨墙注入] slot mounted', { scopeKey, pending: lines.length, chars: text.length, key: BRIDGE_PROMPT_ID, depth: 4 });
     return lines.length;
   } catch (error) {
-    console.warn('[moli小手机] refresh persistent bridge prompt failed', error);
-    clearBridgePrompt(ctx);
+    console.warn('[moli小手机][跨墙注入] refresh failed', error);
     return 0;
   }
 }
@@ -197,7 +206,7 @@ function consumeActivationReceipt(ctx, messageId, scopeKey) {
   if (cleaned !== original.trim()) { message.mes=cleaned; Promise.resolve(ctx.saveChat?.()).catch(()=>{}); }
   if (ids.length) {
     activateStoryBridgeLines(scopeKey, ids, mid);
-    refreshBridgePrompt(ctx, scopeKey);
+    refreshBridgePrompt(scopeKey);
   }
 }
 
@@ -225,7 +234,7 @@ export function createTavernInjectionBridge() {
 
     // Persistent prompts are ST-owned slots: refresh/overwrite them, never clear them
     // merely because a generation starts or ends.
-    refreshBridgePrompt(ctx, scopeKey);
+    refreshBridgePrompt(scopeKey);
     refreshStoryPlanPrompt(ctx, scopeKey);
 
     // Ephemeral prompts belong only to this generation.
@@ -292,7 +301,7 @@ export function createTavernInjectionBridge() {
     if (!activeGeneration) {
       clearExtensionPrompt(ctx);
       clearLifeInspirationPrompt(ctx);
-      refreshBridgePrompt(ctx, getCurrentScopeKey());
+      refreshBridgePrompt(getCurrentScopeKey());
       refreshStoryPlanPrompt(ctx, getCurrentScopeKey());
     }
   };
@@ -303,7 +312,7 @@ export function createTavernInjectionBridge() {
   const onStoryBridgeChanged = event => {
     const changedScope = String(event?.detail?.scopeKey || '');
     const currentScope = getCurrentScopeKey();
-    if (!activeGeneration && (!changedScope || changedScope === currentScope)) refreshBridgePrompt(ctx, currentScope);
+    if (!activeGeneration && (!changedScope || changedScope === currentScope)) refreshBridgePrompt(currentScope);
   };
   const onStoryPlanChanged = event => {
     const changedScope = String(event?.detail?.scopeKey || '');
@@ -321,7 +330,7 @@ export function createTavernInjectionBridge() {
 
   // ST setExtensionPrompt slots are persistent. Mount persistent state once while idle;
   // later generations inherit it until the same key is overwritten or explicitly cleared.
-  refreshBridgePrompt(ctx, getCurrentScopeKey());
+  refreshBridgePrompt(getCurrentScopeKey());
   refreshStoryPlanPrompt(ctx, getCurrentScopeKey());
 
   return {
