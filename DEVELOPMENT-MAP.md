@@ -3680,3 +3680,5 @@ Still next, without splitting into UI micro-patches:
 - moli261：放弃260的 idle persistent-slot 方案，恢复最早已实机成功的一次性 generation-start 注入模式，并通过每轮重新武装 pending bridge line 实现持续注入。
 
 - moli262：修复261确定性 bug——跨墙 prompt 曾在 generation-start 中“arm 后立即 clear”。现改为“先清旧 → 再 arm 新 → generation end/stop 再清”。
+
+- moli263：编辑室改为“取纳”暗号工作流；删除长按纳取/注入；新增编辑室专属小上帝/moli人格覆盖；取纳自动入墙并提供输入框上方跳转；清理墙素材与跨墙 prompt 的解释性保护话术。
