@@ -517,6 +517,7 @@ export function createPhonePanel({
         </div>
         <div class="moli-nav-title" data-chat-title></div>
         <button type="button" class="moli-studio-nav-entry" data-studio-menu-toggle hidden>来嗑瓜子</button>
+        <span class="moli-studio-first-guide" data-studio-first-guide hidden aria-hidden="true">➜</span>
         <div class="moli-nav-side right">
           <button class="moli-icon-btn" data-action="chat-info" aria-label="聊天信息">…</button>
         </div>
@@ -563,6 +564,10 @@ export function createPhonePanel({
       <div class="moli-studio-compose-tools" data-studio-compose-tools hidden>
         <button type="button" class="moli-studio-compose-tool" data-action="studio-quick-adopt">取纳</button>
         <button type="button" class="moli-studio-compose-tool moli-studio-material-jump" data-action="studio-material-jump" hidden>瓜子磕完了，帮你放素材栏了哈！自己看着要不要改</button>
+      </div>
+      <div class="moli-studio-after-adopt" data-studio-after-adopt hidden>
+        <button type="button" data-studio-after-adopt="clear">清空本次讨论</button>
+        <button type="button" data-studio-after-adopt="continue">我还没完呢</button>
       </div>
       <footer class="moli-compose">
         <textarea class="moli-input" rows="1" placeholder="说点什么…"></textarea>
@@ -1440,6 +1445,8 @@ export function createPhonePanel({
   const messageMenu = panel.querySelector('[data-message-menu]');
   const writersRoomToolbar = panel.querySelector('[data-writers-room-toolbar]');
   const studioNavEntry = panel.querySelector('[data-studio-menu-toggle]');
+  const studioFirstGuide = panel.querySelector('[data-studio-first-guide]');
+  const studioAfterAdopt = panel.querySelector('[data-studio-after-adopt]');
   const studioChoice = panel.querySelector('[data-studio-choice]');
   const studioPlanChoices = panel.querySelector('[data-studio-plan-choices]');
   const studioMemeChoices = panel.querySelector('[data-studio-meme-choices]');
@@ -5909,6 +5916,7 @@ export function createPhonePanel({
     if (!rows.some(row => row.id === id)) rows.push({ id, content, senderName: String(message?.senderSnapshot?.name || (message?.role === 'user' ? 'User' : '娘家人')), createdAt: Date.now(), conversationName: String(conversation?.name || '娘家人') });
     localStorage.setItem(studioMaterialKey(scopeKey), JSON.stringify(rows.slice(-80)));
     windowRef.dispatchEvent?.(new CustomEvent('moli:wall-source-changed'));
+    if (isWritersRoom(conversation) && studioAfterAdopt) studioAfterAdopt.hidden = false;
     return true;
   }
   function isWritersRoom(conversation) { return conversation?.type === 'group' && String(conversation.systemKind || '') === 'writers-room'; }
@@ -5942,6 +5950,9 @@ export function createPhonePanel({
     const studioRoom = isWritersRoom(conversation);
     if (writersRoomToolbar) writersRoomToolbar.hidden = !studioRoom;
     if (studioNavEntry) studioNavEntry.hidden = !studioRoom;
+    if (studioFirstGuide) studioFirstGuide.hidden = !studioRoom || studioGuideSeen();
+    panel.classList.toggle('moli-studio-room-active', studioRoom);
+    if (!studioRoom && studioAfterAdopt) studioAfterAdopt.hidden = true;
     if (studioComposeTools) studioComposeTools.hidden = !studioRoom;
     const item = isGroup
       ? null
@@ -6517,6 +6528,15 @@ export function createPhonePanel({
     if (clearGenerationError(scopeKey, currentContactId)) renderGenerationErrorBanner();
   }
 
+  const STUDIO_GUIDE_KEY = 'moli:studio:guide-seen';
+  function studioGuideSeen() {
+    try { return windowRef.localStorage?.getItem(STUDIO_GUIDE_KEY) === '1'; } catch { return false; }
+  }
+  function markStudioGuideSeen() {
+    try { windowRef.localStorage?.setItem(STUDIO_GUIDE_KEY, '1'); } catch {}
+    if (studioFirstGuide) studioFirstGuide.hidden = true;
+  }
+
   function focusStudioInput(task) {
     pendingStudioTask = task || null;
     if (studioChoice) studioChoice.hidden = true;
@@ -6956,6 +6976,17 @@ export function createPhonePanel({
 
       stage = '刷新聊天界面';
       renderChat();
+
+      if (isWritersRoom(conversation)) {
+        if (/^取纳(?:\s|[，,：:。！!？?]|$)/u.test(text)) {
+          const notes = text.replace(/^取纳(?:\s|[，,：:。！!？?])*/u, '').trim();
+          windowRef.setTimeout(() => requestReply({ studioTask: { type: 'adopt', notes } }), 0);
+        } else if (pendingStudioTask) {
+          const task = { ...pendingStudioTask, notes: text };
+          pendingStudioTask = null;
+          windowRef.setTimeout(() => requestReply({ studioTask: task }), 0);
+        }
+      }
     } catch (error) {
       console.error(`[moli小手机] send message failed at ${stage}:`, error);
       toast(`发送失败（${stage}）：${error?.message || error}`);
@@ -7293,10 +7324,36 @@ export function createPhonePanel({
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   studioMaterialJump?.addEventListener('click', () => show('injection-composer'));
+  studioAfterAdopt?.addEventListener('click', event => {
+    const action = event.target.closest?.('[data-studio-after-adopt]')?.dataset?.studioAfterAdopt;
+    if (!action) return;
+    const conversation = currentConversation();
+    if (!isWritersRoom(conversation)) return;
+    if (action === 'continue') {
+      studioAfterAdopt.hidden = true;
+      input?.focus();
+      return;
+    }
+    if (action === 'clear') {
+      const scopeKey = conversationRuntimeScopeKey(conversation);
+      if (!scopeKey) return;
+      clearConversationMessages(scopeKey, conversation.conversationKey || conversation.id);
+      pendingStudioTask = null;
+      studioAfterAdopt.hidden = true;
+      if (studioMaterialJump) studioMaterialJump.hidden = true;
+      if (studioChoice) studioChoice.hidden = true;
+      if (studioPlanChoices) studioPlanChoices.hidden = true;
+      if (studioMemeChoices) studioMemeChoices.hidden = true;
+      renderChat({ forceLatest: true });
+      input?.focus();
+      toast('本次讨论已清空');
+    }
+  });
   panel.querySelector('[data-action="open-writers-room"]')?.addEventListener('click', () => { try { const room = ensureWritersRoom(); currentContactId = room.conversationKey || room.id; show('chat'); renderChat({ forceLatest: true }); } catch (error) { toast(error?.message || '娘家人打开失败'); } });
   studioNavEntry?.addEventListener('click', () => {
     const conversation = currentConversation();
     if (!isWritersRoom(conversation)) return;
+    markStudioGuideSeen();
     if (studioChoice) studioChoice.hidden = !studioChoice.hidden;
     if (studioPlanChoices) studioPlanChoices.hidden = true;
     if (studioMemeChoices) studioMemeChoices.hidden = true;
