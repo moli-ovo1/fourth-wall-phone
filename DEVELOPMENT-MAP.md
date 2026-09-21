@@ -3659,3 +3659,7 @@ Still next, without splitting into UI micro-patches:
 - 触发到的人物身份、职业、家世、经济状况、关系和既有经历作为创作事实层提供给编辑室；已有答案的事实不得为了想梗重新脑补。
 - 未触发/未记载的部分仍可作为“可能/如果”的创作设想，但不得伪装成既定设定。
 - 不整本灌入世界书，仍按相关关键词触发，避免无关条目和未触发信息泛滥。
+
+## moli257 / v0.6.10
+- Writers-room NPC fact retrieval: current Tavern char card description + relevant World Book entries, then BaiBaiBook long-term history, then recent body context. WeChat editable contact profile is excluded as an NPC identity authority.
+- Semantic rule: Character Setting is content semantics; Character Card and World Book are storage sources, not fixed semantic categories.
