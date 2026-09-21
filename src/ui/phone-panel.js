@@ -7329,11 +7329,13 @@ export function createPhonePanel({
     if (!action) return;
     const conversation = currentConversation();
     if (!isWritersRoom(conversation)) return;
+
     if (action === 'continue') {
       studioAfterAdopt.hidden = true;
       input?.focus();
       return;
     }
+
     if (action === 'clear') {
       const scopeKey = conversationRuntimeScopeKey(conversation);
       if (!scopeKey) return;
