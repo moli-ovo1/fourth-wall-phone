@@ -2813,3 +2813,21 @@
   box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.22),0 6px 20px rgba(0,0,0,.10);
   min-height:38px;padding:7px 14px;font:inherit;font-size:12px;color:inherit;
 }
+
+/* moli277 · 编辑室收束：只保留两个主入口，左右对称。 */
+#moli-phone-panel .bubble-cast{
+  left:4%!important;right:auto!important;top:34px!important;margin-left:0!important;
+  transform:none!important;animation:moli277-bob-left 1.7s ease-in-out infinite!important;
+}
+#moli-phone-panel .bubble-meme{
+  left:auto!important;right:4%!important;top:34px!important;margin-left:0!important;
+  transform:none!important;animation:moli277-bob-right 1.55s ease-in-out infinite!important;
+}
+@keyframes moli277-bob-left{
+  0%,100%{margin-top:0;margin-left:0}
+  50%{margin-top:-7px;margin-left:4px}
+}
+@keyframes moli277-bob-right{
+  0%,100%{margin-top:0;margin-right:0}
+  50%{margin-top:-7px;margin-right:4px}
+}
