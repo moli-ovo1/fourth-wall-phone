@@ -3620,3 +3620,10 @@ Still next, without splitting into UI micro-patches:
 - 修复 `story-bridge-status.js` 未定义 `plans` 导致整个「我们的墙」正文状态栏在插入前崩溃。
 - 持续剧情线改为更轻的长期潜伏事件提示，并放在 `SYSTEM + IN_CHAT + depth 4`；保留 moli 自己的激活回执协议，不照搬外部 Lines schema/lifecycle。
 - 「纳取」强化源心理结论剥离，防止讨论阶段猜测再次成为跨墙正文前提。
+
+
+## moli250 / v0.6.03 — 跨墙潜伏线持续挂载修复
+
+- 修复潜伏线只在首轮正文请求出现的问题：不再只依赖 `GENERATION_STARTED` 临时挂载；生成结束/停止后若仍未激活，立即重新挂载同一 `SYSTEM + IN_CHAT + depth 4` extension prompt，聊天切换与扩展初始化也按当前 scope 刷新。
+- 激活或清除后，下一次刷新会移除该 prompt；未激活期间每轮正文请求都应可见，但不会在聊天历史中累积副本。
+- 正文侧潜伏提示删除“User选择长期保留”等后台 provenance，只描述材料自身为尚未发生的潜伏事件机会。
