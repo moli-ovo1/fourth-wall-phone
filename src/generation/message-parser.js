@@ -68,12 +68,23 @@ export function parseGeneratedMessageActions(rawText) {
   const raw = String(rawText || '').trim();
   if (!raw) return [];
   const actions = [];
-  const pattern = /<(message|msg|recall)>([\s\S]*?)<\/(?:message|msg|recall)>/gi;
+  const pattern = /<(message|msg|recall|quote)>([\s\S]*?)<\/(?:message|msg|recall|quote)>/gi;
   let match;
+  let pendingQuoteContent = '';
   while ((match = pattern.exec(raw))) {
+    const tag = String(match[1] || '').toLowerCase();
     const content = String(match[2] || '').trim();
     if (!content) continue;
-    actions.push({ type: String(match[1]).toLowerCase() === 'recall' ? 'recall' : 'message', content });
+    if (tag === 'quote') {
+      pendingQuoteContent = content;
+      continue;
+    }
+    actions.push({
+      type: tag === 'recall' ? 'recall' : 'message',
+      content,
+      ...(tag !== 'recall' && pendingQuoteContent ? { quoteContent: pendingQuoteContent } : {}),
+    });
+    pendingQuoteContent = '';
   }
   if (actions.length) return actions;
   return parseGeneratedMessages(raw).map(content => ({ type: 'message', content }));
