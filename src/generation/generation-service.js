@@ -34,6 +34,7 @@ import { buildCharacterContinuity } from '../storage/character-continuity-store.
 import { getPublicWebPost, listPublicWebPosts, listWeiboFollows, listNetworkActors, getWeiboSupertopicStates, updateWeiboSupertopicStates, saveWeiboMessagePeer, addWeiboPrivateMessage, listCommunityEchoes, markCommunityEchoesConsumed, getCommunityUserProfile } from '../storage/public-web-store.js';
 import { projectNpcBodyAwareness } from './npc-awareness-service.js';
 import { getPrivatePhoneTraces } from '../storage/private-phone-trace-store.js';
+import { listActiveStoryPlans } from '../storage/story-plan-store.js';
 
 function communityActorName(actor) {
   return String(actor?.uiName || actor?.name || '小号网友').trim() || '小号网友';
@@ -1138,6 +1139,18 @@ async function buildBatchGroupRequest({
   }).filter(Boolean).join('\n') : '';
   const taskType = String(studioTask?.type || '');
   const taskNotes = String(studioTask?.notes || '').trim();
+  const studioPlanLedger = studio && String(studioTask?.mode || '') === 'future'
+    ? listActiveStoryPlans(scopeKey).slice(-12).map((plan, index) => {
+        const status = String(plan?.status || 'watching');
+        const statusLabel = status === 'paused' ? '暂停'
+          : status === 'needs-adjustment' ? '需要调整'
+          : status === 'ended' ? '已结束'
+          : '观察中';
+        return `${index + 1}. ${String(plan?.title || '未命名长线')}｜${statusLabel}｜阶段${Math.max(1, Number(plan?.stage) || 1)}
+已记录路线：${String(plan?.text || '').trim()}
+最近观察：${String(plan?.lastNote || '暂无').trim()}`;
+      }).join('\n\n')
+    : '';
   const studioLikedMessages = studio
     ? (conversation.messages || []).filter(message => message?.role === 'assistant' && message?.likedByUser === true)
     : [];
@@ -1152,11 +1165,26 @@ async function buildBatchGroupRequest({
 正文AI真是太无聊啦！当用户点击这个入口时，你们帮她想想梗吧！
 有什么可能自然发生的小事、偶遇、麻烦、便利、插曲、意外获得、环境变化或他人的独立活动？可以平淡、荒诞、温柔、扫兴、麻烦、幸运、尴尬，甚至没有主线意义；生活允许只是发生。近期已反复使用的同类机关应主动降权。提供事件入口，不预设各角色的心理，不预设后续发展。${taskNotes ? `\n用户补充：${taskNotes}` : ''}`
       : taskType === 'plan'
-        ? `【本轮创作任务：剧情好难走啊】
-正文AI总是要用户自己走剧情，走一步动一步！当用户点击这个入口时，你们帮她规划一条路线吧！根据前情提要，看看路线可以怎么走？不止是当下，可以扩散到长期，不用用户自己来想剧情，不预设各角色的心理和行动结论，我们只提供事件入口。
-${String(studioTask?.mode || '') === 'idea'
-  ? '【当前模式：我有想法】用户已经有自己的想法。以用户这次输入的想法为起点，和她一起把这条路线往下讨论、展开。'
-  : '【当前模式：你帮我想】用户现在希望你们主动想路线。结合前情提要和用户这次输入的问题，主动提出剧情可以往哪里发展。'}${taskNotes ? `\n用户补充：${taskNotes}` : ''}`
+        ? String(studioTask?.mode || '') === 'future'
+          ? `【本轮创作任务：看看以后】
+用户不是卡在眼前这一幕，而是想看看这个故事接下来一段时间可以往哪里发展。
+
+根据前情提要，先在心里辨认当前故事里已经存在、仍有发展空间的剧情线：人物各自的生活与事务、关系已经造成的现实后果、尚未解决的问题、已经埋下的事情、外部环境变化，以及暂时沉寂但仍可能继续发展的线。辨认是为了获得全局视野，不要把“前情提要”成段复述给用户。
+
+不要把几个“马上发生的小事故”排列起来冒充长期规划。把视野从当前场景拉远，至少同时考虑近期、中期和更远期：数天、数周乃至更长时间里，哪些事情可能逐渐发展、交汇、沉寂、重新出现，或者产生新的现实后果。可以提出新的长期变量，但必须能自然进入现有世界。
+
+规划世界会继续发生什么，不规划角色到时候必须怎么做。不要规定某人最终爱上谁、原谅谁、离开谁、意识到什么，也不要预设角色未来的心理、感情和行动结论。我们规划的是角色未来可能面对的处境、事件与变化，真正到了那里，由正文角色自己决定怎么反应。
+
+沉寂的线不等于必须捞回来，结束的事也允许真的结束。不要为了“回收伏笔”机械清库存。和用户讨论几条真正值得发展的路线即可，不制定精确分钟时间表，也不要一次把未来写死。
+${studioPlanLedger ? `\n【现有长线状态账本｜仅作事实参考，不要求全部推进】\n${studioPlanLedger}` : '\n【现有长线状态账本】目前没有已经建立的持续规划；请直接从前情提要辨认真实存在的长期线索，不要因此退回只想眼前小事故。'}
+${taskNotes ? `\n用户补充：${taskNotes}` : ''}`
+          : `【本轮创作任务：救救眼前】
+用户现在不知道眼前这段剧情怎么继续了。根据前情提要和当前场景，看看从此刻开始，有哪些自然、合理又有意思的事情可以发生，让剧情重新流动起来。
+
+可以利用当前已经存在的人、事、环境、未处理的问题，也可以引入合理的新事件。不要只盯着主角，可以考虑配角自己的事务、外界变化和现实生活中的偶发情况。
+
+只解决眼前这一段，不必替后面的故事制定路线。不预设角色的心理、感情和行动结论，我们提供可以发生的事件入口，让正文中的角色自己反应。
+${taskNotes ? `\n用户补充：${taskNotes}` : ''}`
         : taskType === 'likes'
           ? `【本轮创作任务：整理❤️】第一版通常由小上帝负责收束：从当前讨论与❤️偏好信号中提炼 User 真正认可的创作意图，去重、处理矛盾，但不要把❤️当命令，也不要完全顺应 User；若正文证据与 User 偏好存在张力，应指出。moli 随后可以赞同、质疑或从整理结果继续发散新的玩法。不要机械复制点赞原句。`
           : taskType === 'adopt'
