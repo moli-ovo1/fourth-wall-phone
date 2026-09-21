@@ -522,7 +522,7 @@ export function createPhonePanel({
       </header>
       <div class="moli-writers-room-toolbar" data-writers-room-toolbar hidden>
         <button type="button" data-studio-task="cast">Ta出场好少</button>
-        <button type="button" data-studio-task="meme">帮我想梗</button>
+        <button type="button" data-studio-task="meme">先磕点瓜子再说</button>
         <button type="button" data-studio-task="plan">给我规划</button>
         <button type="button" data-studio-task="length">长度 <span data-studio-length-label>80</span></button>
       </div>
@@ -1971,7 +1971,7 @@ export function createPhonePanel({
     group: `娘家人 · ${row.senderName || '创作提示'}`,
     kind: 'creative-guidance',
     label: String(row.content || '').replace(/\s+/g, ' ').slice(0, 88) + (String(row.content || '').length > 88 ? '…' : ''),
-    build: () => `【创作指导 · 娘家人 · ${row.senderName || '创作提示'}】\n以下是 User 主动纳取并选择跨墙的开放式导演素材，不是故事中已经发生的事实，也不代表角色知道这些内容。它只能提供事件条件、外部机会和人物自身已有依据的行动空间；不得把素材里对角色心理、情绪、判断、选择、台词、反应或事件结果的推测当成正文要求。若素材中仍残留此类结论，必须忽略这些结论，让人物依据当下真实状态自然演算；事件也允许最终没有重要影响。\n${row.content}`,
+    build: () => `【创作指导 · 娘家人 · ${row.senderName || '创作提示'}】\n这是尚未发生的开放事件种子。只把其中可成立的外部条件、事件机会与人物本人已有依据的行动入口作为创作材料；角色当下如何理解、感受、选择和回应，继续由正文依据真实状态自然演算。事件可以被错过、拒绝、改变，也可以最终没有重要影响。\n${row.content}`,
   })));
 
   registerWallSourceProvider('calendar', ({scopeKey}) => listCalendarEvents(scopeKey).filter(row => row.status !== 'done').map(row => {
@@ -8808,8 +8808,10 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
       '[data-action="home"]'
     )
     .forEach(button => {
-      button.onclick = () =>
-        show('home');
+      button.onclick = () => {
+        const conversation = currentConversation();
+        show(isWritersRoom(conversation) ? 'injection-composer' : 'home');
+      };
     });
 
   panel.querySelector(
