@@ -3674,3 +3674,5 @@ Still next, without splitting into UI micro-patches:
 ## moli259 — 持久跨墙 Prompt 挂载时序
 - “我们的墙”新增/续写/删除跨墙剧情线后，持久 `setExtensionPrompt` 必须在生成前的空闲期立即与当前 scope 同步；不得仅依赖 `GENERATION_STARTED`。
 - `GENERATION_STARTED` 只作为生成前兜底刷新。这样 Provider 组装最终 API 请求时，跨墙潜伏线已经存在于 SillyTavern 的 extension prompt slot。
+
+- moli260：跨墙 injection controller 改为实时获取 SillyTavern context + 固定 slot 持续挂载，并增加诊断日志；不要求手动激活。

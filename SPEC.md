@@ -4678,3 +4678,5 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 ## moli259 — 持久跨墙 Prompt 挂载时序
 - “我们的墙”新增/续写/删除跨墙剧情线后，持久 `setExtensionPrompt` 必须在生成前的空闲期立即与当前 scope 同步；不得仅依赖 `GENERATION_STARTED`。
 - `GENERATION_STARTED` 只作为生成前兜底刷新。这样 Provider 组装最终 API 请求时，跨墙潜伏线已经存在于 SillyTavern 的 extension prompt slot。
+
+- 跨墙持久线：pending 线在正文生成前持续挂载到当前 SillyTavern context 的固定 extension-prompt slot；“未激活”是剧情状态而非注入开关。refresh 必须获取实时 context。

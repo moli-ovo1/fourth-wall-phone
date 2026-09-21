@@ -1,3 +1,11 @@
+# CURRENT STATE — moli260 / v0.6.13
+- 跨墙持久注入每次 refresh 都重新取得当前 SillyTavern context，再维护固定 extension-prompt slot，不再长期依赖初始化时捕获的 context。
+- pending 线固定使用 `IN_CHAT + depth 4 + SYSTEM`；无 pending 线时用同 key 空文本清除。
+- 增加跨墙注入诊断日志：挂载时输出 scopeKey / pending 数 / 字符数 / key / depth。
+- “未激活”表示事件尚未在正文实际发生，不是“未注入”；无需手动激活。
+
+> Updated 2026-09-21. This top block is the authoritative current handoff; older entries below are retained as history.
+
 # CURRENT STATE — moli259 / v0.6.12
 - 修复“我们的墙”持续跨墙线实际进入 SillyTavern 最终请求的时序：新增剧情线/修改剧情规划时，立即在空闲期同步 `setExtensionPrompt`，不再等到 `GENERATION_STARTED` 才挂载。
 - 原因：墙内存储与预览此前已经成功，但持久 Prompt 只在生成开始事件刷新；部分 SillyTavern/Provider 在该事件前已经组装最终请求，因此 Termux 看得到正文请求却看不到跨墙 Prompt。
