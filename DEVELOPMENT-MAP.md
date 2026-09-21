@@ -3676,3 +3676,5 @@ Still next, without splitting into UI micro-patches:
 - `GENERATION_STARTED` 只作为生成前兜底刷新。这样 Provider 组装最终 API 请求时，跨墙潜伏线已经存在于 SillyTavern 的 extension prompt slot。
 
 - moli260：跨墙 injection controller 改为实时获取 SillyTavern context + 固定 slot 持续挂载，并增加诊断日志；不要求手动激活。
+
+- moli261：放弃260的 idle persistent-slot 方案，恢复最早已实机成功的一次性 generation-start 注入模式，并通过每轮重新武装 pending bridge line 实现持续注入。

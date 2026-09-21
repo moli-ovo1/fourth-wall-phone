@@ -1,3 +1,11 @@
+# CURRENT STATE — moli261 / v0.6.14
+- 跨墙注入回退到已被实机验证成功的“一次性注入”路径：每次正文 `GENERATION_STARTED` 都把当前 pending 跨墙线重新写入 extension prompt，使用 `IN_CHAT + depth 0 + SYSTEM`。
+- “持续注入”不再依赖持久 slot：持久的是 story-bridge store 中的 pending 状态；每一轮正文都重新武装一次，生成结束/停止只清 prompt slot，不删除 pending 线。
+- 只有正文真正输出激活回执后，才把对应 bridge line 从 pending 转为 activated；“手动激活”不是注入开关。
+- 保留诊断日志 `[moli小手机][跨墙注入] 本轮已重新武装`，包含 scopeKey / pending / chars / key / depth。
+
+> Updated 2026-09-21. This top block is the authoritative current handoff; older entries below are retained as history.
+
 # CURRENT STATE — moli260 / v0.6.13
 - 跨墙持久注入每次 refresh 都重新取得当前 SillyTavern context，再维护固定 extension-prompt slot，不再长期依赖初始化时捕获的 context。
 - pending 线固定使用 `IN_CHAT + depth 4 + SYSTEM`；无 pending 线时用同 key 空文本清除。

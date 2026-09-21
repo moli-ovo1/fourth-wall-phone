@@ -4680,3 +4680,5 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - `GENERATION_STARTED` 只作为生成前兜底刷新。这样 Provider 组装最终 API 请求时，跨墙潜伏线已经存在于 SillyTavern 的 extension prompt slot。
 
 - 跨墙持久线：pending 线在正文生成前持续挂载到当前 SillyTavern context 的固定 extension-prompt slot；“未激活”是剧情状态而非注入开关。refresh 必须获取实时 context。
+
+- 跨墙持续注入采用“状态持久 + 每轮一次性重新武装”：pending 数据长期保存在 bridge store；每次正文生成开始时按已验证的一次性路径写入 `IN_CHAT + depth 0 + SYSTEM`，本轮结束只清 prompt slot。不要把“持续”实现为依赖宿主持久 slot。
