@@ -72,12 +72,20 @@ export async function runToolCalling({
 
   for (let round = 1; round <= rounds; round += 1) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const completion = await adapter.complete({
-      request,
-      tools: asOpenAiTools(available),
-      history: history.slice(),
-      signal,
-    });
+    let completion;
+    try {
+      completion = await adapter.complete({
+        request,
+        tools: asOpenAiTools(available),
+        history: history.slice(),
+        signal,
+      });
+    } catch (error) {
+      const stage = history.some(item => item?.type === 'tool')
+        ? '工具结果回传模型阶段'
+        : 'AI Tool Calling 请求阶段';
+      throw new Error(`${stage}失败：${String(error?.message || error || '未知错误')}`, { cause: error });
+    }
     const calls = Array.isArray(completion?.calls) ? completion.calls : [];
     const text = String(completion?.text || '').trim();
 
@@ -98,7 +106,12 @@ export async function runToolCalling({
       if (!tool) throw new Error(`模型请求了未授权的工具：${toolId || '未知'}`);
       const args = parseArgs(call?.arguments);
       onToolCall?.({ tool, args, call, round });
-      const execution = await invokeTool(tool.id, args, { signal, ...(toolContext && typeof toolContext === 'object' ? toolContext : {}) });
+      let execution;
+      try {
+        execution = await invokeTool(tool.id, args, { signal, ...(toolContext && typeof toolContext === 'object' ? toolContext : {}) });
+      } catch (error) {
+        throw new Error(`MCP 工具执行失败 [${tool.providerName || '未命名 MCP'} / ${tool.name}]：${String(error?.message || error || '未知错误')}`, { cause: error });
+      }
       const resultText = safeJson(execution.result);
       const record = {
         callId: String(call?.id || `${round}:${tool.id}`),

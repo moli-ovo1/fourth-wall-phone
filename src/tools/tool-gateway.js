@@ -120,8 +120,18 @@ export async function invokeTool(toolId, args = {}, options = {}) {
   if (server.enabled === false) throw new Error('该工具所属的 MCP Server 当前未启用');
   if (!String(server.url || '').trim()) throw new Error('该工具所属的 MCP Server 没有有效地址');
 
-  const client = await connect(server, options);
-  const remoteTools = await client.listTools();
+  let client;
+  try {
+    client = await connect(server, options);
+  } catch (error) {
+    throw new Error(`MCP 连接/初始化失败 [${server.name || '未命名 MCP'}]：${String(error?.message || error || '未知错误')}`, { cause: error });
+  }
+  let remoteTools;
+  try {
+    remoteTools = await client.listTools();
+  } catch (error) {
+    throw new Error(`MCP tools/list 失败 [${server.name || '未命名 MCP'}]：${String(error?.message || error || '未知错误')}`, { cause: error });
+  }
   const remoteTool = remoteTools.find(item => String(item?.name || '') === toolName);
   if (!remoteTool) throw new Error('MCP Server 当前没有提供这个工具');
   const decision = accessDecision(server, remoteTool, options);
@@ -131,7 +141,12 @@ export async function invokeTool(toolId, args = {}, options = {}) {
     error.toolDecision = decision;
     throw error;
   }
-  const result = await client.callTool(toolName, args && typeof args === 'object' ? args : {});
+  let result;
+  try {
+    result = await client.callTool(toolName, args && typeof args === 'object' ? args : {});
+  } catch (error) {
+    throw new Error(`MCP tools/call 失败 [${server.name || '未命名 MCP'} / ${toolName}]：${String(error?.message || error || '未知错误')}`, { cause: error });
+  }
   return {
     toolId: makeToolId(server.id, toolName),
     provider: 'mcp',
