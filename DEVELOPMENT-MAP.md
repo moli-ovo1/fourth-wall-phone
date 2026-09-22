@@ -1,3 +1,12 @@
+# moli297 / v0.6.50 — Character Wake 第一阶段（酒馆运行期间）
+
+- 私聊角色设置新增 Character Wake 开关与 15–720 分钟自主醒来间隔，默认关闭、默认间隔 60 分钟。
+- Character Wake 与“主动私聊”拆开：Wake 是角色自己的生活机会，不等于联系 User，也不使用主动私聊百分比。
+- 酒馆页面运行期间，到达 Wake 间隔后角色可自主判断是否使用 MCP App 已授权给 Character Wake 的工具；Tool Gateway 继续强制角色范围、allowWake 与读写权限。
+- Wake 本轮不允许顺手私聊或发朋友圈；工具真实结果写入 World Event / Character Continuity，后续角色可以记得自己做过什么。
+- 酒馆关闭后 JavaScript 不运行，本阶段不宣称后台离线 Wake；Android Companion/后台执行环境留给后续阶段。
+- 默认不强制行动，SKIP 合法；没有动机时不为了展示功能机械调用 MCP。
+
 ## moli296 / v0.6.49 — MCP 主屏幕 App + 预授权无弹窗
 
 - MCP 从“设置”中的子项提升为手机主屏幕独立 App；MCP 中心返回键回主屏幕。
