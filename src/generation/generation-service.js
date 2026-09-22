@@ -1402,7 +1402,7 @@ export async function generateContactMoment({ scopeKey, contactId, signal } = {}
     .sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0));
 
   const privateConversation = conversations.find(conversation => conversation?.type === 'private') || null;
-  const proactiveEnabled = privateConversation?.automation?.autoChatEnabled === true;
+  const proactiveEnabled = (privateConversation?.automation?.storyAlignedEnabled === true || privateConversation?.automation?.autoChatEnabled === true);
   const proactiveTendency = Math.max(0, Math.min(100, Number(privateConversation?.automation?.autoChatProbability ?? 30) || 0));
   const pendingMomentEvents = getPendingMomentChatEvents(scopeKey, contact.id);
   const pendingMomentEventIds = pendingMomentEvents.map(event => event.id);

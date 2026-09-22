@@ -64,3 +64,38 @@ export function buildPhoneContext(scopeKey,contactId,{query='',currentConversati
   const text=blocks.join('\n\n');
   return {text:text.length>26000?`${text.slice(0,26000)}\n…（手机上下文已按长度压缩）`:text,continuity};
 }
+
+/**
+ * Compact continuity projection for Story-Aligned contacts.
+ * It carries only facts the same character has personally experienced/known on the phone side.
+ * This is continuity, not a director instruction and not a dump of the whole phone database.
+ */
+export function buildStoryAlignedContinuity(scopeKey, contactId, { userName = 'User', limit = 18 } = {}) {
+  const cid = String(contactId || '');
+  if (!scopeKey || !cid) return '';
+  const contactsList = getContacts();
+  const contacts = new Map(contactsList.map(x => [String(x.id || ''), x]));
+  const identityLabels = { user: String(userName || 'User'), ...Object.fromEntries(contactsList.map(x => [String(x.id || ''), label(x)])) };
+  const continuity = buildCharacterContinuity(scopeKey, cid, { limit, identityLabels }).text;
+  const blocks = [];
+  if (continuity) blocks.push(continuity);
+
+  const privateConversation = getScopeConversations(scopeKey)
+    .filter(c => c?.type === 'private' && String(c.contactId || '') === cid)
+    .sort((a,b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))[0];
+  const recentMessages = (privateConversation?.messages || []).slice(-12)
+    .map(m => messageText(m, contacts, userName)).filter(Boolean);
+  if (recentMessages.length) blocks.push(`【你与 User 已经真实发生的近期手机私聊】\n${recentMessages.join('\n')}`);
+
+  const own = listProfileMoments(scopeKey, cid).slice(0, 3);
+  const seen = listPublicMoments(scopeKey).filter(x => visibleMoment(x, cid) && (x?.seenBy || []).map(String).includes(cid)).slice(0, 4);
+  const momentEvents = getRecentMomentChatEvents(scopeKey, cid, 8);
+  const momentParts = [];
+  if (own.length) momentParts.push(`你自己发过：\n${own.map(momentText).join('\n')}`);
+  if (seen.length) momentParts.push(`你已经实际看过：\n${seen.map(momentText).join('\n')}`);
+  if (momentEvents.length) momentParts.push(`你已经知道的朋友圈互动：\n${momentEvents.map(x => `- ${x.content}`).join('\n')}`);
+  if (momentParts.length) blocks.push(`【朋友圈连续性】\n${momentParts.join('\n')}`);
+
+  const text = blocks.join('\n\n').trim();
+  return text.length > 8000 ? `${text.slice(0, 8000)}\n…（正文人物手机连续性已压缩）` : text;
+}
