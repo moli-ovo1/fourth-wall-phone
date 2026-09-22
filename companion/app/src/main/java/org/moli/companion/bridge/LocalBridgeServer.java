@@ -3,6 +3,7 @@ package org.moli.companion.bridge;
 import android.content.Context;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.moli.companion.mcp.McpProfileStore;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -11,8 +12,8 @@ import java.util.*;
 /** Small loopback-only HTTP bridge. Pairing token is mandatory for every state endpoint. */
 public final class LocalBridgeServer {
     public static final int PORT = 17463;
-    private final BridgeStore store; private volatile boolean running; private ServerSocket server;
-    public LocalBridgeServer(Context context) { store = new BridgeStore(context.getApplicationContext()); }
+    private final BridgeStore store; private final McpProfileStore mcpProfiles; private volatile boolean running; private ServerSocket server;
+    public LocalBridgeServer(Context context) { store = new BridgeStore(context.getApplicationContext()); mcpProfiles = new McpProfileStore(context.getApplicationContext()); }
     public String pairingToken() { return store.pairingToken(); }
     public synchronized void start() throws IOException {
         if (running) return; server = new ServerSocket(); server.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), PORT)); running = true;
@@ -41,6 +42,7 @@ public final class LocalBridgeServer {
             else if("POST".equals(method)&&"/v1/wake-results/ack".equals(path))respond(out,200,new JSONObject().put("acknowledged",store.acknowledgeWakeResults(scope,body.optJSONArray("wakeIds")==null?new JSONArray():body.optJSONArray("wakeIds"))));
             else if("GET".equals(method)&&"/v1/lease".equals(path))respond(out,200,store.getLease(scope));
             else if("POST".equals(method)&&"/v1/lease/cas".equals(path)){JSONObject accepted=store.compareAndSetLease(scope,body.optJSONObject("expected"),body.optJSONObject("replacement"));respond(out,accepted==null?409:200,accepted==null?new JSONObject().put("error","lease-conflict"):accepted);}
+            else if("POST".equals(method)&&"/v1/mcp-profile".equals(path)){mcpProfiles.save(body.getString("actorId"),body.optString("name","MCP"),body.optString("endpoint",""),body.optString("bearer",""),body.optString("headerName",""),body.optString("headerValue",""),body.optJSONObject("headers")==null?"{}":body.optJSONObject("headers").toString(),body.optBoolean("enabled",false),body.optBoolean("allowWrite",false));respond(out,200,new JSONObject().put("ok",true));}
             else respond(out,404,new JSONObject().put("error","not-found"));
         } catch(Exception ignored) {}
     }
