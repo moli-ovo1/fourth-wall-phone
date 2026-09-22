@@ -8448,19 +8448,28 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     button.setAttribute('aria-busy', 'true');
     try {
       const result = await generateContactMoment({ scopeKey, contactId: item.id });
-      let createdMoment = null;
-      if ((result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') && result?.content) {
-        createdMoment = createProfileMoment(scopeKey, item.id, {
-          author: { id: item.id, name: actorName, type: 'contact' },
-          content: result.content,
-          visibility: result.onlyUserVisible ? {mode:'only',contactIds:['user']} : {mode:'public',contactIds:[]},
-          createdAt: result.createdAt,
-        });
+      const createdMoments = [];
+      if (result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') {
+        const posts = Array.isArray(result?.posts) && result.posts.length
+          ? result.posts.slice(0, 3)
+          : (result?.content ? [{ content: result.content, onlyUserVisible: result.onlyUserVisible, createdAt: result.createdAt }] : []);
+        for (const post of posts) {
+          if (!String(post?.content || '').trim()) continue;
+          createdMoments.push(createProfileMoment(scopeKey, item.id, {
+            author: { id: item.id, name: actorName, type: 'contact' },
+            content: String(post.content).trim(),
+            visibility: post.onlyUserVisible ? {mode:'only',contactIds:['user']} : {mode:'public',contactIds:[]},
+            createdAt: Number(post.createdAt || Date.now()),
+          }));
+        }
       }
+      const createdMoment = createdMoments[0] || null;
       const validNpcKeys = new Set((result?.npcSources || []).map(source => String(source?.key || '')));
       for (const interaction of result?.interactions || []) {
         const rawTargetId = String(interaction?.targetMomentId || '');
-        const targetId = rawTargetId === '__NEW__' ? String(createdMoment?.id || '') : rawTargetId;
+        const newMatch = rawTargetId.match(/^__NEW(?:_(\d+))?__$/);
+        const newIndex = newMatch ? Math.max(0, Number(newMatch[1] || 1) - 1) : -1;
+        const targetId = newMatch ? String(createdMoments[newIndex]?.id || '') : rawTargetId;
         if (!targetId) continue;
         let socialActor = null;
         if (interaction.actorType === 'contact' && String(interaction.actorId || '') === String(item.id)) {
@@ -8502,9 +8511,22 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
           incrementConversationUnread(scopeKey, conversationKey, result.privateMessages.length);
         }
       }
-      if (result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') {
-        setProfileMomentStatus(scopeKey, item.id, { message: `发现 ${actorName} 的一条近期朋友圈`, note: '', kind: 'post' });
-        toast(`发现 ${actorName} 的一条近期朋友圈`);
+      if ((result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') && createdMoments.length) {
+        const countText = createdMoments.length === 1 ? '一条' : `${createdMoments.length} 条`;
+        setProfileMomentStatus(scopeKey, item.id, { message: `发现 ${actorName} 的${countText}近期朋友圈`, note: '', kind: 'post' });
+        toast(`发现 ${actorName} 的${countText}近期朋友圈`);
+        // 说明书约定：私聊中“有几率”收到当前角色的朋友圈更新提醒。这里只生成系统提醒，不触发额外 API。
+        if (Math.random() < 0.35) {
+          const privateConversation = getScopeConversations(scopeKey)
+            .filter(entry => entry?.type === 'private' && String(entry.contactId || '') === String(item.id))
+            .sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || ensureConversation(scopeKey, item.id);
+          const conversationKey = String(privateConversation?.conversationKey || privateConversation?.id || item.id);
+          appendMessage(scopeKey, conversationKey, 'system', `${actorName}的朋友圈有新动态`, {
+            source: 'profile-moment-update-reminder', messageType: 'moment-event',
+            momentEvent: { contactId: item.id, momentIds: createdMoments.map(moment => moment.id) },
+          });
+          if (conversationKey !== String(currentConversation()?.conversationKey || currentConversation()?.id || '')) incrementConversationUnread(scopeKey, conversationKey, 1);
+        }
       } else {
         setProfileMomentStatus(scopeKey, item.id, { message: `${actorName} 最近没有新的朋友圈`, note: result?.statusNote || '这会儿没什么想公开发的。', kind: 'skip' });
         toast(`${actorName} 最近没有新的朋友圈`);
