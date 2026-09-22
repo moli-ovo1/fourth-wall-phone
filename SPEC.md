@@ -4991,3 +4991,12 @@ Android Companion lives under `companion/` in the same repository. It is an exec
 - MCP 凭证属于 Companion Credential Vault 域。Wake Snapshot/Result 继续保持无 secret；Web→Android 的 secret provisioning 只能经已配对的 loopback bridge 进入 Vault。
 - 后台工具权限继承用户在 MCP 中对 Character Wake、角色范围、read/write policy 的明确授权。未知风险工具按 write 处理。
 - 每个角色可使用自己的持久 actor endpoint；这属于角色身份凭证，不得跨角色共享。
+
+
+## moli315 / v0.6.68 — Companion 真机验收收口与诊断面板
+
+- Companion 增加只读真机诊断：Bridge、后台 Provider、已同步角色 scope、MCP 授权状态、最近 Worker 状态、待回收 WakeResult 数量。诊断不会输出 API Key、MCP Endpoint、Bearer 或自定义 Header。
+- 增加“请求一次后台 Wake 测试”，通过 OneTimeWorkRequest 复用正式 CompanionWakeWorker，不另造测试执行器。
+- 修正 313/314 遗留的过期注释，明确 Android Worker 已具备 Community + 授权 MCP 的真实 headless runtime。
+- 构建审计确认 Android 子项目的 Gradle/AGP 配置、Manifest/XML 与 Java 源结构完整；当前仓库仍未携带 Gradle Wrapper，当前执行环境也没有 Android SDK/Gradle，因此本轮不宣称 APK 已编译。首次 APK 构建应在 Android Studio/具备 Android SDK 的 CI 完成。
+- 审计同时确认一个必须显式保留的已知限制：loopback Bridge 目前跟随 MainActivity 生命周期。WorkManager 后台执行不依赖 Bridge，但 Web 回收离线结果时需要 Companion Bridge 可达。首轮真机验收先把这一点暴露在诊断页，不用假后台常驻掩盖；后续根据真机结果决定 BridgeService/其他 transport。
