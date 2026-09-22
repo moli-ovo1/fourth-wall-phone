@@ -103,3 +103,12 @@ export function getMcpActorEndpoint(serverId, actorId) {
   const server = getMcpServer(serverId);
   return String(server?.actorEndpoints?.[String(actorId || '').trim()] || '').trim();
 }
+
+export function clearMcpActorEndpoint(serverId, actorId) {
+  const server = getMcpServer(serverId);
+  const actor = String(actorId || '').trim();
+  if (!server || !actor || !server.actorEndpoints?.[actor]) return server || null;
+  const actorEndpoints = { ...(server.actorEndpoints || {}) };
+  delete actorEndpoints[actor];
+  return saveMcpServer({ ...server, actorEndpoints });
+}
