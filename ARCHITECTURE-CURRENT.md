@@ -1,4 +1,4 @@
-# moli Current Architecture — v0.6.63 / moli310
+# moli Current Architecture — v0.6.64 / moli311
 
 > This is the short authoritative architecture entry for future development. If an old TODO in SPEC.md conflicts with current code or this document, treat it as historical unless CURRENT-STATE.md says otherwise.
 
@@ -99,3 +99,8 @@ Companion Phase 1A closes with a portable executor boundary: `WakeRequest -> inj
 
 ## moli310 / v0.6.63 — Android Companion runtime shell
 Phase 1B begins with `companion/` as a second executor, never a second character database. Android owns only device-local execution concerns: encrypted credentials, transport participation and lease participation. `CompanionTransport` keeps the eventual Web↔Android mechanism replaceable. `SchedulerLeaseClient` requires an expired/absent Web lease and compare-and-set acceptance before Companion ownership. No Worker is enabled until this handoff can be tested end-to-end.
+
+
+## moli311 / v0.6.64 — Real Web ↔ Companion transport boundary
+
+Transport now has a concrete first implementation: a token-protected loopback HTTP bridge bound only to `127.0.0.1:17463`. Android owns only transport-pending WakeRequest/WakeResult/Lease envelopes plus encrypted credentials; canonical social/character facts remain Web-owned. On foreground recovery, Web pulls pending Companion results, commits them through the canonical event adapter, ACKs only committed/duplicate wakeIds, then CAS-takes the scheduler lease. A missing/unavailable Companion must not break foreground Web Wake. WorkManager is intentionally still absent.

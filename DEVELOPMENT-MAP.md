@@ -4002,3 +4002,7 @@ Still next, without splitting into UI micro-patches:
 - DONE: transport abstraction for snapshot/journal/lease exchange.
 - DONE: Companion lease client boundary; no scheduler enabled yet.
 - NEXT: implement one concrete Web↔Companion transport and recovery handshake; verify lease epoch/CAS semantics across close/reopen; only then add WorkManager approximate background Wake.
+
+
+### moli311 / v0.6.64
+Companion Phase 1B transport/handoff landed: loopback Bridge + pairing token + Web pairing UI + WakeRequest sync + pending WakeResult recovery + scheduler lease CAS handoff. Next: make the Bridge available to background runtime and add WorkManager worker around the already-defined Headless Executor; do not duplicate canonical stores in Android.

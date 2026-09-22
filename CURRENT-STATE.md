@@ -1157,3 +1157,13 @@
 - Android 侧建立 portable contract 校验、`CompanionTransport` 抽象与 `SchedulerLeaseClient`；只有 Web lease 失效后 Companion 才有资格尝试 CAS 接管，具体 transport 尚未绑定。
 - 新增 `CredentialVault`：AI/MCP 等 Secret 只进入 Android Keystore-backed AES/GCM vault，不进入 Wake Snapshot / Offline Journal。
 - 本版刻意不加入 Worker/定时器、不选择 localhost/file/bridge transport，也不复制 Community/World Event/Life Log canonical stores。下一步先实现 Web↔Companion transport 与 lease handoff/recovery，再接 WorkManager。
+
+
+## moli311 / v0.6.64 — Companion Phase 1B：Loopback Transport + Web Recovery Handoff
+
+- Android Companion 新增仅绑定 `127.0.0.1:17463` 的本机 Bridge；角色状态不会开放到局域网。
+- Bridge 使用随机持久配对码保护 WakeRequest / WakeResult / Lease 接口；配对码不进入角色 Snapshot。
+- MCP 中心新增 Android Companion 配对入口，可保存配对码并检测真实 Bridge。
+- Web Character Wake 在已配对时会同步最新 WakeRequest，并将 Companion Bridge Lease 纳入调度所有权判断；Bridge 不可用时前台现有 Wake 不被阻断。
+- Web 重新取得 Companion Lease 前会先拉取 pending WakeResults，经 canonical adapter 幂等 Commit 后才 ACK，保持“Companion 产事实，Web 建立正式事实”的边界。
+- 本轮仍未启用 WorkManager/后台 Worker；关闭 Companion App 后当前 Activity Bridge 会停止。后台执行留给下一阶段。

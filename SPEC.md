@@ -4964,3 +4964,11 @@ When an MCP account/identity tool returns a persistent role identity endpoint, m
 
 ## moli310 / v0.6.63 — Companion Phase 1B boundary
 Android Companion lives under `companion/` in the same repository. It is an execution environment only. Canonical character/social state remains in moli Web; Android may hold encrypted credentials plus portable Wake requests/results needed for offline execution. Secrets belong to the Android Credential Vault and must never be serialized into Wake Snapshot or Offline Journal. Background scheduling must not begin until transport and lease handoff can prevent Web/Companion double execution.
+
+
+### Companion 本机桥接（moli311）
+- 第一种真实 Transport 固定为本机 loopback Bridge：只监听 `127.0.0.1`，不监听 LAN。
+- 所有状态接口必须携带随机配对码；health 可无凭证探测，但不能读取任何角色/Lease/Journal 数据。
+- 配对码属于 transport credential，不得进入 Wake Snapshot / WakeResult。
+- Web 恢复顺序：读取 Companion Lease → 若 Companion 持有则先恢复 pending results → canonical Commit → ACK → CAS 切回 Web。
+- Bridge 失联时不得让现有前台 Character Wake 停摆；真正后台 Worker 启用后再提高 handoff 的强一致性要求。
