@@ -968,3 +968,9 @@
 - Story-Aligned / 自动私聊不再写死最多 3 条，改为读取同一私聊实例（优先）/联系人资料卡的气泡范围。编辑室的 unlimited/maxRepliesOverride 不参与私聊。
 - 生成 runtime 增加 5 分钟陈旧锁自愈：仅清理已经失去正常 finally 收尾的内存 busy 锁，避免发送键永久停在“■”。正常生成/停止流程不变。
 - 删除语义保持“删什么撤销什么”：正文删除由 Tavern 当前正文源自然消失；微信消息删除后不再出现在实时私聊/Story-Aligned 最近消息投影。不会因为删正文而物理删除微信消息，也不会因为删微信消息而物理删除正文。若旧消息已经进入压缩手机记忆，现有 needsReview 机制仍会提示核对，避免静默伪造摘要。
+
+
+## moli285 / v0.6.38 — Tool Calling orchestration core
+- Added `src/tools/tool-calling-service.js`: provider-neutral bounded Tool Calling loop over moli Tool Gateway.
+- The loop discovers enabled tools, namespaces calls through Tool Gateway, returns tool results to an injected model adapter, and stops after a bounded number of rounds.
+- Safety boundary: this release does **not** expose MCP tools to private/group chat automatically. Character/origin permissions and write confirmation must be added before chat wiring.

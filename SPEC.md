@@ -4789,3 +4789,9 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - 编辑室故事事实链：当前 char 角色描述 → 相关世界书 → 柏宝书长期记忆 → 清洗后的近期故事正文。
 - 正文进入编辑室前必须做 story-only 提取：优先 `<content>`；thinking/analysis/reasoning/details 等生成控制内容不得作为故事事实注入。
 - 编辑室通用成员/世界书扫描不得直接使用原始正文 body；故事事实只走编辑室专用事实链。
+
+
+## moli285 / v0.6.38 — Tool Calling orchestration core
+- Added `src/tools/tool-calling-service.js`: provider-neutral bounded Tool Calling loop over moli Tool Gateway.
+- The loop discovers enabled tools, namespaces calls through Tool Gateway, returns tool results to an injected model adapter, and stops after a bounded number of rounds.
+- Safety boundary: this release does **not** expose MCP tools to private/group chat automatically. Character/origin permissions and write confirmation must be added before chat wiring.
