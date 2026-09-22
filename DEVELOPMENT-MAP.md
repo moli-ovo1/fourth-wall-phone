@@ -3995,3 +3995,10 @@ Still next, without splitting into UI micro-patches:
 - Headless executor contract is now explicit: portable WakeRequest in, injected capability handlers execute, fact-only WakeResult out.
 - Phase 1A is considered complete. Android Phase 1B may begin from this boundary; Companion must not own canonical Community/World Event/Life Log databases.
 - Phase 1B first targets: Android shell + encrypted Credential Vault + scheduler/lease transport + Offline Journal transport. Do not port the whole Web moli brain to Kotlin.
+
+## moli310 / v0.6.63 — Companion Phase 1B started
+- DONE: minimal Android app/module skeleton.
+- DONE: Android Keystore-backed credential vault foundation.
+- DONE: transport abstraction for snapshot/journal/lease exchange.
+- DONE: Companion lease client boundary; no scheduler enabled yet.
+- NEXT: implement one concrete Web↔Companion transport and recovery handshake; verify lease epoch/CAS semantics across close/reopen; only then add WorkManager approximate background Wake.

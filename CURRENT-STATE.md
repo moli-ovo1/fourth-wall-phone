@@ -1151,3 +1151,9 @@
 - Phase 1A 收口判断：portable contract、Snapshot projection、Scheduler Lease、Offline Journal、幂等 Commit、真实 canonical adapters、Headless Executor boundary 已齐。Web 当前在线行为仍沿用成熟路径，未强行切换到新 executor。
 - 已知且有意保留的 Phase 1B 边界：酒馆默认 `generateRaw()` 不能在 Companion 离线环境使用；Companion 必须使用独立 Provider/Credential Vault。Community 的 Web executor 仍可依赖现有 UI closure，但 Companion 只实现同一 Headless capability contract，不复制 canonical stores。
 - 下一阶段可进入 Companion Phase 1B：建立 Android Companion 最小骨架、Credential Vault、Lease/Journal transport；不得在 Kotlin 中复制第二套 moli canonical brain。
+
+## moli310 / v0.6.63 — Companion Phase 1B：Android Runtime Skeleton
+- 新增 `companion/` Android 子项目骨架；它是第二执行环境，不是第二套 moli。当前不会启动后台 Wake。
+- Android 侧建立 portable contract 校验、`CompanionTransport` 抽象与 `SchedulerLeaseClient`；只有 Web lease 失效后 Companion 才有资格尝试 CAS 接管，具体 transport 尚未绑定。
+- 新增 `CredentialVault`：AI/MCP 等 Secret 只进入 Android Keystore-backed AES/GCM vault，不进入 Wake Snapshot / Offline Journal。
+- 本版刻意不加入 Worker/定时器、不选择 localhost/file/bridge transport，也不复制 Community/World Event/Life Log canonical stores。下一步先实现 Web↔Companion transport 与 lease handoff/recovery，再接 WorkManager。

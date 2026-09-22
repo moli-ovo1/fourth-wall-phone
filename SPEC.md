@@ -4961,3 +4961,6 @@ When an MCP account/identity tool returns a persistent role identity endpoint, m
 - External MCP and Community are independent capabilities under the same request; a runtime may execute either, both, or neither according to schedule/capability flags.
 - Runtime-specific credentials are resolved outside WakeRequest. Companion credentials belong in its encrypted vault; portable snapshots/journals must remain secret-free.
 - Phase 1A Web boundary is complete enough to begin Android Companion Phase 1B without replacing current online Wake behavior.
+
+## moli310 / v0.6.63 — Companion Phase 1B boundary
+Android Companion lives under `companion/` in the same repository. It is an execution environment only. Canonical character/social state remains in moli Web; Android may hold encrypted credentials plus portable Wake requests/results needed for offline execution. Secrets belong to the Android Credential Vault and must never be serialized into Wake Snapshot or Offline Journal. Background scheduling must not begin until transport and lease handoff can prevent Web/Companion double execution.

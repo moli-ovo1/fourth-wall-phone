@@ -1,12 +1,12 @@
-# moli Current Architecture — v0.6.61 / moli308
+# moli Current Architecture — v0.6.63 / moli310
 
 > This is the short authoritative architecture entry for future development. If an old TODO in SPEC.md conflicts with current code or this document, treat it as historical unless CURRENT-STATE.md says otherwise.
 
 
 ## 0. Companion boundary (current)
-Character Wake now has two independent profile switches: external life (MCP) and autonomous Community browsing. While SillyTavern is running, Web remains the executor. Companion work is in Phase 1A: extract explicit headless boundaries before any Android APK is created.
+Character Wake now has two independent profile switches: external life (MCP) and autonomous Community browsing. While SillyTavern is running, Web remains the executor. Companion work is in Phase 1B: the repository now contains a minimal Android runtime shell, but background Wake is still disabled until transport and lease handoff are proven.
 
-Architecture rule: **one character, two execution environments**. moli/SillyTavern owns canonical state. A future Companion may hold a canonical Wake Snapshot, its uncommitted Offline Journal, encrypted credentials and a Scheduler Lease, but must not maintain a second independent World Event/Awareness/Runtime/Community database.
+Architecture rule: **one character, two execution environments**. moli/SillyTavern owns canonical state. The Companion may hold a canonical Wake Snapshot, its uncommitted Offline Journal, encrypted credentials and a Scheduler Lease, but must not maintain a second independent World Event/Awareness/Runtime/Community database.
 
 Community Wake scheduler calls `src/automation/community-wake-service.js`; the current Web executor is registered by phone-panel and still reuses the existing Community Discovery chain. This removes the scheduler's direct `window` event dependency without changing Community behavior.
 
@@ -96,3 +96,6 @@ Companion Phase 1A now has real Web-side canonical adapters for portable WakeRes
 
 ## moli309 / v0.6.62 — Headless execution boundary
 Companion Phase 1A closes with a portable executor boundary: `WakeRequest -> injected capability handlers -> WakeResult -> Offline Journal/Commit -> canonical stores`. The executor has no ownership of Community, World Event, Life Log or Character Runtime databases and receives no API/MCP secrets. Web may keep using its mature online paths while Android implements the same capability boundary. Phase 1B must therefore add an Android runtime, encrypted credential resolution and transport/lease mechanics—not a second moli brain.
+
+## moli310 / v0.6.63 — Android Companion runtime shell
+Phase 1B begins with `companion/` as a second executor, never a second character database. Android owns only device-local execution concerns: encrypted credentials, transport participation and lease participation. `CompanionTransport` keeps the eventual Web↔Android mechanism replaceable. `SchedulerLeaseClient` requires an expired/absent Web lease and compare-and-set acceptance before Companion ownership. No Worker is enabled until this handoff can be tested end-to-end.
