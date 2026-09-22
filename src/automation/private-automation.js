@@ -8,7 +8,7 @@ import { listWorldEvents, markWorldEventsConsumed, recordWorldEvent, summarizeWo
 import { buildPhoneContext } from '../generation/phone-context-builder.js';
 import { buildCharacterDecisionInstruction } from '../generation/character-decision.js';
 import { updateCharacterRuntime } from '../storage/character-runtime-store.js';
-import { recordLifeLog } from '../storage/life-log-store.js';
+import { recordLifeLog, listLifeLogs } from '../storage/life-log-store.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -17,6 +17,8 @@ const SOCIAL_EVENT_BATCH_MS = 2 * 60 * 1000;
 const SOCIAL_FACT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SOFT_ACTION_WINDOW_MS = 20 * 60 * 1000;
 const running = new Set();
+const recoveredLifeLogScopes = new Set();
+const WAKE_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 const chance = p => Math.random() * 100 < Math.max(0, Math.min(100, Number(p) || 0));
 const commentaryEvaluationStep = p => {
   const tendency = Math.max(0, Math.min(100, Number(p) || 0));
@@ -75,6 +77,16 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
   const tick = async () => {
     if (destroyed) return;
     const scopeKey = getScopeKey?.(); if (!scopeKey) return;
+    if (!recoveredLifeLogScopes.has(scopeKey)) {
+      recoveredLifeLogScopes.add(scopeKey);
+      const logs = listLifeLogs(scopeKey, { limit: 300, autonomousOnly: true });
+      const nowAtRecovery = Date.now();
+      for (const start of logs.filter(row => row?.kind === 'wake' && row?.metadata?.phase === 'start' && nowAtRecovery - Number(row.createdAt || 0) > WAKE_REQUEST_TIMEOUT_MS)) {
+        const hasLaterEnd = logs.some(row => row?.actorId === start.actorId && row?.kind === 'wake' && row?.metadata?.phase === 'end' && Number(row.createdAt || 0) > Number(start.createdAt || 0));
+        const alreadyRecovered = logs.some(row => row?.actorId === start.actorId && row?.metadata?.recoveredStartId === start.id);
+        if (!hasLaterEnd && !alreadyRecovered) recordLifeLog(scopeKey, { actorId: start.actorId, actorName: start.actorName, kind: 'wake', title: '上次自主醒来中断', summary: '上一次自主醒来没有留下完成结果。可能是页面进入后台、被系统暂停/关闭，或请求在完成前中断；没有把它误记成角色主动 SKIP。', source: 'Character Wake', status: 'interrupted', metadata: { autonomous: true, phase: 'end', recoveredStartId: start.id } });
+      }
+    }
     const contacts = getContacts();
     const body = getTavernAssistantTurnState();
     const revisions = getTavernMessageRevisionState();
@@ -221,6 +233,8 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         : '';
       running.add(key);
       beginGenerationTask(scopeKey, key, null, mode);
+      let wakeToolRecords = [];
+      let finalBehaviorAction = '';
       try {
         const isFourthWall = isFourthWallContact;
         const socialEventText = socialEvents.map(event => {
@@ -272,16 +286,28 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         if (mode === 'character-wake') {
           recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: '自主醒来', summary: '获得一次自主生活机会，正在决定是否行动。', source: 'Character Wake', metadata: { autonomous: true, phase: 'start' } });
         }
-        const result = await generatePrivateReply({
-          scopeKey,
-          conversationKey: key,
-          allowNoPendingUser: true,
-          automationInstruction: instruction,
-          fourthWallCommentary: isFourthWall && mode === 'commentary' ? commentaryEvent : null,
-          toolOrigin: mode === 'character-wake' ? 'character_wake' : 'private_chat',
-        });
+        let wakeAbortController = null;
+        let wakeTimeout = null;
+        if (mode === 'character-wake') {
+          wakeAbortController = new AbortController();
+          wakeTimeout = window.setTimeout(() => wakeAbortController.abort('Character Wake timeout'), WAKE_REQUEST_TIMEOUT_MS);
+        }
+        let result;
+        try {
+          result = await generatePrivateReply({
+            scopeKey,
+            conversationKey: key,
+            signal: wakeAbortController?.signal,
+            allowNoPendingUser: true,
+            automationInstruction: instruction,
+            fourthWallCommentary: isFourthWall && mode === 'commentary' ? commentaryEvent : null,
+            toolOrigin: mode === 'character-wake' ? 'character_wake' : 'private_chat',
+          });
+        } finally {
+          if (wakeTimeout) window.clearTimeout(wakeTimeout);
+        }
 
-        const wakeToolRecords = mode === 'character-wake' && Array.isArray(result?.toolCalling?.usedTools) ? result.toolCalling.usedTools : [];
+        wakeToolRecords = mode === 'character-wake' && Array.isArray(result?.toolCalling?.usedTools) ? result.toolCalling.usedTools : [];
         if (wakeToolRecords.length) {
           for (const toolRecord of wakeToolRecords) {
             const safeResult = String(toolRecord?.resultText || '').replace(/https?:\/\/[^\s]+\/ctai[_\/\-]?v?1[_\/\-]?[^\s"']*/gi, '[专属 MCP 身份地址已隐藏]').slice(0, 1800);
@@ -313,6 +339,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           postContent = decision.post;
           privateMessages = decision.privateMessages;
         }
+        finalBehaviorAction = behaviorAction;
         if (behaviorAction === 'SKIP') {
           if (mode !== 'commentary' && decisionWorldEventIds.length) markWorldEventsConsumed(scopeKey, contact.id, decisionWorldEventIds, decisionConsumer);
           continue;
@@ -375,7 +402,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: wakeToolRecords.length ? '自主活动结束' : '这次没有行动', summary: wakeToolRecords.length ? `本轮自主醒来共执行 ${wakeToolRecords.length} 次外部工具调用。` : '醒来后决定不执行外部操作。', source: 'Character Wake', metadata: { autonomous: true, phase: 'end', toolCount: wakeToolRecords.length } });
         }
         if (storyAligned && storySignature) runtimePatch.lastStoryAlignedBodySignature = storySignature;
-        if (storyAligned) updateCharacterRuntime(scopeKey, contact.id, { existenceMode: 'story_aligned', sourceId: String(contact?.source?.sourceId || ''), storyTime: getCurrentTavernStoryTimeState(), storySignature, lastAttentionReason: mode || 'baseline', lastAttentionAt: Date.now(), lastDecision: behaviorAction || 'SKIP', lastDecisionAt: mode ? Date.now() : 0 });
+        if (storyAligned) updateCharacterRuntime(scopeKey, contact.id, { existenceMode: 'story_aligned', sourceId: String(contact?.source?.sourceId || ''), storyTime: getCurrentTavernStoryTimeState(), storySignature, lastAttentionReason: mode || 'baseline', lastAttentionAt: Date.now(), lastDecision: finalBehaviorAction || 'SKIP', lastDecisionAt: mode ? Date.now() : 0 });
         if (mode === 'social-event' || (mode === 'chat' && socialEvents.length)) runtimePatch.pendingSocialEvents = [];
         if (mode === 'commentary' && commentaryEvent?.type === 'ai_message') {
           runtimePatch.lastCommentaryEvaluationBodyCount = bodyCount;
