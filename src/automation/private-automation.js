@@ -12,6 +12,7 @@ import { recordLifeLog, listLifeLogs } from '../storage/life-log-store.js';
 import { requestCommunityWake } from './community-wake-service.js';
 import { acquireWebSchedulerLease, releaseWebSchedulerLease } from './scheduler-lease.js';
 import { buildWebWakeRequest } from './wake-snapshot-builder.js';
+import { acquireCompanionWebLease, syncWakeRequestToCompanion } from '../companion/web-handoff.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -94,7 +95,8 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
     const body = getTavernAssistantTurnState();
     const revisions = getTavernMessageRevisionState();
     const now = Date.now();
-    const wakeLease = acquireWebSchedulerLease(now);
+    const companionLease = await acquireCompanionWebLease(scopeKey, now);
+    const wakeLease = companionLease.acquired ? acquireWebSchedulerLease(now) : { acquired: false, lease: companionLease.lease || {} };
 
     let editedEvent = null;
     if (revisions.available) {
@@ -230,6 +232,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           },
           metadata: { schedulerOwner: 'web', schedulerEpoch: Number(wakeLease.lease?.epoch || 0) },
         });
+        void syncWakeRequestToCompanion(wakeRequest);
         if (a.externalWakeEnabled === true) {
           mode = 'character-wake';
           socialEvents = pendingSocialEvents;
