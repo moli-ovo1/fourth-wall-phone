@@ -8,7 +8,7 @@ import java.util.HashSet;
 import java.util.Set;
 import org.moli.companion.mcp.McpCapabilityRuntime;
 
-/** Android implementation of the portable headless boundary. Phase 313 executes Community only; external MCP remains gated. */
+/** Android implementation of the portable headless boundary for Community + authorized MCP capabilities. */
 public final class AndroidHeadlessWakeExecutor {
     private final OpenAiCompatibleClient ai; private final McpCapabilityRuntime mcp;
     public AndroidHeadlessWakeExecutor(OpenAiCompatibleClient ai) { this(ai, null); }
