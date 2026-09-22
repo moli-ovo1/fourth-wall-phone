@@ -262,6 +262,7 @@ export async function generatePrivateReply({
   allowNoPendingUser = false,
   fourthWallCommentary = null,
   regenerateFromMessageId = '',
+  confirmTool = null,
 } = {}) {
   if (!scopeKey || !conversationKey) {
     throw new Error('当前会话不可用');
@@ -464,6 +465,7 @@ export async function generatePrivateReply({
       request,
       signal,
       toolContext: { actorId: String(contact?.id || ''), origin: 'private_chat' },
+      confirmTool,
       adapter: {
         complete: ({ request: toolRequest, tools, history, signal: toolSignal }) =>
           completeProviderWithTools(config, toolRequest, { tools, history, signal: toolSignal }),
@@ -478,7 +480,11 @@ export async function generatePrivateReply({
       result = { text, raw: null, toolCalling: { usedTools: toolResult.usedTools, rounds: toolResult.rounds, discoveryErrors: toolResult.discoveryErrors } };
     }
   } else {
-    result = await generateProviderText(config, request, { signal, onDelta: isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false ? undefined : onDelta });
+    try {
+      result = await generateProviderText(config, request, { signal, onDelta: isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false ? undefined : onDelta });
+    } catch (error) {
+      throw new Error(`普通模型生成请求失败：${String(error?.message || error || '未知错误')}`, { cause: error });
+    }
   }
 
   if (momentEventIds.length) markMomentChatEventsDelivered(scopeKey, contact.id, momentEventIds);
