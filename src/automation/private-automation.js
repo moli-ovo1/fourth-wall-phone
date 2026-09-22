@@ -234,6 +234,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       running.add(key);
       beginGenerationTask(scopeKey, key, null, mode);
       let wakeToolRecords = [];
+      const wakeRunId = mode === 'character-wake' ? `wake:${Date.now()}:${String(contact.id || '').replace(/[^a-zA-Z0-9:_-]/g, '_')}` : '';
       let finalBehaviorAction = '';
       try {
         const isFourthWall = isFourthWallContact;
@@ -284,7 +285,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
               entrypoint: mode === 'social-event' ? 'social-event-decision' : 'proactive-private-decision',
             });
         if (mode === 'character-wake') {
-          recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: '自主醒来', summary: '获得一次自主生活机会，正在决定是否行动。', source: 'Character Wake', metadata: { autonomous: true, phase: 'start' } });
+          recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: '有了一点自己的时间', summary: '闲下来了一会儿，看看有没有什么想做的。', source: 'Character Wake', metadata: { autonomous: true, phase: 'start', wakeRunId } });
         }
         let wakeAbortController = null;
         let wakeTimeout = null;
@@ -311,7 +312,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         if (wakeToolRecords.length) {
           for (const toolRecord of wakeToolRecords) {
             const safeResult = String(toolRecord?.resultText || '').replace(/https?:\/\/[^\s]+\/ctai[_\/\-]?v?1[_\/\-]?[^\s"']*/gi, '[专属 MCP 身份地址已隐藏]').slice(0, 1800);
-            recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'mcp', title: `使用 ${String(toolRecord?.providerName || 'MCP')} · ${String(toolRecord?.name || 'tool')}`, summary: safeResult || '工具调用成功。', source: String(toolRecord?.providerName || 'MCP'), status: 'success', metadata: { autonomous: true, toolId: String(toolRecord?.toolId || ''), toolName: String(toolRecord?.name || '') } });
+            recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'mcp', title: `使用 ${String(toolRecord?.providerName || 'MCP')} · ${String(toolRecord?.name || 'tool')}`, summary: safeResult || '工具调用成功。', source: String(toolRecord?.providerName || 'MCP'), status: 'success', metadata: { autonomous: true, wakeRunId, toolId: String(toolRecord?.toolId || ''), toolName: String(toolRecord?.name || '') } });
             recordWorldEvent(scopeKey, {
               source: 'mcp.character-wake', actorId: contact.id, action: 'MCP_TOOL_USED', targetContactIds: [contact.id], objectId: String(toolRecord?.toolId || ''),
               content: `你在一次自主醒来中使用了 ${String(toolRecord?.providerName || '外部工具')} / ${String(toolRecord?.name || 'tool')}。${safeResult ? `真实结果：${safeResult}` : ''}`.slice(0, 2200),
@@ -399,7 +400,8 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         const runtimePatch = { lastAutoChatAt: (mode === 'chat' || (mode === 'social-event' && !storyAligned && a.autoChatEnabled)) ? Date.now() : Number(a.lastAutoChatAt || 0) };
         if (mode === 'character-wake') {
           runtimePatch.lastCharacterWakeAt = Date.now();
-          recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: wakeToolRecords.length ? '自主活动结束' : '这次没有行动', summary: wakeToolRecords.length ? `本轮自主醒来共执行 ${wakeToolRecords.length} 次外部工具调用。` : '醒来后决定不执行外部操作。', source: 'Character Wake', metadata: { autonomous: true, phase: 'end', toolCount: wakeToolRecords.length } });
+          recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: wakeToolRecords.length ? '出去转了一圈' : '今天没有出去', summary: wakeToolRecords.length ? `自己出去活动了一会儿，做了 ${wakeToolRecords.length} 件事。` : '这次没有使用外部工具。', source: 'Character Wake', metadata: { autonomous: true, phase: 'end', wakeRunId, toolCount: wakeToolRecords.length } });
+          window.dispatchEvent(new CustomEvent('moli:community-wake-request',{detail:{scopeKey,actorId:String(contact.id||''),actorName:String(contact.name||''),source:'character-wake'}}));
         }
         if (storyAligned && storySignature) runtimePatch.lastStoryAlignedBodySignature = storySignature;
         if (storyAligned) updateCharacterRuntime(scopeKey, contact.id, { existenceMode: 'story_aligned', sourceId: String(contact?.source?.sourceId || ''), storyTime: getCurrentTavernStoryTimeState(), storySignature, lastAttentionReason: mode || 'baseline', lastAttentionAt: Date.now(), lastDecision: finalBehaviorAction || 'SKIP', lastDecisionAt: mode ? Date.now() : 0 });
