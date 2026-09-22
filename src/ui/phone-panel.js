@@ -3658,11 +3658,11 @@ export function createPhonePanel({
       const payload = {
         prompt: contactProfilePrompt?.value || '',
       };
-      if (['custom', 'tavern'].includes(item.kind)) {
-        payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false, activationMode: row.querySelector('[data-profile-entry-mode]')?.value === 'keywords' ? 'keywords' : 'always', keywords: row.querySelector('[data-profile-entry-keywords]')?.value || '' }));
-      }
       if (item.kind !== 'tavern') {
         payload.intro = contactProfileIntro?.value || '';
+        if (['custom', 'tavern'].includes(item.kind)) {
+          payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false, activationMode: row.querySelector('[data-profile-entry-mode]')?.value === 'keywords' ? 'keywords' : 'always', keywords: row.querySelector('[data-profile-entry-keywords]')?.value || '' }));
+        }
         if (item.kind === 'custom') {
           const bookName = String(profileWorldBookSelect?.value || '').trim();
           const mainEntryKey = String(profileMainEntrySelect?.value || '');
@@ -6658,7 +6658,17 @@ export function createPhonePanel({
         ? result.replies
         : [{
             contact: result.contact,
-            messages: privateFourthWall ? fourthWallParsed.messages : parseGeneratedMessageActions(result.text),
+            // Private chat bubble range is a real output boundary, not prompt-only guidance.
+            // The prompt asks the model to choose naturally inside the range; the parser enforces
+            // the configured maximum so a malformed/overlong model reply cannot flood WeChat.
+            messages: privateFourthWall
+              ? fourthWallParsed.messages
+              : (() => {
+                  const bubbleSource = conversation.replyBubbleRange || result?.contact?.replyBubbleRange || {};
+                  const bubbleMin = Math.max(1, Math.min(12, Number(bubbleSource?.min) || 1));
+                  const bubbleMax = Math.max(bubbleMin, Math.min(12, Number(bubbleSource?.max) || 3));
+                  return parseGeneratedMessageActions(result.text).slice(0, bubbleMax);
+                })(),
             thinking: privateFourthWall ? fourthWallParsed.thinking : '',
           }];
 
