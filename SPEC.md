@@ -4913,3 +4913,11 @@ When an MCP account/identity tool returns a persistent role identity endpoint, m
 - 日志按角色筛选，面向用户展示自然语言活动轨迹；MCP 身份地址、Token/Authorization 等敏感内容在写入前脱敏。
 - 「他的生活」是用户可见运行账本，与 World Event 分层：日志可完整记录自主行为，World Event 仍只承担角色连续性事实。
 - 当前仅记录自主 Character Wake 路径；未来主动私聊、朋友圈、Garden 等自主行为统一接入同一账本。
+
+
+## moli303 / v0.6.56 — 自主生活开关拆分
+- 角色资料卡将原 Character Wake 拆为两个独立开关：`外部生活（MCP）` 与 `自主逛社区`，共享原有自主生活间隔。
+- 外部生活关闭时不会为了社区 Wake 额外调用 MCP/私聊生成链；社区 Wake 直接复用既有 Community Discovery。
+- 自主逛社区关闭时，MCP Wake 完成后不会再触发社区 Discovery。
+- 从 v0.6.55 升级时，旧 Character Wake 若已开启，两个新开关首次迁移均继承为开启，避免静默丢失既有行为；之后可分别保存。
+- 朋友圈、主动私聊及社区内部决策逻辑保持不变。
