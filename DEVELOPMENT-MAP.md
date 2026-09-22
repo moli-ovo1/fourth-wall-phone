@@ -1,3 +1,11 @@
+## moli291 / v0.6.44 — MCP 角色身份接管 + 敏感结果分层
+
+- CEDAR `account` 等工具返回专属 MCP 身份地址时，不再要求用户手工复制：moli 会请求确认，确认后按当前角色保存 endpoint override；其他角色与其他用户不会共享该身份。
+- 角色身份地址只保存在本地 MCP 配置的 actorEndpoints 中，不写入仓库/发布包；Tool Gateway 连接时按 actorId 自动选择角色专属 endpoint。
+- Observation 注入前对专属身份 URL、Bearer/Token/API Key 等明显凭证做脱敏；普通游戏结果仍完整回报。需要用户处理的身份切换由系统确认承接，不把“安全”做成吞掉工具结果。
+- Observation Router 增加最近对话作为参数衔接背景，并继续把本轮真实工具观察逐轮提供给 Router，改善 account → play 等连续工具调用时的参数继承。
+- 本版不自动无确认地切换身份，不把测试用户的 CEDAR 身份写死为默认配置。
+
 ## moli290 / v0.6.43 — MCP Observation 兼容层
 
 - 保留原生 OpenAI-compatible Tool Calling；当中转/模型的原生 `tools/tool_calls` 路径报错或返回不可用结果时，自动进入 Observation fallback。
