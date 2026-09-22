@@ -3658,11 +3658,11 @@ export function createPhonePanel({
       const payload = {
         prompt: contactProfilePrompt?.value || '',
       };
+      if (['custom', 'tavern'].includes(item.kind)) {
+        payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false, activationMode: row.querySelector('[data-profile-entry-mode]')?.value === 'keywords' ? 'keywords' : 'always', keywords: row.querySelector('[data-profile-entry-keywords]')?.value || '' }));
+      }
       if (item.kind !== 'tavern') {
         payload.intro = contactProfileIntro?.value || '';
-        if (['custom', 'tavern'].includes(item.kind)) {
-          payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false, activationMode: row.querySelector('[data-profile-entry-mode]')?.value === 'keywords' ? 'keywords' : 'always', keywords: row.querySelector('[data-profile-entry-keywords]')?.value || '' }));
-        }
         if (item.kind === 'custom') {
           const bookName = String(profileWorldBookSelect?.value || '').trim();
           const mainEntryKey = String(profileMainEntrySelect?.value || '');
