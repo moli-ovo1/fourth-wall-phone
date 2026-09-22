@@ -6,11 +6,13 @@ import org.moli.companion.contract.CompanionContracts;
 import org.moli.companion.provider.OpenAiCompatibleClient;
 import java.util.HashSet;
 import java.util.Set;
+import org.moli.companion.mcp.McpCapabilityRuntime;
 
 /** Android implementation of the portable headless boundary. Phase 313 executes Community only; external MCP remains gated. */
 public final class AndroidHeadlessWakeExecutor {
-    private final OpenAiCompatibleClient ai;
-    public AndroidHeadlessWakeExecutor(OpenAiCompatibleClient ai) { this.ai = ai; }
+    private final OpenAiCompatibleClient ai; private final McpCapabilityRuntime mcp;
+    public AndroidHeadlessWakeExecutor(OpenAiCompatibleClient ai) { this(ai, null); }
+    public AndroidHeadlessWakeExecutor(OpenAiCompatibleClient ai, McpCapabilityRuntime mcp) { this.ai = ai; this.mcp = mcp; }
 
     public JSONObject execute(JSONObject request) throws Exception {
         CompanionContracts.requireWakeRequest(request);
@@ -21,9 +23,24 @@ public final class AndroidHeadlessWakeExecutor {
             && request.optJSONObject("capabilities").optBoolean("communityDiscovery", false);
         JSONArray events = new JSONArray(), lifeEvents = new JSONArray();
         String decision = "SKIP";
+        boolean external = request.optJSONObject("schedule") != null
+            && request.optJSONObject("schedule").optBoolean("externalWakeEnabled", false)
+            && request.optJSONObject("capabilities") != null
+            && request.optJSONObject("capabilities").optBoolean("externalMcp", false);
+        boolean externalExecuted = false;
+        if (external && mcp != null) {
+            JSONObject x = mcp.execute(request); externalExecuted = true;
+            if ("MCP".equals(x.optString("decision", "SKIP"))) {
+                decision = "MCP"; long now = System.currentTimeMillis(); String wakeId=request.getString("wakeId"), actorId=request.getString("characterId"), actorName=request.optString("actorName",actorId);
+                String summary=x.optString("summary","完成了一次外部活动");
+                lifeEvents.put(new JSONObject().put("eventId",wakeId+":mcp-life:0").put("type","LIFE_EVENT").put("payload",new JSONObject().put("actorId",actorId).put("actorName",actorName).put("kind","mcp").put("title","进行了一次外部活动").put("summary",summary).put("source","Android Companion · MCP").put("createdAt",now).put("metadata",new JSONObject().put("toolCallCount",x.optJSONArray("toolCalls")==null?0:x.optJSONArray("toolCalls").length()))));
+                events.put(new JSONObject().put("eventId",wakeId+":mcp-continuity:0").put("type","CONTINUITY_EVENT").put("payload",new JSONObject().put("actorId",actorId).put("actorName",actorName).put("source","mcp.character-wake").put("action","MCP_TOOL_USED").put("content",summary).put("awareness","known").put("createdAt",now)));
+            }
+        }
         if (community) {
             JSONObject observation = executeCommunity(request);
-            decision = observation.optString("decision", "SKIP");
+            String communityDecision = observation.optString("decision", "SKIP");
+            if (!"SKIP".equals(communityDecision)) decision = "MCP".equals(decision) ? "MCP+" + communityDecision : communityDecision;
             copy(observation.optJSONArray("events"), events);
             copy(observation.optJSONArray("lifeEvents"), lifeEvents);
         }
@@ -36,7 +53,7 @@ public final class AndroidHeadlessWakeExecutor {
             .put("status", "completed").put("decision", decision)
             .put("startedAt", started).put("completedAt", System.currentTimeMillis())
             .put("events", events).put("continuityCandidates", new JSONArray()).put("lifeEvents", lifeEvents)
-            .put("metadata", new JSONObject().put("executor", "android-headless-v1").put("communityExecuted", community).put("externalExecuted", false));
+            .put("metadata", new JSONObject().put("executor", "android-headless-v2").put("communityExecuted", community).put("externalExecuted", externalExecuted));
         return CompanionContracts.requireWakeResult(result);
     }
 
