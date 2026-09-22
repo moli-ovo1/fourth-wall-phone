@@ -123,7 +123,7 @@ import { registerWallSourceProvider, listRegisteredWallSources } from '../storag
 import { listCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalendarEvent } from '../storage/calendar-store.js';
 import { listMcpServers, getMcpServer, saveMcpServer, deleteMcpServer } from '../storage/mcp-store.js';
 import { testMcpConnection } from '../integrations/mcp-client.js';
-import { getCompanionPairingToken, setCompanionPairingToken, probeCompanion } from '../companion/loopback-transport.js';
+import { getCompanionPairingToken, setCompanionPairingToken, probeCompanion, provisionCompanionMcpProfile } from '../companion/loopback-transport.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -8935,6 +8935,23 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
       activeMcpServerId = saved.id;
       updateMcpSettingsSummary();
       toast('MCP 已保存');
+      // Companion has a separate encrypted credential domain. When paired, mirror only the
+      // explicitly Wake-authorized profile over loopback; Wake Snapshot itself stays secret-free.
+      if (saved.access?.allowWake === true && getCompanionPairingToken()) {
+        const targets = saved.access?.scope === 'characters'
+          ? getContacts().filter(item => saved.access.characterIds?.includes(String(item?.id)))
+          : getContacts().filter(item => item && item.kind !== 'group');
+        for (const item of targets) {
+          const endpoint = String(saved.actorEndpoints?.[item.id] || saved.url || '').trim();
+          if (!endpoint) continue;
+          void provisionCompanionMcpProfile({ actorId:String(item.id), name:saved.name, endpoint,
+            bearer:saved.auth?.type === 'bearer' ? String(saved.auth?.token || '') : '',
+            headerName:saved.auth?.type === 'header' ? String(saved.auth?.headerName || '') : '',
+            headerValue:saved.auth?.type === 'header' ? String(saved.auth?.headerValue || '') : '', headers:saved.headers || {},
+            enabled:saved.enabled !== false, allowWrite:saved.access?.writePolicy !== 'deny' })
+            .catch(error => console.warn('[moli Companion] MCP credential provisioning failed', error));
+        }
+      }
       show('mcp-settings');
     } catch (error) { toast(error?.message || '保存 MCP 失败'); }
   });
