@@ -119,6 +119,8 @@ import { buildPhoneContext } from '../generation/phone-context-builder.js';
 import { getPrivatePhoneTraces, settlePrivatePhoneTraceRefresh } from '../storage/private-phone-trace-store.js';
 import { registerWallSourceProvider, listRegisteredWallSources } from '../storage/wall-source-registry.js';
 import { listCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalendarEvent } from '../storage/calendar-store.js';
+import { listMcpServers, getMcpServer, saveMcpServer, deleteMcpServer } from '../storage/mcp-store.js';
+import { testMcpConnection } from '../integrations/mcp/mcp-client.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -662,6 +664,13 @@ export function createPhonePanel({
           </span>
           <b>›</b>
         </button>
+        <button type="button" class="moli-settings-row" data-action="mcp-settings">
+          <span>
+            <strong>MCP 中心</strong>
+            <small data-mcp-settings-summary>外部工具连接</small>
+          </span>
+          <b>›</b>
+        </button>
         <button type="button" class="moli-settings-row" data-action="prompt-settings">
           <span>
             <strong>提示词与预设</strong>
@@ -679,6 +688,57 @@ export function createPhonePanel({
         <div class="moli-settings-note">
           当前聊天模式统一为线上即时通讯。预设负责所有联系人共用的线上聊天行为；联系人自身的人格与资料仍由联系人配置提供。
         </div>
+      </main>
+    </section>
+
+    <section class="moli-page" data-page="mcp-settings">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="mcp-settings-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">MCP 中心</div>
+        <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="mcp-add" aria-label="添加 MCP">＋</button></div>
+      </header>
+      <main class="moli-mcp-settings">
+        <div class="moli-settings-note">连接远程 HTTP/HTTPS MCP Server。当前阶段只负责连接、保存配置与发现工具，还不会把工具交给角色自动调用。</div>
+        <div class="moli-mcp-server-list" data-mcp-server-list></div>
+      </main>
+    </section>
+
+    <section class="moli-page" data-page="mcp-editor">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="mcp-editor-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title" data-mcp-editor-title>添加 MCP</div>
+        <div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-api-settings moli-api-clone-layout moli-mcp-editor">
+        <section class="moli-api-section">
+          <div class="moli-api-section-title">服务器</div>
+          <label class="moli-api-label"><span>名称</span><input class="moli-api-input" data-mcp-name type="text" maxlength="80" placeholder="例如：我的搜索 MCP"></label>
+          <label class="moli-api-label"><span>远程 MCP 地址</span><input class="moli-api-input" data-mcp-url type="url" placeholder="https://example.com/mcp"></label>
+          <label class="moli-api-check-row moli-mcp-enabled-row"><input type="checkbox" data-mcp-enabled checked><span>启用这个 MCP</span></label>
+        </section>
+        <section class="moli-api-section">
+          <div class="moli-api-section-title">认证</div>
+          <select class="moli-api-select" data-mcp-auth-type>
+            <option value="none">无认证</option>
+            <option value="bearer">Bearer Token</option>
+            <option value="header">自定义 Header</option>
+          </select>
+          <div data-mcp-bearer hidden><label class="moli-api-label"><span>Bearer Token</span><div class="moli-api-password-row"><input class="moli-api-input" data-mcp-token type="password" autocomplete="off"><button type="button" class="moli-api-mini-btn" data-action="mcp-toggle-token">显示</button></div></label></div>
+          <div data-mcp-header hidden>
+            <label class="moli-api-label"><span>Header 名称</span><input class="moli-api-input" data-mcp-header-name type="text" placeholder="X-API-Key"></label>
+            <label class="moli-api-label"><span>Header 值</span><div class="moli-api-password-row"><input class="moli-api-input" data-mcp-header-value type="password" autocomplete="off"><button type="button" class="moli-api-mini-btn" data-action="mcp-toggle-header">显示</button></div></label>
+          </div>
+          <div class="moli-api-hint">密钥只保存在当前 moli 用户的本地配置中，不会写进项目仓库。</div>
+        </section>
+        <section class="moli-api-section">
+          <div class="moli-api-section-title">连接测试</div>
+          <div class="moli-api-actions"><button type="button" class="moli-secondary-btn" data-action="mcp-test">测试连接</button><button type="button" class="moli-primary-btn" data-action="mcp-save">保存</button></div>
+          <div class="moli-api-status" data-mcp-status></div>
+          <div class="moli-mcp-tools" data-mcp-tools hidden></div>
+        </section>
+        <section class="moli-api-section moli-mcp-danger" data-mcp-delete-section hidden>
+          <button type="button" class="moli-secondary-btn moli-danger-inline" data-action="mcp-delete">删除这个 MCP</button>
+        </section>
       </main>
     </section>
 
@@ -1479,6 +1539,22 @@ export function createPhonePanel({
   const messageSearchInput = panel.querySelector('[data-message-search-input]');
   const messageSearchResults = panel.querySelector('[data-message-search-results]');
   const apiSettingsSummary = panel.querySelector('[data-api-settings-summary]');
+  const mcpSettingsSummary = panel.querySelector('[data-mcp-settings-summary]');
+  const mcpServerList = panel.querySelector('[data-mcp-server-list]');
+  const mcpEditorTitle = panel.querySelector('[data-mcp-editor-title]');
+  const mcpName = panel.querySelector('[data-mcp-name]');
+  const mcpUrl = panel.querySelector('[data-mcp-url]');
+  const mcpEnabled = panel.querySelector('[data-mcp-enabled]');
+  const mcpAuthType = panel.querySelector('[data-mcp-auth-type]');
+  const mcpBearer = panel.querySelector('[data-mcp-bearer]');
+  const mcpToken = panel.querySelector('[data-mcp-token]');
+  const mcpHeader = panel.querySelector('[data-mcp-header]');
+  const mcpHeaderName = panel.querySelector('[data-mcp-header-name]');
+  const mcpHeaderValue = panel.querySelector('[data-mcp-header-value]');
+  const mcpStatus = panel.querySelector('[data-mcp-status]');
+  const mcpTools = panel.querySelector('[data-mcp-tools]');
+  const mcpDeleteSection = panel.querySelector('[data-mcp-delete-section]');
+  let activeMcpServerId = '';
   const apiPreset = panel.querySelector('[data-api-preset]');
   const apiSource = panel.querySelector('[data-api-source]');
   const apiCustomSettings = panel.querySelector('[data-api-custom-settings]');
@@ -2214,6 +2290,104 @@ export function createPhonePanel({
       if (item) return displayName(item);
     }
     return conversationDisplayTitle(conversation) || '联系人';
+  }
+
+  function updateMcpSettingsSummary() {
+    if (!mcpSettingsSummary) return;
+    const servers = listMcpServers();
+    const enabled = servers.filter(item => item.enabled !== false).length;
+    mcpSettingsSummary.textContent = servers.length ? `${servers.length} 个连接 · ${enabled} 个启用` : '尚未添加 MCP';
+  }
+
+  function renderMcpServers() {
+    updateMcpSettingsSummary();
+    if (!mcpServerList) return;
+    const servers = listMcpServers();
+    if (!servers.length) {
+      mcpServerList.innerHTML = '<div class="moli-mcp-empty">还没有 MCP。点击右上角 ＋ 添加一个远程 MCP Server。</div>';
+      return;
+    }
+    mcpServerList.innerHTML = servers.map(item => `
+      <button type="button" class="moli-mcp-server-card" data-mcp-open="${escapeHtml(item.id)}">
+        <span class="moli-mcp-server-main"><strong>${escapeHtml(item.name || '未命名 MCP')}</strong><small>${escapeHtml(item.url || '未填写地址')}</small></span>
+        <span class="moli-mcp-server-state ${item.enabled !== false ? 'is-on' : ''}">${item.enabled !== false ? '已启用' : '已停用'}</span>
+        <b>›</b>
+      </button>`).join('');
+  }
+
+  function syncMcpAuthForm() {
+    const type = mcpAuthType?.value || 'none';
+    if (mcpBearer) mcpBearer.hidden = type !== 'bearer';
+    if (mcpHeader) mcpHeader.hidden = type !== 'header';
+  }
+
+  function setMcpStatus(text = '', kind = '') {
+    if (!mcpStatus) return;
+    mcpStatus.textContent = text;
+    mcpStatus.dataset.kind = kind;
+  }
+
+  function renderMcpTools(tools = []) {
+    if (!mcpTools) return;
+    const rows = Array.isArray(tools) ? tools : [];
+    mcpTools.hidden = !rows.length;
+    mcpTools.innerHTML = rows.length ? `<div class="moli-api-section-title">发现 ${rows.length} 个工具</div>${rows.map(tool => `<div class="moli-mcp-tool"><strong>${escapeHtml(tool?.name || '未命名工具')}</strong>${tool?.description ? `<small>${escapeHtml(tool.description)}</small>` : ''}</div>`).join('')}` : '';
+  }
+
+  function currentMcpFormServer() {
+    const existing = activeMcpServerId ? getMcpServer(activeMcpServerId) : null;
+    return {
+      ...(existing || {}),
+      ...(activeMcpServerId ? { id: activeMcpServerId } : {}),
+      name: mcpName?.value?.trim() || '未命名 MCP',
+      url: mcpUrl?.value?.trim() || '',
+      enabled: Boolean(mcpEnabled?.checked),
+      auth: {
+        type: mcpAuthType?.value || 'none',
+        token: mcpToken?.value || '',
+        headerName: mcpHeaderName?.value?.trim() || 'X-API-Key',
+        headerValue: mcpHeaderValue?.value || '',
+      },
+    };
+  }
+
+  function openMcpEditor(id = '') {
+    activeMcpServerId = String(id || '');
+    const item = activeMcpServerId ? getMcpServer(activeMcpServerId) : null;
+    if (mcpEditorTitle) mcpEditorTitle.textContent = item ? '编辑 MCP' : '添加 MCP';
+    if (mcpName) mcpName.value = item?.name || '';
+    if (mcpUrl) mcpUrl.value = item?.url || '';
+    if (mcpEnabled) mcpEnabled.checked = item?.enabled !== false;
+    if (mcpAuthType) mcpAuthType.value = item?.auth?.type || 'none';
+    if (mcpToken) { mcpToken.value = item?.auth?.token || ''; mcpToken.type = 'password'; }
+    if (mcpHeaderName) mcpHeaderName.value = item?.auth?.headerName || 'X-API-Key';
+    if (mcpHeaderValue) { mcpHeaderValue.value = item?.auth?.headerValue || ''; mcpHeaderValue.type = 'password'; }
+    if (mcpDeleteSection) mcpDeleteSection.hidden = !item;
+    syncMcpAuthForm();
+    setMcpStatus('');
+    renderMcpTools([]);
+    show('mcp-editor');
+  }
+
+  async function testCurrentMcp() {
+    const server = currentMcpFormServer();
+    setMcpStatus('正在连接 MCP Server…', 'loading');
+    renderMcpTools([]);
+    const button = panel.querySelector('[data-action="mcp-test"]');
+    if (button) button.disabled = true;
+    try {
+      const result = await testMcpConnection(server);
+      const serverName = result?.serverInfo?.name ? ` · ${result.serverInfo.name}` : '';
+      setMcpStatus(`连接成功${serverName} · 发现 ${result.tools.length} 个工具`, 'success');
+      renderMcpTools(result.tools);
+    } catch (error) {
+      console.error('[moli小手机] MCP connection test failed', error);
+      const message = String(error?.message || error || '未知错误');
+      const corsHint = /fetch|network|failed/i.test(message) ? '\n如果地址本身可用，可能是浏览器 CORS 限制；后续代理层会专门处理。' : '';
+      setMcpStatus(`连接失败：${message}${corsHint}`, 'error');
+    } finally {
+      if (button) button.disabled = false;
+    }
   }
 
   function apiSourceLabel(source) {
@@ -4501,6 +4675,11 @@ export function createPhonePanel({
 
     if (name === 'settings') {
       updateApiSettingsSummary();
+      updateMcpSettingsSummary();
+    }
+
+    if (name === 'mcp-settings') {
+      renderMcpServers();
     }
 
     if (name === 'api-settings') {
@@ -8584,6 +8763,40 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
 
   // 非阻塞后台检查；失败不影响手机初始化。
   checkExtensionUpdateAvailability();
+
+  panel.querySelector('[data-action="mcp-settings"]')?.addEventListener('click', () => show('mcp-settings'));
+  panel.querySelector('[data-action="mcp-settings-back"]')?.addEventListener('click', () => show('settings'));
+  panel.querySelector('[data-action="mcp-editor-back"]')?.addEventListener('click', () => show('mcp-settings'));
+  panel.querySelector('[data-action="mcp-add"]')?.addEventListener('click', () => openMcpEditor());
+  mcpServerList?.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-mcp-open]');
+    if (button) openMcpEditor(button.dataset.mcpOpen);
+  });
+  mcpAuthType?.addEventListener('change', syncMcpAuthForm);
+  panel.querySelector('[data-action="mcp-toggle-token"]')?.addEventListener('click', event => toggleSecret(mcpToken, event.currentTarget));
+  panel.querySelector('[data-action="mcp-toggle-header"]')?.addEventListener('click', event => toggleSecret(mcpHeaderValue, event.currentTarget));
+  panel.querySelector('[data-action="mcp-test"]')?.addEventListener('click', () => { void testCurrentMcp(); });
+  panel.querySelector('[data-action="mcp-save"]')?.addEventListener('click', () => {
+    try {
+      const server = currentMcpFormServer();
+      if (!/^https?:\/\//i.test(server.url)) { toast('MCP 地址必须以 http:// 或 https:// 开头'); return; }
+      const saved = saveMcpServer(server);
+      activeMcpServerId = saved.id;
+      updateMcpSettingsSummary();
+      toast('MCP 已保存');
+      show('mcp-settings');
+    } catch (error) { toast(error?.message || '保存 MCP 失败'); }
+  });
+  panel.querySelector('[data-action="mcp-delete"]')?.addEventListener('click', () => {
+    if (!activeMcpServerId) return;
+    const item = getMcpServer(activeMcpServerId);
+    if (!(windowRef.confirm?.(`删除 MCP“${item?.name || '未命名 MCP'}”？`) ?? true)) return;
+    deleteMcpServer(activeMcpServerId);
+    activeMcpServerId = '';
+    updateMcpSettingsSummary();
+    toast('MCP 已删除');
+    show('mcp-settings');
+  });
 
   panel.querySelector('[data-action="settings-home"]')?.addEventListener('click', () => show('phone-home'));
   panel.querySelector('[data-action="prompt-settings"]')?.addEventListener('click', () => show('prompt-settings'));
