@@ -1,3 +1,9 @@
+## moli288 / v0.6.41 — MCP Tool Calling 分阶段诊断
+
+- 不新增 MCP 功能；为首次真实 MCP 联调补充分阶段错误信息。
+- 区分 AI Tool Calling 首次请求、MCP 连接/初始化、tools/list、tools/call、工具结果回传模型等失败阶段。
+- 保持现有权限策略与聊天行为不变，便于定位 CEDAR 实机链路的真实断点。
+
 
 ## moli287 / v0.6.40 — MCP 私聊 Tool Calling 首次接线
 - MCP Tool Calling 首次接入角色私聊生成链；仅在 moli 自建 OpenAI Compatible API 且当前角色存在已授权工具时启用，未配置工具时保持原生成链。

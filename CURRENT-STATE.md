@@ -1,3 +1,9 @@
+## moli288 / v0.6.41 — MCP Tool Calling 分阶段诊断
+
+- CEDAR TOY 已实机通过 MCP 中心 initialize + tools/list，并发现 4 个工具。
+- 私聊 Tool Calling 曾出现裸 `Failed to fetch`；本版加入分阶段错误包装以定位具体断点。
+- 注意：写入/未声明工具若策略为“每次询问”，在确认 UI 尚未接入前不会暴露给模型；本版未改变该安全策略。
+
 
 ## moli287 / v0.6.40 — MCP 私聊 Tool Calling 首次接线
 - MCP Tool Calling 首次接入角色私聊生成链；仅在 moli 自建 OpenAI Compatible API 且当前角色存在已授权工具时启用，未配置工具时保持原生成链。
