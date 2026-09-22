@@ -3598,7 +3598,7 @@ export function createPhonePanel({
     if (restoreBuiltinPromptButton) restoreBuiltinPromptButton.hidden = item.kind !== 'builtin' || protectedBuiltinPersona;
     if (customProfileWorldBook) customProfileWorldBook.hidden = item.kind !== 'custom';
     if (item.kind === 'custom') renderCustomContactWorldBook(item);
-    if (customProfileEntries) customProfileEntries.hidden = item.kind !== 'custom';
+    if (customProfileEntries) customProfileEntries.hidden = !['custom', 'tavern'].includes(item.kind);
     if (customProfileEntryList) {
       const entries = Array.isArray(item.profileEntries) ? item.profileEntries : [];
       customProfileEntryList.innerHTML = entries.map((entry, index) => `<div class="moli-profile-entry" data-profile-entry="${index}"><div class="moli-profile-entry-head"><input type="checkbox" data-profile-entry-enabled ${entry.enabled !== false ? 'checked' : ''}><input type="text" data-profile-entry-title value="${escapeHtml(entry.title || `条目 ${index + 1}`)}" placeholder="条目名称"><button type="button" data-profile-entry-delete="${index}">删除</button></div><div class="moli-profile-entry-trigger"><select data-profile-entry-mode><option value="always" ${entry.activationMode !== 'keywords' ? 'selected' : ''}>常驻</option><option value="keywords" ${entry.activationMode === 'keywords' ? 'selected' : ''}>关键词触发</option></select><input type="text" data-profile-entry-keywords value="${escapeHtml(entry.keywords || '')}" placeholder="关键词，用逗号分隔；任一命中即激活" ${entry.activationMode === 'keywords' ? '' : 'hidden'}></div><textarea rows="6" data-profile-entry-content placeholder="填写这条人物设定、关系、习惯或其他资料">${escapeHtml(entry.content || '')}</textarea></div>`).join('');
@@ -3609,7 +3609,7 @@ export function createPhonePanel({
       if (contactIntroField) contactIntroField.hidden = true;
       if (contactPromptLabel) contactPromptLabel.textContent = '自定义附加 Prompt（可选）';
       if (contactProfilePrompt) contactProfilePrompt.placeholder = '例如：手机聊天时比正文稍微松弛，但仍保持克制，不使用网络流行语。';
-      if (contactPromptHint) contactPromptHint.textContent = '酒馆角色的人格 Source of Truth 始终是 SillyTavern 角色卡及其关联资料。这里负责筛选来源与补充 Prompt；当前正文、聊天历史、时间模式等动态上下文由当前 Conversation 管理。联系人简介仅用于 UI 展示，不进入酒馆角色生成 Prompt。';
+      if (contactPromptHint) contactPromptHint.textContent = '酒馆角色的人格 Source of Truth 始终是 SillyTavern 角色卡及其关联资料。下方资料条目只写 moli/手机侧新增补充，不需要复制角色卡或世界书；当前正文、聊天历史、时间模式等动态上下文由当前 Conversation 管理。联系人简介仅用于 UI 展示，不进入酒馆角色生成 Prompt。';
     } else if (item.kind === 'builtin') {
       if (contactPromptLabel) contactPromptLabel.textContent = '内置人格 Prompt';
       if (contactProfilePrompt) contactProfilePrompt.placeholder = '内置人格的系统 Prompt';
@@ -3660,6 +3660,9 @@ export function createPhonePanel({
       };
       if (item.kind !== 'tavern') {
         payload.intro = contactProfileIntro?.value || '';
+        if (['custom', 'tavern'].includes(item.kind)) {
+          payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false, activationMode: row.querySelector('[data-profile-entry-mode]')?.value === 'keywords' ? 'keywords' : 'always', keywords: row.querySelector('[data-profile-entry-keywords]')?.value || '' }));
+        }
         if (item.kind === 'custom') {
           const bookName = String(profileWorldBookSelect?.value || '').trim();
           const mainEntryKey = String(profileMainEntrySelect?.value || '');
@@ -3669,7 +3672,6 @@ export function createPhonePanel({
             return;
           }
           payload.customWorldBook = { bookName, mainEntryKey };
-          payload.profileEntries = [...(customProfileEntryList?.querySelectorAll('[data-profile-entry]') || [])].map((row, index) => ({ id: item.profileEntries?.[index]?.id || `entry:${Date.now()}:${index}`, title: row.querySelector('[data-profile-entry-title]')?.value || `条目 ${index + 1}`, content: row.querySelector('[data-profile-entry-content]')?.value || '', enabled: row.querySelector('[data-profile-entry-enabled]')?.checked !== false, activationMode: row.querySelector('[data-profile-entry-mode]')?.value === 'keywords' ? 'keywords' : 'always', keywords: row.querySelector('[data-profile-entry-keywords]')?.value || '' }));
         }
       } else {
         payload.roleSources = {
