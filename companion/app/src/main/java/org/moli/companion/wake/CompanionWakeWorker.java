@@ -9,6 +9,9 @@ import org.moli.companion.bridge.BridgeStore;
 import org.moli.companion.contract.CompanionContracts;
 import org.moli.companion.lease.SchedulerLeaseClient;
 import org.moli.companion.transport.LoopbackCompanionTransport;
+import org.moli.companion.provider.ProviderSettings;
+import org.moli.companion.provider.OpenAiCompatibleClient;
+import org.moli.companion.headless.AndroidHeadlessWakeExecutor;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,7 +34,7 @@ public final class CompanionWakeWorker extends Worker {
         LoopbackCompanionTransport transport = new LoopbackCompanionTransport(store);
         SchedulerLeaseClient leaseClient = new SchedulerLeaseClient(transport);
         List<String> scopes = store.listWakeScopes();
-        int due = 0, acquired = 0, waitingRuntime = 0;
+        int due = 0, acquired = 0, completed = 0;
         long now = System.currentTimeMillis();
         for (String scopeKey : scopes) {
             try {
@@ -41,16 +44,34 @@ public final class CompanionWakeWorker extends Worker {
                 String sessionId = "companion-worker-" + UUID.randomUUID();
                 if (!leaseClient.tryAcquire(scopeKey, sessionId, now, LEASE_TTL_MS)) continue;
                 acquired++;
-                // Phase 1B safety gate: scheduling/ownership is real now, execution is not.
-                // 313 installs the Android Headless capability runtime here. Until then we
-                // record only device-local diagnostics and never emit a fake character fact.
-                waitingRuntime++;
-                store.recordWorkerOpportunity(scopeKey, now, "waiting-capability-runtime");
+                JSONObject schedule = template.optJSONObject("schedule");
+                JSONObject capabilities = template.optJSONObject("capabilities");
+                boolean communityReady = schedule != null && schedule.optBoolean("communityWakeEnabled", false)
+                        && capabilities != null && capabilities.optBoolean("communityDiscovery", false);
+                if (!communityReady) {
+                    store.recordWorkerOpportunity(scopeKey, now, "waiting-mcp-runtime");
+                    continue;
+                }
+                ProviderSettings provider = new ProviderSettings(getApplicationContext());
+                if (!provider.configured()) {
+                    store.recordWorkerOpportunity(scopeKey, now, "provider-not-configured");
+                    continue;
+                }
+                // The Web snapshot is a reusable template. Every background opportunity must
+                // receive a fresh wakeId or journal/commit idempotency would collapse later wakes.
+                JSONObject request = new JSONObject(template.toString());
+                request.put("wakeId", template.optString("wakeId", "wake") + ":android:" + now + ":" + UUID.randomUUID());
+                request.put("requestedAt", now);
+                AndroidHeadlessWakeExecutor executor = new AndroidHeadlessWakeExecutor(new OpenAiCompatibleClient(provider));
+                JSONObject result = executor.execute(request);
+                transport.appendPendingWakeResult(result);
+                completed++;
+                store.recordWorkerOpportunity(scopeKey, now, "completed:" + result.optString("decision", "SKIP"));
             } catch (Exception error) {
                 store.recordWorkerOpportunity(scopeKey, now, "error:" + error.getClass().getSimpleName());
             }
         }
-        store.recordWorkerSummary(now, scopes.size(), due, acquired, waitingRuntime);
+        store.recordWorkerSummary(now, scopes.size(), due, acquired, completed);
         return Result.success();
     }
 
