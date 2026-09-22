@@ -1,4 +1,4 @@
-# moli Current Architecture — v0.6.60 / moli307
+# moli Current Architecture — v0.6.61 / moli308
 
 > This is the short authoritative architecture entry for future development. If an old TODO in SPEC.md conflicts with current code or this document, treat it as historical unless CURRENT-STATE.md says otherwise.
 
@@ -88,3 +88,8 @@ Before Story-Aligned controls Moments/Weibo/Community broadly, implement conserv
 - 新增 `src/automation/offline-wake-journal.js`：建立未提交 WakeResult 的 Offline Journal contract；写入前重新经过 Wake contract 的 Secret 校验，按 wakeId 去重；Journal 只保存 pending/短尾 committed 记录，不成为第二套人物/社区历史数据库。
 - 新增 `src/automation/wake-replay-harness.js`：提供不自动运行的 Web-only replay harness，可模拟 `WakeResult → Journal → recovery commit → duplicate replay`，验证 Commit ledger 的 wakeId/eventId 幂等边界。
 - 本版仍未创建 Android/APK，也未让 Journal 接管现有在线 Character Wake。下一步应做 Companion Phase 1A 收口测试与 canonical event adapters，确认真实 Community/Life/Continuity 事件可由同一 Commit 层回放后，再进入 Android Companion 骨架。
+
+
+## moli308 / v0.6.61 — Canonical Wake Event Adapters
+
+Companion Phase 1A now has real Web-side canonical adapters for portable WakeResult events. `COMMUNITY_POSTED` and `COMMUNITY_REPLIED` replay into the existing Public Web store; `LIFE_EVENT` replays into the existing Life Log; `CONTINUITY_EVENT` / `WORLD_EVENT` replay into the existing World Event store. Canonical stores accept stable event IDs so recovery after a partial replay remains idempotent. Unknown event types are rejected rather than guessed. The Web-only canonical replay harness proves `WakeResult → Offline Journal → canonical stores → duplicate replay` without Android.

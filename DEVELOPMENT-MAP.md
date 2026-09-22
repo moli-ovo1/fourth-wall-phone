@@ -3981,3 +3981,12 @@ Still next, without splitting into UI micro-patches:
 - 新增 `src/automation/offline-wake-journal.js`：建立未提交 WakeResult 的 Offline Journal contract；写入前重新经过 Wake contract 的 Secret 校验，按 wakeId 去重；Journal 只保存 pending/短尾 committed 记录，不成为第二套人物/社区历史数据库。
 - 新增 `src/automation/wake-replay-harness.js`：提供不自动运行的 Web-only replay harness，可模拟 `WakeResult → Journal → recovery commit → duplicate replay`，验证 Commit ledger 的 wakeId/eventId 幂等边界。
 - 本版仍未创建 Android/APK，也未让 Journal 接管现有在线 Character Wake。下一步应做 Companion Phase 1A 收口测试与 canonical event adapters，确认真实 Community/Life/Continuity 事件可由同一 Commit 层回放后，再进入 Android Companion 骨架。
+
+
+## moli308 / v0.6.61 — Companion Phase 1A：Canonical Event Adapters + Real Replay
+
+- 新增 `canonical-wake-event-adapters.js`：WakeResult 只描述事实，由 Web canonical adapter 决定写入现有正式 Store。
+- `COMMUNITY_POSTED` / `COMMUNITY_REPLIED` 回放到现有 Community/Public Web Store；`LIFE_EVENT` 回放到「他的生活」；`CONTINUITY_EVENT` / `WORLD_EVENT` 回放到现有 World Event。
+- Life Log 与 World Event 增加可选稳定 ID + 去重支持，为“事件已写入但 ledger 尚未来得及落盘”的恢复窗口提供第二层幂等保护；旧调用保持兼容。
+- 新增 canonical replay harness。Web-only 实测：首次回放 `committed`（4 个真实 canonical events），第二次同 wake `duplicate`，Journal pending=0；社区帖子=1、评论=1、Life Log=1、World Event=1。
+- 未创建 Android/APK；未让 Offline Journal 接管当前在线 Wake；未改现有 Community AI 决策、朋友圈或主动私聊。
