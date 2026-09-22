@@ -34,6 +34,13 @@ export function sanitizeMcpServer(raw = {}) {
       headerValue: String(auth.headerValue || ''),
     },
     headers: normalizeHeaders(raw.headers),
+    access: {
+      scope: raw.access?.scope === 'characters' ? 'characters' : 'global',
+      characterIds: Array.isArray(raw.access?.characterIds) ? [...new Set(raw.access.characterIds.map(x => String(x || '').trim()).filter(Boolean))] : [],
+      allowWake: raw.access?.allowWake === true,
+      readPolicy: ['allow', 'confirm', 'deny'].includes(raw.access?.readPolicy) ? raw.access.readPolicy : 'allow',
+      writePolicy: ['allow', 'confirm', 'deny'].includes(raw.access?.writePolicy) ? raw.access.writePolicy : 'confirm',
+    },
     createdAt: Number(raw.createdAt) || Date.now(),
     updatedAt: Number(raw.updatedAt) || Date.now(),
   };
