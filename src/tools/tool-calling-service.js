@@ -6,11 +6,13 @@ function safeJson(value) {
   try { return JSON.stringify(value); } catch { return JSON.stringify({ error: '工具结果无法序列化' }); }
 }
 
+function modelToolName(index) { return `moli_tool_${index + 1}`; }
+
 function asOpenAiTools(tools) {
-  return tools.map(tool => ({
+  return tools.map((tool, index) => ({
     type: 'function',
     function: {
-      name: tool.id,
+      name: modelToolName(index),
       description: [tool.providerName, tool.description].filter(Boolean).join('｜').slice(0, 1024),
       parameters: tool.inputSchema && typeof tool.inputSchema === 'object'
         ? tool.inputSchema
@@ -44,10 +46,11 @@ export async function runToolCalling({
   toolFilter = null,
   onToolCall = null,
   onToolResult = null,
+  toolContext = null,
 } = {}) {
   if (!adapter || typeof adapter.complete !== 'function') throw new Error('缺少 Tool Calling 模型适配器');
 
-  const discovery = await listAvailableTools({ signal });
+  const discovery = await listAvailableTools({ signal, ...(toolContext && typeof toolContext === 'object' ? toolContext : {}) });
   const available = typeof toolFilter === 'function'
     ? discovery.tools.filter(tool => toolFilter(tool) !== false)
     : discovery.tools;
@@ -62,7 +65,7 @@ export async function runToolCalling({
     };
   }
 
-  const toolMap = new Map(available.map(tool => [tool.id, tool]));
+  const toolMap = new Map(available.map((tool, index) => [modelToolName(index), tool]));
   const history = [];
   const usedTools = [];
   const rounds = Math.max(1, Math.min(8, Number(maxRounds) || DEFAULT_MAX_ROUNDS));
@@ -95,7 +98,7 @@ export async function runToolCalling({
       if (!tool) throw new Error(`模型请求了未授权的工具：${toolId || '未知'}`);
       const args = parseArgs(call?.arguments);
       onToolCall?.({ tool, args, call, round });
-      const execution = await invokeTool(tool.id, args, { signal });
+      const execution = await invokeTool(tool.id, args, { signal, ...(toolContext && typeof toolContext === 'object' ? toolContext : {}) });
       const resultText = safeJson(execution.result);
       const record = {
         callId: String(call?.id || `${round}:${tool.id}`),

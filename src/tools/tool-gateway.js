@@ -91,7 +91,10 @@ export async function listAvailableTools(options = {}) {
       const remoteTools = await client.listTools();
       for (const remoteTool of remoteTools) {
         const normalized = normalizeTool(server, remoteTool);
-        if (normalized) tools.push(normalized);
+        if (!normalized) continue;
+        const decision = accessDecision(server, remoteTool, options);
+        if (!decision.allowed) continue;
+        tools.push(normalized);
       }
     } catch (error) {
       errors.push({
