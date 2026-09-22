@@ -9,6 +9,7 @@ import { buildPhoneContext } from '../generation/phone-context-builder.js';
 import { buildCharacterDecisionInstruction } from '../generation/character-decision.js';
 import { updateCharacterRuntime } from '../storage/character-runtime-store.js';
 import { recordLifeLog, listLifeLogs } from '../storage/life-log-store.js';
+import { requestCommunityWake } from './community-wake-service.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -214,7 +215,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           socialEvents = pendingSocialEvents;
         } else {
           updatePrivateAutomationRuntime(scopeKey, key, { lastCharacterWakeAt: Date.now() });
-          window.dispatchEvent(new CustomEvent('moli:community-wake-request',{detail:{scopeKey,actorId:String(contact.id||''),actorName:String(contact.name||''),source:'community-wake'}}));
+          void requestCommunityWake({ scopeKey, actorId: String(contact.id || ''), actorName: String(contact.name || ''), source: 'community-wake' });
           continue;
         }
       } else if (
@@ -407,7 +408,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         if (mode === 'character-wake') {
           runtimePatch.lastCharacterWakeAt = Date.now();
           recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: wakeToolRecords.length ? '出去转了一圈' : '今天没有出去', summary: wakeToolRecords.length ? `自己出去活动了一会儿，做了 ${wakeToolRecords.length} 件事。` : '这次没有使用外部工具。', source: 'Character Wake', metadata: { autonomous: true, phase: 'end', wakeRunId, toolCount: wakeToolRecords.length } });
-          if (a.communityWakeEnabled === true) window.dispatchEvent(new CustomEvent('moli:community-wake-request',{detail:{scopeKey,actorId:String(contact.id||''),actorName:String(contact.name||''),source:'character-wake'}}));
+          if (a.communityWakeEnabled === true) void requestCommunityWake({ scopeKey, actorId: String(contact.id || ''), actorName: String(contact.name || ''), source: 'character-wake' });
         }
         if (storyAligned && storySignature) runtimePatch.lastStoryAlignedBodySignature = storySignature;
         if (storyAligned) updateCharacterRuntime(scopeKey, contact.id, { existenceMode: 'story_aligned', sourceId: String(contact?.source?.sourceId || ''), storyTime: getCurrentTavernStoryTimeState(), storySignature, lastAttentionReason: mode || 'baseline', lastAttentionAt: Date.now(), lastDecision: finalBehaviorAction || 'SKIP', lastDecisionAt: mode ? Date.now() : 0 });
