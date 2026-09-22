@@ -3407,9 +3407,10 @@ export function createPhonePanel({
           <div class="moli-compact-range-row moli-setting-line"><span>回复气泡条数</span><label><input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.min)||1)}" data-info-bubble-min> — <input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.max)||3)}" data-info-bubble-max></label></div>
           ${storyAlignedEligible ? `<label class="moli-switch-row moli-setting-line"><span>贴合正文的私聊 <small>实验</small></span><input type="checkbox" data-story-aligned-enabled ${conversation.automation?.storyAlignedEnabled === true ? 'checked' : ''}></label><div class="moli-setting-note">开启后，这个联系人视为当前正文中的同一个人；正文进展和他自己的手机经历共同决定是否私聊。此模式不受下方“主动私聊”开关与比例限制，关闭即可完整回到原机制。</div>` : ''}
           <label class="moli-inline-slider-row"><span><input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}>主动私聊</span><div><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}"><small data-auto-chat-value>${Number(conversation.automation?.autoChatProbability ?? 30)}%</small></div></label>
-          <label class="moli-switch-row moli-setting-line"><span>Character Wake <small>酒馆运行时</small></span><input type="checkbox" data-character-wake-enabled ${conversation.automation?.characterWakeEnabled === true ? 'checked' : ''}></label>
-          <label class="moli-compact-number-row moli-setting-line"><span>自主醒来间隔（分钟）</span><input type="number" min="15" max="720" step="15" value="${Number(conversation.automation?.characterWakeIntervalMinutes ?? 60)}" data-character-wake-interval></label>
-          <div class="moli-setting-note">开启后，只要酒馆页面仍在运行，角色会按间隔获得一次自主生活机会；可使用 MCP App 中已授权给 Character Wake 的工具。关闭酒馆后不会后台运行。</div>
+          <label class="moli-switch-row moli-setting-line"><span>外部生活（MCP） <small>酒馆运行时</small></span><input type="checkbox" data-external-wake-enabled ${conversation.automation?.externalWakeEnabled === true ? 'checked' : ''}></label>
+          <label class="moli-switch-row moli-setting-line"><span>自主逛社区 <small>酒馆运行时</small></span><input type="checkbox" data-community-wake-enabled ${conversation.automation?.communityWakeEnabled === true ? 'checked' : ''}></label>
+          <label class="moli-compact-number-row moli-setting-line"><span>自主生活间隔（分钟）</span><input type="number" min="15" max="720" step="15" value="${Number(conversation.automation?.characterWakeIntervalMinutes ?? 60)}" data-character-wake-interval></label>
+          <div class="moli-setting-note">两个开关彼此独立并共享同一间隔：外部生活只允许角色自主使用已授权的 MCP；自主逛社区只调用现有 Community Discovery。关闭酒馆后都不会后台运行。</div>
           <label class="moli-switch-row moli-setting-line"><span>允许社区触发主动私聊</span><input type="checkbox" data-community-private-enabled ${conversation.automation?.communityPrivateEnabled !== false ? 'checked' : ''}></label>
           <label class="moli-inline-slider-row"><span><input type="checkbox" data-commentary-enabled ${conversation.automation?.commentaryEnabled ? 'checked' : ''}>吐槽正文</span><div><input type="range" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}"><small data-commentary-value>${Number(conversation.automation?.commentaryProbability ?? 30)}%</small></div></label>
           <button type="button" class="moli-info-save-button" data-action="save-all-private-settings">保存设置</button>
@@ -3506,7 +3507,8 @@ export function createPhonePanel({
       replyBubbleRange:{min,max},
       title:chatInfo.querySelector('[data-info-chat-title]')?.value||'',
       autoChatEnabled:Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked), autoChatProbability,
-      characterWakeEnabled:Boolean(chatInfo.querySelector('[data-character-wake-enabled]')?.checked),
+      externalWakeEnabled:Boolean(chatInfo.querySelector('[data-external-wake-enabled]')?.checked),
+      communityWakeEnabled:Boolean(chatInfo.querySelector('[data-community-wake-enabled]')?.checked),
       characterWakeIntervalMinutes:Math.max(15,Math.min(720,Number(chatInfo.querySelector('[data-character-wake-interval]')?.value)||60)),
       storyAlignedEnabled: storyAlignedEligible ? Boolean(chatInfo.querySelector('[data-story-aligned-enabled]')?.checked) : false,
       storyAlignedSourceId: storyAlignedEligible && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(item?.source?.sourceId || '') : '',
@@ -3542,7 +3544,8 @@ export function createPhonePanel({
         updatePrivateConversationSettings(scopeKey, currentContactId, {
           autoChatEnabled: Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked),
           autoChatProbability,
-          characterWakeEnabled: Boolean(chatInfo.querySelector('[data-character-wake-enabled]')?.checked),
+          externalWakeEnabled: Boolean(chatInfo.querySelector('[data-external-wake-enabled]')?.checked),
+          communityWakeEnabled: Boolean(chatInfo.querySelector('[data-community-wake-enabled]')?.checked),
           characterWakeIntervalMinutes: Math.max(15, Math.min(720, Number(chatInfo.querySelector('[data-character-wake-interval]')?.value) || 60)),
           storyAlignedEnabled: storyAlignedEligibility(conversation, item, scopeKey) ? Boolean(chatInfo.querySelector('[data-story-aligned-enabled]')?.checked) : false,
           storyAlignedSourceId: storyAlignedEligibility(conversation, item, scopeKey) && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(item?.source?.sourceId || '') : '',
