@@ -1144,3 +1144,10 @@
 - Life Log 与 World Event 增加可选稳定 ID + 去重支持，为“事件已写入但 ledger 尚未来得及落盘”的恢复窗口提供第二层幂等保护；旧调用保持兼容。
 - 新增 canonical replay harness。Web-only 实测：首次回放 `committed`（4 个真实 canonical events），第二次同 wake `duplicate`，Journal pending=0；社区帖子=1、评论=1、Life Log=1、World Event=1。
 - 未创建 Android/APK；未让 Offline Journal 接管当前在线 Wake；未改现有 Community AI 决策、朋友圈或主动私聊。
+
+## moli309 / v0.6.62 — Companion Phase 1A 收口：Headless Executor Boundary
+- 新增 `headless-wake-executor.js`：定义不依赖 DOM / SillyTavern / canonical store / Android / Secret 的最小执行接口。运行环境只需注入 external/community capability handler；两端共享同一 secret-free WakeRequest，并只返回事实型 WakeResult。
+- 新增不自动运行的 `headless-wake-executor-harness.js`，验证同一 WakeRequest 可同时经过外部生活与社区两个 capability handler，并被标准化为带稳定 eventId 的 WakeResult。
+- Phase 1A 收口判断：portable contract、Snapshot projection、Scheduler Lease、Offline Journal、幂等 Commit、真实 canonical adapters、Headless Executor boundary 已齐。Web 当前在线行为仍沿用成熟路径，未强行切换到新 executor。
+- 已知且有意保留的 Phase 1B 边界：酒馆默认 `generateRaw()` 不能在 Companion 离线环境使用；Companion 必须使用独立 Provider/Credential Vault。Community 的 Web executor 仍可依赖现有 UI closure，但 Companion 只实现同一 Headless capability contract，不复制 canonical stores。
+- 下一阶段可进入 Companion Phase 1B：建立 Android Companion 最小骨架、Credential Vault、Lease/Journal transport；不得在 Kotlin 中复制第二套 moli canonical brain。

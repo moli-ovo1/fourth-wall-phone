@@ -4955,3 +4955,9 @@ When an MCP account/identity tool returns a persistent role identity endpoint, m
 - Life Log 与 World Event 增加可选稳定 ID + 去重支持，为“事件已写入但 ledger 尚未来得及落盘”的恢复窗口提供第二层幂等保护；旧调用保持兼容。
 - 新增 canonical replay harness。Web-only 实测：首次回放 `committed`（4 个真实 canonical events），第二次同 wake `duplicate`，Journal pending=0；社区帖子=1、评论=1、Life Log=1、World Event=1。
 - 未创建 Android/APK；未让 Offline Journal 接管当前在线 Wake；未改现有 Community AI 决策、朋友圈或主动私聊。
+
+## moli309 / v0.6.62 — Headless Wake Executor invariant
+- A Wake executor is an execution environment, not a canonical database owner. It consumes a secret-free WakeRequest and emits fact-only WakeResult events.
+- External MCP and Community are independent capabilities under the same request; a runtime may execute either, both, or neither according to schedule/capability flags.
+- Runtime-specific credentials are resolved outside WakeRequest. Companion credentials belong in its encrypted vault; portable snapshots/journals must remain secret-free.
+- Phase 1A Web boundary is complete enough to begin Android Companion Phase 1B without replacing current online Wake behavior.

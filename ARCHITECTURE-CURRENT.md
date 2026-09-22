@@ -93,3 +93,6 @@ Before Story-Aligned controls Moments/Weibo/Community broadly, implement conserv
 ## moli308 / v0.6.61 — Canonical Wake Event Adapters
 
 Companion Phase 1A now has real Web-side canonical adapters for portable WakeResult events. `COMMUNITY_POSTED` and `COMMUNITY_REPLIED` replay into the existing Public Web store; `LIFE_EVENT` replays into the existing Life Log; `CONTINUITY_EVENT` / `WORLD_EVENT` replay into the existing World Event store. Canonical stores accept stable event IDs so recovery after a partial replay remains idempotent. Unknown event types are rejected rather than guessed. The Web-only canonical replay harness proves `WakeResult → Offline Journal → canonical stores → duplicate replay` without Android.
+
+## moli309 / v0.6.62 — Headless execution boundary
+Companion Phase 1A closes with a portable executor boundary: `WakeRequest -> injected capability handlers -> WakeResult -> Offline Journal/Commit -> canonical stores`. The executor has no ownership of Community, World Event, Life Log or Character Runtime databases and receives no API/MCP secrets. Web may keep using its mature online paths while Android implements the same capability boundary. Phase 1B must therefore add an Android runtime, encrypted credential resolution and transport/lease mechanics—not a second moli brain.

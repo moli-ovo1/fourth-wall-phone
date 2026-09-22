@@ -3990,3 +3990,8 @@ Still next, without splitting into UI micro-patches:
 - Life Log 与 World Event 增加可选稳定 ID + 去重支持，为“事件已写入但 ledger 尚未来得及落盘”的恢复窗口提供第二层幂等保护；旧调用保持兼容。
 - 新增 canonical replay harness。Web-only 实测：首次回放 `committed`（4 个真实 canonical events），第二次同 wake `duplicate`，Journal pending=0；社区帖子=1、评论=1、Life Log=1、World Event=1。
 - 未创建 Android/APK；未让 Offline Journal 接管当前在线 Wake；未改现有 Community AI 决策、朋友圈或主动私聊。
+
+## moli309 / v0.6.62 — Companion Phase 1A closure
+- Headless executor contract is now explicit: portable WakeRequest in, injected capability handlers execute, fact-only WakeResult out.
+- Phase 1A is considered complete. Android Phase 1B may begin from this boundary; Companion must not own canonical Community/World Event/Life Log databases.
+- Phase 1B first targets: Android shell + encrypted Credential Vault + scheduler/lease transport + Offline Journal transport. Do not port the whole Web moli brain to Kotlin.
