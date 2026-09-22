@@ -3139,6 +3139,7 @@ export function createPhonePanel({
       const item = contact(conversation.contactId || currentContactId);
       if (!item) { chatInfo.innerHTML = '<div class="moli-placeholder">联系人不存在。</div>'; return; }
       const isTavern = item.kind === 'tavern';
+      const storyAlignedEligible = storyAlignedEligibility(conversation, item);
       const sourceMissing = isTavern && item.source?.status === 'missing';
       if (infoEntrySource === 'contacts') {
         const scopeTag = privateConversationScopeAnnotation(conversation);
@@ -3182,6 +3183,7 @@ export function createPhonePanel({
           <label class="moli-compact-select-row moli-setting-line"><span>时间模式</span><select data-info-time-mode><option value="body" ${quickTimeMode==='body'?'selected':''}>跟随正文时间</option><option value="real" ${quickTimeMode==='real'?'selected':''}>现实世界时间</option></select></label>
           <label class="moli-compact-number-row moli-setting-line"><span>角色读取轮数</span><input type="number" min="10" max="9999" value="${quickRecentLimit}" data-info-recent-limit></label>
           <div class="moli-compact-range-row moli-setting-line"><span>回复气泡条数</span><label><input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.min)||1)}" data-info-bubble-min> — <input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.max)||3)}" data-info-bubble-max></label></div>
+          ${storyAlignedEligible ? `<label class="moli-switch-row moli-setting-line"><span>贴合正文的私聊 <small>实验</small></span><input type="checkbox" data-story-aligned-enabled ${conversation.automation?.storyAlignedEnabled === true ? 'checked' : ''}></label><div class="moli-setting-note">开启后，这个联系人视为当前正文中的同一个人；正文进展和他自己的手机经历共同决定是否私聊。此模式不受下方“主动私聊”开关与比例限制，关闭即可完整回到原机制。</div>` : ''}
           <label class="moli-inline-slider-row"><span><input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}>主动私聊</span><div><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}"><small data-auto-chat-value>${Number(conversation.automation?.autoChatProbability ?? 30)}%</small></div></label>
           <label class="moli-switch-row moli-setting-line"><span>允许社区触发主动私聊</span><input type="checkbox" data-community-private-enabled ${conversation.automation?.communityPrivateEnabled !== false ? 'checked' : ''}></label>
           <label class="moli-inline-slider-row"><span><input type="checkbox" data-commentary-enabled ${conversation.automation?.commentaryEnabled ? 'checked' : ''}>吐槽正文</span><div><input type="range" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}"><small data-commentary-value>${Number(conversation.automation?.commentaryProbability ?? 30)}%</small></div></label>
@@ -3271,6 +3273,7 @@ export function createPhonePanel({
     const max=Math.max(min,Math.min(12,Number(chatInfo.querySelector('[data-info-bubble-max]')?.value)||3));
     const autoChatProbability=Math.max(0,Math.min(100,Number(chatInfo.querySelector('[data-auto-chat-probability]')?.value)||0));
     const commentaryProbability=Math.max(0,Math.min(100,Number(chatInfo.querySelector('[data-commentary-probability]')?.value)||0));
+    const storyAlignedEligible = storyAlignedEligibility(conversation, item, scopeKey);
     updatePrivateConversationSettings(scopeKey,currentContactId,{
       bodyContextEnabled: conversation.scopeMode === 'global' && !specialPersonaIds.has(String(item.id || '')) ? Boolean(chatInfo.querySelector('[data-info-body-context]')?.checked) : true,
       timeMode:chatInfo.querySelector('[data-info-time-mode]')?.value==='real'?'real':'body',
@@ -3278,6 +3281,9 @@ export function createPhonePanel({
       replyBubbleRange:{min,max},
       title:chatInfo.querySelector('[data-info-chat-title]')?.value||'',
       autoChatEnabled:Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked), autoChatProbability,
+      storyAlignedEnabled: storyAlignedEligible ? Boolean(chatInfo.querySelector('[data-story-aligned-enabled]')?.checked) : false,
+      storyAlignedSourceId: storyAlignedEligible && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(item?.source?.sourceId || '') : '',
+      storyAlignedScopeKey: storyAlignedEligible && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(getScopeKey?.() || '') : '',
       communityPrivateEnabled:Boolean(chatInfo.querySelector('[data-community-private-enabled]')?.checked),
       commentaryEnabled:Boolean(chatInfo.querySelector('[data-commentary-enabled]')?.checked), commentaryProbability,
     });
@@ -3309,6 +3315,9 @@ export function createPhonePanel({
         updatePrivateConversationSettings(scopeKey, currentContactId, {
           autoChatEnabled: Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked),
           autoChatProbability,
+          storyAlignedEnabled: storyAlignedEligibility(conversation, item, scopeKey) ? Boolean(chatInfo.querySelector('[data-story-aligned-enabled]')?.checked) : false,
+          storyAlignedSourceId: storyAlignedEligibility(conversation, item, scopeKey) && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(item?.source?.sourceId || '') : '',
+          storyAlignedScopeKey: storyAlignedEligibility(conversation, item, scopeKey) && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(scopeKey) : '',
           communityPrivateEnabled: Boolean(chatInfo.querySelector('[data-community-private-enabled]')?.checked),
           commentaryEnabled: Boolean(chatInfo.querySelector('[data-commentary-enabled]')?.checked),
           commentaryProbability,
@@ -4594,6 +4603,13 @@ export function createPhonePanel({
     try { raw = decodeURIComponent(raw); } catch {}
     raw = raw.replace(/\.(?:jsonl?|txt)$/i, '').trim();
     return raw;
+  }
+
+  function storyAlignedEligibility(conversation, item, scopeKey = getScopeKey?.()) {
+    if (!conversation || !item || item.kind !== 'tavern' || conversation.scopeMode === 'global') return false;
+    const currentStoryCharacter = getCurrentTavernCharacterSnapshot();
+    return String(currentStoryCharacter?.sourceId || '') === String(item?.source?.sourceId || '')
+      && (!conversation.boundScopeKey || String(conversation.boundScopeKey) === String(scopeKey || ''));
   }
 
   function privateConversationScopeAnnotation(conversation, ownTitle = '', item = null) {
@@ -7569,7 +7585,7 @@ export function createPhonePanel({
       const continuity=buildPhoneContext(scopeKey,contactId,{limit:30,query:`${post.title||''}\n${communityDiscussionContext(post)}\n${events.map(e=>e.content||'').join('\n')}`,userName:getTavernUserContext()?.name||'User'}).text;
       const conversationKey=privateConversationKeyFor(scopeKey,contactId);
       const privateConv=getScopeConversations(scopeKey).find(c=>String(c.conversationKey||c.id||'')===String(conversationKey));
-      const proactiveEnabled=privateConv?.automation?.autoChatEnabled===true;
+      const proactiveEnabled=(privateConv?.automation?.storyAlignedEnabled===true||privateConv?.automation?.autoChatEnabled===true);
       const selfAuthored=communitySelfAuthoredContext(post,contactId);
       const knownAliases=listKnownAnonymousIdentities(scopeKey,contactId).filter(x=>String(x.realContactId||'')===String(contactId)&&String(x.alias||'').trim()).map(x=>String(x.alias).trim()).filter((x,i,a)=>a.indexOf(x)===i);
       const instruction=`【moli社区自然参与判断】\n你之前已经参与过这篇${sourceLabel(post)}讨论。现在刷新时出现了你尚未判断的新变化。\n标题：${post.title||'无标题'}\n当前讨论：\n${communityDiscussionContext(post)}\n${selfAuthored?`\n\n【你本人此前在这篇讨论中说过的话】\n${selfAuthored}\n这些是你本人真实做过/说过的事，不是陌生网友发言。延续你当时已经形成的指代、立场和人物关系；除非后续事实明确改变，不要把自己原本指向自己或已知人物的称呼重新解释成一个凭空出现的第三人。`:''}\n\n【这次真正的新变化】\n${events.map(e=>`- ${e.content||e.action}`).join('\n')}\n${continuity?`\n【你自己的手机经历/认知】\n${continuity}`:''}${knownAliases.length?`\n【你已经实际使用过的公开小号】\n${knownAliases.join('、')}\n这些是你过去真实使用过的账号。若本次仍要用小号，优先延续已有账号；只有人物确实有理由创建新账号时才另取新ID。`:''}\n\n按照当前人物、已有经历与当前讨论自行决定。\nPUBLIC 可选 REPLY_REAL / REPLY_ANONYMOUS / SKIP。${proactiveEnabled?'PRIVATE 可独立选 SEND / SKIP。':'主动私聊权限关闭：PRIVATE 必须 SKIP。'}\n严格追加：<community_decision>REPLY_REAL|REPLY_ANONYMOUS|SKIP</community_decision><community_alias>小号时的网名</community_alias><community_reply>公开回复；SKIP 时留空</community_reply><community_private>SEND|SKIP</community_private><community_private_reason>简短原因</community_private_reason>；PRIVATE=SEND 时再输出 2~5 个 <msg>私聊内容</msg>。`;
@@ -7598,7 +7614,7 @@ export function createPhonePanel({
     }
     for(const item of targeted){
       const target=getContacts().find(x=>String(x.id)===String(item.targetId)); if(!target){done.push(item.id);continue;}
-      const scopeKey=getScopeKey?.(); const conversationKey=privateConversationKeyFor(scopeKey,target.id); const privateConv=getScopeConversations(scopeKey).find(c=>String(c.conversationKey||c.id||'')===String(conversationKey)); const proactiveEnabled=privateConv?.automation?.autoChatEnabled===true; const isAnswer=item.kind==='answer';
+      const scopeKey=getScopeKey?.(); const conversationKey=privateConversationKeyFor(scopeKey,target.id); const privateConv=getScopeConversations(scopeKey).find(c=>String(c.conversationKey||c.id||'')===String(conversationKey)); const proactiveEnabled=(privateConv?.automation?.storyAlignedEnabled===true||privateConv?.automation?.autoChatEnabled===true); const isAnswer=item.kind==='answer';
       markWorldEventsKnownByObjectTargets(scopeKey,[item.id]);
       const continuity=buildPhoneContext(scopeKey,target.id,{limit:30,query:`${post.title||''}\n${communityDiscussionContext(post)}\n${item.content||''}`,userName:getTavernUserContext()?.name||'User'}).text;
       const forcedMode=String(item.mentionMode||''); const forcedAlias=String(item.mentionAlias||'').trim();
@@ -8096,7 +8112,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
           }
         }
         const privateConv=getScopeConversations(scopeKey).filter(c=>c?.type==='private'&&String(c.contactId||'')===String(target.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
-        const canPrivate=privateConv?.automation?.autoChatEnabled===true&&privateConv?.automation?.communityPrivateEnabled!==false;
+        const canPrivate=(privateConv?.automation?.storyAlignedEnabled===true||(privateConv?.automation?.storyAlignedEnabled===true||privateConv?.automation?.autoChatEnabled===true))&&privateConv?.automation?.communityPrivateEnabled!==false;
         const privateAction=canPrivate?String(actor.privateAction||'SKIP').toUpperCase():'SKIP'; const privatePost=byId.get(String(actor.privatePostId||actor.actionPostId||''));
         if((privateAction==='MESSAGE'||privateAction==='SHARE')&&privatePost&&viewed.some(p=>String(p.id)===String(privatePost.id))){
           const conversationKey=privateConv?.conversationKey||privateConv?.id||privateConversationKeyFor(scopeKey,target.id);
