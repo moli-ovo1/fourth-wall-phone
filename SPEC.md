@@ -4874,3 +4874,10 @@ MCP 是 moli 的通用外部能力提供者，不默认等于角色权限。每�
 
 ### MCP persistent identity handoff (v0.6.47)
 When an MCP account/identity tool returns a persistent role identity endpoint, moli may offer to bind it to the current actor. On confirmation, the endpoint is stored as an actor-scoped override rather than replacing the shared server URL. This behavior must work identically in native Tool Calling and Observation Router fallback. The raw credential-bearing endpoint must not be exposed to the role model after handoff; the model receives a safe status summary. Other users and other actors must not inherit that endpoint.
+
+
+## moli298 / v0.6.51 — 「他的生活」自主活动账本
+- 主屏幕新增「他的生活」App，记录 Character Wake 的醒来、SKIP/无行动和真实 MCP 自主调用。
+- 日志按角色筛选，面向用户展示自然语言活动轨迹；MCP 身份地址、Token/Authorization 等敏感内容在写入前脱敏。
+- 「他的生活」是用户可见运行账本，与 World Event 分层：日志可完整记录自主行为，World Event 仍只承担角色连续性事实。
+- 当前仅记录自主 Character Wake 路径；未来主动私聊、朋友圈、Garden 等自主行为统一接入同一账本。

@@ -3910,3 +3910,10 @@ Still next, without splitting into UI micro-patches:
 - Keep the configured server endpoint as the shared/public entry; store accepted persistent identity endpoints in `actorEndpoints[actorId]` only.
 - Never bake a user's persistent MCP identity endpoint into the distribution package.
 - Tool history sent back to the role model must redact persistent identity URLs and common token/API-key/Bearer forms.
+
+
+## moli298 / v0.6.51 — 「他的生活」自主活动账本
+- 主屏幕新增「他的生活」App，记录 Character Wake 的醒来、SKIP/无行动和真实 MCP 自主调用。
+- 日志按角色筛选，面向用户展示自然语言活动轨迹；MCP 身份地址、Token/Authorization 等敏感内容在写入前脱敏。
+- 「他的生活」是用户可见运行账本，与 World Event 分层：日志可完整记录自主行为，World Event 仍只承担角色连续性事实。
+- 当前仅记录自主 Character Wake 路径；未来主动私聊、朋友圈、Garden 等自主行为统一接入同一账本。

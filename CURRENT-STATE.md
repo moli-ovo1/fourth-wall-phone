@@ -1061,3 +1061,10 @@
 - Identity handoff is now applied to both Observation Router fallback and native Tool Calling. An `account` result containing a persistent identity endpoint can be confirmed by the user and stored only as the current actor's MCP endpoint override.
 - The persistent endpoint/token is redacted before tool history is returned to the role model; the role receives only a safe system status after successful handoff.
 - This closes a gap where identity handoff previously existed only in the Observation fallback path.
+
+
+## moli298 / v0.6.51 — 「他的生活」自主活动账本
+- 主屏幕新增「他的生活」App，记录 Character Wake 的醒来、SKIP/无行动和真实 MCP 自主调用。
+- 日志按角色筛选，面向用户展示自然语言活动轨迹；MCP 身份地址、Token/Authorization 等敏感内容在写入前脱敏。
+- 「他的生活」是用户可见运行账本，与 World Event 分层：日志可完整记录自主行为，World Event 仍只承担角色连续性事实。
+- 当前仅记录自主 Character Wake 路径；未来主动私聊、朋友圈、Garden 等自主行为统一接入同一账本。

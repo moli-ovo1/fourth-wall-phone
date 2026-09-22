@@ -2882,3 +2882,15 @@
 
 /* moli296: MCP is a first-class phone app. */
 #moli-phone-panel .moli-mcp-app-tile{display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#23272b,#4a545d);color:#fff;font:700 15px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.06em}
+
+/* moli298 · 他的生活 */
+#moli-phone-panel .moli-life-app-tile{display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#f4eadb,#d9c7aa);color:#66533d;font:700 25px/1 serif}
+#moli-phone-panel .moli-life-log{height:100%;overflow:auto;padding:12px 12px 28px;box-sizing:border-box;background:rgba(247,244,238,.94)}
+#moli-phone-panel .moli-life-filter{display:flex;gap:7px;overflow-x:auto;padding:2px 0 12px;scrollbar-width:none}
+#moli-phone-panel .moli-life-filter button{flex:0 0 auto;border:0;border-radius:16px;padding:7px 12px;background:rgba(255,255,255,.78);color:#777;font-size:12px}
+#moli-phone-panel .moli-life-filter button.active{background:#272727;color:#fff}
+#moli-phone-panel .moli-life-list{display:flex;flex-direction:column;gap:10px}
+#moli-phone-panel .moli-life-card{padding:13px 14px;border-radius:15px;background:rgba(255,255,255,.9);box-shadow:0 2px 12px rgba(45,38,30,.06)}
+#moli-phone-panel .moli-life-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px;font-size:12px}.moli-life-head time{color:#aaa}
+#moli-phone-panel .moli-life-card>strong{display:block;font-size:14px;margin-bottom:5px}.moli-life-card p{margin:0 0 7px;white-space:pre-wrap;font-size:13px;line-height:1.55;color:#555}.moli-life-card>small{color:#aaa;font-size:11px}
+#moli-phone-panel .moli-life-empty{text-align:center;color:#999;padding:70px 20px;font-size:14px;line-height:1.7}.moli-life-empty small{font-size:12px}
