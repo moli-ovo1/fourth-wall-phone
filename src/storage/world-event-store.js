@@ -8,10 +8,11 @@ function load(scopeKey){ if(!isPersistentScopeKey(scopeKey)) return transientSta
 function save(scopeKey,state){ state.events=(state.events||[]).filter(Boolean).slice(-MAX_EVENTS); if(isPersistentScopeKey(scopeKey)) writeRaw(key(scopeKey),JSON.stringify(state)); else transientStates.set(String(scopeKey||''),state); }
 function makeId(){ return `world:${Date.now()}:${Math.random().toString(36).slice(2,9)}`; }
 function unique(values=[]){ return [...new Set((Array.isArray(values)?values:[values]).map(String).filter(Boolean))]; }
-export function recordWorldEvent(scopeKey,{source='phone',actorId='',action='EVENT',targetContactIds=[],objectId='',content='',metadata={},awareness='pending',dedupeKey=''}={}){
-  if(!scopeKey||!action)return null; const state=load(scopeKey); const targets=unique(targetContactIds); const now=Date.now(); const dk=String(dedupeKey||'');
-  if(dk){const old=[...state.events].reverse().find(e=>String(e?.dedupeKey||'')===dk&&now-Number(e?.createdAt||0)<5000);if(old)return old;}
-  const entry={id:makeId(),source:String(source||'phone'),actorId:String(actorId||''),action:String(action||'EVENT'),targetContactIds:targets,objectId:String(objectId||''),content:String(content||'').trim().slice(0,1600),metadata:metadata&&typeof metadata==='object'?metadata:{},dedupeKey:dk,createdAt:now,awareness:Object.fromEntries(targets.map(id=>[id,{state:awareness==='known'?'known':'pending',at:awareness==='known'?now:0}])),consumedBy:{}};
+export function recordWorldEvent(scopeKey,{id='',source='phone',actorId='',action='EVENT',targetContactIds=[],objectId='',content='',metadata={},awareness='pending',dedupeKey='',createdAt=Date.now()}={}){
+  if(!scopeKey||!action)return null; const state=load(scopeKey); const targets=unique(targetContactIds); const now=Number(createdAt||Date.now()); const dk=String(dedupeKey||''),rid=String(id||'').trim();
+  if(rid){const old=state.events.find(e=>String(e?.id||'')===rid);if(old)return old;}
+  if(dk){const old=[...state.events].reverse().find(e=>String(e?.dedupeKey||'')===dk&&Math.abs(now-Number(e?.createdAt||0))<5000);if(old)return old;}
+  const entry={id:rid||makeId(),source:String(source||'phone'),actorId:String(actorId||''),action:String(action||'EVENT'),targetContactIds:targets,objectId:String(objectId||''),content:String(content||'').trim().slice(0,1600),metadata:metadata&&typeof metadata==='object'?metadata:{},dedupeKey:dk,createdAt:now,awareness:Object.fromEntries(targets.map(id=>[id,{state:awareness==='known'?'known':'pending',at:awareness==='known'?now:0}])),consumedBy:{}};
   state.events.push(entry); save(scopeKey,state); return entry;
 }
 export function markWorldEventsKnown(scopeKey,contactId,eventIds=[]){ const ids=new Set(unique(eventIds)); if(!ids.size)return; const state=load(scopeKey),now=Date.now(),cid=String(contactId||''); for(const event of state.events){if(ids.has(String(event.id))&&event.targetContactIds?.includes(cid)){event.awareness ||= {}; event.awareness[cid]={state:'known',at:now};}} save(scopeKey,state); }
