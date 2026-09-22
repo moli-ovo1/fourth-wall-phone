@@ -7,7 +7,8 @@ import {
   getScopeConversations,
 } from '../storage/data-store.js';
 import { getApiSettings, getApiPreset, resolveApiRuntimeConfig } from '../storage/api-settings.js';
-import { generateProviderText } from '../api/providers/provider-registry.js';
+import { generateProviderText, completeProviderWithTools, supportsProviderToolCalling } from '../api/providers/provider-registry.js';
+import { runToolCalling } from '../tools/tool-calling-service.js';
 import {
   getTavernCharacterSnapshot,
   getTavernCharacterForContact,
@@ -458,6 +459,24 @@ export async function generatePrivateReply({
     if (!text) throw new Error('酒馆当前 API 返回了空回复');
     if (!(isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false)) onDelta?.(text, text);
     result = { text, raw: null };
+  } else if (!isFourthWall && supportsProviderToolCalling(config)) {
+    const toolResult = await runToolCalling({
+      request,
+      signal,
+      toolContext: { actorId: String(contact?.id || ''), origin: 'private_chat' },
+      adapter: {
+        complete: ({ request: toolRequest, tools, history, signal: toolSignal }) =>
+          completeProviderWithTools(config, toolRequest, { tools, history, signal: toolSignal }),
+      },
+    });
+    if (toolResult.skipped === 'no-tools') {
+      result = await generateProviderText(config, request, { signal, onDelta });
+    } else {
+      const text = String(toolResult.text || '').trim();
+      if (!text) throw new Error('工具调用完成后模型没有返回最终回复');
+      onDelta?.(text, text);
+      result = { text, raw: null, toolCalling: { usedTools: toolResult.usedTools, rounds: toolResult.rounds, discoveryErrors: toolResult.discoveryErrors } };
+    }
   } else {
     result = await generateProviderText(config, request, { signal, onDelta: isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false ? undefined : onDelta });
   }
