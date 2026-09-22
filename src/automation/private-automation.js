@@ -30,7 +30,8 @@ const autoChatEvaluationInterval = p => {
 const eligibleAutoChatContact = c => c && (c.kind === 'tavern' || c.kind === 'custom');
 const eligibleCommentaryContact = c => c && (c.kind === 'tavern' || c.kind === 'custom' || String(c.id || '') === 'builtin:meta');
 
-function parseBehaviorDecision(rawText = '', { allowPost = true, allowPrivate = true } = {}) {
+function parseBehaviorDecision(rawText = '', { allowPost = true, allowPrivate = true, maxPrivateMessages = 3 } = {}) {
+  const privateLimit = Math.max(1, Math.min(12, Number(maxPrivateMessages) || 3));
   const text = String(rawText || '').trim();
   const fallback = { action: 'SKIP', post: '', privateMessages: [] };
   if (!text) return fallback;
@@ -49,7 +50,7 @@ function parseBehaviorDecision(rawText = '', { allowPost = true, allowPrivate = 
         ? value.privateMessages
         : (value?.privateChat ? [value.privateChat] : value?.message ? [value.message] : []);
       const privateMessages = allowPrivate
-        ? rawPrivate.map(item => String(item || '').trim()).filter(Boolean).slice(0, 3)
+        ? rawPrivate.map(item => String(item || '').trim()).filter(Boolean).slice(0, privateLimit)
         : [];
       if (action === 'POST' && !post) action = 'SKIP';
       if (action === 'PRIVATE_CHAT' && !privateMessages.length) action = 'SKIP';
@@ -63,7 +64,7 @@ function parseBehaviorDecision(rawText = '', { allowPost = true, allowPrivate = 
   }
   // Automation 决策必须是 JSON，或至少显式使用 <msg>。绝不能把模型回显的世界书/记忆/正文素材当成一条主动私聊发送出去。
   if (/^\s*\[SKIP\]\s*$/i.test(text) || /\[SKIP\]/i.test(text)) return fallback;
-  const explicitMessages = [...text.matchAll(/<(?:message|msg)>([\s\S]*?)<\/(?:message|msg)>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean).slice(0,3);
+  const explicitMessages = [...text.matchAll(/<(?:message|msg)>([\s\S]*?)<\/(?:message|msg)>/gi)].map(m=>String(m[1]||'').trim()).filter(Boolean).slice(0, privateLimit);
   return allowPrivate && explicitMessages.length ? { action: 'PRIVATE_CHAT', post: '', privateMessages: explicitMessages } : fallback;
 }
 
@@ -276,7 +277,10 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           parsedThinking = parsed.thinking || '';
           behaviorAction = privateMessages.length ? 'PRIVATE_CHAT' : 'SKIP';
         } else {
-          const decision = parseBehaviorDecision(result.text, { allowPost, allowPrivate });
+          const bubbleSource = conv.replyBubbleRange || contact.replyBubbleRange || {};
+          const bubbleMin = Math.max(1, Math.min(12, Number(bubbleSource?.min) || 1));
+          const bubbleMax = Math.max(bubbleMin, Math.min(12, Number(bubbleSource?.max) || 3));
+          const decision = parseBehaviorDecision(result.text, { allowPost, allowPrivate, maxPrivateMessages: bubbleMax });
           behaviorAction = decision.action;
           postContent = decision.post;
           privateMessages = decision.privateMessages;
