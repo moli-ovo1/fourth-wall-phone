@@ -46,6 +46,8 @@ public final class BridgeStore {
             .putString("worker_summary", scopes + ":" + due + ":" + acquired + ":" + waitingRuntime).commit();
     }
     public synchronized String getWorkerSummary() { return prefs.getString("worker_summary", "0:0:0:0"); }
+    public synchronized String getWorkerStatus(String scope) { return prefs.getString(key("worker_status", scope), "never"); }
+    public synchronized int getPendingWakeResultCount(String scope) { return getWakeResults(scope).length(); }
     public synchronized long getWorkerSummaryAt() { return prefs.getLong("worker_summary_at", 0L); }
     public synchronized JSONObject getWakeRequest(String scope) { return object(key("wake", scope)); }
     public synchronized JSONObject getLease(String scope) { return object(key("lease", scope)); }
