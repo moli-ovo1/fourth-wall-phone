@@ -2,6 +2,7 @@ import {
   OPENAI_COMPATIBLE_DEFAULT_BASE_URL,
   listModels as listOpenAiCompatibleModels,
   generateText as generateOpenAiCompatibleText,
+  completeWithTools as completeOpenAiCompatibleWithTools,
 } from './openai-compatible.js';
 import {
   CLAUDE_DEFAULT_BASE_URL,
@@ -20,6 +21,7 @@ const PROVIDERS = Object.freeze({
     defaultBaseUrl: OPENAI_COMPATIBLE_DEFAULT_BASE_URL,
     listModels: listOpenAiCompatibleModels,
     generateText: generateOpenAiCompatibleText,
+    completeWithTools: completeOpenAiCompatibleWithTools,
   },
   claude: {
     label: 'Claude',
@@ -134,6 +136,23 @@ export async function generateProviderText(config, request, options = {}) {
       signal,
       onDelta: options.onDelta,
     }),
+    options.signal,
+    options.timeoutMs || 90000,
+  );
+}
+
+
+export function supportsProviderToolCalling(config) {
+  if (config?.source === 'tavern') return false;
+  try { return typeof getProviderDefinition(config?.provider)?.completeWithTools === 'function'; } catch { return false; }
+}
+
+export async function completeProviderWithTools(config, request, options = {}) {
+  if (config?.source === 'tavern') throw new Error('酒馆当前 API 暂不提供原生 Tool Calling 接口');
+  const definition = getProviderDefinition(config?.provider);
+  if (typeof definition.completeWithTools !== 'function') throw new Error(`当前 Provider 暂未接入原生 Tool Calling：${config?.provider || '未知'}`);
+  return withTimeoutAndExternalSignal(
+    signal => definition.completeWithTools(config, request, { ...options, fetchImpl: options.fetchImpl || fetch, signal }),
     options.signal,
     options.timeoutMs || 90000,
   );
