@@ -120,7 +120,7 @@ import { getPrivatePhoneTraces, settlePrivatePhoneTraceRefresh } from '../storag
 import { registerWallSourceProvider, listRegisteredWallSources } from '../storage/wall-source-registry.js';
 import { listCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalendarEvent } from '../storage/calendar-store.js';
 import { listMcpServers, getMcpServer, saveMcpServer, deleteMcpServer } from '../storage/mcp-store.js';
-import { testMcpConnection } from '../integrations/mcp-client.js';
+import { testMcpConnection } from '../integrations/mcp/mcp-client.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -729,6 +729,15 @@ export function createPhonePanel({
             <label class="moli-api-label"><span>Header 值</span><div class="moli-api-password-row"><input class="moli-api-input" data-mcp-header-value type="password" autocomplete="off"><button type="button" class="moli-api-mini-btn" data-action="mcp-toggle-header">显示</button></div></label>
           </div>
           <div class="moli-api-hint">密钥只保存在当前 moli 用户的本地配置中，不会写进项目仓库。</div>
+        </section>
+        <section class="moli-api-section">
+          <div class="moli-api-section-title">角色与安全权限</div>
+          <label class="moli-api-label"><span>可使用范围</span><select class="moli-api-select" data-mcp-scope><option value="global">所有角色</option><option value="characters">仅指定角色</option></select></label>
+          <div data-mcp-character-scope hidden><div class="moli-api-hint">选择允许使用这个 MCP 的联系人：</div><div class="moli-mcp-character-list" data-mcp-character-list></div></div>
+          <label class="moli-api-check-row"><input type="checkbox" data-mcp-allow-wake><span>允许 Character Wake 使用</span></label>
+          <label class="moli-api-label"><span>读取型工具</span><select class="moli-api-select" data-mcp-read-policy><option value="allow">允许自动调用</option><option value="confirm">每次询问</option><option value="deny">禁止</option></select></label>
+          <label class="moli-api-label"><span>写入 / 未声明工具</span><select class="moli-api-select" data-mcp-write-policy><option value="confirm">每次询问（推荐）</option><option value="allow">允许自动调用</option><option value="deny">禁止</option></select></label>
+          <div class="moli-api-hint">只有 MCP 明确标记 readOnlyHint 的工具才按“读取型”处理；未声明类型的工具默认按写入能力保护。</div>
         </section>
         <section class="moli-api-section">
           <div class="moli-api-section-title">连接测试</div>
@@ -1554,6 +1563,12 @@ export function createPhonePanel({
   const mcpStatus = panel.querySelector('[data-mcp-status]');
   const mcpTools = panel.querySelector('[data-mcp-tools]');
   const mcpDeleteSection = panel.querySelector('[data-mcp-delete-section]');
+  const mcpScope = panel.querySelector('[data-mcp-scope]');
+  const mcpCharacterScope = panel.querySelector('[data-mcp-character-scope]');
+  const mcpCharacterList = panel.querySelector('[data-mcp-character-list]');
+  const mcpAllowWake = panel.querySelector('[data-mcp-allow-wake]');
+  const mcpReadPolicy = panel.querySelector('[data-mcp-read-policy]');
+  const mcpWritePolicy = panel.querySelector('[data-mcp-write-policy]');
   let activeMcpServerId = '';
   const apiPreset = panel.querySelector('[data-api-preset]');
   const apiSource = panel.querySelector('[data-api-source]');
@@ -2321,6 +2336,14 @@ export function createPhonePanel({
     if (mcpHeader) mcpHeader.hidden = type !== 'header';
   }
 
+  function syncMcpScopeForm(selectedIds = null) {
+    if (mcpCharacterScope) mcpCharacterScope.hidden = (mcpScope?.value || 'global') !== 'characters';
+    if (!mcpCharacterList) return;
+    const selected = new Set(Array.isArray(selectedIds) ? selectedIds.map(String) : [...mcpCharacterList.querySelectorAll('input:checked')].map(x => String(x.value)));
+    const contacts = getContacts().filter(item => item && item.kind !== 'group');
+    mcpCharacterList.innerHTML = contacts.length ? contacts.map(item => `<label class="moli-api-check-row"><input type="checkbox" value="${escapeHtml(item.id)}" ${selected.has(String(item.id)) ? 'checked' : ''}><span>${escapeHtml(displayName(item))}</span></label>`).join('') : '<div class="moli-api-hint">暂无可选择联系人。</div>';
+  }
+
   function setMcpStatus(text = '', kind = '') {
     if (!mcpStatus) return;
     mcpStatus.textContent = text;
@@ -2342,6 +2365,13 @@ export function createPhonePanel({
       name: mcpName?.value?.trim() || '未命名 MCP',
       url: mcpUrl?.value?.trim() || '',
       enabled: Boolean(mcpEnabled?.checked),
+      access: {
+        scope: mcpScope?.value === 'characters' ? 'characters' : 'global',
+        characterIds: [...(mcpCharacterList?.querySelectorAll('input:checked') || [])].map(x => String(x.value)),
+        allowWake: Boolean(mcpAllowWake?.checked),
+        readPolicy: mcpReadPolicy?.value || 'allow',
+        writePolicy: mcpWritePolicy?.value || 'confirm',
+      },
       auth: {
         type: mcpAuthType?.value || 'none',
         token: mcpToken?.value || '',
@@ -2363,6 +2393,11 @@ export function createPhonePanel({
     if (mcpHeaderName) mcpHeaderName.value = item?.auth?.headerName || 'X-API-Key';
     if (mcpHeaderValue) { mcpHeaderValue.value = item?.auth?.headerValue || ''; mcpHeaderValue.type = 'password'; }
     if (mcpDeleteSection) mcpDeleteSection.hidden = !item;
+    if (mcpScope) mcpScope.value = item?.access?.scope === 'characters' ? 'characters' : 'global';
+    if (mcpAllowWake) mcpAllowWake.checked = item?.access?.allowWake === true;
+    if (mcpReadPolicy) mcpReadPolicy.value = item?.access?.readPolicy || 'allow';
+    if (mcpWritePolicy) mcpWritePolicy.value = item?.access?.writePolicy || 'confirm';
+    syncMcpScopeForm(item?.access?.characterIds || []);
     syncMcpAuthForm();
     setMcpStatus('');
     renderMcpTools([]);
@@ -8773,6 +8808,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     if (button) openMcpEditor(button.dataset.mcpOpen);
   });
   mcpAuthType?.addEventListener('change', syncMcpAuthForm);
+  mcpScope?.addEventListener('change', () => syncMcpScopeForm());
   panel.querySelector('[data-action="mcp-toggle-token"]')?.addEventListener('click', event => toggleSecret(mcpToken, event.currentTarget));
   panel.querySelector('[data-action="mcp-toggle-header"]')?.addEventListener('click', event => toggleSecret(mcpHeaderValue, event.currentTarget));
   panel.querySelector('[data-action="mcp-test"]')?.addEventListener('click', () => { void testCurrentMcp(); });
