@@ -6859,6 +6859,13 @@ export function createPhonePanel({
         : await generatePrivateReply({
             ...commonGenerationOptions,
             regenerateFromMessageId: regenerateMessageId,
+            confirmTool: async ({ tool, args }) => {
+              const provider = String(tool?.providerName || '未命名 MCP');
+              const name = String(tool?.name || '未知工具');
+              let argsText = '';
+              try { argsText = JSON.stringify(args || {}, null, 2); } catch {}
+              return Boolean(windowRef.confirm?.(`角色请求调用 MCP 工具：\n${provider} / ${name}\n\n参数：\n${argsText || '{}'}\n\n允许本次调用吗？`));
+            },
           });
 
       if (controller.signal.aborted) return;
