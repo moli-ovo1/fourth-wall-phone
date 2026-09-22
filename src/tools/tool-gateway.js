@@ -67,8 +67,14 @@ function accessDecision(server, tool, options = {}) {
   return { allowed: true, risk, policy };
 }
 
+function serverForActor(server, options = {}) {
+  const actorId = String(options.actorId || '').trim();
+  const actorUrl = actorId ? String(server?.actorEndpoints?.[actorId] || '').trim() : '';
+  return actorUrl ? { ...server, url: actorUrl } : server;
+}
+
 async function connect(server, options = {}) {
-  const client = new McpHttpClient(server, options);
+  const client = new McpHttpClient(serverForActor(server, options), options);
   await client.initialize();
   return client;
 }

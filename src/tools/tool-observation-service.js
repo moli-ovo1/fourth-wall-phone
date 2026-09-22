@@ -1,4 +1,5 @@
 import { listAvailableTools, invokeTool } from './tool-gateway.js';
+import { setMcpActorEndpoint } from '../storage/mcp-store.js';
 
 const MAX_ROUTER_ROUNDS = 3;
 
@@ -16,6 +17,27 @@ function toolSummary(tools) {
   return tools.map((tool, index) => `${index + 1}. id=${tool.id}\nname=${tool.name}\ndescription=${tool.description || ''}\ninputSchema=${json(tool.inputSchema || { type: 'object', properties: {} })}`).join('\n\n');
 }
 
+
+function recentConversationText(request) {
+  const messages = Array.isArray(request?.messages) ? request.messages : [];
+  return messages.slice(-8).map(item => `${item?.role || 'user'}: ${String(item?.content || '').slice(0, 1800)}`).join('\n');
+}
+
+function findIdentityEndpoint(value) {
+  let text = '';
+  try { text = JSON.stringify(value); } catch { text = String(value || ''); }
+  const urls = text.match(/https?:\/\/[^\s\"'<>]+/g) || [];
+  return urls.find(url => /\/ctai[_\/-]?v?1[_\/-]/i.test(url)) || '';
+}
+
+function redactSecrets(text, endpoint = '') {
+  let safe = String(text || '');
+  if (endpoint) safe = safe.split(endpoint).join('[专属 MCP 身份地址已由 moli 接管]');
+  safe = safe.replace(/(bearer\s+)[A-Za-z0-9._~+\/-]{16,}/gi, '$1[已隐藏]');
+  safe = safe.replace(/((?:token|api[_ -]?key|authorization)[\"'\s:=]+)[A-Za-z0-9._~+\/-]{16,}/gi, '$1[已隐藏]');
+  return safe;
+}
+
 function latestUserText(request) {
   const messages = Array.isArray(request?.messages) ? request.messages : [];
   for (let i = messages.length - 1; i >= 0; i -= 1) if (messages[i]?.role !== 'assistant') return String(messages[i]?.content || '');
@@ -27,7 +49,7 @@ function latestUserText(request) {
  * A small internal routing prompt chooses a tool; actual execution still goes through Tool Gateway
  * permissions and confirmation. Tool results are returned as observations for the normal character pass.
  */
-export async function collectToolObservations({ request, completeText, signal, toolContext = null, confirmTool = null, maxRounds = MAX_ROUTER_ROUNDS } = {}) {
+export async function collectToolObservations({ request, completeText, signal, toolContext = null, confirmTool = null, confirmIdentityHandoff = null, maxRounds = MAX_ROUTER_ROUNDS } = {}) {
   if (typeof completeText !== 'function') throw new Error('缺少 Observation Router 模型接口');
   const discovery = await listAvailableTools({ signal, includeConfirmationRequired: true, ...(toolContext || {}) });
   const tools = discovery.tools || [];
@@ -36,12 +58,13 @@ export async function collectToolObservations({ request, completeText, signal, t
   const observations = [];
   const usedTools = [];
   const userText = latestUserText(request);
+  const conversationText = recentConversationText(request);
   const rounds = Math.max(1, Math.min(5, Number(maxRounds) || MAX_ROUTER_ROUNDS));
 
   for (let round = 1; round <= rounds; round += 1) {
     const routerRequest = {
       system: `你是 moli 的内部工具路由器，不扮演角色，不与用户聊天。判断当前用户请求是否需要调用一个外部工具。\n只输出一个 JSON 对象，不要 Markdown。\n不需要工具：{"action":"none"}\n需要工具：{"action":"call","toolId":"完整工具id","arguments":{}}\n只能选择下面列出的工具，不得编造。若已有观察结果足够回答，应输出 none。\n\n可用工具：\n${toolSummary(tools)}`,
-      messages: [{ role: 'user', content: `用户当前请求：\n${userText}\n\n已经获得的外部观察：\n${observations.length ? observations.map((o, i) => `${i + 1}. ${o.providerName}/${o.name}: ${o.resultText}`).join('\n') : '（无）'}` }],
+      messages: [{ role: 'user', content: `用户当前请求：\n${userText}\n\n最近对话（只用于理解上下文与沿用已知参数，不得把角色台词当工具事实）：\n${conversationText || '（无）'}\n\n已经获得的外部观察：\n${observations.length ? observations.map((o, i) => `${i + 1}. ${o.providerName}/${o.name}: ${o.resultText}`).join('\n') : '（无）'}` }],
     };
     const routed = await completeText(routerRequest, signal);
     const decision = parseJsonObject(routed?.text ?? routed);
@@ -59,7 +82,23 @@ export async function collectToolObservations({ request, completeText, signal, t
       if (!confirmed) throw new Error(`用户取消了 MCP 工具调用 [${tool.providerName || '未命名 MCP'} / ${tool.name}]`);
       execution = await invokeTool(tool.id, args, { signal, confirmed: true, ...(toolContext || {}) });
     }
-    const resultText = json(execution.result);
+    const rawResultText = json(execution.result);
+    let resultText = rawResultText;
+    const identityEndpoint = tool.name === 'account' ? findIdentityEndpoint(execution.result) : '';
+    if (identityEndpoint && toolContext?.actorId) {
+      let accepted = false;
+      if (typeof confirmIdentityHandoff === 'function') {
+        accepted = await confirmIdentityHandoff({ tool, endpoint: identityEndpoint, actorId: String(toolContext.actorId), result: execution.result });
+      }
+      if (accepted) {
+        setMcpActorEndpoint(tool.providerId, toolContext.actorId, identityEndpoint);
+        resultText = `${redactSecrets(rawResultText, identityEndpoint)}\n[系统状态] moli 已为当前角色接管新的专属 MCP 身份地址；后续该角色访问此 MCP 时会自动使用，无需用户复制粘贴。`;
+      } else {
+        resultText = redactSecrets(rawResultText, identityEndpoint);
+      }
+    } else {
+      resultText = redactSecrets(rawResultText);
+    }
     const record = { toolId: tool.id, name: tool.name, providerName: tool.providerName, args, result: execution.result, resultText };
     observations.push(record);
     usedTools.push(record);
