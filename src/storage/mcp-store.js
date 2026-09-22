@@ -34,6 +34,7 @@ export function sanitizeMcpServer(raw = {}) {
       headerValue: String(auth.headerValue || ''),
     },
     headers: normalizeHeaders(raw.headers),
+    actorEndpoints: normalizeHeaders(raw.actorEndpoints),
     access: {
       scope: raw.access?.scope === 'characters' ? 'characters' : 'global',
       characterIds: Array.isArray(raw.access?.characterIds) ? [...new Set(raw.access.characterIds.map(x => String(x || '').trim()).filter(Boolean))] : [],
@@ -88,4 +89,17 @@ export function deleteMcpServer(id) {
   current.servers = current.servers.filter(item => item.id !== String(id));
   if (current.servers.length !== before) writeState(current);
   return current.servers.length !== before;
+}
+
+export function setMcpActorEndpoint(serverId, actorId, url) {
+  const server = getMcpServer(serverId);
+  const actor = String(actorId || '').trim();
+  const endpoint = String(url || '').trim();
+  if (!server || !actor || !/^https?:\/\//i.test(endpoint)) return null;
+  return saveMcpServer({ ...server, actorEndpoints: { ...(server.actorEndpoints || {}), [actor]: endpoint } });
+}
+
+export function getMcpActorEndpoint(serverId, actorId) {
+  const server = getMcpServer(serverId);
+  return String(server?.actorEndpoints?.[String(actorId || '').trim()] || '').trim();
 }
