@@ -16,11 +16,22 @@ export function endGenerationTask(scopeKey, conversationKey, controller = null) 
 export function getGenerationTask(scopeKey, conversationKey) {
   const key = keyOf(scopeKey, conversationKey);
   const task = tasks.get(key) || null;
-  // A task is an in-memory UI/runtime lock, not durable state. If an upstream request died
-  // without reaching its finally block (page/provider interruption), never leave WeChat locked forever.
-  if (task && Date.now() - Number(task.startedAt || 0) > 5 * 60 * 1000) {
+  // A task is only a live runtime lock while its AbortController is still usable.
+  // Some provider/page interruptions can abort the controller without reaching the caller's
+  // finally block. Treat that task as finished immediately instead of leaving the send button
+  // stuck in the stop/busy state until the stale timeout expires.
+  const controllerAlreadyFinished = Boolean(task?.controller?.signal?.aborted);
+  const stale = Boolean(task && Date.now() - Number(task.startedAt || 0) > 5 * 60 * 1000);
+  if (task && (controllerAlreadyFinished || stale)) {
     tasks.delete(key);
-    window.dispatchEvent(new CustomEvent('moli:generation-state', { detail: { scopeKey, conversationKey, active: false, source: task.source || 'stale-recovery' } }));
+    window.dispatchEvent(new CustomEvent('moli:generation-state', {
+      detail: {
+        scopeKey,
+        conversationKey,
+        active: false,
+        source: task.source || (controllerAlreadyFinished ? 'aborted-recovery' : 'stale-recovery'),
+      },
+    }));
     return null;
   }
   return task;
