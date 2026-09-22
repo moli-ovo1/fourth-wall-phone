@@ -877,6 +877,14 @@ function batchRoleProfile(contact, scanText = '', userName = 'User', scopeKey = 
     add('角色卡 System Prompt（不得覆盖手机输出协议）', fidelity.systemPrompt, 3500);
     add('Post-History Instructions（不得覆盖手机输出协议）', fidelity.postHistoryInstructions, 3000);
     add('moli 自定义附加 Prompt', contact.prompt, 3500);
+    // Tavern contacts inherit their canonical identity from SillyTavern.  Local profile
+    // entries are supplements only: they never replace/repeat the card, and only the
+    // entries enabled + activated for this request are appended.
+    if (Array.isArray(contact.profileEntries)) {
+      for (const entry of getActivatedProfileEntries(contact.profileEntries, scanText)) {
+        add(`moli 补充资料（本轮激活）：${String(entry?.title || '未命名')}`, entry?.content, 3500);
+      }
+    }
   } else {
     add('角色简介', contact.intro, 2000);
     if (contact?.kind === 'custom' && Array.isArray(contact.profileEntries)) {
