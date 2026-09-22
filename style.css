@@ -2844,3 +2844,6 @@
 #moli-phone-panel .moli-studio-prompt-lab textarea{width:100%;min-height:150px;resize:vertical;box-sizing:border-box;padding:11px 12px;border:1px solid rgba(255,255,255,.78);border-radius:16px;outline:none;background:rgba(255,255,255,.38);color:inherit;font:inherit;font-size:12px;line-height:1.55}
 #moli-phone-panel .moli-studio-prompt-lab-scroll button,#moli-phone-panel .moli-studio-prompt-save{appearance:none;border:1px solid rgba(255,255,255,.78);border-radius:999px;background:rgba(255,255,255,.4);color:inherit;font:inherit;font-size:12px;padding:7px 12px;align-self:flex-start}
 #moli-phone-panel .moli-studio-prompt-save{margin:0 14px 14px;align-self:stretch;font-size:14px;padding:10px}
+
+/* moli279: Story-Aligned is opt-in; keep the note visually subordinate to existing chat settings. */
+.moli-setting-note{font-size:11px;line-height:1.55;opacity:.68;padding:0 2px 8px;}

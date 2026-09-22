@@ -1,3 +1,27 @@
+# moli279 architecture checkpoint (v0.6.32)
+
+## Current construction boundary
+- `phone_native` remains the default existence mode. Legacy Automation, proactive tendency, privacy-blur knowledge, Moments/Community behavior must not be globally tightened or silently migrated.
+- `story_aligned` is opt-in and scope-bound. It means the Tavern contact and current正文 character are the same person; the phone is that person's actual phone in this story world.
+- Story-Aligned private permission belongs to the正文 character decision itself. The legacy `autoChatEnabled/autoChatProbability` controls are not gates for Story-Aligned private decisions.
+- Story-Aligned does **not** run legacy natural timed proactive evaluation. This prevents duplicate wakeups. Phone/social facts may still create attention opportunities.
+- Phone -> Story continuity is identity continuity, not “我们的墙” creative direction. Reuse Tavern Injection infrastructure but keep a separate prompt identity and strict per-character knowledge boundary.
+- `Character Runtime` is intentionally small: current existence mode / story binding / current story time-signature / latest attention-decision only. Historical facts stay in World Event / Awareness / Continuity / Memory.
+
+## Protected semantics
+- `autoChatProbability` remains the legacy phone-native initiative mechanism; do not reinterpret it as total life/activity frequency.
+- PEEK / VISIT / 已阅 / 删除评论理由 and other deliberate privacy-blur mechanics are product semantics, not leaks to “fix”.
+- Unified character brain means shared identity/runtime/knowledge/motivation inputs, **not** one universal action JSON. WeChat, Moments, Community, Weibo may retain surface-specific action spaces.
+- Life Loop remains the next architecture layer. It should reuse Character Runtime and unify attention scheduling without turning “being alive” into forced content generation.
+
+## Next after Story-Aligned field testing
+1. Add Story State Projector for structured current location/activity/availability with conservative unknowns.
+2. Add Attention Scheduler / Life Loop V2 behind an experimental boundary; do not replace phone-native legacy scheduler by default.
+3. Let Moments/Weibo/Community consume the same Runtime constraints incrementally after private-chat behavior is validated.
+4. Add revision/re-roll invalidation handling before Story-Aligned state is allowed to drive more surfaces.
+
+---
+
 ## moli278 / v0.6.31 — 编辑室提示词实验口
 - 编辑室右上角 `…` 新增 `编辑室提示词`，可直接编辑公共 Prompt、`Ta出场太少啦`、`帮我想梗`。
 - 保存后下一次生成立即读取本地版本；三个框均可独立恢复默认，刷新酒馆仍保留。
