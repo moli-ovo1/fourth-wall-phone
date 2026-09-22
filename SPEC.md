@@ -1,3 +1,10 @@
+
+## moli287 / v0.6.40 — MCP 私聊 Tool Calling 首次接线
+- MCP Tool Calling 首次接入角色私聊生成链；仅在 moli 自建 OpenAI Compatible API 且当前角色存在已授权工具时启用，未配置工具时保持原生成链。
+- 模型收到的是临时安全工具别名，moli 内部再映射到 namespaced Tool ID，避免 MCP Server/Tool 名称不符合模型 function-name 约束。
+- 工具发现与执行均携带 actorId + private_chat origin，并由 Tool Gateway 二次执行角色作用域、读写策略；需要确认但尚未确认的工具不会暴露给本轮模型。
+- 完成真实循环：模型 tool_calls → Tool Gateway → MCP tools/call → tool result → 模型最终回复；本阶段工具轮采用非流式原生 Tool Calling，最终文本一次性回填到现有私聊 UI。
+- 当前原生 Tool Calling 首批只接 OpenAI Compatible；Claude/Gemini/酒馆当前 API 仍走原生成链，后续按各自原生协议单独适配，避免用伪标签模拟工具调用。
 ## moli284 / v0.6.37 — Tool Gateway 第三步
 - 新增 `src/tools/tool-gateway.js`：建立 moli 自己的 provider-neutral 外部能力入口；上层不再需要直接理解 MCP JSON-RPC、认证或 Session。
 - Gateway 会从已启用的 MCP Server 动态发现 Tools，并统一归一化为 moli Tool：稳定 namespaced Tool ID、provider/providerId、名称、说明、inputSchema 与 annotations，避免多 Server 同名工具冲突。
