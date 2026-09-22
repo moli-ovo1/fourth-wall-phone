@@ -3962,3 +3962,10 @@ Still next, without splitting into UI micro-patches:
 - First boundary extraction completed: Community Wake scheduler no longer talks to the UI through a `window` CustomEvent. It calls `community-wake-service`, while the current Web executor registers the existing Community Discovery implementation.
 - Next Companion 1A steps: define canonical Wake Snapshot/Result envelopes around existing semantics; add Scheduler Lease/epoch ownership; define idempotent Commit/Offline Journal boundary; then test Web-side headless execution before creating the Android project.
 - Keep Moments/private proactive automation/community decision semantics unchanged while extracting boundaries.
+
+
+## moli305 / v0.6.58 — Companion Phase 1A：Wake Contract + Scheduler Lease
+- 新增 `src/automation/wake-contract.js`：定义无 DOM / 无 SillyTavern / 无存储依赖的 `WakeRequest` / `WakeResult` v1 envelope；契约层显式拒绝 API key、token、password、认证 header、actor endpoint 等 secret 字段，避免未来 Snapshot 把凭证混入普通同步数据。
+- 新增 `src/automation/scheduler-lease.js`：Web Wake 调度器开始使用 `owner + sessionId + epoch + heartbeatAt + expiresAt` lease；当前仅 Web owner 生效，为未来 Companion 接管/归还调度权建立协议，不改变普通主动私聊、朋友圈或 Story-Aligned 的调度。
+- Character / Community Wake 到期分支现在先确认 Web lease；纯 Community Wake 会携带 portable wake envelope 进入既有 Community Wake Service。Community 的实际浏览/评论/发帖逻辑仍完全复用原实现。
+- 本版本仍不创建 APK、不复制 canonical stores、不迁移 Secret。下一步继续构建 Snapshot Builder / Commit Result 边界，并用 Web executor 验证同一 Wake 语义。

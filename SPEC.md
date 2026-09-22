@@ -4927,3 +4927,10 @@ When an MCP account/identity tool returns a persistent role identity endpoint, m
 - Background execution contract must not copy raw Web stores wholesale. Future Companion input is a canonical Wake Snapshot plus capabilities; output is an event-oriented Wake Result/Offline Journal that moli commits idempotently.
 - Secrets (AI keys, MCP auth headers/tokens, credential-bearing actor endpoints) are excluded from ordinary character snapshots and must later live behind a credential vault/capability boundary.
 - Community Wake now uses an explicit service boundary rather than `window` events. The current Web executor still invokes the existing Community Discovery chain; behavior is intentionally unchanged.
+
+
+## moli305 / v0.6.58 — Companion Phase 1A：Wake Contract + Scheduler Lease
+- 新增 `src/automation/wake-contract.js`：定义无 DOM / 无 SillyTavern / 无存储依赖的 `WakeRequest` / `WakeResult` v1 envelope；契约层显式拒绝 API key、token、password、认证 header、actor endpoint 等 secret 字段，避免未来 Snapshot 把凭证混入普通同步数据。
+- 新增 `src/automation/scheduler-lease.js`：Web Wake 调度器开始使用 `owner + sessionId + epoch + heartbeatAt + expiresAt` lease；当前仅 Web owner 生效，为未来 Companion 接管/归还调度权建立协议，不改变普通主动私聊、朋友圈或 Story-Aligned 的调度。
+- Character / Community Wake 到期分支现在先确认 Web lease；纯 Community Wake 会携带 portable wake envelope 进入既有 Community Wake Service。Community 的实际浏览/评论/发帖逻辑仍完全复用原实现。
+- 本版本仍不创建 APK、不复制 canonical stores、不迁移 Secret。下一步继续构建 Snapshot Builder / Commit Result 边界，并用 Web executor 验证同一 Wake 语义。

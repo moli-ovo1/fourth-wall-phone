@@ -1115,3 +1115,10 @@
 - `private-automation.js` 不再直接依赖 `window.dispatchEvent('moli:community-wake-request')`；现有 Web executor 由 `phone-panel.js` 注册，仍复用原 `settleCommunityDiscovery()`，因此浏览/评论/匿名评论/主动发帖/World Event/Life Log 语义不变。
 - 这是 Headless Boundary 的第一步，不代表 Community Core 已完全 headless；当前 Web executor 仍位于 phone-panel closure。后续再逐步抽离 Snapshot / Commit / Scheduler Lease，不在本轮大拆已工作的社区逻辑。
 - 尚未创建 Android APK/Companion 工程。
+
+
+## moli305 / v0.6.58 — Companion Phase 1A：Wake Contract + Scheduler Lease
+- 新增 `src/automation/wake-contract.js`：定义无 DOM / 无 SillyTavern / 无存储依赖的 `WakeRequest` / `WakeResult` v1 envelope；契约层显式拒绝 API key、token、password、认证 header、actor endpoint 等 secret 字段，避免未来 Snapshot 把凭证混入普通同步数据。
+- 新增 `src/automation/scheduler-lease.js`：Web Wake 调度器开始使用 `owner + sessionId + epoch + heartbeatAt + expiresAt` lease；当前仅 Web owner 生效，为未来 Companion 接管/归还调度权建立协议，不改变普通主动私聊、朋友圈或 Story-Aligned 的调度。
+- Character / Community Wake 到期分支现在先确认 Web lease；纯 Community Wake 会携带 portable wake envelope 进入既有 Community Wake Service。Community 的实际浏览/评论/发帖逻辑仍完全复用原实现。
+- 本版本仍不创建 APK、不复制 canonical stores、不迁移 Secret。下一步继续构建 Snapshot Builder / Commit Result 边界，并用 Web executor 验证同一 Wake 语义。
