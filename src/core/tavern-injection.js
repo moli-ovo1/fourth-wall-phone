@@ -2,7 +2,8 @@ import { extension_prompt_types, extension_prompt_roles } from '../../../../../.
 import { getCurrentScopeKey } from './tavern-scope.js';
 import { getPendingInjection, markPendingInjectionArmed, clearPendingInjection } from '../storage/injection-store.js';
 import { listPendingStoryBridgeLines, activateStoryBridgeLines, markStoryBridgeInjected } from '../storage/story-bridge-store.js';
-import { getScopeConversations, updateGroupConversation } from '../storage/data-store.js';
+import { getScopeConversations, getContacts, updateGroupConversation } from '../storage/data-store.js';
+import { buildStoryAlignedContinuity } from '../generation/phone-context-builder.js';
 import { listInjectableStoryPlans, applyStoryPlanReview } from '../storage/story-plan-store.js';
 import { listOpenStoryThreads, applyStoryThreadUpdates } from '../storage/story-thread-store.js';
 
@@ -11,6 +12,7 @@ const BRIDGE_PROMPT_ID = 'moli-story-bridge-active-lines';
 const LIFE_INSPIRATION_PROMPT_ID = 'moli-life-inspiration-watch';
 const STORY_PLAN_PROMPT_ID = 'moli-story-plan-watch';
 const STORY_THREAD_PROMPT_ID = 'moli-story-thread-watch';
+const STORY_ALIGNED_CONTINUITY_PROMPT_ID = 'moli-story-aligned-character-continuity';
 const ACTIVATION_RE = /<moli_bridge_activation>([\s\S]*?)<\/moli_bridge_activation>/gi;
 const LIFE_EVENT_RE = /<moli_life_event>([\s\S]*?)<\/moli_life_event>/gi;
 const STORY_PLAN_RE = /<moli_story_plan_review>([\s\S]*?)<\/moli_story_plan_review>/gi;
@@ -59,6 +61,43 @@ function wrapBridgeLines(lines) {
     '内部状态回执：仅当本轮正文已经把某条当前阶段实际写成发生中的事件时，在正文末尾附加 <moli_bridge_activation>ID</moli_bridge_activation>；仅提到、想到、计划以后发生都不算。没有实际发生就不要输出。回执不是故事内容。',
     '[跨墙潜伏线结束]',
   ].join('\n');
+}
+
+
+function clearStoryAlignedContinuityPrompt(ctx) {
+  try { ctx?.setExtensionPrompt?.(STORY_ALIGNED_CONTINUITY_PROMPT_ID, '', extension_prompt_types.NONE, 0, false); } catch {}
+}
+function refreshStoryAlignedContinuityPrompt(ctx, scopeKey = getCurrentScopeKey()) {
+  try {
+    const contacts = new Map(getContacts().map(item => [String(item.id || ''), item]));
+    const aligned = getScopeConversations(scopeKey).find(conv => {
+      if (conv?.type !== 'private' || conv?.scopeMode === 'global') return false;
+      const contact = contacts.get(String(conv.contactId || ''));
+      const a = conv.automation || {};
+      return contact?.kind === 'tavern'
+        && a.storyAlignedEnabled === true
+        && String(a.storyAlignedScopeKey || '') === String(scopeKey)
+        && (!a.storyAlignedSourceId || String(a.storyAlignedSourceId) === String(contact?.source?.sourceId || ''));
+    });
+    if (!aligned) { clearStoryAlignedContinuityPrompt(ctx); return 0; }
+    const contact = contacts.get(String(aligned.contactId || ''));
+    const continuity = buildStoryAlignedContinuity(scopeKey, contact.id, { userName: 'User', limit: 18 });
+    if (!continuity) { clearStoryAlignedContinuityPrompt(ctx); return 0; }
+    const name = String(contact?.source?.originalName || contact?.name || '当前正文人物').trim();
+    const text = [
+      '[正文人物手机连续性]',
+      `当前正文人物「${name}」与小手机中的这个联系人是同一个人；小手机是他/她在本正文世界中真实使用的手机，不是平行版本。`,
+      '以下只记录这个人物本人已经亲历、做过或已经知道的手机侧事实。它们属于人物连续性，不是本轮剧情任务，也不要求正文逐条提及。',
+      '知识边界：这些事实只保证当前人物本人知道；除非正文中存在合理传播过程，不得因此让其他人物自动知道。手机世界的“偷看次数/已阅/删除理由”等叙事性隐私模糊可以作为当前人物的既有认知，但正文表达应服从当前故事质感，不必机械复述后台数字或技术来源。',
+      '不要因为这些材料擅自规定人物下一步心理、选择、台词或结果；只需避免让同一个人物在正文里遗忘自己已经真实经历过的手机生活。',
+      '', continuity, '', '[正文人物手机连续性结束]',
+    ].join('\n');
+    ctx?.setExtensionPrompt?.(STORY_ALIGNED_CONTINUITY_PROMPT_ID, text, extension_prompt_types.IN_CHAT, 4, false, extension_prompt_roles.SYSTEM);
+    return 1;
+  } catch (error) {
+    console.warn('[moli小手机] refresh story-aligned continuity failed', error);
+    clearStoryAlignedContinuityPrompt(ctx); return 0;
+  }
 }
 
 function clearBridgePrompt(ctx) {
@@ -262,6 +301,7 @@ export function createTavernInjectionBridge() {
     refreshBridgePrompt(ctx, scopeKey);
     refreshStoryPlanPrompt(ctx, scopeKey);
     refreshStoryThreadPrompt(ctx, scopeKey);
+    refreshStoryAlignedContinuityPrompt(ctx, scopeKey);
 
     // Ephemeral prompts belong only to this generation.
     clearExtensionPrompt(ctx);
@@ -332,6 +372,7 @@ export function createTavernInjectionBridge() {
       refreshBridgePrompt(ctx, getCurrentScopeKey());
       refreshStoryPlanPrompt(ctx, getCurrentScopeKey());
       refreshStoryThreadPrompt(ctx, getCurrentScopeKey());
+      refreshStoryAlignedContinuityPrompt(ctx, getCurrentScopeKey());
     }
   };
 
@@ -346,6 +387,7 @@ export function createTavernInjectionBridge() {
   refreshBridgePrompt(ctx, getCurrentScopeKey());
   refreshStoryPlanPrompt(ctx, getCurrentScopeKey());
   refreshStoryThreadPrompt(ctx, getCurrentScopeKey());
+  refreshStoryAlignedContinuityPrompt(ctx, getCurrentScopeKey());
 
   return {
     destroy() {
@@ -354,6 +396,7 @@ export function createTavernInjectionBridge() {
       clearLifeInspirationPrompt(ctx);
       clearStoryPlanPrompt(ctx);
       clearStoryThreadPrompt(ctx);
+      clearStoryAlignedContinuityPrompt(ctx);
       eventSource.removeListener?.(events.GENERATION_STARTED, onGenerationStarted);
       if (events.MESSAGE_RECEIVED) eventSource.removeListener?.(events.MESSAGE_RECEIVED, onMessageReceived);
       eventSource.removeListener?.(events.GENERATION_ENDED, onGenerationEnded);
