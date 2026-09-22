@@ -7,6 +7,7 @@ import { createProfileMoment } from '../storage/moments-store.js';
 import { listWorldEvents, markWorldEventsConsumed, recordWorldEvent, summarizeWorldEventsForContext, linkWorldEventResult } from '../storage/world-event-store.js';
 import { buildPhoneContext } from '../generation/phone-context-builder.js';
 import { buildCharacterDecisionInstruction } from '../generation/character-decision.js';
+import { updateCharacterRuntime } from '../storage/character-runtime-store.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -116,6 +117,11 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
             commentaryProbability: Number(contact.fourthWallGlobalSettings?.commentary?.probability ?? 30),
           }
         : (conv.automation || {});
+      const storyAligned = !isFourthWallContact
+        && contact.kind === 'tavern'
+        && a.storyAlignedEnabled === true
+        && String(a.storyAlignedScopeKey || '') === String(scopeKey)
+        && (!a.storyAlignedSourceId || String(a.storyAlignedSourceId) === String(contact?.source?.sourceId || ''));
       const bodyCount = Math.max(0, Number(body?.count || 0));
       const previousBody = Math.max(0, Number(a.lastBodyAssistantCount || 0));
       const previousCommentaryEvaluationBody = Math.max(0, Number(a.lastCommentaryEvaluationBodyCount || 0));
@@ -136,8 +142,23 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       const pendingBatch = pendingSocialEvents.slice(-10);
       const hasPostOpportunity = wakeEvents.some(event => event?.eventType === 'chat-progress' || event?.allowPost === true);
       const hasPrivateOpportunity = wakeEvents.some(event => event?.allowPrivate === true)
-        && eligibleAutoChatContact(contact) && a.autoChatEnabled;
+        && eligibleAutoChatContact(contact) && (storyAligned || a.autoChatEnabled);
+      const storySignature = String(body?.lastSignature || '');
+      if (storyAligned && body.available && storySignature && !String(a.lastStoryAlignedBodySignature || '')) {
+        // Enabling Story-Aligned starts from the current正文 as a baseline; it must not retroactively send a message.
+        updatePrivateAutomationRuntime(scopeKey, key, { lastStoryAlignedBodySignature: storySignature });
+        updateCharacterRuntime(scopeKey, contact.id, { existenceMode: 'story_aligned', sourceId: String(contact?.source?.sourceId || ''), storyTime: getCurrentTavernStoryTimeState(), storySignature });
+      }
       if (
+        storyAligned
+        && body.available
+        && storySignature
+        && String(a.lastStoryAlignedBodySignature || '')
+        && storySignature !== String(a.lastStoryAlignedBodySignature || '')
+      ) {
+        mode = 'story-aligned';
+        commentaryEvent = { type: 'story_progress', targetText: String(body?.lastTurn?.content || ''), index: Number(body?.lastTurn?.index ?? -1) };
+      } else if (
         socialEventReady
         && eligibleAutoChatContact(contact)
         && (hasPostOpportunity || hasPrivateOpportunity)
@@ -146,6 +167,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         socialEvents = pendingBatch;
       } else if (
         editedEvent
+        && !storyAligned
         && String(contact.id || '') === 'builtin:meta'
         && a.commentaryEnabled
         && chance(a.commentaryProbability)
@@ -153,7 +175,8 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         mode = 'commentary';
         commentaryEvent = editedEvent;
       } else if (
-        body.available
+        !storyAligned
+        && body.available
         && bodyCount > previousBody
         && eligibleCommentaryContact(contact)
         && a.commentaryEnabled
@@ -168,6 +191,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         };
       } else if (
         eligibleAutoChatContact(contact)
+        && !storyAligned
         && opportunity
         && a.autoChatEnabled
         && Number(a.autoChatProbability ?? 0) > 0
@@ -177,7 +201,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         socialEvents = pendingSocialEvents;
       }
       if (!mode) continue;
-      const decisionConsumer = mode === 'social-event' ? 'social-event-decision' : (mode === 'chat' ? 'proactive-private-decision' : 'commentary-decision');
+      const decisionConsumer = mode === 'story-aligned' ? 'story-aligned-decision' : (mode === 'social-event' ? (storyAligned ? 'story-aligned-event-decision' : 'social-event-decision') : (mode === 'chat' ? 'proactive-private-decision' : 'commentary-decision'));
       decisionWorldEvents = listWorldEvents(scopeKey, {
         contactId: contact.id, awareness: 'known', limit: 30, unconsumedBy: decisionConsumer,
       });
@@ -205,16 +229,28 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         const recentActionText = recentBehaviorActions.length
           ? recentBehaviorActions.map(entry => `- ${Math.max(0, Math.round((now - Number(entry.at || 0)) / 60000))} 分钟前：${String(entry.action || 'SKIP')}`).join('\n')
           : '（最近没有刚执行过的主动行为）';
-        const allowPost = !isFourthWall && mode !== 'commentary' && (mode !== 'social-event' || hasPostOpportunity);
-        const allowPrivate = mode === 'commentary' || Boolean(a.autoChatEnabled);
-        const instruction = mode === 'commentary'
+        const allowPost = !storyAligned && !isFourthWall && mode !== 'commentary' && (mode !== 'social-event' || hasPostOpportunity);
+        const allowPrivate = mode === 'story-aligned' || storyAligned || mode === 'commentary' || Boolean(a.autoChatEnabled);
+        const storyAlignedContinuity = storyAligned ? `【正文人物同一性】\n你就是当前正文中的这个人物本人；小手机是你在正文世界里真实使用的手机，不是平行版本。正文当前处境是现实约束，手机中你已经亲历/知道的事情也是你自己的真实连续性。不要为了证明主动而发消息；只有以当前正文状态与手机经历而言，你本人此刻真的会拿起手机联系 User 时才 PRIVATE_CHAT，否则 SKIP。\n\n${buildPhoneContext(scopeKey, contact.id, { limit: 24, query: unifiedEventText, userName: 'User' }).text}` : '';
+        const instruction = mode === 'story-aligned'
+          ? buildCharacterDecisionInstruction({
+              wakeReason: '正文刚产生新的真实进展；判断正文中的你本人此刻是否自然会拿起自己的手机联系 User',
+              newFacts: `【刚发生的正文进展】\n${String(commentaryEvent?.targetText || '').trim().slice(0, 2600) || '（正文有新进展）'}`,
+              continuity: storyAlignedContinuity,
+              initiative: 100,
+              allowPost: false,
+              allowPrivate: true,
+              recentActions: recentActionText,
+              entrypoint: 'story-aligned-private-decision',
+            })
+          : mode === 'commentary'
           ? (isFourthWall
             ? '这是正文刚发生后的场外私聊反应机会。你就是正文中的你本人，不是分析员。只有此刻真的会想联系用户时才回复；若不想说，严格只输出 [SKIP]。若回复，像手机私聊一样简短自然。'
             : `这是一次“酒馆正文事件 → 这个人物是否会在手机里产生反应”的行为判断机会，不是命令你必须吐槽。刚发生的正文事件：\n${String(commentaryEvent?.targetText || '').trim().slice(0, 1800) || '（正文有新进展）'}\n你可以揶揄、生气、看戏、担心、追问、冷淡、转移话题，或者完全不想说；一切由你的人格、与用户的关系、当前情绪和已有手机连续性决定。若此刻不会主动在手机里联系用户，严格只输出 [SKIP]；若会，直接发真实手机私聊内容，不解释判断过程。`)
           : buildCharacterDecisionInstruction({
-              wakeReason: mode === 'social-event' ? '手机世界出现已知事件/社交变化' : '自然主动行为评估',
+              wakeReason: mode === 'social-event' ? (storyAligned ? '正文人物自己的手机出现了新事件/社交变化；结合当前正文处境判断是否会行动' : '手机世界出现已知事件/社交变化') : '自然主动行为评估',
               newFacts: unifiedEventText,
-              continuity: buildPhoneContext(scopeKey, contact.id, { limit: 24, query: unifiedEventText, userName: 'User' }).text,
+              continuity: storyAligned ? storyAlignedContinuity : buildPhoneContext(scopeKey, contact.id, { limit: 24, query: unifiedEventText, userName: 'User' }).text,
               initiative: Number(a.autoChatProbability ?? 30),
               allowPost,
               allowPrivate,
@@ -268,7 +304,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           const turnId = `auto:${mode}:${Date.now()}:${Math.random().toString(36).slice(2,8)}`;
           const storyTime = conv.timeMode === 'body' ? getCurrentTavernStoryTimeState() : null;
           privateMessages.forEach(content => appendMessage(scopeKey, key, 'assistant', content, {
-            source: mode === 'commentary' ? 'commentary' : (mode === 'social-event' ? 'moment-interaction' : 'auto-chat'),
+            source: mode === 'story-aligned' ? 'story-aligned' : (mode === 'commentary' ? 'commentary' : (mode === 'social-event' ? (storyAligned ? 'story-aligned-event' : 'moment-interaction') : 'auto-chat')),
             generationTurnId: turnId,
             storyTime,
             thinking: mode === 'commentary' ? '' : parsedThinking,
@@ -301,7 +337,9 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         window.dispatchEvent(new CustomEvent('moli:conversation-updated', { detail: { scopeKey, conversationKey: key, source: mode, behaviorAction } }));
       } catch (e) { setGenerationError(scopeKey, key, `自动行为失败：${String(e?.message || e || '请求失败')}`, mode); console.error('[moli小手机] private automation failed:', e); }
       finally {
-        const runtimePatch = { lastAutoChatAt: (mode === 'chat' || (mode === 'social-event' && a.autoChatEnabled)) ? Date.now() : Number(a.lastAutoChatAt || 0) };
+        const runtimePatch = { lastAutoChatAt: (mode === 'chat' || (mode === 'social-event' && !storyAligned && a.autoChatEnabled)) ? Date.now() : Number(a.lastAutoChatAt || 0) };
+        if (storyAligned && storySignature) runtimePatch.lastStoryAlignedBodySignature = storySignature;
+        if (storyAligned) updateCharacterRuntime(scopeKey, contact.id, { existenceMode: 'story_aligned', sourceId: String(contact?.source?.sourceId || ''), storyTime: getCurrentTavernStoryTimeState(), storySignature, lastAttentionReason: mode || 'baseline', lastAttentionAt: Date.now(), lastDecision: behaviorAction || 'SKIP', lastDecisionAt: mode ? Date.now() : 0 });
         if (mode === 'social-event' || (mode === 'chat' && socialEvents.length)) runtimePatch.pendingSocialEvents = [];
         if (mode === 'commentary' && commentaryEvent?.type === 'ai_message') {
           runtimePatch.lastCommentaryEvaluationBodyCount = bodyCount;
