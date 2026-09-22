@@ -2847,3 +2847,22 @@
 
 /* moli279: Story-Aligned is opt-in; keep the note visually subordinate to existing chat settings. */
 .moli-setting-note{font-size:11px;line-height:1.55;opacity:.68;padding:0 2px 8px;}
+
+/* moli283 — MCP center */
+#moli-phone-panel .moli-mcp-settings{flex:1;min-height:0;overflow:auto;background:#f3f3f3;padding:12px}
+#moli-phone-panel .moli-mcp-server-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+#moli-phone-panel .moli-mcp-empty{padding:24px 16px;border-radius:10px;background:#fff;color:#888;font-size:12px;line-height:1.6;text-align:center}
+#moli-phone-panel .moli-mcp-server-card{width:100%;display:flex;align-items:center;gap:10px;border:0;border-radius:10px;background:#fff;padding:13px 14px;text-align:left;color:inherit}
+#moli-phone-panel .moli-mcp-server-main{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+#moli-phone-panel .moli-mcp-server-main strong{font-size:14px}
+#moli-phone-panel .moli-mcp-server-main small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#888;font-size:10px;font-weight:400}
+#moli-phone-panel .moli-mcp-server-state{flex:0 0 auto;font-size:10px;color:#999}
+#moli-phone-panel .moli-mcp-server-state.is-on{color:#348a4a}
+#moli-phone-panel .moli-mcp-server-card>b{font-size:22px;color:#aaa;font-weight:400}
+#moli-phone-panel .moli-mcp-enabled-row{margin-top:13px}
+#moli-phone-panel .moli-mcp-tools{margin-top:12px;padding-top:10px;border-top:1px solid #eee}
+#moli-phone-panel .moli-mcp-tool{display:flex;flex-direction:column;gap:3px;padding:8px 0;border-bottom:1px solid #f0f0f0}
+#moli-phone-panel .moli-mcp-tool:last-child{border-bottom:0}
+#moli-phone-panel .moli-mcp-tool strong{font-size:12px;overflow-wrap:anywhere}
+#moli-phone-panel .moli-mcp-tool small{font-size:10px;line-height:1.45;color:#888;overflow-wrap:anywhere}
+#moli-phone-panel .moli-mcp-danger{margin-top:18px}

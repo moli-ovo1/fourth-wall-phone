@@ -1,3 +1,12 @@
+## moli283 / v0.6.36 — MCP 中心第二步
+- 设置页新增「MCP 中心」：普通用户可添加、编辑、删除多个远程 HTTP/HTTPS MCP Server，不需要自行安装开发依赖。
+- MCP 编辑页支持名称、URL、启用状态、无认证 / Bearer Token / 自定义 Header；密钥继续只保存在当前用户本地 moli 配置。
+- 新增「测试连接」：直接复用 moli282 MCP Client Core 完成 initialize → initialized → tools/list，并在页面展示 Server 名称与自动发现的工具列表。
+- 浏览器直连失败时保留明确的 CORS 提示；本版不擅自增加第三方代理。代理/同源桥接要等真实 MCP 实机连接结果后单独设计。
+- 本版仍不把 MCP Tools 注入角色/聊天/Automation/Character Wake；角色行为保持不变。下一阶段才建立 moli Tool Gateway。
+
+> Updated 2026-09-22. This top block is authoritative; older entries below are retained as history.
+
 ## v0.6.35 — MCP Client Core Contract
 - moli 的 MCP 能力是通用外部能力底座，不绑定搜索、花园或任何单一第三方程序。一个 moli 可保存多个远程 MCP Server。
 - 第一阶段 transport 仅接受 HTTP/HTTPS；协议链为 `initialize`、`notifications/initialized`、`tools/list`，Tool Runtime 可调用 `tools/call`。
