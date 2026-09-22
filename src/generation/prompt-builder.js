@@ -354,7 +354,7 @@ export function buildPrivateGenerationRequest({
 
   systemBlocks.push(...roleFidelityBlocks(contact));
 
-  if (contact.kind === 'custom' && Array.isArray(contact.profileEntries)) {
+  if (['custom', 'tavern'].includes(contact.kind) && Array.isArray(contact.profileEntries)) {
     const profileScanText = [
       ...messages.slice(-Math.max(12, Number(historyLimit || 0))).map(messageText),
       ...(Array.isArray(recentBody?.messages) ? recentBody.messages.map(messageText) : []),

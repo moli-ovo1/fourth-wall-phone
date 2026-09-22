@@ -1462,8 +1462,8 @@ export async function generateContactMoment({ scopeKey, contactId, signal } = {}
     contact.intro,
     contact.prompt,
     contact.kind === 'tavern' ? Object.values(contact?.source?.roleFidelity || {}).filter(Boolean).join('\n\n') : '',
-    contact.kind === 'custom' && Array.isArray(contact.profileEntries)
-      ? getActivatedProfileEntries(contact.profileEntries, scanText).map(entry => `【${entry.title}】\n${entry.content}`).join('\n\n')
+    ['custom', 'tavern'].includes(contact.kind) && Array.isArray(contact.profileEntries)
+      ? getActivatedProfileEntries(contact.profileEntries, scanText).map(entry => `【moli补充资料：${entry.title}】\n${entry.content}`).join('\n\n')
       : '',
     worldBook?.text || '',
   ].map(value => String(value || '').trim()).filter(Boolean).join('\n\n');
@@ -1769,8 +1769,17 @@ function communityIdentityAnchor(contact) {
       return text ? `${key}：${text}` : '';
     }).filter(Boolean).join('\n');
     if (stable) blocks.push(`角色卡：\n${truncateCommunityContext(stable, 6500)}`);
+    if (Array.isArray(contact.profileEntries) && contact.profileEntries.length) {
+      const supplements = contact.profileEntries.filter(entry => entry?.enabled !== false).slice(0, 12).map(entry => {
+        const title = String(entry?.title || '补充资料').trim();
+        const content = truncateCommunityContext(entry?.content, 1600);
+        return content ? `【${title}】\n${content}` : '';
+      }).filter(Boolean).join('\n');
+      if (supplements) blocks.push(`moli补充资料（仅补充此人物，不替代角色卡/世界书）：\n${truncateCommunityContext(supplements, 4200)}`);
+    }
   }
-  return truncateCommunityContext(blocks.join('\n'), 7500);
+  blocks.push(`身份归属：以上事实只属于「${name}」。除非正文明确说明，不得把其他人物锚点中的职业、身份、经历、性别、关系或社会位置移植给「${name}」。`);
+  return truncateCommunityContext(blocks.join('\n'), 9000);
 }
 
 async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
@@ -1787,7 +1796,7 @@ async function buildCommunityWorldContextPack(scopeKey, recent, userName) {
     }
   }
   return [
-    identityPack ? `【稳定人物身份 · Public Identity Anchor】\n以下只用于确认故事世界里“谁是谁”的稳定身份，不携带任何人物私聊、Phone Context 或人物专属世界书。公共生成器不得据此补写人物私密认知。\n${identityPack}` : '',
+    identityPack ? `【稳定人物身份 · Public Identity Anchor】\n以下只用于确认故事世界里“谁是谁”的稳定身份，不携带任何人物私聊、Phone Context 或人物专属世界书。每个【人物身份锚点】是独立的人物事实包：描述某个人时，只能从该人物自己的锚点取稳定身份事实，不得把另一个锚点的职业、身份、经历、性别、关系或社会位置拼接过来。网友可以误认、猜测或造谣，但必须明确表现为网友自己的未证实说法，而不能把串线后的属性写成世界事实。\n${identityPack}` : '',
     recentText ? `【当前正文 · Recent World State】\n${recentText}` : '',
     longTermText ? `【柏宝书长期剧情 · Long-term World History】\n这是世界历史素材，不等于每个社区人物都亲历或知道；公共生成不得把它转换成某个人物的私有知识。\n${longTermText}` : '',
   ].filter(Boolean).join('\n\n');
