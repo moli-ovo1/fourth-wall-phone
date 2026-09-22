@@ -2,6 +2,7 @@ import { getStudioPromptSettings, saveStudioPromptSettings, resetStudioPrompt } 
 import { getLargeStorageStats } from '../storage/large-storage.js';
 import { readRaw, writeRaw } from '../storage/storage-adapter.js';
 import { listLifeLogs, recordLifeLog } from '../storage/life-log-store.js';
+import { registerCommunityWakeExecutor } from '../automation/community-wake-service.js';
 import {
   getContacts,
   getConversation,
@@ -9719,17 +9720,16 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   windowRef.addEventListener('moli:generation-state', externalGenerationState);
 
   const communityWakeRunning = new Set();
-  const externalCommunityWake = async event => {
-    const detail=event?.detail||{}; const scopeKey=getScopeKey?.(); const actorId=String(detail.actorId||'');
-    if(!scopeKey||String(detail.scopeKey||'')!==String(scopeKey)||!actorId)return;
-    const lock=`${scopeKey}:${actorId}`; if(communityWakeRunning.has(lock))return;
-    const posts=listPublicWebPosts(scopeKey,{section:'recommend'}).slice(0,12); if(!posts.length)return;
+  const unregisterCommunityWakeExecutor = registerCommunityWakeExecutor(async detail => {
+    const scopeKey=getScopeKey?.(); const actorId=String(detail?.actorId||'');
+    if(!scopeKey||String(detail?.scopeKey||'')!==String(scopeKey)||!actorId)return { status:'ignored', reason:'scope-or-actor-mismatch' };
+    const lock=`${scopeKey}:${actorId}`; if(communityWakeRunning.has(lock))return { status:'ignored', reason:'already-running' };
+    const posts=listPublicWebPosts(scopeKey,{section:'recommend'}).slice(0,12); if(!posts.length)return { status:'skipped', reason:'no-posts' };
     communityWakeRunning.add(lock);
-    try{await settleCommunityDiscovery(posts,getPublicWebSettings(scopeKey),{actorIds:[actorId],autonomousWake:true});renderPublicWeb();renderLifeLog();}
-    catch(error){console.error('[moli小手机] community wake failed:',error);}
+    try{const actors=await settleCommunityDiscovery(posts,getPublicWebSettings(scopeKey),{actorIds:[actorId],autonomousWake:true});renderPublicWeb();renderLifeLog();return { status:'completed', actors };}
+    catch(error){console.error('[moli小手机] community wake failed:',error);return { status:'failed', error:String(error?.message||error||'unknown') };}
     finally{communityWakeRunning.delete(lock);}
-  };
-  windowRef.addEventListener('moli:community-wake-request',externalCommunityWake);
+  });
 
   const externalGenerationError = event => {
     const detail = event?.detail || {};
@@ -9776,7 +9776,7 @@ open(handleElement) {
 
     destroy() {
       windowRef.removeEventListener('moli:conversation-updated', externalConversationUpdate);
-      windowRef.removeEventListener('moli:community-wake-request', externalCommunityWake);
+      unregisterCommunityWakeExecutor?.();
       windowRef.removeEventListener('moli:generation-state', externalGenerationState);
       windowRef.removeEventListener('moli:generation-error', externalGenerationError);
       panel.remove();
