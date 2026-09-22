@@ -22,3 +22,6 @@ export async function readPendingWakeResults(scopeKey) { return (await call(`/wa
 export async function acknowledgeWakeResults(scopeKey,wakeIds) { return call('/wake-results/ack',{method:'POST',body:{scopeKey,wakeIds}}); }
 export async function readCompanionLease(scopeKey) { return call(`/lease${q(scopeKey)}`); }
 export async function compareAndSetCompanionLease(scopeKey,expected,replacement) { return call('/lease/cas',{method:'POST',body:{scopeKey,expected,replacement}}); }
+
+/** Provision MCP secrets over the paired loopback bridge. Secrets terminate in Android CredentialVault and never enter WakeRequest/Result. */
+export async function provisionCompanionMcpProfile(profile) { return call('/mcp-profile',{method:'POST',body:profile,timeoutMs:3000}); }
