@@ -265,6 +265,7 @@ export async function generatePrivateReply({
   regenerateFromMessageId = '',
   confirmTool = null,
   confirmIdentityHandoff = null,
+  toolOrigin = 'private_chat',
 } = {}) {
   if (!scopeKey || !conversationKey) {
     throw new Error('当前会话不可用');
@@ -463,7 +464,7 @@ export async function generatePrivateReply({
     if (!(isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false)) onDelta?.(text, text);
     result = { text, raw: null };
   } else if (!isFourthWall && supportsProviderToolCalling(config)) {
-    const toolContext = { actorId: String(contact?.id || ''), origin: 'private_chat' };
+    const toolContext = { actorId: String(contact?.id || ''), origin: String(toolOrigin || 'private_chat') };
     try {
       const toolResult = await runToolCalling({
         request,
