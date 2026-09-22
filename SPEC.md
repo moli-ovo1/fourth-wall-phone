@@ -1,3 +1,11 @@
+# moli299 / v0.6.52 — 角色朋友圈持久化边界修复
+
+- 审计确认：朋友圈此前沿用全局 Fallback Scope 硬边界，`:fallback:` / `:no-chat` 下整个 Moments State 只存内存，导致角色资料卡朋友圈在无具体 Tavern chat scope 时重开后消失。问题并非仅限自创角色；任何角色在临时 scope 下都可能触发。
+- 不修改 `scope-policy.js`，继续保持 Data Store、World Event、Community、正文注入等既有 fallback/no-chat 禁止正式持久化的安全边界。
+- 仅将“角色资料卡朋友圈”拆为按稳定 `contactId` 保存的独立 Profile Archive；User 公共朋友圈、chatEvents、访问/偷看等仍保持原 scope 规则。
+- Profile Archive 同步保存角色 profile feed、朋友圈记忆摘要与 profile status；现有正式 `:chat:` scope 中的角色朋友圈在首次读取时可合并进入 archive，避免已有数据因修复而丢失。
+- 未改变角色分类、NPC 正文绑定、Conversation scope、World Event 或 Character Wake 行为。
+
 # moli297 / v0.6.50 — Character Wake 第一阶段（酒馆运行期间）
 
 - 私聊角色设置新增 Character Wake 开关与 15–720 分钟自主醒来间隔，默认关闭、默认间隔 60 分钟。
