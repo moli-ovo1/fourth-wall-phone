@@ -123,6 +123,7 @@ import { registerWallSourceProvider, listRegisteredWallSources } from '../storag
 import { listCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalendarEvent } from '../storage/calendar-store.js';
 import { listMcpServers, getMcpServer, saveMcpServer, deleteMcpServer } from '../storage/mcp-store.js';
 import { testMcpConnection } from '../integrations/mcp-client.js';
+import { getCompanionPairingToken, setCompanionPairingToken, probeCompanion } from '../companion/loopback-transport.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -713,6 +714,12 @@ export function createPhonePanel({
       </header>
       <main class="moli-mcp-settings">
         <div class="moli-settings-note">连接远程 HTTP/HTTPS MCP Server，并集中管理角色范围、Character Wake 与工具调用权限。聊天过程中不会弹出 MCP 工具确认框。</div>
+        <section class="moli-api-section">
+          <div class="moli-api-section-title">Android Companion</div>
+          <div class="moli-api-hint">打开 Companion App，把其中显示的配对码填在这里。配对码只用于本机 127.0.0.1 Bridge，不进入角色 Snapshot。</div>
+          <label class="moli-api-label"><span>配对码</span><div class="moli-api-password-row"><input class="moli-api-input" data-companion-token type="password" autocomplete="off" placeholder="Companion 中显示的配对码"><button type="button" class="moli-api-mini-btn" data-action="companion-save">保存并测试</button></div></label>
+          <div class="moli-api-status" data-companion-status></div>
+        </section>
         <div class="moli-mcp-server-list" data-mcp-server-list></div>
       </main>
     </section>
@@ -8894,6 +8901,17 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   checkExtensionUpdateAvailability();
 
   panel.querySelector('[data-action="mcp-settings"]')?.addEventListener('click', () => show('mcp-settings'));
+  const companionTokenInput = panel.querySelector('[data-companion-token]');
+  const companionStatus = panel.querySelector('[data-companion-status]');
+  if (companionTokenInput) companionTokenInput.value = getCompanionPairingToken();
+  panel.querySelector('[data-action="companion-save"]')?.addEventListener('click', () => {
+    const token = setCompanionPairingToken(companionTokenInput?.value || '');
+    if (companionTokenInput) companionTokenInput.value = token;
+    if (companionStatus) companionStatus.textContent = token ? '正在测试本机 Companion…' : '已清除配对码';
+    if (!token) return;
+    void probeCompanion().then(ok => { if (companionStatus) companionStatus.textContent = ok ? 'Companion Bridge 已发现；配对码已保存。' : '没有发现 Companion。请先打开 Android Companion。'; });
+  });
+
   panel.querySelector('[data-action="mcp-settings-back"]')?.addEventListener('click', () => show('phone-home'));
   panel.querySelector('[data-action="open-mcp"]')?.addEventListener('click', () => show('mcp-settings'));
   panel.querySelector('[data-action="open-life"]')?.addEventListener('click', () => show('life-log'));
