@@ -4934,3 +4934,8 @@ When an MCP account/identity tool returns a persistent role identity endpoint, m
 - 新增 `src/automation/scheduler-lease.js`：Web Wake 调度器开始使用 `owner + sessionId + epoch + heartbeatAt + expiresAt` lease；当前仅 Web owner 生效，为未来 Companion 接管/归还调度权建立协议，不改变普通主动私聊、朋友圈或 Story-Aligned 的调度。
 - Character / Community Wake 到期分支现在先确认 Web lease；纯 Community Wake 会携带 portable wake envelope 进入既有 Community Wake Service。Community 的实际浏览/评论/发帖逻辑仍完全复用原实现。
 - 本版本仍不创建 APK、不复制 canonical stores、不迁移 Secret。下一步继续构建 Snapshot Builder / Commit Result 边界，并用 Web executor 验证同一 Wake 语义。
+
+## moli306 / v0.6.59 — Companion Phase 1A：Canonical Wake Snapshot + Commit Boundary
+- Wake Snapshot 是 canonical state 的只读投影，不是第二份角色数据库。Web 侧通过 `buildWebWakeRequest()` 生成角色/User/连续性/Community/Runtime 快照；任何 API key、token、认证 header、actor endpoint 等 Secret 继续由契约层拒绝。
+- WakeResult 的正式回写采用幂等事件 Commit：`wakeId` 防整轮重复，`eventId` 防单事件重放；Commit 层只负责协议和 replay guard，具体事实仍由 moli canonical stores 应用。
+- Companion 未来只能“产生事实事件”，不能直接拥有/覆盖 World Event、Awareness、Community、Life Log 或 Character Runtime 数据库。

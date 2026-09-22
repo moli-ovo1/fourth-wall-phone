@@ -1,4 +1,4 @@
-# moli Current Architecture — v0.6.58 / moli305
+# moli Current Architecture — v0.6.59 / moli306
 
 > This is the short authoritative architecture entry for future development. If an old TODO in SPEC.md conflicts with current code or this document, treat it as historical unless CURRENT-STATE.md says otherwise.
 
@@ -75,3 +75,9 @@ Before Story-Aligned controls Moments/Weibo/Community broadly, implement conserv
 - 新增 `src/automation/scheduler-lease.js`：Web Wake 调度器开始使用 `owner + sessionId + epoch + heartbeatAt + expiresAt` lease；当前仅 Web owner 生效，为未来 Companion 接管/归还调度权建立协议，不改变普通主动私聊、朋友圈或 Story-Aligned 的调度。
 - Character / Community Wake 到期分支现在先确认 Web lease；纯 Community Wake 会携带 portable wake envelope 进入既有 Community Wake Service。Community 的实际浏览/评论/发帖逻辑仍完全复用原实现。
 - 本版本仍不创建 APK、不复制 canonical stores、不迁移 Secret。下一步继续构建 Snapshot Builder / Commit Result 边界，并用 Web executor 验证同一 Wake 语义。
+
+
+## moli306 / v0.6.59 — Canonical Wake Snapshot + Commit Boundary
+- `wake-snapshot-builder.js` is the Web-side projection boundary: canonical moli/ST state → secret-free portable WakeRequest. It is not a replicated database.
+- `wake-result-commit.js` defines the idempotent return boundary: WakeResult events are replay-guarded by wakeId/eventId, while canonical stores retain ownership of how facts are applied.
+- Current Web behavior still writes through existing paths. The new boundary is intentionally additive until replay tests prove semantic equivalence.

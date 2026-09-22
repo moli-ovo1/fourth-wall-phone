@@ -3969,3 +3969,8 @@ Still next, without splitting into UI micro-patches:
 - 新增 `src/automation/scheduler-lease.js`：Web Wake 调度器开始使用 `owner + sessionId + epoch + heartbeatAt + expiresAt` lease；当前仅 Web owner 生效，为未来 Companion 接管/归还调度权建立协议，不改变普通主动私聊、朋友圈或 Story-Aligned 的调度。
 - Character / Community Wake 到期分支现在先确认 Web lease；纯 Community Wake 会携带 portable wake envelope 进入既有 Community Wake Service。Community 的实际浏览/评论/发帖逻辑仍完全复用原实现。
 - 本版本仍不创建 APK、不复制 canonical stores、不迁移 Secret。下一步继续构建 Snapshot Builder / Commit Result 边界，并用 Web executor 验证同一 Wake 语义。
+
+## moli306 / v0.6.59 — Companion Phase 1A：Canonical Wake Snapshot + Commit Boundary
+- 已建立 `wake-snapshot-builder.js`，将在线 canonical 状态投影成 portable WakeRequest；Character/Community Wake 调度已开始携带真实角色连续性与 Community 快照，而不是只有调度 envelope。
+- 已建立 `wake-result-commit.js` 幂等 Commit 边界，使用 wakeId/eventId ledger 防 Companion Journal 重放；当前尚未接管在线行为写入。
+- 下一步：WakeResult adapter + Offline Journal contract + Web-only replay harness。先证明 snapshot → execute/模拟 result → journal → commit 的语义闭环，再创建 Android Companion。
