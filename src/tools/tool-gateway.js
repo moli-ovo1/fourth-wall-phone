@@ -1,5 +1,5 @@
 import { McpHttpClient } from '../integrations/mcp-client.js';
-import { getMcpServer, listMcpServers } from '../storage/mcp-store.js';
+import { clearMcpActorEndpoint, getMcpServer, listMcpServers } from '../storage/mcp-store.js';
 
 const TOOL_ID_SEPARATOR = '::';
 
@@ -74,9 +74,28 @@ function serverForActor(server, options = {}) {
 }
 
 async function connect(server, options = {}) {
-  const client = new McpHttpClient(serverForActor(server, options), options);
-  await client.initialize();
-  return client;
+  const resolved = serverForActor(server, options);
+  const client = new McpHttpClient(resolved, options);
+  try {
+    await client.initialize();
+    return client;
+  } catch (error) {
+    const actorId = String(options.actorId || '').trim();
+    const actorUrl = actorId ? String(server?.actorEndpoints?.[actorId] || '').trim() : '';
+    const baseUrl = String(server?.url || '').trim();
+    // A role-specific identity endpoint must never brick the whole MCP connection.
+    // If that override cannot even initialize, verify the configured public endpoint once.
+    // Only when the public endpoint succeeds do we remove the broken override.
+    if (!actorId || !actorUrl || !baseUrl || actorUrl === baseUrl) throw error;
+    const fallback = new McpHttpClient(server, options);
+    try {
+      await fallback.initialize();
+      clearMcpActorEndpoint(server.id, actorId);
+      return fallback;
+    } catch {
+      throw error;
+    }
+  }
 }
 
 /**
