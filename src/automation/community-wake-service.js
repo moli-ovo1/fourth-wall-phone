@@ -16,7 +16,7 @@ export function registerCommunityWakeExecutor(nextExecutor) {
   };
 }
 
-export async function requestCommunityWake({ scopeKey = '', actorId = '', actorName = '', source = 'community-wake' } = {}) {
+export async function requestCommunityWake({ scopeKey = '', actorId = '', actorName = '', source = 'community-wake', wakeRequest = null } = {}) {
   const request = {
     contractVersion: 1,
     requestId: `community-wake:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
@@ -25,6 +25,7 @@ export async function requestCommunityWake({ scopeKey = '', actorId = '', actorN
     actorName: String(actorName || ''),
     source: String(source || 'community-wake'),
     requestedAt: Date.now(),
+    wakeRequest: wakeRequest && typeof wakeRequest === 'object' ? wakeRequest : null,
   };
   if (!request.scopeKey || !request.actorId) return { status: 'rejected', reason: 'missing-context', request };
   if (typeof executor !== 'function') return { status: 'unavailable', reason: 'no-executor', request };

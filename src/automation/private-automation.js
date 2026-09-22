@@ -10,6 +10,8 @@ import { buildCharacterDecisionInstruction } from '../generation/character-decis
 import { updateCharacterRuntime } from '../storage/character-runtime-store.js';
 import { recordLifeLog, listLifeLogs } from '../storage/life-log-store.js';
 import { requestCommunityWake } from './community-wake-service.js';
+import { acquireWebSchedulerLease, releaseWebSchedulerLease } from './scheduler-lease.js';
+import { createWakeRequest } from './wake-contract.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -92,6 +94,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
     const body = getTavernAssistantTurnState();
     const revisions = getTavernMessageRevisionState();
     const now = Date.now();
+    const wakeLease = acquireWebSchedulerLease(now);
 
     let editedEvent = null;
     if (revisions.available) {
@@ -210,12 +213,30 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         && (a.externalWakeEnabled === true || a.communityWakeEnabled === true)
         && now - Number(a.lastCharacterWakeAt || 0) >= Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)) * 60 * 1000
       ) {
+        if (!wakeLease.acquired) continue;
+        const wakeRequest = createWakeRequest({
+          scopeKey,
+          characterId: String(contact.id || ''),
+          actorName: String(contact.name || ''),
+          wakeType: a.externalWakeEnabled === true ? 'external' : 'community',
+          baseRevision: Number(wakeLease.lease?.epoch || 0),
+          schedule: {
+            externalWakeEnabled: a.externalWakeEnabled === true,
+            communityWakeEnabled: a.communityWakeEnabled === true,
+            intervalMinutes: Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)),
+          },
+          capabilities: {
+            externalMcp: a.externalWakeEnabled === true,
+            communityDiscovery: a.communityWakeEnabled === true,
+          },
+          metadata: { schedulerOwner: 'web', schedulerEpoch: Number(wakeLease.lease?.epoch || 0) },
+        });
         if (a.externalWakeEnabled === true) {
           mode = 'character-wake';
           socialEvents = pendingSocialEvents;
         } else {
           updatePrivateAutomationRuntime(scopeKey, key, { lastCharacterWakeAt: Date.now() });
-          void requestCommunityWake({ scopeKey, actorId: String(contact.id || ''), actorName: String(contact.name || ''), source: 'community-wake' });
+          void requestCommunityWake({ scopeKey, actorId: String(contact.id || ''), actorName: String(contact.name || ''), source: 'community-wake', wakeRequest });
           continue;
         }
       } else if (
@@ -423,7 +444,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
     }
   };
   timer = window.setInterval(() => void tick(), POLL_MS); void tick();
-  return { destroy(){ destroyed=true; if(timer) window.clearInterval(timer); timer=null; }, tick };
+  return { destroy(){ destroyed=true; if(timer) window.clearInterval(timer); timer=null; releaseWebSchedulerLease(); }, tick };
 }
 
 
