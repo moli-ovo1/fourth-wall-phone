@@ -193,6 +193,14 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       } else if (
         eligibleAutoChatContact(contact)
         && !storyAligned
+        && a.characterWakeEnabled === true
+        && now - Number(a.lastCharacterWakeAt || 0) >= Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)) * 60 * 1000
+      ) {
+        mode = 'character-wake';
+        socialEvents = pendingSocialEvents;
+      } else if (
+        eligibleAutoChatContact(contact)
+        && !storyAligned
         && opportunity
         && a.autoChatEnabled
         && Number(a.autoChatProbability ?? 0) > 0
@@ -202,7 +210,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         socialEvents = pendingSocialEvents;
       }
       if (!mode) continue;
-      const decisionConsumer = mode === 'story-aligned' ? 'story-aligned-decision' : (mode === 'social-event' ? (storyAligned ? 'story-aligned-event-decision' : 'social-event-decision') : (mode === 'chat' ? 'proactive-private-decision' : 'commentary-decision'));
+      const decisionConsumer = mode === 'story-aligned' ? 'story-aligned-decision' : (mode === 'social-event' ? (storyAligned ? 'story-aligned-event-decision' : 'social-event-decision') : (mode === 'character-wake' ? 'character-wake-decision' : (mode === 'chat' ? 'proactive-private-decision' : 'commentary-decision')));
       decisionWorldEvents = listWorldEvents(scopeKey, {
         contactId: contact.id, awareness: 'known', limit: 30, unconsumedBy: decisionConsumer,
       });
@@ -230,8 +238,8 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         const recentActionText = recentBehaviorActions.length
           ? recentBehaviorActions.map(entry => `- ${Math.max(0, Math.round((now - Number(entry.at || 0)) / 60000))} 分钟前：${String(entry.action || 'SKIP')}`).join('\n')
           : '（最近没有刚执行过的主动行为）';
-        const allowPost = !storyAligned && !isFourthWall && mode !== 'commentary' && (mode !== 'social-event' || hasPostOpportunity);
-        const allowPrivate = mode === 'story-aligned' || storyAligned || mode === 'commentary' || Boolean(a.autoChatEnabled);
+        const allowPost = mode !== 'character-wake' && !storyAligned && !isFourthWall && mode !== 'commentary' && (mode !== 'social-event' || hasPostOpportunity);
+        const allowPrivate = mode !== 'character-wake' && (mode === 'story-aligned' || storyAligned || mode === 'commentary' || Boolean(a.autoChatEnabled));
         const storyAlignedContinuity = storyAligned ? `【正文人物同一性】\n你就是当前正文中的这个人物本人；小手机是你在正文世界里真实使用的手机，不是平行版本。正文当前处境是现实约束，手机中你已经亲历/知道的事情也是你自己的真实连续性。不要为了证明主动而发消息；只有以当前正文状态与手机经历而言，你本人此刻真的会拿起手机联系 User 时才 PRIVATE_CHAT，否则 SKIP。\n\n${buildPhoneContext(scopeKey, contact.id, { limit: 24, query: unifiedEventText, userName: 'User' }).text}` : '';
         const instruction = mode === 'story-aligned'
           ? buildCharacterDecisionInstruction({
@@ -244,6 +252,8 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
               recentActions: recentActionText,
               entrypoint: 'story-aligned-private-decision',
             })
+          : mode === 'character-wake'
+          ? `【Character Wake · 自主生活机会】\n这不是 User 给你的命令，也不是要求你必须联系 User。酒馆页面当前仍在运行，你获得了一次属于自己的短暂自由时间。\n你可以根据自己的人格、最近经历和真实兴趣，自主决定是否使用当前已授权给 Character Wake 的外部工具做一件你自己会做的事；也可以什么都不做。不要为了证明功能而强行行动。\n如果使用工具，依据工具的真实返回继续必要步骤；不要编造工具结果。完成后不要主动给 User 发消息，也不要发朋友圈，本轮最终严格输出 {\"action\":\"SKIP\"}。如果没有值得做的事，也严格输出同样 JSON。\n\n【最近手机连续性】\n${buildPhoneContext(scopeKey, contact.id, { limit: 24, query: unifiedEventText, userName: 'User' }).text}`
           : mode === 'commentary'
           ? (isFourthWall
             ? '这是正文刚发生后的场外私聊反应机会。你就是正文中的你本人，不是分析员。只有此刻真的会想联系用户时才回复；若不想说，严格只输出 [SKIP]。若回复，像手机私聊一样简短自然。'
@@ -264,7 +274,20 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           allowNoPendingUser: true,
           automationInstruction: instruction,
           fourthWallCommentary: isFourthWall && mode === 'commentary' ? commentaryEvent : null,
+          toolOrigin: mode === 'character-wake' ? 'character_wake' : 'private_chat',
         });
+
+        const wakeToolRecords = mode === 'character-wake' && Array.isArray(result?.toolCalling?.usedTools) ? result.toolCalling.usedTools : [];
+        if (wakeToolRecords.length) {
+          for (const toolRecord of wakeToolRecords) {
+            const safeResult = String(toolRecord?.resultText || '').replace(/https?:\/\/[^\s]+\/ctai[_\/\-]?v?1[_\/\-]?[^\s"']*/gi, '[专属 MCP 身份地址已隐藏]').slice(0, 1800);
+            recordWorldEvent(scopeKey, {
+              source: 'mcp.character-wake', actorId: contact.id, action: 'MCP_TOOL_USED', targetContactIds: [contact.id], objectId: String(toolRecord?.toolId || ''),
+              content: `你在一次自主醒来中使用了 ${String(toolRecord?.providerName || '外部工具')} / ${String(toolRecord?.name || 'tool')}。${safeResult ? `真实结果：${safeResult}` : ''}`.slice(0, 2200),
+              metadata: { toolId: String(toolRecord?.toolId || ''), toolName: String(toolRecord?.name || ''), providerName: String(toolRecord?.providerName || ''), origin: 'character_wake' }, awareness: 'known',
+            });
+          }
+        }
 
         let privateMessages = [];
         let postContent = '';
@@ -342,6 +365,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       } catch (e) { setGenerationError(scopeKey, key, `自动行为失败：${String(e?.message || e || '请求失败')}`, mode); console.error('[moli小手机] private automation failed:', e); }
       finally {
         const runtimePatch = { lastAutoChatAt: (mode === 'chat' || (mode === 'social-event' && !storyAligned && a.autoChatEnabled)) ? Date.now() : Number(a.lastAutoChatAt || 0) };
+        if (mode === 'character-wake') runtimePatch.lastCharacterWakeAt = Date.now();
         if (storyAligned && storySignature) runtimePatch.lastStoryAlignedBodySignature = storySignature;
         if (storyAligned) updateCharacterRuntime(scopeKey, contact.id, { existenceMode: 'story_aligned', sourceId: String(contact?.source?.sourceId || ''), storyTime: getCurrentTavernStoryTimeState(), storySignature, lastAttentionReason: mode || 'baseline', lastAttentionAt: Date.now(), lastDecision: behaviorAction || 'SKIP', lastDecisionAt: mode ? Date.now() : 0 });
         if (mode === 'social-event' || (mode === 'chat' && socialEvents.length)) runtimePatch.pendingSocialEvents = [];
