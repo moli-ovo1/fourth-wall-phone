@@ -3826,3 +3826,8 @@ Still next, without splitting into UI micro-patches:
 - Added `src/tools/tool-calling-service.js`: provider-neutral bounded Tool Calling loop over moli Tool Gateway.
 - The loop discovers enabled tools, namespaces calls through Tool Gateway, returns tool results to an injected model adapter, and stops after a bounded number of rounds.
 - Safety boundary: this release does **not** expose MCP tools to private/group chat automatically. Character/origin permissions and write confirmation must be added before chat wiring.
+
+## MCP capability layer — v0.6.39
+- Permission boundary is now enforced in Tool Gateway: server scope (global/characters), Character Wake opt-in, read/write policy.
+- Unknown MCP tools are conservatively write-capable unless server declares readOnlyHint.
+- Next integration point: private-chat model tool calling should pass actorId/origin and surface MOLI_TOOL_CONFIRM_REQUIRED through a user confirmation UI before retrying with confirmed=true.

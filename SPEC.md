@@ -4795,3 +4795,6 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 - Added `src/tools/tool-calling-service.js`: provider-neutral bounded Tool Calling loop over moli Tool Gateway.
 - The loop discovers enabled tools, namespaces calls through Tool Gateway, returns tool results to an injected model adapter, and stops after a bounded number of rounds.
 - Safety boundary: this release does **not** expose MCP tools to private/group chat automatically. Character/origin permissions and write confirmation must be added before chat wiring.
+
+## MCP 权限规范（v0.6.39）
+MCP 是 moli 的通用外部能力提供者，不默认等于角色权限。每个 Server 独立保存作用域（全部角色/指定角色）、Character Wake 授权，以及读取型/写入型调用策略。读取型仅信任 MCP 标准 annotations.readOnlyHint=true；没有声明 readOnlyHint 的工具按潜在写入能力处理。权限必须由 Tool Gateway 在 tools/call 前强制执行，界面隐藏或模型提示均不能代替运行时校验。

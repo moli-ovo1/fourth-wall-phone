@@ -974,3 +974,11 @@
 - Added `src/tools/tool-calling-service.js`: provider-neutral bounded Tool Calling loop over moli Tool Gateway.
 - The loop discovers enabled tools, namespaces calls through Tool Gateway, returns tool results to an injected model adapter, and stops after a bounded number of rounds.
 - Safety boundary: this release does **not** expose MCP tools to private/group chat automatically. Character/origin permissions and write confirmation must be added before chat wiring.
+
+## v0.6.39 / moli286 — MCP 角色权限与安全边界
+- MCP Server 增加全局/指定角色作用域；指定角色可在 MCP 编辑页勾选联系人。
+- 增加 Character Wake 独立授权开关，默认关闭。
+- 增加读取型工具与写入/未知工具的独立策略：允许、每次确认、禁止。
+- 安全默认：只有 MCP annotations.readOnlyHint=true 才视为读取型；未声明能力默认按写入能力保护并要求确认。
+- Tool Gateway 在实际 tools/call 前再次检查角色、来源与风险策略；不能只依赖 UI。
+- 本阶段仍未把 MCP 自动接入角色私聊生成链。
