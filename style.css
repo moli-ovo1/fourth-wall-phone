@@ -2879,3 +2879,6 @@
 #moli-phone-panel .moli-mcp-permission-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 #moli-phone-panel .moli-mcp-permission-actions button{border:0;border-radius:12px;padding:10px 8px;background:#eef0f1;color:#34383b;font-size:12px}
 #moli-phone-panel .moli-mcp-permission-actions button.primary{background:#202326;color:#fff}
+
+/* moli296: MCP is a first-class phone app. */
+#moli-phone-panel .moli-mcp-app-tile{display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#23272b,#4a545d);color:#fff;font:700 15px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.06em}

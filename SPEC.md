@@ -1,3 +1,11 @@
+## moli296 / v0.6.49 — MCP 主屏幕 App + 预授权无弹窗
+
+- MCP 从“设置”中的子项提升为手机主屏幕独立 App；MCP 中心返回键回主屏幕。
+- MCP App 集中管理服务器、认证、角色范围、Character Wake 与读取/写入权限。
+- 工具权限改为预先配置：自动允许 / 禁止。旧的 `confirm` 配置在读取时兼容迁移为允许，正常聊天不再弹 MCP 工具确认卡。
+- `account` 已获允许时，返回的角色持久身份 endpoint 自动只绑定当前角色；不再在聊天中弹身份接管确认，完整凭证仍按既有脱敏链路处理。
+- 未改变 MCP Tool Gateway、CEDAR 持久身份、Observation/Native Tool Calling 的主体链路。
+
 ## moli295 / v0.6.48 — MCP 权限确认 UI 收尾
 
 - 将 MCP `confirm` 临时浏览器弹窗替换为 moli 手机内权限卡片，不再显示 `来自 127.0.0.1 的消息`。
