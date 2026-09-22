@@ -470,6 +470,7 @@ export async function generatePrivateReply({
         signal,
         toolContext,
         confirmTool,
+        confirmIdentityHandoff,
         adapter: {
           complete: ({ request: toolRequest, tools, history, signal: toolSignal }) =>
             completeProviderWithTools(config, toolRequest, { tools, history, signal: toolSignal }),
