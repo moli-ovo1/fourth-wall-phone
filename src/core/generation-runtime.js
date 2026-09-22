@@ -13,7 +13,18 @@ export function endGenerationTask(scopeKey, conversationKey, controller = null) 
   if (task && (!controller || task.controller === controller)) tasks.delete(key);
   window.dispatchEvent(new CustomEvent('moli:generation-state', { detail: { scopeKey, conversationKey, active: false, source: task?.source || 'manual' } }));
 }
-export function getGenerationTask(scopeKey, conversationKey) { return tasks.get(keyOf(scopeKey, conversationKey)) || null; }
+export function getGenerationTask(scopeKey, conversationKey) {
+  const key = keyOf(scopeKey, conversationKey);
+  const task = tasks.get(key) || null;
+  // A task is an in-memory UI/runtime lock, not durable state. If an upstream request died
+  // without reaching its finally block (page/provider interruption), never leave WeChat locked forever.
+  if (task && Date.now() - Number(task.startedAt || 0) > 5 * 60 * 1000) {
+    tasks.delete(key);
+    window.dispatchEvent(new CustomEvent('moli:generation-state', { detail: { scopeKey, conversationKey, active: false, source: task.source || 'stale-recovery' } }));
+    return null;
+  }
+  return task;
+}
 export function isGenerationActive(scopeKey, conversationKey) { return Boolean(getGenerationTask(scopeKey, conversationKey)?.active); }
 export function abortGenerationTask(scopeKey, conversationKey) { const task=getGenerationTask(scopeKey, conversationKey); if (!task?.controller) return false; task.controller.abort(); return true; }
 
