@@ -1,7 +1,7 @@
 import { getStudioPromptSettings, saveStudioPromptSettings, resetStudioPrompt } from '../storage/studio-prompt-store.js';
 import { getLargeStorageStats } from '../storage/large-storage.js';
 import { readRaw, writeRaw } from '../storage/storage-adapter.js';
-import { listLifeLogs } from '../storage/life-log-store.js';
+import { listLifeLogs, recordLifeLog } from '../storage/life-log-store.js';
 import {
   getContacts,
   getConversation,
@@ -4657,9 +4657,33 @@ export function createPhonePanel({
     filter.innerHTML=`<button class="${!lifeActorFilter?'active':''}" data-life-actor="">全部</button>`+contacts.map(c=>`<button class="${lifeActorFilter===String(c.id)?'active':''}" data-life-actor="${escapeHtml(c.id)}">${escapeHtml(c.name||'角色')}</button>`).join('');
     filter.querySelectorAll('[data-life-actor]').forEach(btn=>btn.addEventListener('click',()=>{lifeActorFilter=String(btn.dataset.lifeActor||'');renderLifeLog();}));
     const rows=listLifeLogs(scopeKey,{actorId:lifeActorFilter,limit:300,autonomousOnly:true});
-    if(!rows.length){list.innerHTML='<div class="moli-life-empty">这里还没有自主生活记录。<br><small>Character Wake 醒来、SKIP 或通过 MCP 做事后，会自动出现在这里。</small></div>';return;}
+    if(!rows.length){list.innerHTML='<div class="moli-life-empty">这里还没有自主生活记录。<br><small>Character Wake、MCP 外部活动和自主社区动态会自动出现在这里。</small></div>';return;}
     const fmt=t=>{const d=new Date(Number(t)||Date.now());return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
-    list.innerHTML=rows.map(r=>`<article class="moli-life-card"><div class="moli-life-head"><b>${escapeHtml(r.actorName||'角色')}</b><time>${fmt(r.createdAt)}</time></div><strong>${escapeHtml(r.title||'活动')}</strong>${r.summary?`<p>${escapeHtml(r.summary)}</p>`:''}<small>${escapeHtml(r.source||'自主活动')}</small></article>`).join('');
+    const cleanToolSummary=value=>{
+      let text=String(value||'').trim();
+      try {
+        const outer=JSON.parse(text);
+        const first=Array.isArray(outer?.content)?outer.content.find(x=>x?.type==='text'&&x?.text):null;
+        if(first?.text){ text=String(first.text); try{const inner=JSON.parse(text); text=String(inner?.text||inner?.message||inner?.result||text);}catch{} }
+      } catch {}
+      return text.replace(/\\n/g,'\n').replace(/\\"/g,'"').replace(/\s+/g,' ').trim().slice(0,520);
+    };
+    const grouped=[]; const byRun=new Map();
+    for(const r of rows){
+      const runId=String(r?.metadata?.wakeRunId||'');
+      if(!runId){ grouped.push({type:'single',rows:[r],at:r.createdAt}); continue; }
+      let g=byRun.get(runId); if(!g){g={type:'wake',rows:[],at:r.createdAt};byRun.set(runId,g);grouped.push(g);} g.rows.push(r); g.at=Math.max(g.at,Number(r.createdAt||0));
+    }
+    grouped.sort((a,b)=>b.at-a.at);
+    list.innerHTML=grouped.map(g=>{
+      if(g.type==='single'){const r=g.rows[0];return `<article class="moli-life-card"><div class="moli-life-head"><b>${escapeHtml(r.actorName||'角色')}</b><time>${fmt(r.createdAt)}</time></div><strong>${escapeHtml(r.title||'活动')}</strong>${r.summary?`<p>${escapeHtml(r.summary)}</p>`:''}<small>${escapeHtml(r.source||'自主活动')}</small></article>`;}
+      const ordered=[...g.rows].sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
+      const start=ordered.find(r=>r?.metadata?.phase==='start'); const end=ordered.find(r=>r?.metadata?.phase==='end'); const tools=ordered.filter(r=>r.kind==='mcp'); const actor=end?.actorName||start?.actorName||ordered[0]?.actorName||'角色';
+      let title='有了一点自己的时间', summary='闲下来了一会儿，看看有没有什么想做的。', source='自主活动';
+      if(end&&tools.length){title='出去转了一圈'; const providers=[...new Set(tools.map(r=>r.source).filter(Boolean))]; const details=tools.map(r=>cleanToolSummary(r.summary)).filter(Boolean); summary=`${actor}自己去了${providers.length?` ${providers.join('、')}`:'外面'}。${details.length?` ${details.join('；')}`:''}`; source=providers.join(' · ')||'MCP 自主活动';}
+      else if(end){title='今天没有出去';summary='想了想，最后还是决定待着。';}
+      return `<article class="moli-life-card"><div class="moli-life-head"><b>${escapeHtml(actor)}</b><time>${fmt(g.at)}</time></div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(summary)}</p><small>${escapeHtml(source)}</small></article>`;
+    }).join('');
   }
 
   const show = name => {
@@ -8362,21 +8386,23 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     if (!post || !ids.length) return null;
     return recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:'system',action:'POST_SNAPSHOT_KNOWN',targetContactIds:ids,objectId:String(post.id||''),content:`你已经看过截至当时的这篇${sourceLabel(post)}内容。\n${communityPostKnowledgeText(post,snapshotAt)}`,metadata:{postId:String(post.id||''),snapshotAt:Number(snapshotAt||Date.now()),knowledgeScope:'post_snapshot',reason},awareness:'known',dedupeKey:`community-post-snapshot:${post.id}:${ids.sort().join(',')}:${Number(snapshotAt||0)}`});
   };
-  const settleCommunityDiscovery = async (posts, settings = getPublicWebSettings(getScopeKey?.())) => {
+  const settleCommunityDiscovery = async (posts, settings = getPublicWebSettings(getScopeKey?.()), { actorIds = [], autonomousWake = false } = {}) => {
     const scopeKey=getScopeKey?.(); const rows=(Array.isArray(posts)?posts:[]).filter(Boolean); if(!scopeKey||!rows.length)return [];
     try{
-      const result=await generateCommunityDiscoveryRefresh({scopeKey,posts:rows,fixedPersonasCommunityEnabled:Boolean(settings?.fixedPersonasCommunityEnabled)});
+      const result=await generateCommunityDiscoveryRefresh({scopeKey,posts:rows,fixedPersonasCommunityEnabled:Boolean(settings?.fixedPersonasCommunityEnabled),actorIds});
       const byId=new Map(rows.map(post=>[String(post.id||''),post]));
       for(const actor of result?.actors||[]){
         const target=getContacts().find(x=>String(x.id)===String(actor.actorId)); if(!target)continue;
         const viewed=(actor.viewedPostIds||[]).map(id=>byId.get(String(id))).filter(Boolean);
         const viewedEventByPostId=new Map();
         for(const post of viewed){const event=recordCommunityPostSnapshotAwareness(scopeKey,post,[actor.actorId],'autonomous-browse',Date.now());if(event?.id)viewedEventByPostId.set(String(post.id||''),event);}
+        if(autonomousWake&&viewed.length) recordLifeLog(scopeKey,{actorId:target.id,actorName:displayName(target),kind:'community-browse',title:'逛了逛社区',summary:`自己看了 ${viewed.length} 篇帖子。`,source:'社区',metadata:{autonomous:true,communityWake:true,postIds:viewed.map(post=>String(post.id||''))}});
         const actionPost=byId.get(String(actor.actionPostId||''));
         if(actionPost&&viewed.some(p=>String(p.id)===String(actionPost.id))){
           const mode=String(actor.publicAction||'SKIP').toUpperCase(); const text=String(actor.publicContent||'').trim();
           if((mode==='REPLY_REAL'||mode==='REPLY_ANONYMOUS')&&text){
             commitCharacterCommunityReply({scopeKey,post:actionPost,target,decision:mode,content:text,alias:String(actor.publicAlias||''),replyToCommentId:String(actor.replyToCommentId||''),answerId:String(actor.answerId||''),action:mode==='REPLY_ANONYMOUS'?'AUTONOMOUS_REPLY_ANONYMOUS':'AUTONOMOUS_REPLY_REAL',reason:'autonomous-participation'});
+            if(autonomousWake) recordLifeLog(scopeKey,{actorId:target.id,actorName:displayName(target),kind:'community-reply',title:mode==='REPLY_ANONYMOUS'?'用小号回了一条帖子':'在社区回了一条帖子',summary:`${sourceLabel(actionPost)} · ${String(actionPost.title||actionPost.content||'').trim().slice(0,80)}\n${text.slice(0,300)}`,source:'社区',metadata:{autonomous:true,communityWake:true,postId:String(actionPost.id||''),anonymous:mode==='REPLY_ANONYMOUS'}});
           }
         }
         const privateConv=getScopeConversations(scopeKey).filter(c=>c?.type==='private'&&String(c.contactId||'')===String(target.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
@@ -8396,7 +8422,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
         const section=['tianya','xiaohongshu','zhihu','weibo'].includes(String(item.section||''))?String(item.section):'weibo';
         const anonymous=Boolean(item.anonymous); const author=anonymous?{type:'contact',id:target.id,name:String(item.alias||'小号用户').trim()||'小号用户',anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false};
         const created=createPublicWebPost(scopeKey,{section,type:section==='zhihu'?'question':section==='xiaohongshu'?'note':section==='weibo'?'weibo':'thread',author,title:String(item.title||'').trim()||String(item.content||'').trim().slice(0,36),content:String(item.content||'').trim(),tags:Array.isArray(item.tags)?item.tags:[],extra:section==='weibo'?{weiboLane:'实时',autonomousCharacterPost:true}:section==='xiaohongshu'?{imagePrompt:String(item.imagePrompt||''),imageText:String(item.imageText||''),autonomousCharacterPost:true}:{autonomousCharacterPost:true}});
-        if(created){const postEvent=recordWorldEvent(scopeKey,{source:`community.${section}`,actorId:target.id,action:'CHARACTER_POSTED',targetContactIds:[target.id],objectId:String(created.id||''),content:`你${anonymous?'使用小号':'实名'}在${sourceLabel(created)}主动发帖：“${String(created.title||created.content||'').slice(0,500)}”`,metadata:{postId:String(created.id||''),decision:'PROACTIVE_POST',anonymousAlias:anonymous?String(item.alias||'小号用户').trim()||'小号用户':''},awareness:'known'});recordCommunityPostSnapshotAwareness(scopeKey,created,[target.id],'autonomous-post',Date.now());if(anonymous)rememberAnonymousIdentity(scopeKey,{surface:`community.${section}`,alias:String(item.alias||'小号用户').trim()||'小号用户',realContactId:target.id,knownBy:[target.id],evidenceEventId:postEvent?.id});}
+        if(created){const postEvent=recordWorldEvent(scopeKey,{source:`community.${section}`,actorId:target.id,action:'CHARACTER_POSTED',targetContactIds:[target.id],objectId:String(created.id||''),content:`你${anonymous?'使用小号':'实名'}在${sourceLabel(created)}主动发帖：“${String(created.title||created.content||'').slice(0,500)}”`,metadata:{postId:String(created.id||''),decision:'PROACTIVE_POST',anonymousAlias:anonymous?String(item.alias||'小号用户').trim()||'小号用户':''},awareness:'known'});recordCommunityPostSnapshotAwareness(scopeKey,created,[target.id],'autonomous-post',Date.now());if(anonymous)rememberAnonymousIdentity(scopeKey,{surface:`community.${section}`,alias:String(item.alias||'小号用户').trim()||'小号用户',realContactId:target.id,knownBy:[target.id],evidenceEventId:postEvent?.id});if(autonomousWake)recordLifeLog(scopeKey,{actorId:target.id,actorName:displayName(target),kind:'community-post',title:anonymous?'用小号发了一篇帖子':'自己发了一篇帖子',summary:`${sourceLabel(created)} · ${String(created.title||'').trim().slice(0,100)}${created.content?`\n${String(created.content).trim().slice(0,360)}`:''}`,source:'社区',metadata:{autonomous:true,communityWake:true,postId:String(created.id||''),section,anonymous}});}
       }
       return result?.actors||[];
     }catch(error){console.error('[moli小手机] community autonomous discovery failed:',error);return [];}
@@ -9689,6 +9715,19 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   };
   windowRef.addEventListener('moli:generation-state', externalGenerationState);
 
+  const communityWakeRunning = new Set();
+  const externalCommunityWake = async event => {
+    const detail=event?.detail||{}; const scopeKey=getScopeKey?.(); const actorId=String(detail.actorId||'');
+    if(!scopeKey||String(detail.scopeKey||'')!==String(scopeKey)||!actorId)return;
+    const lock=`${scopeKey}:${actorId}`; if(communityWakeRunning.has(lock))return;
+    const posts=listPublicWebPosts(scopeKey,{section:'recommend'}).slice(0,12); if(!posts.length)return;
+    communityWakeRunning.add(lock);
+    try{await settleCommunityDiscovery(posts,getPublicWebSettings(scopeKey),{actorIds:[actorId],autonomousWake:true});renderPublicWeb();renderLifeLog();}
+    catch(error){console.error('[moli小手机] community wake failed:',error);}
+    finally{communityWakeRunning.delete(lock);}
+  };
+  windowRef.addEventListener('moli:community-wake-request',externalCommunityWake);
+
   const externalGenerationError = event => {
     const detail = event?.detail || {};
     if (detail.scopeKey && detail.scopeKey !== getScopeKey?.()) return;
@@ -9734,6 +9773,7 @@ open(handleElement) {
 
     destroy() {
       windowRef.removeEventListener('moli:conversation-updated', externalConversationUpdate);
+      windowRef.removeEventListener('moli:community-wake-request', externalCommunityWake);
       windowRef.removeEventListener('moli:generation-state', externalGenerationState);
       windowRef.removeEventListener('moli:generation-error', externalGenerationError);
       panel.remove();
