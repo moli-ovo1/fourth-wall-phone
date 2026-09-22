@@ -1670,17 +1670,18 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
  * what a character actually happened to browse during this refresh. It does not
  * force a reply and does not turn backend-visible posts into character knowledge.
  */
-export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], fixedPersonasCommunityEnabled = false, signal } = {}) {
+export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], fixedPersonasCommunityEnabled = false, actorIds = [], signal } = {}) {
   if (!scopeKey) throw new Error('当前社区不可用');
   const visiblePosts = (Array.isArray(posts) ? posts : []).filter(post => post?.id).slice(-12);
   if (!visiblePosts.length) return { actors: [], proactivePosts: [] };
 
-  const candidates = [...communityWorldContacts(scopeKey)];
+  const requestedActorIds = new Set((Array.isArray(actorIds) ? actorIds : [actorIds]).map(String).filter(Boolean));
+  const candidates = [...communityWorldContacts(scopeKey)].filter(contact => !requestedActorIds.size || requestedActorIds.has(String(contact.id || '')));
   if (fixedPersonasCommunityEnabled) {
     const byId = new Map(getContacts().map(item => [String(item.id || ''), item]));
     for (const id of ['builtin:guide', 'builtin:meta', 'builtin:writer']) {
       const contact = byId.get(id);
-      if (contact && !candidates.some(item => String(item.id || '') === id)) candidates.push(hydratedContact(contact));
+      if (contact && (!requestedActorIds.size || requestedActorIds.has(id)) && !candidates.some(item => String(item.id || '') === id)) candidates.push(hydratedContact(contact));
     }
   }
   if (!candidates.length) return { actors: [], proactivePosts: [] };
