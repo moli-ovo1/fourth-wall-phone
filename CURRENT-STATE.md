@@ -1,3 +1,13 @@
+## moli282 / v0.6.35 — MCP Client Core 第一步
+- 新增 moli 自有远程 HTTP MCP Client Core；当前只建立协议/连接底座，不接入聊天、Automation、Character Wake 或 UI，因此不会改变任何现有角色行为。
+- 支持标准 JSON-RPC 初始化链：`initialize` → `notifications/initialized` → `tools/list`，并预留标准 `tools/call`；支持 JSON 与基础 SSE 响应、`Mcp-Session-Id` 会话头。
+- 新增多 MCP Server 轻量配置存储：HTTP/HTTPS 地址、启用状态、无认证 / Bearer / 自定义 Header 认证及额外 Headers。Token 只保存在当前 moli 用户本地配置，不写入仓库。
+- 新增独立 `testMcpConnection()`，后续 MCP 中心 UI 可直接复用完成“测试连接 + 自动发现 Tools”。
+- 当前只支持远程 HTTP/HTTPS MCP；不支持 stdio。浏览器 CORS / 代理策略留到 MCP 中心接线阶段实机验证后决定，不在本步擅自增加代理。
+- 无现有 Schema/Conversation/Scope Key 迁移；新增独立 `moli-phone:mcp-servers:v1` 轻量设置 key。
+
+> Updated 2026-09-22. This top block is authoritative; older entries below are retained as history.
+
 ## moli281 / v0.6.34 — Story-Aligned 统一身份基底
 - Tavern/正文人物在手机各入口继续以 SillyTavern 角色卡为基础身份，不要求在 moli 复制一套角色人设。
 - Tavern 联系人的 moli 资料条目现在作为“补充层”开放：只写手机侧新增设定；启用且本轮命中的条目才追加到人物身份，不覆盖角色卡。

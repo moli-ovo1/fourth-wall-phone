@@ -1,3 +1,12 @@
+## v0.6.35 MCP Client Core（moli282）
+- [x] 新增 `src/integrations/mcp/mcp-protocol.js`：moli 自有 MCP JSON-RPC 消息构造与响应校验。
+- [x] 新增 `src/integrations/mcp/mcp-client.js`：远程 HTTP/HTTPS MCP 初始化、会话、Tools 发现与 Tool Call 底座。
+- [x] 新增 `src/storage/mcp-store.js`：多 Server 轻量配置存储；不让 UI/Generation 直接依赖具体 storage key。
+- [x] 第一步保持隔离：不修改 Generation / Automation / Character Runtime 行为。
+- [ ] 下一步：MCP 中心 UI（添加/编辑/删除/启用 Server、测试连接、显示 Tools）。
+- [ ] MCP 中心实机连接后再决定浏览器 CORS 的正式 transport/proxy 方案；禁止在未验证前写死第三方代理。
+- [ ] 后续 Tool Gateway 再接 Generation / Automation / Character Wake；权限与写操作确认独立设计。
+
 ## moli281 / v0.6.34 — Unified Tavern identity base
 - Tavern character card = base identity; moli profile entries/prompt = supplements; Tavern world book = enabled + dynamically activated entries only.
 - First consumers: Community / public Moments / existing batchRoleProfile paths. No change to phone-native behavior.

@@ -1,3 +1,10 @@
+## v0.6.35 — MCP Client Core Contract
+- moli 的 MCP 能力是通用外部能力底座，不绑定搜索、花园或任何单一第三方程序。一个 moli 可保存多个远程 MCP Server。
+- 第一阶段 transport 仅接受 HTTP/HTTPS；协议链为 `initialize`、`notifications/initialized`、`tools/list`，Tool Runtime 可调用 `tools/call`。
+- MCP 配置属于轻量用户设置，经 Storage abstraction 保存；密钥不得写入仓库或默认配置。
+- MCP Client Core 不得直接改变人物行为。AI Tool Calling、Automation、Character Wake、Garden 等只能在后续通过 moli 自己的 Tool Gateway/权限层接入。
+- 外部 MCP 的 CORS/代理属于 transport 问题，不允许为了“能连”默认把用户 Token 转交给未知第三方代理。
+
 ## moli278 / v0.6.31 — 编辑室提示词实验口
 - 编辑室右上角 `…` 新增 `编辑室提示词`，可直接编辑公共 Prompt、`Ta出场太少啦`、`帮我想梗`。
 - 保存后下一次生成立即读取本地版本；三个框均可独立恢复默认，刷新酒馆仍保留。
