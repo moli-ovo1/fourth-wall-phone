@@ -20,9 +20,9 @@ import java.util.UUID;
 /**
  * Approximate background opportunity scheduler.
  *
- * This worker deliberately stops before AI/MCP execution until the Android
- * capability runtime is installed. Acquiring a lease is not permission to
- * fabricate a WakeResult. The latest Web snapshot remains the only input.
+ * Acquiring a lease is necessary but not sufficient: the worker also requires
+ * a synced Web snapshot, an independent Provider, and an enabled Community or
+ * authorized MCP capability. The latest Web snapshot remains the only input.
  */
 public final class CompanionWakeWorker extends Worker {
     private static final long LEASE_TTL_MS = 5L * 60L * 1000L;

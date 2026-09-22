@@ -5,6 +5,7 @@ import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.PeriodicWorkRequest;
+import androidx.work.OneTimeWorkRequest;
 import androidx.work.WorkManager;
 import java.util.concurrent.TimeUnit;
 
@@ -12,6 +13,12 @@ import java.util.concurrent.TimeUnit;
 public final class CompanionWakeScheduler {
     private static final String WORK_NAME = "moli-companion-wake-tick-v1";
     private CompanionWakeScheduler() {}
+
+    public static void runDiagnosticNow(Context context) {
+        Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+        WorkManager.getInstance(context.getApplicationContext()).enqueue(
+                new OneTimeWorkRequest.Builder(CompanionWakeWorker.class).setConstraints(constraints).build());
+    }
 
     public static void ensureScheduled(Context context) {
         Constraints constraints = new Constraints.Builder()
