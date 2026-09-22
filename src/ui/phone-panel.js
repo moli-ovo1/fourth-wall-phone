@@ -120,7 +120,7 @@ import { getPrivatePhoneTraces, settlePrivatePhoneTraceRefresh } from '../storag
 import { registerWallSourceProvider, listRegisteredWallSources } from '../storage/wall-source-registry.js';
 import { listCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalendarEvent } from '../storage/calendar-store.js';
 import { listMcpServers, getMcpServer, saveMcpServer, deleteMcpServer } from '../storage/mcp-store.js';
-import { testMcpConnection } from '../integrations/mcp/mcp-client.js';
+import { testMcpConnection } from '../integrations/mcp-client.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
