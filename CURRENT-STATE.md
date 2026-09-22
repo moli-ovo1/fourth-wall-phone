@@ -1175,3 +1175,11 @@
 - Web 在 Companion 已配对且 Bridge 可达时，不再只在“恰好到 Wake 时间”才同步请求；每次前台 automation tick 会为已启用 Character Wake 的角色预置最新 portable Wake Snapshot，降低“刚关闭酒馆就没有后台输入”的断层。
 - 本版刻意保留执行安全闸：Android 还没有独立 AI/MCP Headless capability runtime，因此 Worker 取得 lease 后只记录 device-local opportunity diagnostic，不生成伪造 WakeResult、不写角色事实。也就是说，**后台调度已经真实运行，后台角色行为尚未启用**。
 - 下一步：实现 Android Headless capability runtime（先独立 Provider + Credential Vault resolution，再 MCP），让 Worker 在取得 lease 后真正执行 WakeRequest 并把 WakeResult 写入 pending Journal。
+
+## moli313 / v0.6.66 — Companion Phase 1B：Independent AI Provider + first real background WakeResult
+
+- Android Companion 新增独立 OpenAI-compatible Provider；Base URL / model 为非秘密配置，API Key 只进入 Android Keystore-backed Credential Vault。
+- WorkManager 在取得 Companion lease 后，可使用关闭酒馆前预置的 secret-free Wake Snapshot 执行真实社区自主决策，并把完整 `COMMUNITY_POSTED` / `COMMUNITY_REPLIED` + `LIFE_EVENT` 写入 pending WakeResult。
+- 每次后台机会从可复用 Snapshot 模板派生新的 wakeId，避免 journal/commit 幂等键把后续后台生活错误折叠成第一次。
+- 当前 Android Headless runtime 只开放 Community capability；外部生活 MCP 仍明确停在 `waiting-mcp-runtime`，不会伪造外部行动。
+- Companion UI 可配置后台 Provider；未配置 Provider 时 Worker 不调用 AI、不生成假事实。

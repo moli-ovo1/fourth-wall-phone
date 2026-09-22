@@ -1,4 +1,4 @@
-# moli Current Architecture — v0.6.65 / moli312
+# moli Current Architecture — v0.6.66 / moli313
 
 > This is the short authoritative architecture entry for future development. If an old TODO in SPEC.md conflicts with current code or this document, treat it as historical unless CURRENT-STATE.md says otherwise.
 
@@ -106,5 +106,9 @@ Phase 1B begins with `companion/` as a second executor, never a second character
 Transport now has a concrete first implementation: a token-protected loopback HTTP bridge bound only to `127.0.0.1:17463`. Android owns only transport-pending WakeRequest/WakeResult/Lease envelopes plus encrypted credentials; canonical social/character facts remain Web-owned. On foreground recovery, Web pulls pending Companion results, commits them through the canonical event adapter, ACKs only committed/duplicate wakeIds, then CAS-takes the scheduler lease. A missing/unavailable Companion must not break foreground Web Wake. WorkManager is intentionally still absent.
 
 
-## moli312 / v0.6.65 — WorkManager owns opportunities, not facts
+## moli313 / v0.6.66 — WorkManager owns opportunities, not facts
 Android now has a real approximate background scheduler. The Worker reads only portable snapshots already staged by Web, applies each role's configured interval, and must CAS-acquire an expired scheduler lease before proceeding. Foreground Web refreshes the staged snapshot while Companion is reachable so closing SillyTavern does not require the close moment to coincide with a wake deadline. The current Worker intentionally stops at the capability-runtime gate: Android has not yet implemented an independent AI/MCP executor, therefore scheduler ownership cannot create a fake character action or WakeResult. This preserves the one-character/two-executors rule while making the Android scheduling layer real.
+
+## moli313 / v0.6.66 — Android Headless Provider
+
+Companion 现在拥有第一条真实 Headless 执行链：`WorkManager → Scheduler Lease → staged WakeRequest → independent AI Provider → portable WakeResult → pending journal transport`。AI Secret 只保存在 Android Credential Vault；Wake contract 继续保持 secret-free。当前 Android executor 只执行 Community capability，MCP 外部生活尚未开放，因此不会把模型想象当作外部事实。

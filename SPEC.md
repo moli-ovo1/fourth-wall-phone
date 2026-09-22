@@ -4979,3 +4979,9 @@ Android Companion lives under `companion/` in the same repository. It is an exec
 - A Worker may execute only after the Web lease has expired and Companion successfully CAS-acquires ownership. Scheduling does not itself authorize a character fact.
 - While Web is active and Companion is paired/reachable, enabled Character Wake roles stage a fresh portable Wake Snapshot on normal automation ticks so background execution has a recent canonical projection before Web disappears.
 - Until Android has an independent Headless AI/MCP capability runtime, the Worker must stop after ownership/due checks and emit no fabricated WakeResult. Canonical facts remain Web-owned and portable results remain secret-free.
+
+### Companion 后台 Provider（moli313）
+- 后台执行不得依赖 SillyTavern `generateRaw()`；Companion 使用用户单独配置的独立 OpenAI-compatible Provider。
+- Provider Secret 属于 Companion Credential Vault，禁止进入 Wake Snapshot、WakeResult、Offline Journal 或 Web canonical store。
+- 313 首个真实后台 capability 为“自主逛社区”：AI 只能 SKIP、发布新帖或回复 Snapshot 中真实存在的帖子；生成结果作为事实事件等待 Web 恢复后 canonical commit。
+- 外部生活（MCP）尚未接入 Android runtime 时必须停住，不得用语言模型虚构“已经调用 MCP/已经做了外部行动”。

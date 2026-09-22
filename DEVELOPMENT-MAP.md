@@ -4014,3 +4014,10 @@ Companion Phase 1B transport/handoff landed: loopback Bridge + pairing token + W
 - DONE: foreground Web pre-stages fresh Wake Snapshot for enabled Character Wake roles when Companion is paired/reachable, rather than waiting until the exact foreground wake is due.
 - SAFETY GATE: no Android Headless provider/MCP runtime yet, so Worker does not invent/append WakeResult.
 - NEXT: Android independent Provider runtime + Credential Vault lookup; then MCP capability; then append real WakeResult to pending Journal and exercise close-ST → background wake → reopen-ST recovery.
+
+### moli313 / v0.6.66
+- [x] Android 独立 OpenAI-compatible Provider + Keystore Secret boundary
+- [x] WorkManager → lease → Headless Community decision → pending WakeResult
+- [x] 后台每次机会派生唯一 wakeId
+- [x] 未配置 Provider / 未接 MCP 时 fail closed，不伪造角色事实
+- [ ] 下一步：Android MCP capability runtime（含角色级凭证/权限）与真实外部生活结果
