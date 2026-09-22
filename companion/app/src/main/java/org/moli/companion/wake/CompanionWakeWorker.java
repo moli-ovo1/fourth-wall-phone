@@ -12,6 +12,8 @@ import org.moli.companion.transport.LoopbackCompanionTransport;
 import org.moli.companion.provider.ProviderSettings;
 import org.moli.companion.provider.OpenAiCompatibleClient;
 import org.moli.companion.headless.AndroidHeadlessWakeExecutor;
+import org.moli.companion.mcp.McpProfileStore;
+import org.moli.companion.mcp.McpCapabilityRuntime;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,8 +50,12 @@ public final class CompanionWakeWorker extends Worker {
                 JSONObject capabilities = template.optJSONObject("capabilities");
                 boolean communityReady = schedule != null && schedule.optBoolean("communityWakeEnabled", false)
                         && capabilities != null && capabilities.optBoolean("communityDiscovery", false);
-                if (!communityReady) {
-                    store.recordWorkerOpportunity(scopeKey, now, "waiting-mcp-runtime");
+                boolean externalRequested = schedule != null && schedule.optBoolean("externalWakeEnabled", false)
+                        && capabilities != null && capabilities.optBoolean("externalMcp", false);
+                McpProfileStore mcpProfiles = new McpProfileStore(getApplicationContext());
+                boolean externalReady = externalRequested && mcpProfiles.configured(template.optString("characterId", ""));
+                if (!communityReady && !externalReady) {
+                    store.recordWorkerOpportunity(scopeKey, now, externalRequested ? "mcp-not-configured" : "no-background-capability");
                     continue;
                 }
                 ProviderSettings provider = new ProviderSettings(getApplicationContext());
@@ -62,7 +68,9 @@ public final class CompanionWakeWorker extends Worker {
                 JSONObject request = new JSONObject(template.toString());
                 request.put("wakeId", template.optString("wakeId", "wake") + ":android:" + now + ":" + UUID.randomUUID());
                 request.put("requestedAt", now);
-                AndroidHeadlessWakeExecutor executor = new AndroidHeadlessWakeExecutor(new OpenAiCompatibleClient(provider));
+                OpenAiCompatibleClient ai = new OpenAiCompatibleClient(provider);
+                McpCapabilityRuntime mcpRuntime = externalReady ? new McpCapabilityRuntime(mcpProfiles, ai) : null;
+                AndroidHeadlessWakeExecutor executor = new AndroidHeadlessWakeExecutor(ai, mcpRuntime);
                 JSONObject result = executor.execute(request);
                 transport.appendPendingWakeResult(result);
                 completed++;
