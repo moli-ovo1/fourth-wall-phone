@@ -973,7 +973,7 @@ export function updateContact(contactId, { name, remark, customAvatar, intro, pr
   const list = getContacts();
   const contact = list.find(item => item.id === contactId);
   if (!contact) throw new Error('联系人不存在');
-  if (profileEntries !== undefined && contact.kind === 'custom') {
+  if (profileEntries !== undefined && ['custom', 'tavern'].includes(contact.kind)) {
     contact.profileEntries = Array.isArray(profileEntries) ? profileEntries.map((entry, index) => ({ id: String(entry?.id || `entry:${Date.now()}:${index}`), title: String(entry?.title || `条目 ${index + 1}`).trim() || `条目 ${index + 1}`, content: String(entry?.content || ''), enabled: entry?.enabled !== false, activationMode: entry?.activationMode === 'keywords' ? 'keywords' : 'always', keywords: String(entry?.keywords || '') })) : [];
   }
   if (name !== undefined && contact.kind === 'custom') {
