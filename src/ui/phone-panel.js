@@ -1,6 +1,7 @@
 import { getStudioPromptSettings, saveStudioPromptSettings, resetStudioPrompt } from '../storage/studio-prompt-store.js';
 import { getLargeStorageStats } from '../storage/large-storage.js';
 import { readRaw, writeRaw } from '../storage/storage-adapter.js';
+import { listLifeLogs } from '../storage/life-log-store.js';
 import {
   getContacts,
   getConversation,
@@ -214,6 +215,10 @@ export function createPhonePanel({
           <button class="moli-app-icon" data-action="open-mcp" aria-label="打开 MCP">
             <span class="moli-app-icon-tile moli-mcp-app-tile">MCP</span>
             <small>MCP</small>
+          </button>
+          <button class="moli-app-icon" data-action="open-life" aria-label="打开他的生活">
+            <span class="moli-app-icon-tile moli-life-app-tile">迹</span>
+            <small>他的生活</small>
           </button>
           <button class="moli-app-icon" data-action="open-his-phone" aria-label="打开他的手机">
             <span class="moli-app-icon-tile moli-his-phone-app-tile">他</span>
@@ -685,6 +690,17 @@ export function createPhonePanel({
         <div class="moli-settings-note">
           当前聊天模式统一为线上即时通讯。预设负责所有联系人共用的线上聊天行为；联系人自身的人格与资料仍由联系人配置提供。
         </div>
+      </main>
+    </section>
+
+    <section class="moli-page" data-page="life-log">
+      <header class="moli-nav">
+        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="life-back" aria-label="返回">‹</button></div>
+        <div class="moli-nav-title">他的生活</div><div class="moli-nav-side right"></div>
+      </header>
+      <main class="moli-life-log">
+        <div class="moli-life-filter" data-life-filter></div>
+        <div class="moli-life-list" data-life-list></div>
       </main>
     </section>
 
@@ -4633,6 +4649,19 @@ export function createPhonePanel({
     if(String(choice).trim()==='5'){if(windowRef.confirm?.(`删除日程“${row.title}”？`))removeCalendarEvent(scopeKey,id);}else{const map={'1':'done','2':'cancelled','3':'missed','4':'scheduled'};const status=map[String(choice).trim()];if(!status)return;updateCalendarEvent(scopeKey,id,{status});} renderCalendar();
   }
 
+  let lifeActorFilter = '';
+  function renderLifeLog(){
+    const scopeKey=getScopeKey?.();
+    const contacts=getContacts().filter(x=>x&&!String(x.id||'').startsWith('builtin:'));
+    const filter=panel.querySelector('[data-life-filter]'); const list=panel.querySelector('[data-life-list]'); if(!filter||!list)return;
+    filter.innerHTML=`<button class="${!lifeActorFilter?'active':''}" data-life-actor="">全部</button>`+contacts.map(c=>`<button class="${lifeActorFilter===String(c.id)?'active':''}" data-life-actor="${escapeHtml(c.id)}">${escapeHtml(c.name||'角色')}</button>`).join('');
+    filter.querySelectorAll('[data-life-actor]').forEach(btn=>btn.addEventListener('click',()=>{lifeActorFilter=String(btn.dataset.lifeActor||'');renderLifeLog();}));
+    const rows=listLifeLogs(scopeKey,{actorId:lifeActorFilter,limit:300,autonomousOnly:true});
+    if(!rows.length){list.innerHTML='<div class="moli-life-empty">这里还没有自主生活记录。<br><small>Character Wake 醒来、SKIP 或通过 MCP 做事后，会自动出现在这里。</small></div>';return;}
+    const fmt=t=>{const d=new Date(Number(t)||Date.now());return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
+    list.innerHTML=rows.map(r=>`<article class="moli-life-card"><div class="moli-life-head"><b>${escapeHtml(r.actorName||'角色')}</b><time>${fmt(r.createdAt)}</time></div><strong>${escapeHtml(r.title||'活动')}</strong>${r.summary?`<p>${escapeHtml(r.summary)}</p>`:''}<small>${escapeHtml(r.source||'自主活动')}</small></article>`).join('');
+  }
+
   const show = name => {
     if (addMenu) addMenu.hidden = true;
     hideMessageMenu();
@@ -4657,6 +4686,7 @@ export function createPhonePanel({
     if (name === 'injection-composer') renderInjectionComposer();
     if (name === 'his-phone') renderHisPhone();
     if (name === 'calendar') renderCalendar();
+    if (name === 'life-log') renderLifeLog();
 
     if (name === 'chat') {
       applyCurrentChatWallpaper();
@@ -8814,6 +8844,8 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   panel.querySelector('[data-action="mcp-settings"]')?.addEventListener('click', () => show('mcp-settings'));
   panel.querySelector('[data-action="mcp-settings-back"]')?.addEventListener('click', () => show('phone-home'));
   panel.querySelector('[data-action="open-mcp"]')?.addEventListener('click', () => show('mcp-settings'));
+  panel.querySelector('[data-action="open-life"]')?.addEventListener('click', () => show('life-log'));
+  panel.querySelector('[data-action="life-back"]')?.addEventListener('click', () => show('phone-home'));
   panel.querySelector('[data-action="mcp-editor-back"]')?.addEventListener('click', () => show('mcp-settings'));
   panel.querySelector('[data-action="mcp-add"]')?.addEventListener('click', () => openMcpEditor());
   mcpServerList?.addEventListener('click', event => {
