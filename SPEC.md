@@ -1,3 +1,11 @@
+## moli290 / v0.6.43 — MCP Observation 兼容层
+
+- 保留原生 OpenAI-compatible Tool Calling；当中转/模型的原生 `tools/tool_calls` 路径报错或返回不可用结果时，自动进入 Observation fallback。
+- 新增 `src/tools/tool-observation-service.js`：使用普通文本生成做内部 Tool Router，只输出结构化 JSON 决策；实际工具执行仍统一经过 Tool Gateway、角色作用域、读写权限与“每次询问”确认。
+- Observation 获得真实 MCP 结果后，将结果作为明确标注的外部观察注入原有普通角色生成链；角色不负责伪造工具结果，普通聊天 API 无需原生 Function Calling 也可使用 MCP。
+- fallback 最多 3 轮工具观察；已有结果足够时 Router 应停止调用。原生 Tool Calling 成功时不会经过 fallback。
+- 本版首先用于兼容“普通聊天正常、原生 Tool Calling 返回空结果”的 OpenAI-compatible 中转；不改变 MCP Server 配置、Character Wake 或其他 Automation 行为。
+
 ## moli289 / v0.6.42 — MCP 每次询问闭环 + 真实调用诊断
 
 - 修复“写入/未声明工具 → 每次询问”此前只做权限过滤、没有真正确认入口的问题：需要确认的工具现在会暴露给模型，但执行前必须弹出本次调用确认。
