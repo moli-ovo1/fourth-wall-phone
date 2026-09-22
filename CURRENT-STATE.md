@@ -1,3 +1,11 @@
+## moli284 / v0.6.37 — Tool Gateway 第三步
+- 新增 `src/tools/tool-gateway.js`：建立 moli 自己的 provider-neutral 外部能力入口；上层不再需要直接理解 MCP JSON-RPC、认证或 Session。
+- Gateway 会从已启用的 MCP Server 动态发现 Tools，并统一归一化为 moli Tool：稳定 namespaced Tool ID、provider/providerId、名称、说明、inputSchema 与 annotations，避免多 Server 同名工具冲突。
+- 新增统一 `invokeTool(toolId, args)`：由 Gateway 定位所属 MCP Server、检查启用状态、建立 MCP 会话并执行 `tools/call`，统一返回调用结果。
+- 单个 MCP Server 连接失败不会阻断其他 Server 的工具发现；`listAvailableTools()` 同时返回可用 tools 与逐 Server errors，给后续 UI/Automation 做可诊断处理。
+- 本版只建立 Tool Gateway，不把 Tools 注入模型，不改变私聊、正文、Automation、Character Wake，也不增加任何自动调用行为。下一阶段才接 AI Tool Calling。
+- 当前 Gateway Provider 只有 MCP；接口刻意保持 provider-neutral，未来 REST Tool 与 moli 内置能力可接入同一层，而不需要改角色调用方。
+
 ## moli283 / v0.6.36 — MCP 中心第二步
 - 设置页新增「MCP 中心」：普通用户可添加、编辑、删除多个远程 HTTP/HTTPS MCP Server，不需要自行安装开发依赖。
 - MCP 编辑页支持名称、URL、启用状态、无认证 / Bearer Token / 自定义 Header；密钥继续只保存在当前用户本地 moli 配置。
