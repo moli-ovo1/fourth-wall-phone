@@ -6866,6 +6866,10 @@ export function createPhonePanel({
               try { argsText = JSON.stringify(args || {}, null, 2); } catch {}
               return Boolean(windowRef.confirm?.(`角色请求调用 MCP 工具：\n${provider} / ${name}\n\n参数：\n${argsText || '{}'}\n\n允许本次调用吗？`));
             },
+            confirmIdentityHandoff: async ({ tool, endpoint }) => {
+              const provider = String(tool?.providerName || 'MCP');
+              return Boolean(windowRef.confirm?.(`${provider} 已为当前角色返回新的专属身份地址。\n\n是否由 moli 为这个角色接管并保存该身份？\n\n保存后：\n• 只对当前角色生效\n• 不写入发布包\n• 后续自动使用，无需复制地址\n• 聊天正文不会显示完整凭证\n\n新地址：\n${endpoint}`));
+            },
           });
 
       if (controller.signal.aborted) return;
