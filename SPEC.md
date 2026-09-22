@@ -1,3 +1,17 @@
+## moli302 / v0.6.55 — Community Wake +「他的生活」社区动态
+- Character Wake 到达自主生活机会后，除既有 MCP 外部生活流程外，会额外向现有 Community Discovery 发出当前角色专属的社区闲逛机会；不重写社区决策。
+- Community Discovery 继续自行决定浏览、实名/匿名回复、主动发帖、私聊/转发或 SKIP；无需 User 刷新、@ 或邀请。
+- Wake 产生的角色帖子/评论直接写入现有 Public Web Store；社区未打开时也已保存，下次打开直接可见；社区当前打开时会在结算后即时重绘。
+- 「他的生活」接入自主社区浏览、回复与主动发帖记录；只记录真实落地结果，不凭空补写角色心理。
+- Community Wake 仅限定当前醒来的 actorId，避免一次角色 Wake 把所有角色重复唤醒。
+
+## moli301 / v0.6.54 — 「他的生活」拟人化与 Wake 聚合
+- Character Wake 的职责边界固定为“外部 MCP 自主生活机会”，不接管朋友圈、社区、主动私聊等已有 Automation。
+- 「他的生活」不再用“获得一次自主生活机会，正在决定是否行动”这类系统话术；Wake 开始/结束改为生活化文案。
+- 每轮 Character Wake 新增 wakeRunId；同一轮 start / MCP 工具 / end 在「他的生活」聚合成一张生活卡片，避免把运行过程拆成多张技术日志。
+- MCP 原始返回仍保留在底层日志/World Event；生活页优先抽取 MCP text 结果并去除 JSON 外壳，凭证脱敏规则保持不变。
+- 既有朋友圈、Community、主动私聊 Automation 均未接入 Character Wake，避免重复唤醒与双触发。
+
 # moli300 / v0.6.53 — 朋友圈说明书对齐 + Character Wake 完成态修复
 
 - 以当前 UI「朋友圈说明书」为准重新审计角色资料卡朋友圈：可见上限保持 6 条，超过 6 条最老一条消失；撤销此前文档中“5 条提醒、可无限累积”的冲突描述。
