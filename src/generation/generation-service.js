@@ -264,6 +264,7 @@ export async function generatePrivateReply({
   fourthWallCommentary = null,
   regenerateFromMessageId = '',
   confirmTool = null,
+  confirmIdentityHandoff = null,
 } = {}) {
   if (!scopeKey || !conversationKey) {
     throw new Error('当前会话不可用');
@@ -491,6 +492,7 @@ export async function generatePrivateReply({
         signal,
         toolContext,
         confirmTool,
+        confirmIdentityHandoff,
         completeText: (routerRequest, routerSignal) => generateProviderText(config, routerRequest, { signal: routerSignal }),
       });
       if (!observed.observations.length) throw nativeError;
