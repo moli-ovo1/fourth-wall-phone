@@ -206,11 +206,17 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       } else if (
         eligibleAutoChatContact(contact)
         && !storyAligned
-        && a.characterWakeEnabled === true
+        && (a.externalWakeEnabled === true || a.communityWakeEnabled === true)
         && now - Number(a.lastCharacterWakeAt || 0) >= Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)) * 60 * 1000
       ) {
-        mode = 'character-wake';
-        socialEvents = pendingSocialEvents;
+        if (a.externalWakeEnabled === true) {
+          mode = 'character-wake';
+          socialEvents = pendingSocialEvents;
+        } else {
+          updatePrivateAutomationRuntime(scopeKey, key, { lastCharacterWakeAt: Date.now() });
+          window.dispatchEvent(new CustomEvent('moli:community-wake-request',{detail:{scopeKey,actorId:String(contact.id||''),actorName:String(contact.name||''),source:'community-wake'}}));
+          continue;
+        }
       } else if (
         eligibleAutoChatContact(contact)
         && !storyAligned
@@ -401,7 +407,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         if (mode === 'character-wake') {
           runtimePatch.lastCharacterWakeAt = Date.now();
           recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: wakeToolRecords.length ? '出去转了一圈' : '今天没有出去', summary: wakeToolRecords.length ? `自己出去活动了一会儿，做了 ${wakeToolRecords.length} 件事。` : '这次没有使用外部工具。', source: 'Character Wake', metadata: { autonomous: true, phase: 'end', wakeRunId, toolCount: wakeToolRecords.length } });
-          window.dispatchEvent(new CustomEvent('moli:community-wake-request',{detail:{scopeKey,actorId:String(contact.id||''),actorName:String(contact.name||''),source:'character-wake'}}));
+          if (a.communityWakeEnabled === true) window.dispatchEvent(new CustomEvent('moli:community-wake-request',{detail:{scopeKey,actorId:String(contact.id||''),actorName:String(contact.name||''),source:'character-wake'}}));
         }
         if (storyAligned && storySignature) runtimePatch.lastStoryAlignedBodySignature = storySignature;
         if (storyAligned) updateCharacterRuntime(scopeKey, contact.id, { existenceMode: 'story_aligned', sourceId: String(contact?.source?.sourceId || ''), storyTime: getCurrentTavernStoryTimeState(), storySignature, lastAttentionReason: mode || 'baseline', lastAttentionAt: Date.now(), lastDecision: finalBehaviorAction || 'SKIP', lastDecisionAt: mode ? Date.now() : 0 });
