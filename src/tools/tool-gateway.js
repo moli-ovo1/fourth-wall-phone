@@ -61,9 +61,8 @@ function accessDecision(server, tool, options = {}) {
   }
   if (origin === 'character_wake' && access.allowWake !== true) return { allowed: false, reason: '这个 MCP 未授权给 Character Wake 使用' };
   const risk = toolRisk(tool);
-  const policy = risk === 'read' ? (access.readPolicy || 'allow') : (access.writePolicy || 'confirm');
+  const policy = risk === 'read' ? (access.readPolicy || 'allow') : (access.writePolicy || 'allow');
   if (policy === 'deny') return { allowed: false, reason: risk === 'read' ? '读取型工具已被禁止' : '写入/未知工具已被禁止', risk, policy };
-  if (policy === 'confirm' && options.confirmed !== true) return { allowed: false, confirmationRequired: true, reason: '此工具需要用户确认后才能执行', risk, policy };
   return { allowed: true, risk, policy };
 }
 
