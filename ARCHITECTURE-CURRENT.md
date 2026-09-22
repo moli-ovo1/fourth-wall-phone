@@ -1,6 +1,14 @@
-# moli Current Architecture — v0.6.32 / moli279
+# moli Current Architecture — v0.6.57 / moli304
 
 > This is the short authoritative architecture entry for future development. If an old TODO in SPEC.md conflicts with current code or this document, treat it as historical unless CURRENT-STATE.md says otherwise.
+
+
+## 0. Companion boundary (current)
+Character Wake now has two independent profile switches: external life (MCP) and autonomous Community browsing. While SillyTavern is running, Web remains the executor. Companion work is in Phase 1A: extract explicit headless boundaries before any Android APK is created.
+
+Architecture rule: **one character, two execution environments**. moli/SillyTavern owns canonical state. A future Companion may hold a canonical Wake Snapshot, its uncommitted Offline Journal, encrypted credentials and a Scheduler Lease, but must not maintain a second independent World Event/Awareness/Runtime/Community database.
+
+Community Wake scheduler calls `src/automation/community-wake-service.js`; the current Web executor is registered by phone-panel and still reuses the existing Community Discovery chain. This removes the scheduler's direct `window` event dependency without changing Community behavior.
 
 ## 1. Character continuity
 Apps are places; the character is the continuity owner. World Event records facts, Awareness records who knows, Character Continuity/Phone Context reconstruct what this person has experienced. “Fact exists” never means every character knows it.

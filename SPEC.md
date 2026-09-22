@@ -4921,3 +4921,9 @@ When an MCP account/identity tool returns a persistent role identity endpoint, m
 - 自主逛社区关闭时，MCP Wake 完成后不会再触发社区 Discovery。
 - 从 v0.6.55 升级时，旧 Character Wake 若已开启，两个新开关首次迁移均继承为开启，避免静默丢失既有行为；之后可分别保存。
 - 朋友圈、主动私聊及社区内部决策逻辑保持不变。
+
+## moli304 / v0.6.57 — Companion / Headless Wake boundary
+- Companion is a second execution environment for the same character, not a second moli. Canonical World Event, Awareness, Character Runtime, Community and Life Log semantics remain single-source.
+- Background execution contract must not copy raw Web stores wholesale. Future Companion input is a canonical Wake Snapshot plus capabilities; output is an event-oriented Wake Result/Offline Journal that moli commits idempotently.
+- Secrets (AI keys, MCP auth headers/tokens, credential-bearing actor endpoints) are excluded from ordinary character snapshots and must later live behind a credential vault/capability boundary.
+- Community Wake now uses an explicit service boundary rather than `window` events. The current Web executor still invokes the existing Community Discovery chain; behavior is intentionally unchanged.

@@ -1108,3 +1108,10 @@
 - 自主逛社区关闭时，MCP Wake 完成后不会再触发社区 Discovery。
 - 从 v0.6.55 升级时，旧 Character Wake 若已开启，两个新开关首次迁移均继承为开启，避免静默丢失既有行为；之后可分别保存。
 - 朋友圈、主动私聊及社区内部决策逻辑保持不变。
+
+## moli304 / v0.6.57 — Companion Phase 1A：Community Wake Headless Boundary（第一刀）
+- Companion Phase 0 架构审计完成：人物 canonical state 仍由 moli/SillyTavern 侧拥有；Companion 未来只持有 Wake Snapshot、未提交 Offline Journal、Credential Vault 与 Scheduler Lease，不建立第二套角色数据库。
+- 新增 `src/automation/community-wake-service.js`，把 Community Wake 的调度请求从浏览器 `window` CustomEvent 中抽离为显式 service contract：`requestCommunityWake()` / `registerCommunityWakeExecutor()`。
+- `private-automation.js` 不再直接依赖 `window.dispatchEvent('moli:community-wake-request')`；现有 Web executor 由 `phone-panel.js` 注册，仍复用原 `settleCommunityDiscovery()`，因此浏览/评论/匿名评论/主动发帖/World Event/Life Log 语义不变。
+- 这是 Headless Boundary 的第一步，不代表 Community Core 已完全 headless；当前 Web executor 仍位于 phone-panel closure。后续再逐步抽离 Snapshot / Commit / Scheduler Lease，不在本轮大拆已工作的社区逻辑。
+- 尚未创建 Android APK/Companion 工程。

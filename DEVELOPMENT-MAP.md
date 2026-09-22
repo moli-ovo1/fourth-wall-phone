@@ -3956,3 +3956,9 @@ Still next, without splitting into UI micro-patches:
 - 自主逛社区关闭时，MCP Wake 完成后不会再触发社区 Discovery。
 - 从 v0.6.55 升级时，旧 Character Wake 若已开启，两个新开关首次迁移均继承为开启，避免静默丢失既有行为；之后可分别保存。
 - 朋友圈、主动私聊及社区内部决策逻辑保持不变。
+
+## moli304 / v0.6.57 — Companion Phase 1A started
+- Phase 0 decision locked: one character, two execution environments. Do not create an Android-side second moli database/brain.
+- First boundary extraction completed: Community Wake scheduler no longer talks to the UI through a `window` CustomEvent. It calls `community-wake-service`, while the current Web executor registers the existing Community Discovery implementation.
+- Next Companion 1A steps: define canonical Wake Snapshot/Result envelopes around existing semantics; add Scheduler Lease/epoch ownership; define idempotent Commit/Offline Journal boundary; then test Web-side headless execution before creating the Android project.
+- Keep Moments/private proactive automation/community decision semantics unchanged while extracting boundaries.
