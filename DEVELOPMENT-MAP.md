@@ -4006,3 +4006,11 @@ Still next, without splitting into UI micro-patches:
 
 ### moli311 / v0.6.64
 Companion Phase 1B transport/handoff landed: loopback Bridge + pairing token + Web pairing UI + WakeRequest sync + pending WakeResult recovery + scheduler lease CAS handoff. Next: make the Bridge available to background runtime and add WorkManager worker around the already-defined Headless Executor; do not duplicate canonical stores in Android.
+
+
+## moli312 / v0.6.65 — Companion Phase 1B background scheduler
+- DONE: WorkManager 15-minute approximate tick with network constraint.
+- DONE: per-scope due filtering from the staged Wake schedule and Companion lease CAS acquisition.
+- DONE: foreground Web pre-stages fresh Wake Snapshot for enabled Character Wake roles when Companion is paired/reachable, rather than waiting until the exact foreground wake is due.
+- SAFETY GATE: no Android Headless provider/MCP runtime yet, so Worker does not invent/append WakeResult.
+- NEXT: Android independent Provider runtime + Credential Vault lookup; then MCP capability; then append real WakeResult to pending Journal and exercise close-ST → background wake → reopen-ST recovery.

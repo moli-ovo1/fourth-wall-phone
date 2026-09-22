@@ -1167,3 +1167,11 @@
 - Web Character Wake 在已配对时会同步最新 WakeRequest，并将 Companion Bridge Lease 纳入调度所有权判断；Bridge 不可用时前台现有 Wake 不被阻断。
 - Web 重新取得 Companion Lease 前会先拉取 pending WakeResults，经 canonical adapter 幂等 Commit 后才 ACK，保持“Companion 产事实，Web 建立正式事实”的边界。
 - 本轮仍未启用 WorkManager/后台 Worker；关闭 Companion App 后当前 Activity Bridge 会停止。后台执行留给下一阶段。
+
+
+## moli312 / v0.6.65 — Companion Phase 1B：WorkManager Scheduler + Durable Wake Staging
+- Android Companion 首次启用 WorkManager 周期调度。系统语义是“约每 15 分钟获得一次后台机会”，不承诺精确 15 分钟；网络不可用时由 WorkManager 等待。
+- Worker 会枚举 Web 已同步的角色 Wake Snapshot，按角色 `intervalMinutes` 判断是否到期，并且只有在 Web lease 已失效且 Companion CAS 成功接管后才获得执行资格。
+- Web 在 Companion 已配对且 Bridge 可达时，不再只在“恰好到 Wake 时间”才同步请求；每次前台 automation tick 会为已启用 Character Wake 的角色预置最新 portable Wake Snapshot，降低“刚关闭酒馆就没有后台输入”的断层。
+- 本版刻意保留执行安全闸：Android 还没有独立 AI/MCP Headless capability runtime，因此 Worker 取得 lease 后只记录 device-local opportunity diagnostic，不生成伪造 WakeResult、不写角色事实。也就是说，**后台调度已经真实运行，后台角色行为尚未启用**。
+- 下一步：实现 Android Headless capability runtime（先独立 Provider + Credential Vault resolution，再 MCP），让 Worker 在取得 lease 后真正执行 WakeRequest 并把 WakeResult 写入 pending Journal。

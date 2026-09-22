@@ -4972,3 +4972,10 @@ Android Companion lives under `companion/` in the same repository. It is an exec
 - 配对码属于 transport credential，不得进入 Wake Snapshot / WakeResult。
 - Web 恢复顺序：读取 Companion Lease → 若 Companion 持有则先恢复 pending results → canonical Commit → ACK → CAS 切回 Web。
 - Bridge 失联时不得让现有前台 Character Wake 停摆；真正后台 Worker 启用后再提高 handoff 的强一致性要求。
+
+
+## moli312 / v0.6.65 — Companion background scheduling contract
+- Companion uses Android WorkManager for approximate periodic opportunities; product copy must say approximately every 15 minutes rather than exact cron semantics.
+- A Worker may execute only after the Web lease has expired and Companion successfully CAS-acquires ownership. Scheduling does not itself authorize a character fact.
+- While Web is active and Companion is paired/reachable, enabled Character Wake roles stage a fresh portable Wake Snapshot on normal automation ticks so background execution has a recent canonical projection before Web disappears.
+- Until Android has an independent Headless AI/MCP capability runtime, the Worker must stop after ownership/due checks and emit no fabricated WakeResult. Canonical facts remain Web-owned and portable results remain secret-free.
