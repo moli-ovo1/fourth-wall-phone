@@ -1,3 +1,10 @@
+## moli295 / v0.6.48 — MCP 权限确认 UI 收尾
+
+- 将 MCP `confirm` 临时浏览器弹窗替换为 moli 手机内权限卡片，不再显示 `来自 127.0.0.1 的消息`。
+- 确认项支持：取消、仅本次、本次聊天允许、始终允许。
+- `本次聊天允许` 仅缓存当前会话 + 当前工具；`始终允许` 按 MCP provider + tool 持久保存，不会自动放行其他工具。
+- 保持既有 MCP 读写策略与 Tool Gateway 不变：只有原本需要 `confirm` 的调用才进入此卡片。
+
 ## moli293 / v0.6.46 — MCP 角色身份 endpoint 容错规范
 - 角色专属 MCP endpoint 是连接覆盖层，不得成为永久单点故障。
 - 有角色 override 时优先连接 override；仅当 initialize 阶段失败，允许以 Server 原始公共 endpoint 做一次健康验证。

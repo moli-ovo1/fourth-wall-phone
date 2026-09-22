@@ -1,3 +1,10 @@
+## moli295 / v0.6.48 — MCP 权限确认 UI 收尾
+
+- 将 MCP `confirm` 临时浏览器弹窗替换为 moli 手机内权限卡片，不再显示 `来自 127.0.0.1 的消息`。
+- 确认项支持：取消、仅本次、本次聊天允许、始终允许。
+- `本次聊天允许` 仅缓存当前会话 + 当前工具；`始终允许` 按 MCP provider + tool 持久保存，不会自动放行其他工具。
+- 保持既有 MCP 读写策略与 Tool Gateway 不变：只有原本需要 `confirm` 的调用才进入此卡片。
+
 ## moli293 / v0.6.46 — MCP actor endpoint fail-safe
 - Character-scoped MCP endpoint overrides are now fail-safe rather than authoritative forever.
 - Connection order: actor endpoint first → on initialize failure only, probe base server endpoint once → if base succeeds, clear the broken actor override and continue through the base endpoint.
