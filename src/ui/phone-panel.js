@@ -6799,6 +6799,39 @@ export function createPhonePanel({
       return;
     }
 
+    const requestMcpToolPermission = async ({ tool, args, conversationKey }) => {
+      const provider = String(tool?.providerName || '未命名 MCP');
+      const name = String(tool?.name || '未知工具');
+      const grantKey = `${String(tool?.providerId || provider)}::${name}`;
+      const sessionKey = `${String(conversationKey || '')}::${grantKey}`;
+      if (!windowRef.__moliMcpSessionGrants) windowRef.__moliMcpSessionGrants = new Set();
+      if (windowRef.__moliMcpSessionGrants.has(sessionKey)) return true;
+      let persistent = {};
+      try { persistent = JSON.parse(windowRef.localStorage?.getItem('moli:mcp:tool-grants') || '{}') || {}; } catch {}
+      if (persistent[grantKey] === true) return true;
+      let argsText = '{}';
+      try { argsText = JSON.stringify(args || {}, null, 2) || '{}'; } catch {}
+      return await new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'moli-mcp-permission-overlay';
+        overlay.innerHTML = `<section class="moli-mcp-permission-card" role="dialog" aria-modal="true" aria-label="MCP 工具权限"><div class="moli-mcp-permission-kicker">MCP 工具请求</div><h3>${escapeHtml(provider)}</h3><p class="moli-mcp-permission-tool">${escapeHtml(name)}</p><pre>${escapeHtml(argsText)}</pre><p class="moli-mcp-permission-note">角色想执行这个外部工具。你可以只允许一次，或记住授权。</p><div class="moli-mcp-permission-actions"><button type="button" data-mcp-grant="cancel">取消</button><button type="button" data-mcp-grant="once">仅本次</button><button type="button" data-mcp-grant="session">本次聊天允许</button><button type="button" class="primary" data-mcp-grant="always">始终允许</button></div></section>`;
+        panel.appendChild(overlay);
+        let settled = false;
+        const finish = value => { if (settled) return; settled = true; overlay.remove(); resolve(value); };
+        overlay.addEventListener('click', event => { if (event.target === overlay) finish(false); });
+        overlay.querySelectorAll('[data-mcp-grant]').forEach(button => button.addEventListener('click', () => {
+          const choice = button.dataset.mcpGrant;
+          if (choice === 'cancel') return finish(false);
+          if (choice === 'session') windowRef.__moliMcpSessionGrants.add(sessionKey);
+          if (choice === 'always') {
+            persistent[grantKey] = true;
+            try { windowRef.localStorage?.setItem('moli:mcp:tool-grants', JSON.stringify(persistent)); } catch {}
+          }
+          finish(true);
+        }));
+      });
+    };
+
     const conversation = currentConversation();
     const scopeKey = conversationRuntimeScopeKey(conversation);
     if (!conversation) {
@@ -6859,13 +6892,7 @@ export function createPhonePanel({
         : await generatePrivateReply({
             ...commonGenerationOptions,
             regenerateFromMessageId: regenerateMessageId,
-            confirmTool: async ({ tool, args }) => {
-              const provider = String(tool?.providerName || '未命名 MCP');
-              const name = String(tool?.name || '未知工具');
-              let argsText = '';
-              try { argsText = JSON.stringify(args || {}, null, 2); } catch {}
-              return Boolean(windowRef.confirm?.(`角色请求调用 MCP 工具：\n${provider} / ${name}\n\n参数：\n${argsText || '{}'}\n\n允许本次调用吗？`));
-            },
+            confirmTool: async ({ tool, args }) => requestMcpToolPermission({ tool, args, conversationKey: requestConversationKey }),
             confirmIdentityHandoff: async ({ tool, endpoint }) => {
               const provider = String(tool?.providerName || 'MCP');
               return Boolean(windowRef.confirm?.(`${provider} 已为当前角色返回新的专属身份地址。\n\n是否由 moli 为这个角色接管并保存该身份？\n\n保存后：\n• 只对当前角色生效\n• 不写入发布包\n• 后续自动使用，无需复制地址\n• 聊天正文不会显示完整凭证\n\n新地址：\n${endpoint}`));
