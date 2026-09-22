@@ -211,6 +211,10 @@ export function createPhonePanel({
             <span class="moli-app-icon-tile moli-settings-app-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.settings}" alt="" /></span>
             <small>设置</small>
           </button>
+          <button class="moli-app-icon" data-action="open-mcp" aria-label="打开 MCP">
+            <span class="moli-app-icon-tile moli-mcp-app-tile">MCP</span>
+            <small>MCP</small>
+          </button>
           <button class="moli-app-icon" data-action="open-his-phone" aria-label="打开他的手机">
             <span class="moli-app-icon-tile moli-his-phone-app-tile">他</span>
             <small>他的手机</small>
@@ -664,13 +668,6 @@ export function createPhonePanel({
           </span>
           <b>›</b>
         </button>
-        <button type="button" class="moli-settings-row" data-action="mcp-settings">
-          <span>
-            <strong>MCP 中心</strong>
-            <small data-mcp-settings-summary>外部工具连接</small>
-          </span>
-          <b>›</b>
-        </button>
         <button type="button" class="moli-settings-row" data-action="prompt-settings">
           <span>
             <strong>提示词与预设</strong>
@@ -698,7 +695,7 @@ export function createPhonePanel({
         <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="mcp-add" aria-label="添加 MCP">＋</button></div>
       </header>
       <main class="moli-mcp-settings">
-        <div class="moli-settings-note">连接远程 HTTP/HTTPS MCP Server。当前阶段只负责连接、保存配置与发现工具，还不会把工具交给角色自动调用。</div>
+        <div class="moli-settings-note">连接远程 HTTP/HTTPS MCP Server，并集中管理角色范围、Character Wake 与工具调用权限。聊天过程中不会弹出 MCP 工具确认框。</div>
         <div class="moli-mcp-server-list" data-mcp-server-list></div>
       </main>
     </section>
@@ -735,9 +732,9 @@ export function createPhonePanel({
           <label class="moli-api-label"><span>可使用范围</span><select class="moli-api-select" data-mcp-scope><option value="global">所有角色</option><option value="characters">仅指定角色</option></select></label>
           <div data-mcp-character-scope hidden><div class="moli-api-hint">选择允许使用这个 MCP 的联系人：</div><div class="moli-mcp-character-list" data-mcp-character-list></div></div>
           <label class="moli-api-check-row"><input type="checkbox" data-mcp-allow-wake><span>允许 Character Wake 使用</span></label>
-          <label class="moli-api-label"><span>读取型工具</span><select class="moli-api-select" data-mcp-read-policy><option value="allow">允许自动调用</option><option value="confirm">每次询问</option><option value="deny">禁止</option></select></label>
-          <label class="moli-api-label"><span>写入 / 未声明工具</span><select class="moli-api-select" data-mcp-write-policy><option value="confirm">每次询问（推荐）</option><option value="allow">允许自动调用</option><option value="deny">禁止</option></select></label>
-          <div class="moli-api-hint">只有 MCP 明确标记 readOnlyHint 的工具才按“读取型”处理；未声明类型的工具默认按写入能力保护。</div>
+          <label class="moli-api-label"><span>读取型工具</span><select class="moli-api-select" data-mcp-read-policy><option value="allow">自动允许</option><option value="deny">禁止</option></select></label>
+          <label class="moli-api-label"><span>写入 / 未声明工具</span><select class="moli-api-select" data-mcp-write-policy><option value="allow">自动允许</option><option value="deny">禁止</option></select></label>
+          <div class="moli-api-hint">只有 MCP 明确标记 readOnlyHint 的工具才按“读取型”处理；未声明类型默认按写入能力处理。权限在这里预先决定，角色聊天时不再临时弹窗。</div>
         </section>
         <section class="moli-api-section">
           <div class="moli-api-section-title">连接测试</div>
@@ -6799,38 +6796,9 @@ export function createPhonePanel({
       return;
     }
 
-    const requestMcpToolPermission = async ({ tool, args, conversationKey }) => {
-      const provider = String(tool?.providerName || '未命名 MCP');
-      const name = String(tool?.name || '未知工具');
-      const grantKey = `${String(tool?.providerId || provider)}::${name}`;
-      const sessionKey = `${String(conversationKey || '')}::${grantKey}`;
-      if (!windowRef.__moliMcpSessionGrants) windowRef.__moliMcpSessionGrants = new Set();
-      if (windowRef.__moliMcpSessionGrants.has(sessionKey)) return true;
-      let persistent = {};
-      try { persistent = JSON.parse(windowRef.localStorage?.getItem('moli:mcp:tool-grants') || '{}') || {}; } catch {}
-      if (persistent[grantKey] === true) return true;
-      let argsText = '{}';
-      try { argsText = JSON.stringify(args || {}, null, 2) || '{}'; } catch {}
-      return await new Promise(resolve => {
-        const overlay = document.createElement('div');
-        overlay.className = 'moli-mcp-permission-overlay';
-        overlay.innerHTML = `<section class="moli-mcp-permission-card" role="dialog" aria-modal="true" aria-label="MCP 工具权限"><div class="moli-mcp-permission-kicker">MCP 工具请求</div><h3>${escapeHtml(provider)}</h3><p class="moli-mcp-permission-tool">${escapeHtml(name)}</p><pre>${escapeHtml(argsText)}</pre><p class="moli-mcp-permission-note">角色想执行这个外部工具。你可以只允许一次，或记住授权。</p><div class="moli-mcp-permission-actions"><button type="button" data-mcp-grant="cancel">取消</button><button type="button" data-mcp-grant="once">仅本次</button><button type="button" data-mcp-grant="session">本次聊天允许</button><button type="button" class="primary" data-mcp-grant="always">始终允许</button></div></section>`;
-        panel.appendChild(overlay);
-        let settled = false;
-        const finish = value => { if (settled) return; settled = true; overlay.remove(); resolve(value); };
-        overlay.addEventListener('click', event => { if (event.target === overlay) finish(false); });
-        overlay.querySelectorAll('[data-mcp-grant]').forEach(button => button.addEventListener('click', () => {
-          const choice = button.dataset.mcpGrant;
-          if (choice === 'cancel') return finish(false);
-          if (choice === 'session') windowRef.__moliMcpSessionGrants.add(sessionKey);
-          if (choice === 'always') {
-            persistent[grantKey] = true;
-            try { windowRef.localStorage?.setItem('moli:mcp:tool-grants', JSON.stringify(persistent)); } catch {}
-          }
-          finish(true);
-        }));
-      });
-    };
+    // MCP permissions are configured ahead of time in the MCP app.
+    // Normal chat must never interrupt roleplay with a permission dialog.
+    const requestMcpToolPermission = async () => true;
 
     const conversation = currentConversation();
     const scopeKey = conversationRuntimeScopeKey(conversation);
@@ -6893,10 +6861,9 @@ export function createPhonePanel({
             ...commonGenerationOptions,
             regenerateFromMessageId: regenerateMessageId,
             confirmTool: async ({ tool, args }) => requestMcpToolPermission({ tool, args, conversationKey: requestConversationKey }),
-            confirmIdentityHandoff: async ({ tool, endpoint }) => {
-              const provider = String(tool?.providerName || 'MCP');
-              return Boolean(windowRef.confirm?.(`${provider} 已为当前角色返回新的专属身份地址。\n\n是否由 moli 为这个角色接管并保存该身份？\n\n保存后：\n• 只对当前角色生效\n• 不写入发布包\n• 后续自动使用，无需复制地址\n• 聊天正文不会显示完整凭证\n\n新地址：\n${endpoint}`));
-            },
+            // account 本身已经通过 MCP App 权限；返回的持久身份只绑定当前角色并自动接管，
+            // 不在聊天中再次弹窗，也不把完整凭证写进角色正文。
+            confirmIdentityHandoff: async () => true,
           });
 
       if (controller.signal.aborted) return;
@@ -8838,7 +8805,8 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   checkExtensionUpdateAvailability();
 
   panel.querySelector('[data-action="mcp-settings"]')?.addEventListener('click', () => show('mcp-settings'));
-  panel.querySelector('[data-action="mcp-settings-back"]')?.addEventListener('click', () => show('settings'));
+  panel.querySelector('[data-action="mcp-settings-back"]')?.addEventListener('click', () => show('phone-home'));
+  panel.querySelector('[data-action="open-mcp"]')?.addEventListener('click', () => show('mcp-settings'));
   panel.querySelector('[data-action="mcp-editor-back"]')?.addEventListener('click', () => show('mcp-settings'));
   panel.querySelector('[data-action="mcp-add"]')?.addEventListener('click', () => openMcpEditor());
   mcpServerList?.addEventListener('click', event => {
