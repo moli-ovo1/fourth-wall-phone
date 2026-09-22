@@ -1,4 +1,4 @@
-import { McpHttpClient } from '../integrations/mcp/mcp-client.js';
+import { McpHttpClient } from '../integrations/mcp-client.js';
 import { getMcpServer, listMcpServers } from '../storage/mcp-store.js';
 
 const TOOL_ID_SEPARATOR = '::';
