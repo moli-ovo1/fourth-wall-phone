@@ -38,7 +38,33 @@ function normalizeTool(server, tool) {
     description: String(tool?.description || '').trim(),
     inputSchema: tool?.inputSchema && typeof tool.inputSchema === 'object' ? tool.inputSchema : { type: 'object', properties: {} },
     annotations: tool?.annotations && typeof tool.annotations === 'object' ? tool.annotations : null,
+    risk: toolRisk(tool),
   };
+}
+
+
+function toolRisk(tool) {
+  const a = tool?.annotations || {};
+  if (a.destructiveHint === true) return 'write';
+  if (a.readOnlyHint === true) return 'read';
+  // Unknown tools are treated conservatively as write-capable until the server declares them read-only.
+  return 'write';
+}
+
+function accessDecision(server, tool, options = {}) {
+  const access = server?.access || {};
+  const actorId = String(options.actorId || '').trim();
+  const origin = String(options.origin || '').trim();
+  if (access.scope === 'characters') {
+    const ids = Array.isArray(access.characterIds) ? access.characterIds.map(String) : [];
+    if (!actorId || !ids.includes(actorId)) return { allowed: false, reason: '当前角色没有这个 MCP 的使用权限' };
+  }
+  if (origin === 'character_wake' && access.allowWake !== true) return { allowed: false, reason: '这个 MCP 未授权给 Character Wake 使用' };
+  const risk = toolRisk(tool);
+  const policy = risk === 'read' ? (access.readPolicy || 'allow') : (access.writePolicy || 'confirm');
+  if (policy === 'deny') return { allowed: false, reason: risk === 'read' ? '读取型工具已被禁止' : '写入/未知工具已被禁止', risk, policy };
+  if (policy === 'confirm' && options.confirmed !== true) return { allowed: false, confirmationRequired: true, reason: '此工具需要用户确认后才能执行', risk, policy };
+  return { allowed: true, risk, policy };
 }
 
 async function connect(server, options = {}) {
@@ -92,6 +118,16 @@ export async function invokeTool(toolId, args = {}, options = {}) {
   if (!String(server.url || '').trim()) throw new Error('该工具所属的 MCP Server 没有有效地址');
 
   const client = await connect(server, options);
+  const remoteTools = await client.listTools();
+  const remoteTool = remoteTools.find(item => String(item?.name || '') === toolName);
+  if (!remoteTool) throw new Error('MCP Server 当前没有提供这个工具');
+  const decision = accessDecision(server, remoteTool, options);
+  if (!decision.allowed) {
+    const error = new Error(decision.reason || 'MCP 工具调用未获授权');
+    error.code = decision.confirmationRequired ? 'MOLI_TOOL_CONFIRM_REQUIRED' : 'MOLI_TOOL_FORBIDDEN';
+    error.toolDecision = decision;
+    throw error;
+  }
   const result = await client.callTool(toolName, args && typeof args === 'object' ? args : {});
   return {
     toolId: makeToolId(server.id, toolName),
