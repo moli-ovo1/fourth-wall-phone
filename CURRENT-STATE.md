@@ -1031,3 +1031,9 @@
 - 安全默认：只有 MCP annotations.readOnlyHint=true 才视为读取型；未声明能力默认按写入能力保护并要求确认。
 - Tool Gateway 在实际 tools/call 前再次检查角色、来源与风险策略；不能只依赖 UI。
 - 本阶段仍未把 MCP 自动接入角色私聊生成链。
+
+## moli294 / v0.6.47 — MCP identity handoff covers native Tool Calling
+- Confirmed with CEDAR TOY that its account tool returns a persistent identity MCP endpoint; using that endpoint removes the need to manually supply `player_id` for play.
+- Identity handoff is now applied to both Observation Router fallback and native Tool Calling. An `account` result containing a persistent identity endpoint can be confirmed by the user and stored only as the current actor's MCP endpoint override.
+- The persistent endpoint/token is redacted before tool history is returned to the role model; the role receives only a safe system status after successful handoff.
+- This closes a gap where identity handoff previously existed only in the Observation fallback path.

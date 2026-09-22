@@ -3880,3 +3880,9 @@ Still next, without splitting into UI micro-patches:
 - Permission boundary is now enforced in Tool Gateway: server scope (global/characters), Character Wake opt-in, read/write policy.
 - Unknown MCP tools are conservatively write-capable unless server declares readOnlyHint.
 - Next integration point: private-chat model tool calling should pass actorId/origin and surface MOLI_TOOL_CONFIRM_REQUIRED through a user confirmation UI before retrying with confirmed=true.
+
+### moli294 — MCP persistent identity handoff closure
+- Extend actor-scoped MCP identity handoff from Observation fallback to the native Tool Calling loop.
+- Keep the configured server endpoint as the shared/public entry; store accepted persistent identity endpoints in `actorEndpoints[actorId]` only.
+- Never bake a user's persistent MCP identity endpoint into the distribution package.
+- Tool history sent back to the role model must redact persistent identity URLs and common token/API-key/Bearer forms.

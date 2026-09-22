@@ -4847,3 +4847,6 @@ World Event 的 `consumedBy` 是“某人物的某个判断入口已经处理过
 
 ## MCP 权限规范（v0.6.39）
 MCP 是 moli 的通用外部能力提供者，不默认等于角色权限。每个 Server 独立保存作用域（全部角色/指定角色）、Character Wake 授权，以及读取型/写入型调用策略。读取型仅信任 MCP 标准 annotations.readOnlyHint=true；没有声明 readOnlyHint 的工具按潜在写入能力处理。权限必须由 Tool Gateway 在 tools/call 前强制执行，界面隐藏或模型提示均不能代替运行时校验。
+
+### MCP persistent identity handoff (v0.6.47)
+When an MCP account/identity tool returns a persistent role identity endpoint, moli may offer to bind it to the current actor. On confirmation, the endpoint is stored as an actor-scoped override rather than replacing the shared server URL. This behavior must work identically in native Tool Calling and Observation Router fallback. The raw credential-bearing endpoint must not be exposed to the role model after handoff; the model receives a safe status summary. Other users and other actors must not inherit that endpoint.
