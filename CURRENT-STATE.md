@@ -1183,3 +1183,12 @@
 - 每次后台机会从可复用 Snapshot 模板派生新的 wakeId，避免 journal/commit 幂等键把后续后台生活错误折叠成第一次。
 - 当前 Android Headless runtime 只开放 Community capability；外部生活 MCP 仍明确停在 `waiting-mcp-runtime`，不会伪造外部行动。
 - Companion UI 可配置后台 Provider；未配置 Provider 时 Worker 不调用 AI、不生成假事实。
+
+## moli314 / v0.6.67 — Companion Phase 1B：Android MCP capability runtime
+
+- Android Companion 新增 MCP 2025-03-26 Streamable HTTP runtime：initialize → initialized → tools/list → tools/call，并保留 Mcp-Session-Id / JSON 与 SSE 响应兼容。
+- 后台外部生活首次进入真实 AI ↔ MCP 多轮执行；最多 4 步工具循环，真实工具结果再形成 LIFE_EVENT + CONTINUITY_EVENT，交回既有 Offline Journal / canonical commit 链。
+- MCP Endpoint、Bearer、自定义 Header 与额外 Headers 进入 Android CredentialVault；不进入 Wake Snapshot / WakeResult。
+- moli MCP 编辑器在 Companion 已配对且该 MCP 明确允许 Character Wake 时，通过 127.0.0.1 paired bridge 将角色 MCP 权限/凭证投递到 Companion Vault；角色专属 actorEndpoint 优先于公共 endpoint。
+- 后台安全边界：readOnlyHint=true 工具可按已授权 MCP 使用；写入/未声明风险工具只有 Web MCP 的 writePolicy=allow（或 Companion 手动明确勾选）才允许进入后台工具集。没有授权时不伪造外部经历。
+- Companion 前台也保留手动角色 MCP 配置入口，供 bridge 不可用/独立调试时使用。

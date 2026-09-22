@@ -4985,3 +4985,9 @@ Android Companion lives under `companion/` in the same repository. It is an exec
 - Provider Secret 属于 Companion Credential Vault，禁止进入 Wake Snapshot、WakeResult、Offline Journal 或 Web canonical store。
 - 313 首个真实后台 capability 为“自主逛社区”：AI 只能 SKIP、发布新帖或回复 Snapshot 中真实存在的帖子；生成结果作为事实事件等待 Web 恢复后 canonical commit。
 - 外部生活（MCP）尚未接入 Android runtime 时必须停住，不得用语言模型虚构“已经调用 MCP/已经做了外部行动”。
+
+### Companion 后台 MCP（moli314）
+- Character Wake 的“外部生活”在 Companion 中必须使用真实 MCP capability；不得由模型凭空编造工具结果。
+- MCP 凭证属于 Companion Credential Vault 域。Wake Snapshot/Result 继续保持无 secret；Web→Android 的 secret provisioning 只能经已配对的 loopback bridge 进入 Vault。
+- 后台工具权限继承用户在 MCP 中对 Character Wake、角色范围、read/write policy 的明确授权。未知风险工具按 write 处理。
+- 每个角色可使用自己的持久 actor endpoint；这属于角色身份凭证，不得跨角色共享。

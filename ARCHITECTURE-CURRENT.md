@@ -1,10 +1,10 @@
-# moli Current Architecture — v0.6.66 / moli313
+# moli Current Architecture — v0.6.67 / moli314
 
 > This is the short authoritative architecture entry for future development. If an old TODO in SPEC.md conflicts with current code or this document, treat it as historical unless CURRENT-STATE.md says otherwise.
 
 
 ## 0. Companion boundary (current)
-Character Wake now has two independent profile switches: external life (MCP) and autonomous Community browsing. While SillyTavern is running, Web remains the executor. Companion work is in Phase 1B: the repository now contains a minimal Android runtime shell, but background Wake is still disabled until transport and lease handoff are proven.
+Character Wake now has two independent profile switches: external life (MCP) and autonomous Community browsing. While SillyTavern is running, Web remains the executor. Companion work is in Phase 1B: WorkManager, lease handoff, paired loopback transport, independent AI provider, Community headless execution and MCP external-life execution are now implemented in code. Remaining work is real Android build/device validation and recovery/diagnostics hardening.
 
 Architecture rule: **one character, two execution environments**. moli/SillyTavern owns canonical state. The Companion may hold a canonical Wake Snapshot, its uncommitted Offline Journal, encrypted credentials and a Scheduler Lease, but must not maintain a second independent World Event/Awareness/Runtime/Community database.
 
@@ -112,3 +112,6 @@ Android now has a real approximate background scheduler. The Worker reads only p
 ## moli313 / v0.6.66 — Android Headless Provider
 
 Companion 现在拥有第一条真实 Headless 执行链：`WorkManager → Scheduler Lease → staged WakeRequest → independent AI Provider → portable WakeResult → pending journal transport`。AI Secret 只保存在 Android Credential Vault；Wake contract 继续保持 secret-free。当前 Android executor 只执行 Community capability，MCP 外部生活尚未开放，因此不会把模型想象当作外部事实。
+
+## moli314 / v0.6.67 — Android MCP capability boundary
+Companion 现有两条可执行 headless capability：Community Discovery 与 MCP External Life。MCP secret 不属于 portable Wake Contract；它们由 Web MCP 配置经 paired loopback provisioning 写入 Android CredentialVault，或由 Companion 前台手动配置。Android runtime 只把工具产生的事实转换成 portable LIFE_EVENT / CONTINUITY_EVENT，再由 Web canonical adapter 建立正式事实。角色专属 endpoint 优先，禁止跨角色共享身份。后台未知风险工具按 write 处理，必须已有明确 write allow。

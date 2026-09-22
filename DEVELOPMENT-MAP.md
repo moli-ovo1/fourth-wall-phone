@@ -4021,3 +4021,12 @@ Companion Phase 1B transport/handoff landed: loopback Bridge + pairing token + W
 - [x] 后台每次机会派生唯一 wakeId
 - [x] 未配置 Provider / 未接 MCP 时 fail closed，不伪造角色事实
 - [ ] 下一步：Android MCP capability runtime（含角色级凭证/权限）与真实外部生活结果
+
+## moli314 / v0.6.67
+- [x] Android MCP Streamable HTTP client（initialize/list/call + session + SSE）
+- [x] Android AI↔MCP headless capability loop
+- [x] 角色 MCP endpoint/auth → Android CredentialVault
+- [x] paired loopback MCP provisioning，actor endpoint 优先
+- [x] 外部生活结果 → LIFE_EVENT / CONTINUITY_EVENT → Offline Journal/Commit
+- [ ] 真机 Gradle/APK 构建与锁屏/Doze 端到端验收
+- [ ] Companion 恢复/错误诊断 UI 与电池优化引导
