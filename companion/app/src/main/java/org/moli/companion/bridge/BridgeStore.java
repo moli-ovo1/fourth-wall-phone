@@ -5,6 +5,10 @@ import android.content.SharedPreferences;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /** Pending transport state only. This is not a second canonical moli database. */
 public final class BridgeStore {
@@ -24,6 +28,25 @@ public final class BridgeStore {
     private JSONArray array(String key) { try { return new JSONArray(prefs.getString(key, "[]")); } catch (Exception e) { return new JSONArray(); } }
 
     public synchronized void putWakeRequest(String scope, JSONObject request) { prefs.edit().putString(key("wake", scope), request.toString()).commit(); }
+    public synchronized List<String> listWakeScopes() {
+        ArrayList<String> scopes = new ArrayList<>();
+        for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
+            String name = entry.getKey();
+            if (name.startsWith("wake:") && name.length() > 5) scopes.add(name.substring(5));
+        }
+        Collections.sort(scopes);
+        return scopes;
+    }
+    public synchronized long getLastWorkerOpportunityAt(String scope) { return prefs.getLong(key("worker_last", scope), 0L); }
+    public synchronized void recordWorkerOpportunity(String scope, long at, String status) {
+        prefs.edit().putLong(key("worker_last", scope), at).putString(key("worker_status", scope), status == null ? "" : status).commit();
+    }
+    public synchronized void recordWorkerSummary(long at, int scopes, int due, int acquired, int waitingRuntime) {
+        prefs.edit().putLong("worker_summary_at", at)
+            .putString("worker_summary", scopes + ":" + due + ":" + acquired + ":" + waitingRuntime).commit();
+    }
+    public synchronized String getWorkerSummary() { return prefs.getString("worker_summary", "0:0:0:0"); }
+    public synchronized long getWorkerSummaryAt() { return prefs.getLong("worker_summary_at", 0L); }
     public synchronized JSONObject getWakeRequest(String scope) { return object(key("wake", scope)); }
     public synchronized JSONObject getLease(String scope) { return object(key("lease", scope)); }
     public synchronized JSONObject compareAndSetLease(String scope, JSONObject expected, JSONObject replacement) {
