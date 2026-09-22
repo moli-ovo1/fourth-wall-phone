@@ -1201,3 +1201,7 @@
 - 修正 313/314 遗留的过期注释，明确 Android Worker 已具备 Community + 授权 MCP 的真实 headless runtime。
 - 构建审计确认 Android 子项目的 Gradle/AGP 配置、Manifest/XML 与 Java 源结构完整；当前仓库仍未携带 Gradle Wrapper，当前执行环境也没有 Android SDK/Gradle，因此本轮不宣称 APK 已编译。首次 APK 构建应在 Android Studio/具备 Android SDK 的 CI 完成。
 - 审计同时确认一个必须显式保留的已知限制：loopback Bridge 目前跟随 MainActivity 生命周期。WorkManager 后台执行不依赖 Bridge，但 Web 回收离线结果时需要 Companion Bridge 可达。首轮真机验收先把这一点暴露在诊断页，不用假后台常驻掩盖；后续根据真机结果决定 BridgeService/其他 transport。
+
+## moli316 / v0.6.69 — Companion Bridge process-lifetime fix
+- 真机发现 `MainActivity.onDestroy()` 会关闭本机 Bridge，造成 Companion 明明刚显示“Bridge 已启动”，切回酒馆后却无法发现。
+- Bridge 改由 `CompanionApplication` 在进程生命周期内持有；Activity 只展示状态，不再负责启动/停止 Bridge。Companion APK 版本升至 0.1.6 (7)。

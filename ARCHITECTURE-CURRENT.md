@@ -124,3 +124,7 @@ Companion 现有两条可执行 headless capability：Community Discovery 与 MC
 - 修正 313/314 遗留的过期注释，明确 Android Worker 已具备 Community + 授权 MCP 的真实 headless runtime。
 - 构建审计确认 Android 子项目的 Gradle/AGP 配置、Manifest/XML 与 Java 源结构完整；当前仓库仍未携带 Gradle Wrapper，当前执行环境也没有 Android SDK/Gradle，因此本轮不宣称 APK 已编译。首次 APK 构建应在 Android Studio/具备 Android SDK 的 CI 完成。
 - 审计同时确认一个必须显式保留的已知限制：loopback Bridge 目前跟随 MainActivity 生命周期。WorkManager 后台执行不依赖 Bridge，但 Web 回收离线结果时需要 Companion Bridge 可达。首轮真机验收先把这一点暴露在诊断页，不用假后台常驻掩盖；后续根据真机结果决定 BridgeService/其他 transport。
+
+## moli316 / v0.6.69 — Companion Bridge process-lifetime fix
+- 首轮真机验收确认：Bridge 由 `MainActivity` 持有时，用户从 Companion 切回酒馆后 Activity 可能被销毁，`onDestroy()` 会立即关闭 `127.0.0.1:17463`，导致 MCP 中心显示“没有发现 Companion”。
+- Bridge 所有权上移到 `CompanionApplication`，生命周期改为 Companion **进程级**；切换回酒馆不再主动关闭 Bridge。WorkManager 仍是离线 Wake 的后台调度器，本改动不把 Bridge 伪装成永久后台服务，也不改变 canonical state / Wake / Community / MCP 语义。

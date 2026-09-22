@@ -4039,3 +4039,7 @@ Companion Phase 1B transport/handoff landed: loopback Bridge + pairing token + W
 - 修正 313/314 遗留的过期注释，明确 Android Worker 已具备 Community + 授权 MCP 的真实 headless runtime。
 - 构建审计确认 Android 子项目的 Gradle/AGP 配置、Manifest/XML 与 Java 源结构完整；当前仓库仍未携带 Gradle Wrapper，当前执行环境也没有 Android SDK/Gradle，因此本轮不宣称 APK 已编译。首次 APK 构建应在 Android Studio/具备 Android SDK 的 CI 完成。
 - 审计同时确认一个必须显式保留的已知限制：loopback Bridge 目前跟随 MainActivity 生命周期。WorkManager 后台执行不依赖 Bridge，但 Web 回收离线结果时需要 Companion Bridge 可达。首轮真机验收先把这一点暴露在诊断页，不用假后台常驻掩盖；后续根据真机结果决定 BridgeService/其他 transport。
+
+## moli316 / v0.6.69 — Companion Bridge process-lifetime fix
+- 完成首轮真机反馈修复：loopback Bridge 从 Activity 生命周期提升到 Companion process 生命周期，避免切 App 后主动断桥。
+- 下一验收点：重新安装 0.1.6 后，在 Companion 显示 Bridge 已启动的情况下切回酒馆，MCP 中心保存配对码应能发现 Bridge；若仍失败，再依据真机结果进入 transport/PNA 层诊断，不扩大修改范围。
