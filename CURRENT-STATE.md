@@ -1,3 +1,10 @@
+## moli292 / v0.6.45 — MCP 参数类型校正 + 重复失败熔断
+
+- Observation Router 的工具参数在执行前按 MCP `inputSchema` 做保守类型归一化；当字段明确要求 string 时，不再把 `{id/...}` 这类对象直接传给远端，优先提取同名字段、`player_id`、`id`、`username`、`name`、`value` 的标量字符串。
+- Router 提示明确要求严格遵守 `inputSchema`，并允许从最近对话/上一轮真实观察中沿用账号名、player_id、id 等连续调用参数。
+- 增加单轮重复失败熔断：同一工具 + 相同参数 + 相同返回结果不再继续重复调用，避免确定性参数错误连续烧 API。
+- 保留 moli291 的角色身份接管与敏感结果分层；本版不扩大 MCP 权限，不改其他 App/Automation。
+
 ## moli291 / v0.6.44 — MCP 角色身份接管 + 敏感结果分层
 
 - CEDAR `account` 等工具返回专属 MCP 身份地址时，不再要求用户手工复制：moli 会请求确认，确认后按当前角色保存 endpoint override；其他角色与其他用户不会共享该身份。

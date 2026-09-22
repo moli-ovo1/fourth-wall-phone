@@ -1,3 +1,9 @@
+## moli292 / v0.6.45 — MCP 连续调用参数约束
+
+- MCP Observation Router 输出的 arguments 不是最终可信参数；Tool Gateway 前的 Observation 执行层必须依据远端 `inputSchema` 做保守类型归一化。
+- 对明确声明为 string 的参数，禁止把对象直接下发；可从对象中的同名字段、`player_id`、`id`、`username`、`name`、`value` 提取标量。
+- 同一轮内相同 Tool ID + 相同 arguments + 相同 result 不得重复执行第三次；检测到重复结果后停止工具循环并把真实结果交给角色说明。
+
 ## moli291 / v0.6.44 — MCP 角色身份接管 + 敏感结果分层
 
 - CEDAR `account` 等工具返回专属 MCP 身份地址时，不再要求用户手工复制：moli 会请求确认，确认后按当前角色保存 endpoint override；其他角色与其他用户不会共享该身份。

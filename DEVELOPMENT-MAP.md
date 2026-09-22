@@ -1,3 +1,11 @@
+## moli292 / v0.6.45 — MCP 参数类型与重复失败保护
+
+- [x] Observation arguments 按 MCP inputSchema 做基础类型归一化。
+- [x] string 参数对象值优先提取 player_id/id/username/name/value 等标量，避免 `player_id 必须是字符串` 一类客户端类型错误。
+- [x] Router 明确要求连续调用沿用最近对话/真实观察中的必要 ID。
+- [x] 同工具 + 同参数 + 同结果加入单轮熔断，避免盲目重复调用。
+- [ ] 实机复测 CEDAR `play(new) → play(cast)`；若仍失败，下一步记录 CEDAR 实际 play schema 与本轮最终 arguments，不再猜测服务端业务字段。
+
 ## moli291 / v0.6.44 — MCP 角色身份接管 + 敏感结果分层
 
 - CEDAR `account` 等工具返回专属 MCP 身份地址时，不再要求用户手工复制：moli 会请求确认，确认后按当前角色保存 endpoint override；其他角色与其他用户不会共享该身份。
