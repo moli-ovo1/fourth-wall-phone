@@ -1,4 +1,5 @@
 import { listAvailableTools, invokeTool } from './tool-gateway.js';
+import { setMcpActorEndpoint } from '../storage/mcp-store.js';
 
 const DEFAULT_MAX_ROUNDS = 4;
 
@@ -7,6 +8,22 @@ function safeJson(value) {
 }
 
 function modelToolName(index) { return `moli_tool_${index + 1}`; }
+
+function findIdentityEndpoint(value) {
+  let text = '';
+  try { text = JSON.stringify(value); } catch { text = String(value || ''); }
+  const urls = text.match(/https?:\/\/[^\s\"'<>]+/g) || [];
+  return urls.find(url => /\/ctai[_\/-]?v?1[_\/-]/i.test(url)) || '';
+}
+
+function redactSecrets(text, endpoint = '') {
+  let safe = String(text || '');
+  if (endpoint) safe = safe.split(endpoint).join('[专属 MCP 身份地址已由 moli 接管]');
+  safe = safe.replace(/(bearer\s+)[A-Za-z0-9._~+\/-]{16,}/gi, '$1[已隐藏]');
+  safe = safe.replace(/((?:token|api[_ -]?key|authorization)[\"'\s:=]+)[A-Za-z0-9._~+\/-]{16,}/gi, '$1[已隐藏]');
+  return safe;
+}
+
 
 function asOpenAiTools(tools) {
   return tools.map((tool, index) => ({
@@ -48,6 +65,7 @@ export async function runToolCalling({
   onToolResult = null,
   toolContext = null,
   confirmTool = null,
+  confirmIdentityHandoff = null,
 } = {}) {
   if (!adapter || typeof adapter.complete !== 'function') throw new Error('缺少 Tool Calling 模型适配器');
 
@@ -122,7 +140,23 @@ export async function runToolCalling({
           throw new Error(`MCP 工具执行失败 [${tool.providerName || '未命名 MCP'} / ${tool.name}]：${String(error?.message || error || '未知错误')}`, { cause: error });
         }
       }
-      const resultText = safeJson(execution.result);
+      const rawResultText = safeJson(execution.result);
+      let resultText = rawResultText;
+      const identityEndpoint = tool.name === 'account' ? findIdentityEndpoint(execution.result) : '';
+      if (identityEndpoint && toolContext?.actorId) {
+        let accepted = false;
+        if (typeof confirmIdentityHandoff === 'function') {
+          accepted = await confirmIdentityHandoff({ tool, endpoint: identityEndpoint, actorId: String(toolContext.actorId), result: execution.result });
+        }
+        if (accepted) {
+          setMcpActorEndpoint(tool.providerId, toolContext.actorId, identityEndpoint);
+          resultText = `${redactSecrets(rawResultText, identityEndpoint)}\n[系统状态] moli 已为当前角色接管新的专属 MCP 身份地址；后续该角色访问此 MCP 时会自动使用，无需用户复制粘贴。`;
+        } else {
+          resultText = redactSecrets(rawResultText, identityEndpoint);
+        }
+      } else {
+        resultText = redactSecrets(rawResultText);
+      }
       const record = {
         callId: String(call?.id || `${round}:${tool.id}`),
         toolId: tool.id,
