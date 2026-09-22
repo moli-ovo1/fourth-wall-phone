@@ -171,6 +171,10 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
       : {};
     conversation.automation = {
       autoChatEnabled: typeof automation.autoChatEnabled === 'boolean' ? automation.autoChatEnabled : true,
+      storyAlignedEnabled: Boolean(automation.storyAlignedEnabled),
+      storyAlignedSourceId: String(automation.storyAlignedSourceId || ''),
+      storyAlignedScopeKey: String(automation.storyAlignedScopeKey || ''),
+      lastStoryAlignedBodySignature: String(automation.lastStoryAlignedBodySignature || ''),
       autoChatProbability: Math.max(0, Math.min(100, Number.isFinite(Number(automation.autoChatProbability)) ? Math.round(Number(automation.autoChatProbability)) : 30)),
       communityPrivateEnabled: typeof automation.communityPrivateEnabled === 'boolean' ? automation.communityPrivateEnabled : true,
       commentaryEnabled: Boolean(automation.commentaryEnabled),
@@ -1662,6 +1666,9 @@ export function updatePrivateConversationSettings(
     replyBubbleRange,
     autoChatEnabled,
     autoChatProbability,
+    storyAlignedEnabled,
+    storyAlignedSourceId,
+    storyAlignedScopeKey,
     communityPrivateEnabled,
     commentaryEnabled,
     commentaryProbability,
@@ -1733,6 +1740,16 @@ export function updatePrivateConversationSettings(
   if (autoChatEnabled !== undefined) {
     conversation.automation.autoChatEnabled = Boolean(autoChatEnabled);
   }
+  if (storyAlignedEnabled !== undefined) {
+    conversation.automation.storyAlignedEnabled = Boolean(storyAlignedEnabled);
+    if (!storyAlignedEnabled) {
+      conversation.automation.storyAlignedSourceId = '';
+      conversation.automation.storyAlignedScopeKey = '';
+      conversation.automation.lastStoryAlignedBodySignature = '';
+    }
+  }
+  if (storyAlignedSourceId !== undefined) conversation.automation.storyAlignedSourceId = String(storyAlignedSourceId || '');
+  if (storyAlignedScopeKey !== undefined) conversation.automation.storyAlignedScopeKey = String(storyAlignedScopeKey || '');
   if (communityPrivateEnabled !== undefined) {
     conversation.automation.communityPrivateEnabled = Boolean(communityPrivateEnabled);
   }
