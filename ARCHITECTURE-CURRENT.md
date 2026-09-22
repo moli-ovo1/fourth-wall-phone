@@ -46,3 +46,17 @@ Story-Aligned is opt-in. Turning it off must stop Story-Aligned scheduling and a
 
 ## 10. Known next risks
 Before Story-Aligned controls Moments/Weibo/Community broadly, implement conservative Story State projection (location/activity/availability) and正文 revision/swipe invalidation. Avoid duplicate wakeups, context inflation and API-per-event designs.
+
+
+## moli281 identity inheritance invariant
+- Tavern/story-aligned contacts inherit canonical identity from the SillyTavern character card. Do not require users to duplicate that card in moli.
+- `contact.prompt` and Tavern `profileEntries` are supplements only. They may add phone/social behavior but must not replace the canonical card.
+- Tavern world-book activation remains scoped and dynamic: raw disabled entries are excluded first; moli-disabled/whitelist exclusions are also respected; remaining entries still require the existing constant/keyword/selective/probability activation rules. Story alignment must never mean “inject the whole book”.
+- Community/Moments/other surfaces may have different action spaces, but when they use a Tavern actor they should consume the same base identity semantics.
+
+
+## moli281 / v0.6.34 — 私聊气泡边界与生成锁恢复
+- 私聊资料卡/聊天信息中的“回复气泡条数”现在不仅进入 Prompt，也在普通微信最终解析处执行 max 硬边界；模型仍在 min～max 内自然决定，不要求凑满。
+- Story-Aligned / 自动私聊不再写死最多 3 条，改为读取同一私聊实例（优先）/联系人资料卡的气泡范围。编辑室的 unlimited/maxRepliesOverride 不参与私聊。
+- 生成 runtime 增加 5 分钟陈旧锁自愈：仅清理已经失去正常 finally 收尾的内存 busy 锁，避免发送键永久停在“■”。正常生成/停止流程不变。
+- 删除语义保持“删什么撤销什么”：正文删除由 Tavern 当前正文源自然消失；微信消息删除后不再出现在实时私聊/Story-Aligned 最近消息投影。不会因为删正文而物理删除微信消息，也不会因为删微信消息而物理删除正文。若旧消息已经进入压缩手机记忆，现有 needsReview 机制仍会提示核对，避免静默伪造摘要。

@@ -1,3 +1,7 @@
+## moli281 / v0.6.34 — Unified Tavern identity base
+- Tavern character card = base identity; moli profile entries/prompt = supplements; Tavern world book = enabled + dynamically activated entries only.
+- First consumers: Community / public Moments / existing batchRoleProfile paths. No change to phone-native behavior.
+
 # moli279 architecture checkpoint (v0.6.32)
 
 ## Current construction boundary
@@ -3783,3 +3787,10 @@ Still next, without splitting into UI micro-patches:
 - writers-room 不再复用 readingMode 的共享正文注入。
 - 新增编辑室 story-only 正文提取，并将故事事实限制在 studioStoryFacts 专线。
 - 普通围读会/角色闲聊保持不变。
+
+
+## moli281 / v0.6.34 — 私聊气泡边界与生成锁恢复
+- 私聊资料卡/聊天信息中的“回复气泡条数”现在不仅进入 Prompt，也在普通微信最终解析处执行 max 硬边界；模型仍在 min～max 内自然决定，不要求凑满。
+- Story-Aligned / 自动私聊不再写死最多 3 条，改为读取同一私聊实例（优先）/联系人资料卡的气泡范围。编辑室的 unlimited/maxRepliesOverride 不参与私聊。
+- 生成 runtime 增加 5 分钟陈旧锁自愈：仅清理已经失去正常 finally 收尾的内存 busy 锁，避免发送键永久停在“■”。正常生成/停止流程不变。
+- 删除语义保持“删什么撤销什么”：正文删除由 Tavern 当前正文源自然消失；微信消息删除后不再出现在实时私聊/Story-Aligned 最近消息投影。不会因为删正文而物理删除微信消息，也不会因为删微信消息而物理删除正文。若旧消息已经进入压缩手机记忆，现有 needsReview 机制仍会提示核对，避免静默伪造摘要。
