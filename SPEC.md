@@ -1,3 +1,10 @@
+## moli293 / v0.6.46 — MCP 角色身份 endpoint 容错规范
+- 角色专属 MCP endpoint 是连接覆盖层，不得成为永久单点故障。
+- 有角色 override 时优先连接 override；仅当 initialize 阶段失败，允许以 Server 原始公共 endpoint 做一次健康验证。
+- 公共 endpoint 初始化成功：说明基础 MCP 仍可达，moli 清除当前角色失效 override，并让本轮继续使用公共 endpoint。
+- 公共 endpoint 同样失败：不得清除 override 或伪装成功，继续上抛原始连接错误供诊断。
+- tools/call 返回的业务错误、参数错误不触发 endpoint 回退；身份覆盖清理只针对连接/初始化失败。
+
 ## moli292 / v0.6.45 — MCP 连续调用参数约束
 
 - MCP Observation Router 输出的 arguments 不是最终可信参数；Tool Gateway 前的 Observation 执行层必须依据远端 `inputSchema` 做保守类型归一化。

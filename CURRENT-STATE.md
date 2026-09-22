@@ -1,3 +1,9 @@
+## moli293 / v0.6.46 — 角色 MCP 身份地址故障回退
+- 修复角色级 MCP 身份地址一旦不可 fetch/初始化就会把整个 MCP 调用链卡死的问题。
+- Tool Gateway 仍优先使用角色专属 endpoint；只有该 endpoint 初始化失败时，才用原始 Server 公共地址做一次健康验证。公共地址成功后，判定角色 override 已失效/不可达，清除该角色 override 并继续本轮调用。
+- 若公共地址也失败，保留原始错误，不掩盖真实网络/CORS/服务器故障。不会因为一次工具业务错误清除身份；回退只发生在连接初始化阶段。
+- 本版不改权限确认 UI、不改 MCP 工具参数策略、不新增产品功能。
+
 ## moli292 / v0.6.45 — MCP 参数类型校正 + 重复失败熔断
 
 - Observation Router 的工具参数在执行前按 MCP `inputSchema` 做保守类型归一化；当字段明确要求 string 时，不再把 `{id/...}` 这类对象直接传给远端，优先提取同名字段、`player_id`、`id`、`username`、`name`、`value` 的标量字符串。

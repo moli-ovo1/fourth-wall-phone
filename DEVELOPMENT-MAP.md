@@ -1,3 +1,9 @@
+## moli293 / v0.6.46 — MCP actor endpoint fail-safe
+- Character-scoped MCP endpoint overrides are now fail-safe rather than authoritative forever.
+- Connection order: actor endpoint first → on initialize failure only, probe base server endpoint once → if base succeeds, clear the broken actor override and continue through the base endpoint.
+- If both endpoints fail, surface the original actor-endpoint failure; do not silently reinterpret a real network/CORS outage as an identity problem.
+- Scope is intentionally narrow: no confirmation-UI redesign and no Cedar-specific protocol hardcoding.
+
 ## moli292 / v0.6.45 — MCP 参数类型与重复失败保护
 
 - [x] Observation arguments 按 MCP inputSchema 做基础类型归一化。
