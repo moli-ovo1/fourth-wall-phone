@@ -7,12 +7,13 @@ import android.view.Gravity;
 import android.widget.*;
 import org.moli.companion.bridge.LocalBridgeServer;
 import org.moli.companion.bridge.BridgeStore;
+import org.moli.companion.diagnostics.CompanionDiagnostics;
 import org.moli.companion.provider.ProviderSettings;
 import org.moli.companion.wake.CompanionWakeScheduler;
 
-/** Foreground shell: loopback bridge + independent background provider configuration. */
+/** Foreground setup + diagnostics shell. Canonical character state remains in moli Web. */
 public final class MainActivity extends Activity {
-    private LocalBridgeServer bridge;
+    private LocalBridgeServer bridge; private boolean bridgeRunning;
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         CompanionWakeScheduler.ensureScheduled(getApplicationContext());
@@ -22,8 +23,8 @@ public final class MainActivity extends Activity {
 
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(48,48,48,48);
         TextView status = new TextView(this); status.setGravity(Gravity.CENTER_HORIZONTAL);
-        try { bridge.start(); status.setText("moli Companion\n\n本机 Bridge 已启动 · 17463\n\n配对码：\n" + bridge.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）\n最近 Worker：" + store.getWorkerSummary()); }
-        catch (Exception error) { status.setText("moli Companion\n\nBridge 启动失败：\n" + error.getMessage()); }
+        try { bridge.start(); bridgeRunning=true; status.setText("moli Companion\n\n本机 Bridge 已启动 · 17463\n\n配对码：\n" + bridge.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）"); }
+        catch (Exception error) { bridgeRunning=false; status.setText("moli Companion\n\nBridge 启动失败：\n" + error.getMessage()); }
         box.addView(status);
 
         TextView title = new TextView(this); title.setText("\n后台 AI Provider（OpenAI-compatible）"); box.addView(title);
@@ -32,9 +33,16 @@ public final class MainActivity extends Activity {
         EditText key = new EditText(this); key.setHint(provider.configured() ? "API Key（已保存；留空保持原值）" : "API Key"); key.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD); box.addView(key);
         Button save = new Button(this); save.setText("保存后台 Provider"); box.addView(save);
         TextView providerState = new TextView(this); providerState.setText(provider.configured() ? "状态：已配置，可供后台 Wake 使用" : "状态：未配置；后台 Worker 不会调用 AI"); box.addView(providerState);
-        save.setOnClickListener(v -> { try { provider.save(base.getText().toString(), model.getText().toString(), key.getText().toString()); key.setText(""); providerState.setText("状态：已保存。API Key 仅进入 Android Credential Vault，不进入 Wake Snapshot/Journal。"); } catch(Exception e) { providerState.setText("保存失败：" + e.getMessage()); } });
+        save.setOnClickListener(v -> { try { provider.save(base.getText().toString(), model.getText().toString(), key.getText().toString()); key.setText(""); providerState.setText("状态：已保存。API Key 仅进入 Android Credential Vault。"); } catch(Exception e) { providerState.setText("保存失败：" + e.getMessage()); } });
+
+        TextView diagTitle = new TextView(this); diagTitle.setText("\n真机诊断"); box.addView(diagTitle);
+        TextView diagnostics = new TextView(this); box.addView(diagnostics);
+        Runnable refresh = () -> diagnostics.setText(CompanionDiagnostics.render(getApplicationContext(), bridgeRunning));
+        Button refreshButton = new Button(this); refreshButton.setText("刷新诊断"); refreshButton.setOnClickListener(v -> refresh.run()); box.addView(refreshButton);
+        Button runNow = new Button(this); runNow.setText("请求一次后台 Wake 测试"); runNow.setOnClickListener(v -> { CompanionWakeScheduler.runDiagnosticNow(getApplicationContext()); Toast.makeText(this,"已交给 WorkManager；稍后点“刷新诊断”查看结果",Toast.LENGTH_LONG).show(); }); box.addView(runNow);
+        refresh.run();
 
         ScrollView scroll = new ScrollView(this); scroll.addView(box); setContentView(scroll);
     }
-    @Override protected void onDestroy() { if (bridge != null) bridge.stop(); super.onDestroy(); }
+    @Override protected void onDestroy() { if (bridge != null) bridge.stop(); bridgeRunning=false; super.onDestroy(); }
 }
