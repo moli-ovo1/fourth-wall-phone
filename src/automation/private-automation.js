@@ -8,6 +8,7 @@ import { listWorldEvents, markWorldEventsConsumed, recordWorldEvent, summarizeWo
 import { buildPhoneContext } from '../generation/phone-context-builder.js';
 import { buildCharacterDecisionInstruction } from '../generation/character-decision.js';
 import { updateCharacterRuntime } from '../storage/character-runtime-store.js';
+import { recordLifeLog } from '../storage/life-log-store.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -268,6 +269,9 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
               recentActions: recentActionText,
               entrypoint: mode === 'social-event' ? 'social-event-decision' : 'proactive-private-decision',
             });
+        if (mode === 'character-wake') {
+          recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: '自主醒来', summary: '获得一次自主生活机会，正在决定是否行动。', source: 'Character Wake', metadata: { autonomous: true, phase: 'start' } });
+        }
         const result = await generatePrivateReply({
           scopeKey,
           conversationKey: key,
@@ -281,6 +285,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         if (wakeToolRecords.length) {
           for (const toolRecord of wakeToolRecords) {
             const safeResult = String(toolRecord?.resultText || '').replace(/https?:\/\/[^\s]+\/ctai[_\/\-]?v?1[_\/\-]?[^\s"']*/gi, '[专属 MCP 身份地址已隐藏]').slice(0, 1800);
+            recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'mcp', title: `使用 ${String(toolRecord?.providerName || 'MCP')} · ${String(toolRecord?.name || 'tool')}`, summary: safeResult || '工具调用成功。', source: String(toolRecord?.providerName || 'MCP'), status: 'success', metadata: { autonomous: true, toolId: String(toolRecord?.toolId || ''), toolName: String(toolRecord?.name || '') } });
             recordWorldEvent(scopeKey, {
               source: 'mcp.character-wake', actorId: contact.id, action: 'MCP_TOOL_USED', targetContactIds: [contact.id], objectId: String(toolRecord?.toolId || ''),
               content: `你在一次自主醒来中使用了 ${String(toolRecord?.providerName || '外部工具')} / ${String(toolRecord?.name || 'tool')}。${safeResult ? `真实结果：${safeResult}` : ''}`.slice(0, 2200),
@@ -365,7 +370,10 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       } catch (e) { setGenerationError(scopeKey, key, `自动行为失败：${String(e?.message || e || '请求失败')}`, mode); console.error('[moli小手机] private automation failed:', e); }
       finally {
         const runtimePatch = { lastAutoChatAt: (mode === 'chat' || (mode === 'social-event' && !storyAligned && a.autoChatEnabled)) ? Date.now() : Number(a.lastAutoChatAt || 0) };
-        if (mode === 'character-wake') runtimePatch.lastCharacterWakeAt = Date.now();
+        if (mode === 'character-wake') {
+          runtimePatch.lastCharacterWakeAt = Date.now();
+          recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'wake', title: wakeToolRecords.length ? '自主活动结束' : '这次没有行动', summary: wakeToolRecords.length ? `本轮自主醒来共执行 ${wakeToolRecords.length} 次外部工具调用。` : '醒来后决定不执行外部操作。', source: 'Character Wake', metadata: { autonomous: true, phase: 'end', toolCount: wakeToolRecords.length } });
+        }
         if (storyAligned && storySignature) runtimePatch.lastStoryAlignedBodySignature = storySignature;
         if (storyAligned) updateCharacterRuntime(scopeKey, contact.id, { existenceMode: 'story_aligned', sourceId: String(contact?.source?.sourceId || ''), storyTime: getCurrentTavernStoryTimeState(), storySignature, lastAttentionReason: mode || 'baseline', lastAttentionAt: Date.now(), lastDecision: behaviorAction || 'SKIP', lastDecisionAt: mode ? Date.now() : 0 });
         if (mode === 'social-event' || (mode === 'chat' && socialEvents.length)) runtimePatch.pendingSocialEvents = [];
