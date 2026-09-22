@@ -3,6 +3,10 @@ import { readJson, writeJson } from './storage-adapter.js';
 import { isPersistentScopeKey } from './scope-policy.js';
 
 const PREFIX = 'moli-phone:moments:v2:';
+// Character profile Moments belong to the contact's own phone continuity, not to
+// a temporary Tavern fallback/no-chat scope. Keep them in a contact-id keyed
+// archive while public Moments and runtime events remain scope-bound.
+const PROFILE_ARCHIVE_KEY = 'moli-phone:moments:profile-archive:v1';
 const SCHEMA_VERSION = 8;
 const transientStates = new Map();
 
@@ -61,8 +65,63 @@ function normalize(value) {
     }])) : {},
   };
 }
-function save(scopeKey, state) { if (isPersistentScopeKey(scopeKey)) writeJson(key(scopeKey), state); else transientStates.set(String(scopeKey || ''), state); return state; }
-export function getMomentsState(scopeKey) { return normalize(isPersistentScopeKey(scopeKey) ? readJson(key(scopeKey), null) : transientStates.get(String(scopeKey || ''))); }
+function mergeProfileItems(primary = [], secondary = []) {
+  const byId = new Map();
+  for (const item of [...secondary, ...primary]) {
+    const normalized = moment(item, 'profile');
+    if (!normalized.id || !normalized.content) continue;
+    const previous = byId.get(normalized.id);
+    if (!previous || Number(normalized.updatedAt || 0) >= Number(previous.updatedAt || 0)) byId.set(normalized.id, normalized);
+  }
+  return [...byId.values()].sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+}
+function readProfileArchive() {
+  const raw = readJson(PROFILE_ARCHIVE_KEY, null);
+  const source = raw && typeof raw === 'object' ? raw : {};
+  return {
+    profileFeeds: source.profileFeeds && typeof source.profileFeeds === 'object' ? source.profileFeeds : {},
+    profileMemory: source.profileMemory && typeof source.profileMemory === 'object' ? source.profileMemory : {},
+    profileStatus: source.profileStatus && typeof source.profileStatus === 'object' ? source.profileStatus : {},
+  };
+}
+function writeProfileArchive(state) {
+  writeJson(PROFILE_ARCHIVE_KEY, {
+    profileFeeds: state?.profileFeeds && typeof state.profileFeeds === 'object' ? state.profileFeeds : {},
+    profileMemory: state?.profileMemory && typeof state.profileMemory === 'object' ? state.profileMemory : {},
+    profileStatus: state?.profileStatus && typeof state.profileStatus === 'object' ? state.profileStatus : {},
+  });
+}
+function hydrateProfileArchive(state) {
+  const archive = readProfileArchive();
+  const contactIds = new Set([...Object.keys(state.profileFeeds || {}), ...Object.keys(archive.profileFeeds || {})]);
+  const mergedFeeds = {};
+  let shouldWrite = false;
+  for (const contactId of contactIds) {
+    const scoped = state.profileFeeds?.[contactId] || [];
+    const archived = archive.profileFeeds?.[contactId] || [];
+    mergedFeeds[contactId] = mergeProfileItems(archived, scoped);
+    if (scoped.length && !archived.length) shouldWrite = true;
+    else if (scoped.length && mergedFeeds[contactId].length !== archived.length) shouldWrite = true;
+  }
+  state.profileFeeds = mergedFeeds;
+  state.profileMemory = { ...(state.profileMemory || {}), ...(archive.profileMemory || {}) };
+  state.profileStatus = { ...(state.profileStatus || {}), ...(archive.profileStatus || {}) };
+  if (shouldWrite) writeProfileArchive(state);
+  return state;
+}
+function save(scopeKey, state) {
+  // Profile Moments are contact-owned and must survive reopening even when the
+  // current Tavern scope is fallback/no-chat. Other Moments data keeps the
+  // existing hard scope boundary.
+  writeProfileArchive(state);
+  if (isPersistentScopeKey(scopeKey)) writeJson(key(scopeKey), state);
+  else transientStates.set(String(scopeKey || ''), state);
+  return state;
+}
+export function getMomentsState(scopeKey) {
+  const scoped = normalize(isPersistentScopeKey(scopeKey) ? readJson(key(scopeKey), null) : transientStates.get(String(scopeKey || '')));
+  return hydrateProfileArchive(scoped);
+}
 export function getMomentsSettings(scopeKey) { return getMomentsState(scopeKey).settings; }
 export function updateMomentsSettings(scopeKey, patch = {}) {
   const state = getMomentsState(scopeKey);
