@@ -47,10 +47,11 @@ export async function runToolCalling({
   onToolCall = null,
   onToolResult = null,
   toolContext = null,
+  confirmTool = null,
 } = {}) {
   if (!adapter || typeof adapter.complete !== 'function') throw new Error('缺少 Tool Calling 模型适配器');
 
-  const discovery = await listAvailableTools({ signal, ...(toolContext && typeof toolContext === 'object' ? toolContext : {}) });
+  const discovery = await listAvailableTools({ signal, includeConfirmationRequired: true, ...(toolContext && typeof toolContext === 'object' ? toolContext : {}) });
   const available = typeof toolFilter === 'function'
     ? discovery.tools.filter(tool => toolFilter(tool) !== false)
     : discovery.tools;
@@ -110,7 +111,16 @@ export async function runToolCalling({
       try {
         execution = await invokeTool(tool.id, args, { signal, ...(toolContext && typeof toolContext === 'object' ? toolContext : {}) });
       } catch (error) {
-        throw new Error(`MCP 工具执行失败 [${tool.providerName || '未命名 MCP'} / ${tool.name}]：${String(error?.message || error || '未知错误')}`, { cause: error });
+        if (error?.code === 'MOLI_TOOL_CONFIRM_REQUIRED') {
+          if (typeof confirmTool !== 'function') {
+            throw new Error(`MCP 工具需要确认 [${tool.providerName || '未命名 MCP'} / ${tool.name}]，但当前界面没有提供确认入口`, { cause: error });
+          }
+          const confirmed = await confirmTool({ tool, args, decision: error.toolDecision || tool.accessDecision || null, round });
+          if (!confirmed) throw new Error(`用户取消了 MCP 工具调用 [${tool.providerName || '未命名 MCP'} / ${tool.name}]`);
+          execution = await invokeTool(tool.id, args, { signal, confirmed: true, ...(toolContext && typeof toolContext === 'object' ? toolContext : {}) });
+        } else {
+          throw new Error(`MCP 工具执行失败 [${tool.providerName || '未命名 MCP'} / ${tool.name}]：${String(error?.message || error || '未知错误')}`, { cause: error });
+        }
       }
       const resultText = safeJson(execution.result);
       const record = {

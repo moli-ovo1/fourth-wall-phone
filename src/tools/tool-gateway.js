@@ -93,8 +93,8 @@ export async function listAvailableTools(options = {}) {
         const normalized = normalizeTool(server, remoteTool);
         if (!normalized) continue;
         const decision = accessDecision(server, remoteTool, options);
-        if (!decision.allowed) continue;
-        tools.push(normalized);
+        if (!decision.allowed && !(decision.confirmationRequired && options.includeConfirmationRequired === true)) continue;
+        tools.push({ ...normalized, accessDecision: decision });
       }
     } catch (error) {
       errors.push({
