@@ -3974,3 +3974,10 @@ Still next, without splitting into UI micro-patches:
 - 已建立 `wake-snapshot-builder.js`，将在线 canonical 状态投影成 portable WakeRequest；Character/Community Wake 调度已开始携带真实角色连续性与 Community 快照，而不是只有调度 envelope。
 - 已建立 `wake-result-commit.js` 幂等 Commit 边界，使用 wakeId/eventId ledger 防 Companion Journal 重放；当前尚未接管在线行为写入。
 - 下一步：WakeResult adapter + Offline Journal contract + Web-only replay harness。先证明 snapshot → execute/模拟 result → journal → commit 的语义闭环，再创建 Android Companion。
+
+
+## moli307 / v0.6.60 — Companion Phase 1A：WakeResult Adapter + Offline Journal + Web Replay Harness
+- 新增 `src/automation/wake-result-adapter.js`：把 executor 观察到的事实标准化为 secret-free WakeResult v1，并为缺失 ID 的事件生成稳定于本轮 wakeId 的 eventId；executor 继续只报告事实，不返回任意 canonical store patch。
+- 新增 `src/automation/offline-wake-journal.js`：建立未提交 WakeResult 的 Offline Journal contract；写入前重新经过 Wake contract 的 Secret 校验，按 wakeId 去重；Journal 只保存 pending/短尾 committed 记录，不成为第二套人物/社区历史数据库。
+- 新增 `src/automation/wake-replay-harness.js`：提供不自动运行的 Web-only replay harness，可模拟 `WakeResult → Journal → recovery commit → duplicate replay`，验证 Commit ledger 的 wakeId/eventId 幂等边界。
+- 本版仍未创建 Android/APK，也未让 Journal 接管现有在线 Character Wake。下一步应做 Companion Phase 1A 收口测试与 canonical event adapters，确认真实 Community/Life/Continuity 事件可由同一 Commit 层回放后，再进入 Android Companion 骨架。

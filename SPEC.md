@@ -4939,3 +4939,10 @@ When an MCP account/identity tool returns a persistent role identity endpoint, m
 - Wake Snapshot 是 canonical state 的只读投影，不是第二份角色数据库。Web 侧通过 `buildWebWakeRequest()` 生成角色/User/连续性/Community/Runtime 快照；任何 API key、token、认证 header、actor endpoint 等 Secret 继续由契约层拒绝。
 - WakeResult 的正式回写采用幂等事件 Commit：`wakeId` 防整轮重复，`eventId` 防单事件重放；Commit 层只负责协议和 replay guard，具体事实仍由 moli canonical stores 应用。
 - Companion 未来只能“产生事实事件”，不能直接拥有/覆盖 World Event、Awareness、Community、Life Log 或 Character Runtime 数据库。
+
+
+## moli307 / v0.6.60 — Companion Phase 1A：WakeResult Adapter + Offline Journal + Web Replay Harness
+- 新增 `src/automation/wake-result-adapter.js`：把 executor 观察到的事实标准化为 secret-free WakeResult v1，并为缺失 ID 的事件生成稳定于本轮 wakeId 的 eventId；executor 继续只报告事实，不返回任意 canonical store patch。
+- 新增 `src/automation/offline-wake-journal.js`：建立未提交 WakeResult 的 Offline Journal contract；写入前重新经过 Wake contract 的 Secret 校验，按 wakeId 去重；Journal 只保存 pending/短尾 committed 记录，不成为第二套人物/社区历史数据库。
+- 新增 `src/automation/wake-replay-harness.js`：提供不自动运行的 Web-only replay harness，可模拟 `WakeResult → Journal → recovery commit → duplicate replay`，验证 Commit ledger 的 wakeId/eventId 幂等边界。
+- 本版仍未创建 Android/APK，也未让 Journal 接管现有在线 Character Wake。下一步应做 Companion Phase 1A 收口测试与 canonical event adapters，确认真实 Community/Life/Continuity 事件可由同一 Commit 层回放后，再进入 Android Companion 骨架。

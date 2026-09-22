@@ -1128,3 +1128,10 @@
 - Character/Community Wake 的调度分支改为使用 `buildWebWakeRequest()`；现有实际行为不变，当前 Web executor 仍执行原有生成/Community Discovery。
 - 新增 `src/automation/wake-result-commit.js`：建立未来 Web/Companion 共用的幂等 Commit 边界与 wakeId/eventId replay ledger。它不直接认识 Community/World Event/Life Log 的内部 schema，必须由 canonical store 层注入 `applyEvent` 后才会提交，避免 Companion 成为第二套数据库。
 - 本版仍未启用 Companion、Offline Journal 或 Android 工程；Commit boundary 目前是协议基础，不替换现有在线行为写入链。下一步应建立 Web executor 的 WakeResult 适配/Journal contract，再做无 Android 的 replay 测试。
+
+
+## moli307 / v0.6.60 — Companion Phase 1A：WakeResult Adapter + Offline Journal + Web Replay Harness
+- 新增 `src/automation/wake-result-adapter.js`：把 executor 观察到的事实标准化为 secret-free WakeResult v1，并为缺失 ID 的事件生成稳定于本轮 wakeId 的 eventId；executor 继续只报告事实，不返回任意 canonical store patch。
+- 新增 `src/automation/offline-wake-journal.js`：建立未提交 WakeResult 的 Offline Journal contract；写入前重新经过 Wake contract 的 Secret 校验，按 wakeId 去重；Journal 只保存 pending/短尾 committed 记录，不成为第二套人物/社区历史数据库。
+- 新增 `src/automation/wake-replay-harness.js`：提供不自动运行的 Web-only replay harness，可模拟 `WakeResult → Journal → recovery commit → duplicate replay`，验证 Commit ledger 的 wakeId/eventId 幂等边界。
+- 本版仍未创建 Android/APK，也未让 Journal 接管现有在线 Character Wake。下一步应做 Companion Phase 1A 收口测试与 canonical event adapters，确认真实 Community/Life/Continuity 事件可由同一 Commit 层回放后，再进入 Android Companion 骨架。
