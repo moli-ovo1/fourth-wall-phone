@@ -11,7 +11,7 @@ import { updateCharacterRuntime } from '../storage/character-runtime-store.js';
 import { recordLifeLog, listLifeLogs } from '../storage/life-log-store.js';
 import { requestCommunityWake } from './community-wake-service.js';
 import { acquireWebSchedulerLease, releaseWebSchedulerLease } from './scheduler-lease.js';
-import { createWakeRequest } from './wake-contract.js';
+import { buildWebWakeRequest } from './wake-snapshot-builder.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -214,10 +214,9 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         && now - Number(a.lastCharacterWakeAt || 0) >= Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)) * 60 * 1000
       ) {
         if (!wakeLease.acquired) continue;
-        const wakeRequest = createWakeRequest({
+        const wakeRequest = buildWebWakeRequest({
           scopeKey,
           characterId: String(contact.id || ''),
-          actorName: String(contact.name || ''),
           wakeType: a.externalWakeEnabled === true ? 'external' : 'community',
           baseRevision: Number(wakeLease.lease?.epoch || 0),
           schedule: {
