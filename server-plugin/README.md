@@ -1,6 +1,8 @@
 # moli Server Wake：单角色社区试验
 
-这是 ZIP42 基线的独立试验。服务器插件在 SillyTavern 的 Node 进程里执行一名角色的社区 POST/SKIP 决策。浏览器关闭后仍可运行；结果先保存在 `plugins/moli-server-wake/data/community-wake-v1.json`，下次打开 moli 时由前端验证身份并写回原社区/生活日志存储。插件不执行 MCP，不更改 Story-Aligned 规则，也不把 APK 的账号配置迁入角色快照。
+这是 ZIP42 基线的独立试验。服务器插件在 SillyTavern 的 Node 进程里执行一名角色的社区 POST/SKIP 决策。浏览器关闭后仍可运行；结果先保存在 `plugins/moli-server-wake/data/community-wake-v1.json`，下次打开 moli 时由前端验证身份并写回原社区/生活日志存储。不更改 Story-Aligned 规则，也不把 APK 的账号配置迁入角色快照。
+
+后续只读 MCP 试验需要在同一手机的 Termux 启动环境中额外设置 `MOLI_WAKE_MCP_URL`（HTTPS MCP 地址），可选 `MOLI_WAKE_MCP_BEARER`。两者不得写进浏览器快照或 Git。仅当角色在 moli 中已获 MCP Wake 授权，快照里恰有一个对应账号绑定，且服务端已配置 MCP 地址时，服务器才会考虑只读 MCP 行动。工具必须声明 `annotations.readOnlyHint: true`，或者由机主在 `MOLI_WAKE_MCP_READ_TOOLS` 以逗号分隔的名单里明确列出；`destructiveHint: true` 一律排除。服务端第一次收到快照时锁定该绑定和本地地址指纹；地址或账号变化会拒绝继续执行，以防错号。MCP 结果仍由浏览器按当前绑定核对后回注。
 
 ## 手机安装
 
@@ -35,4 +37,4 @@ bash start.sh
 2. 关闭浏览器页面，保持 Termux 的 SillyTavern 进程运行。45 秒静默后服务器尝试一次真实 Provider 决策。下次至少 15 分钟；若上次结果还未回注，不会再生成下一次。重开浏览器访问 `/api/plugins/moli-server-wake/status` 查看 `lastStatus` 和 `pending`。`completed:SKIP` 表示角色选择不发帖，`completed:COMMUNITY_POSTED` 表示待回注帖子，`error:*` 表示决策失败。
 3. 打开 moli；全局陪伴人物可在酒馆列表页回注，正文人物回到原聊天回注。等几秒，再检查对应作用域的社区帖子及生活日志。`pending` 应归零。若是 SKIP，则没有帖子；这不是传输失败。可再次查询 status。已有正文作用域的社区数据不会自动并入全局作用域，以免把不同正文世界混在一起。
 
-单角色正文作用域的 SKIP 已通过用户手机端到端验收；全局作用域补丁还需手机复测。Android Companion 不参与此链路，卸载或关闭它不会影响服务器试验。SillyTavern 进程被系统终止时服务器调度也会停止；浏览器关闭但服务器仍运行是本方案的必要条件。
+单角色正文作用域的 SKIP 与全局作用域的 POST/SKIP 已通过用户手机端到端验收。只读 MCP 路径目前只通过本地模拟测试，尚未完成真机 MCP 调用。Android Companion 不参与服务器试验链路。SillyTavern 进程被系统终止时服务器调度也会停止；浏览器关闭但服务器仍运行是本方案的必要条件。

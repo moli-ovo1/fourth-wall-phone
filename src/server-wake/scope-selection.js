@@ -3,13 +3,14 @@ import { isPersistentScopeKey } from '../storage/scope-policy.js';
 
 const id = value => String(value ?? '');
 
-export function serverWakeCandidates(activeScopeKey, conversations, contacts) {
+export function serverWakeCandidates(activeScopeKey, conversations, contacts, { mcpReady = false } = {}) {
   const byId = new Map((contacts || []).map(contact => [id(contact?.id), contact]));
   const unique = new Map();
   for (const conversation of conversations || []) {
     if (conversation?.type !== 'private' || conversation?.automation?.autoSuspended) continue;
     const automation = conversation.automation || {};
-    if (automation.communityWakeEnabled !== true || automation.externalWakeEnabled === true
+    if ((automation.communityWakeEnabled !== true && automation.externalWakeEnabled !== true)
+        || (automation.externalWakeEnabled === true && !mcpReady)
         || automation.storyAlignedEnabled === true) continue;
     const contact = byId.get(id(conversation.contactId));
     if (!contact) continue;
