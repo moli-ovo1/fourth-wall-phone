@@ -128,6 +128,17 @@ test('browser resync accepts read allowlist update but not an MCP address change
     process.env.MOLI_WAKE_MCP_URL = 'https://other.example.test/account';
     assert.equal(invoke('POST', '/snapshot', snapshot).statusCode, 409);
     assert.equal(invoke('GET', '/status').data.mcpBindingReady, false);
+    const state = plugin._test.getState();
+    state.mcpTransitionFrom = state.mcpBinding;
+    state.mcpBinding = null;
+    state.mcpConfigFingerprint = '';
+    state.mcpCredentialFingerprint = '';
+    state.profile = null;
+    assert.equal(invoke('POST', '/snapshot', snapshot).data.error, 'mcp-new-binding-required');
+    const fresh = structuredClone(snapshot);
+    fresh.identity.bindings[0].revision = '2';
+    assert.equal(invoke('POST', '/snapshot', fresh).statusCode, 200);
+    assert.equal(invoke('GET', '/status').data.mcpBindingReady, true);
   } finally {
     await plugin.exit();
     for (const [name, prior] of Object.entries(before)) {

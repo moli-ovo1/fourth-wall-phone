@@ -11,7 +11,7 @@ const MIN_INTERVAL_MS = 15 * 60_000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 let filePath;
 let timer;
-let state = { ownerHandle: '', profile: null, mcpBinding: null, mcpConfigFingerprint: '', mcpCredentialFingerprint: '', pending: [], lastRunAt: 0, lastStatus: 'never' };
+let state = { ownerHandle: '', profile: null, mcpBinding: null, mcpTransitionFrom: null, mcpConfigFingerprint: '', mcpCredentialFingerprint: '', pending: [], lastRunAt: 0, lastStatus: 'never' };
 let running = false;
 
 const value = x => String(x ?? '').trim();
@@ -60,10 +60,11 @@ function load() {
   try {
     const stored = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     state = { ownerHandle: value(stored.ownerHandle), profile: stored.profile || null, mcpBinding: stored.mcpBinding || null,
+      mcpTransitionFrom: stored.mcpTransitionFrom || null,
       mcpConfigFingerprint: value(stored.mcpConfigFingerprint), mcpCredentialFingerprint: value(stored.mcpCredentialFingerprint),
       pending: Array.isArray(stored.pending) ? stored.pending : [],
       lastRunAt: Number(stored.lastRunAt) || 0, lastStatus: value(stored.lastStatus) || 'never' };
-  } catch { state = { ownerHandle: '', profile: null, mcpBinding: null, mcpConfigFingerprint: '', mcpCredentialFingerprint: '', pending: [], lastRunAt: 0, lastStatus: 'never' }; }
+  } catch { state = { ownerHandle: '', profile: null, mcpBinding: null, mcpTransitionFrom: null, mcpConfigFingerprint: '', mcpCredentialFingerprint: '', pending: [], lastRunAt: 0, lastStatus: 'never' }; }
 }
 
 function parseChoice(raw) {
@@ -212,6 +213,8 @@ async function init(router) {
       && request.metadata?.scopeMode === 'global' && state.pending.length === 0;
     if (changedOwner && !migrateSamePersonToGlobal) return res.status(409).json({ error: 'one-character-mvp' });
     const binding = request.schedule?.externalWakeEnabled === true ? request.identity.bindings[0] : null;
+    if (state.mcpTransitionFrom && (!binding || mcp.sameBinding(binding, state.mcpTransitionFrom)))
+      return res.status(409).json({ error: 'mcp-new-binding-required' });
     if (binding && state.mcpBinding && !mcp.sameBinding(binding, state.mcpBinding)) return res.status(409).json({ error: 'mcp-binding-changed' });
     if (binding && state.mcpConfigFingerprint && state.mcpConfigFingerprint !== mcp.configFingerprint()) {
       const sameCredentials = state.mcpCredentialFingerprint
@@ -224,6 +227,7 @@ async function init(router) {
     if (binding) {
       state.mcpConfigFingerprint = mcp.configFingerprint();
       state.mcpCredentialFingerprint = mcp.credentialFingerprint();
+      state.mcpTransitionFrom = null;
     }
     state.profile = { request: clone(request), lastSeenAt: Date.now() };
     persist();
