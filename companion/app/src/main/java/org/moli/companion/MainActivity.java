@@ -28,8 +28,8 @@ public final class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(48,48,48,48);
         TextView status = new TextView(this); status.setGravity(Gravity.CENTER_HORIZONTAL);
         Runnable refreshBridgeStatus = () -> {
-            if (BridgeForegroundService.bridgeRunning()) status.setText("moli Companion 0.1.9\n\n本机 Bridge 前台服务已启动 · 17463\n\n配对码：\n" + store.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）");
-            else status.setText("moli Companion 0.1.9\n\nBridge 正在启动。若几秒后仍无法访问，请点刷新诊断。\n" + BridgeForegroundService.bridgeError() + "\n\n配对码：\n" + store.pairingToken());
+            if (BridgeForegroundService.bridgeRunning()) status.setText("moli Companion 0.2.0\n\n本机 Bridge 前台服务已启动 · 17463\n\n配对码：\n" + store.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）");
+            else status.setText("moli Companion 0.2.0\n\nBridge 正在启动。若几秒后仍无法访问，请点刷新诊断。\n" + BridgeForegroundService.bridgeError() + "\n\n配对码：\n" + store.pairingToken());
         };
         refreshBridgeStatus.run();
         status.postDelayed(refreshBridgeStatus, 500);

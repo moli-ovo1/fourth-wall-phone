@@ -30,6 +30,7 @@ public final class LocalBridgeServer {
             for(int i=1;i<lines.length;i++){int x=lines[i].indexOf(':');if(x>0)headers.put(lines[i].substring(0,x).trim().toLowerCase(Locale.ROOT),lines[i].substring(x+1).trim());}
             int length=0; try{length=Integer.parseInt(headers.getOrDefault("content-length","0"));}catch(Exception ignored){}
             byte[] payload=new byte[Math.max(0,length)]; int read=0,n; while(read<payload.length && (n=in.read(payload,read,payload.length-read))>0)read+=n;
+            if("POST".equals(method)&&"/v1/form-bridge".equals(path(target))){handleFormBridge(out,new String(payload,0,read,StandardCharsets.UTF_8));return;}
             JSONObject body=read>0?new JSONObject(new String(payload,0,read,StandardCharsets.UTF_8)):new JSONObject();
             if("OPTIONS".equals(method)){respond(out,204,new JSONObject());return;}
             if("/v1/health".equals(path(target))){respond(out,200,new JSONObject().put("ok",true).put("protocol",1));return;}
@@ -47,6 +48,26 @@ public final class LocalBridgeServer {
         } catch(Exception ignored) {}
     }
     private static String path(String target){int q=target.indexOf('?');return q<0?target:target.substring(0,q);}
+    private void handleFormBridge(OutputStream out,String encoded)throws IOException{
+        Map<String,String> form=parseForm(encoded);String requestId=form.getOrDefault("requestId","");String op=form.getOrDefault("op","");
+        try{
+            if("health".equals(op)){respondForm(out,requestId,200,new JSONObject().put("ok",true).put("protocol",1));return;}
+            if(!store.pairingToken().equals(form.getOrDefault("token",""))){respondForm(out,requestId,401,new JSONObject().put("error","pairing-required"));return;}
+            JSONObject body=new JSONObject(form.getOrDefault("body","{}"));String scope=body.optString("scopeKey","");JSONObject value;int status=200;
+            switch(op){
+                case "lease-get": value=store.getLease(scope);break;
+                case "lease-cas": value=store.compareAndSetLease(scope,body.optJSONObject("expected"),body.optJSONObject("replacement"));if(value==null){status=409;value=new JSONObject().put("error","lease-conflict");}break;
+                case "wake-request-post": store.putWakeRequest(scope,body.getJSONObject("request"));value=new JSONObject().put("ok",true);break;
+                case "wake-results-get": value=new JSONObject().put("results",store.getWakeResults(scope));break;
+                case "wake-results-ack": value=new JSONObject().put("acknowledged",store.acknowledgeWakeResults(scope,body.optJSONArray("wakeIds")==null?new JSONArray():body.optJSONArray("wakeIds")));break;
+                case "mcp-profile-post": mcpProfiles.save(body);value=new JSONObject().put("ok",true);break;
+                default: status=404;value=new JSONObject().put("error","not-found");
+            }
+            respondForm(out,requestId,status,value);
+        }catch(Exception error){respondForm(out,requestId,500,new JSONObject(Collections.singletonMap("error",error.getMessage()==null?error.getClass().getSimpleName():error.getMessage())));}
+    }
+    private static Map<String,String> parseForm(String encoded){Map<String,String> result=new HashMap<>();try{for(String pair:encoded.split("&")){String[]kv=pair.split("=",2);result.put(URLDecoder.decode(kv[0],"UTF-8"),kv.length>1?URLDecoder.decode(kv[1],"UTF-8"):"");}}catch(Exception ignored){}return result;}
+    private static void respondForm(OutputStream out,String requestId,int status,JSONObject body)throws IOException{String payload=Base64.getUrlEncoder().withoutPadding().encodeToString(body.toString().getBytes(StandardCharsets.UTF_8));String safeId=requestId.replace("\\","\\\\").replace("\"","\\\"");String html="<!doctype html><meta charset=utf-8><script>parent.postMessage({moliCompanionForm:1,requestId:\""+safeId+"\",status:"+status+",payload:\""+payload+"\"},'*')</script>";byte[]bytes=html.getBytes(StandardCharsets.UTF_8);String h="HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: "+bytes.length+"\r\nConnection: close\r\n\r\n";out.write(h.getBytes(StandardCharsets.US_ASCII));out.write(bytes);out.flush();}
     private static String query(String target,String key){try{int q=target.indexOf('?');if(q<0)return"";for(String pair:target.substring(q+1).split("&")){String[]kv=pair.split("=",2);if(URLDecoder.decode(kv[0],"UTF-8").equals(key))return kv.length>1?URLDecoder.decode(kv[1],"UTF-8"):"";}}catch(Exception ignored){}return"";}
     private static void respond(OutputStream out,int code,JSONObject body)throws IOException{byte[]bytes=body.toString().getBytes(StandardCharsets.UTF_8);String status=code==200?"OK":code==204?"No Content":code==401?"Unauthorized":code==409?"Conflict":"Not Found";String h="HTTP/1.1 "+code+" "+status+"\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: Content-Type, X-Moli-Pairing-Token\r\nAccess-Control-Allow-Private-Network: true\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nCache-Control: no-store\r\nContent-Length: "+(code==204?0:bytes.length)+"\r\nConnection: close\r\n\r\n";out.write(h.getBytes(StandardCharsets.US_ASCII));if(code!=204)out.write(bytes);out.flush();}
 }
