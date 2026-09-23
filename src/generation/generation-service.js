@@ -9,7 +9,6 @@ import {
 import { getApiSettings, getApiPreset, resolveApiRuntimeConfig } from '../storage/api-settings.js';
 import { generateProviderText, completeProviderWithTools, supportsProviderToolCalling } from '../api/providers/provider-registry.js';
 import { runToolCalling } from '../tools/tool-calling-service.js';
-import { collectToolObservations, appendObservationsToRequest } from '../tools/tool-observation-service.js';
 import {
   getTavernCharacterSnapshot,
   getTavernCharacterForContact,
@@ -465,46 +464,24 @@ export async function generatePrivateReply({
     result = { text, raw: null };
   } else if (!isFourthWall && supportsProviderToolCalling(config)) {
     const toolContext = { actorId: String(contact?.id || ''), origin: String(toolOrigin || 'private_chat') };
-    try {
-      const toolResult = await runToolCalling({
-        request,
-        signal,
-        toolContext,
-        confirmTool,
-        confirmIdentityHandoff,
-        adapter: {
-          complete: ({ request: toolRequest, tools, history, signal: toolSignal }) =>
-            completeProviderWithTools(config, toolRequest, { tools, history, signal: toolSignal }),
-        },
-      });
-      if (toolResult.skipped === 'no-tools') {
-        result = await generateProviderText(config, request, { signal, onDelta });
-      } else {
-        const text = String(toolResult.text || '').trim();
-        if (!text) throw new Error('工具调用完成后模型没有返回最终回复');
-        onDelta?.(text, text);
-        result = { text, raw: null, toolCalling: { mode: 'native', usedTools: toolResult.usedTools, rounds: toolResult.rounds, discoveryErrors: toolResult.discoveryErrors } };
-      }
-    } catch (nativeError) {
-      // Compatibility path: some OpenAI-compatible proxies chat normally but return unusable native tool_calls.
-      // Route tools with an ordinary text completion, execute via the same permissioned Gateway, then let the
-      // normal character generation consume the verified observations.
-      const observed = await collectToolObservations({
-        request,
-        signal,
-        toolContext,
-        confirmTool,
-        confirmIdentityHandoff,
-        completeText: (routerRequest, routerSignal) => generateProviderText(config, routerRequest, { signal: routerSignal }),
-      });
-      if (!observed.observations.length) throw nativeError;
-      const observedRequest = appendObservationsToRequest(request, observed.observations);
-      try {
-        result = await generateProviderText(config, observedRequest, { signal, onDelta });
-      } catch (error) {
-        throw new Error(`Observation 工具结果回传普通模型失败：${String(error?.message || error || '未知错误')}`, { cause: error });
-      }
-      result.toolCalling = { mode: 'observation-fallback', usedTools: observed.usedTools, nativeError: String(nativeError?.message || nativeError || ''), discoveryErrors: observed.discoveryErrors };
+    const toolResult = await runToolCalling({
+      request,
+      signal,
+      toolContext,
+      confirmTool,
+      confirmIdentityHandoff,
+      adapter: {
+        complete: ({ request: toolRequest, tools, history, signal: toolSignal }) =>
+          completeProviderWithTools(config, toolRequest, { tools, history, signal: toolSignal }),
+      },
+    });
+    if (toolResult.skipped === 'no-tools') {
+      result = await generateProviderText(config, request, { signal, onDelta });
+    } else {
+      const text = String(toolResult.text || '').trim();
+      if (!text) throw new Error('工具调用完成后模型没有返回最终回复');
+      onDelta?.(text, text);
+      result = { text, raw: null, toolCalling: { mode: 'native', usedTools: toolResult.usedTools, rounds: toolResult.rounds, discoveryErrors: toolResult.discoveryErrors } };
     }
   } else {
     try {
