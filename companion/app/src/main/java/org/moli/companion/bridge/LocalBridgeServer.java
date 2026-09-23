@@ -33,7 +33,8 @@ public final class LocalBridgeServer {
             JSONObject body=read>0?new JSONObject(new String(payload,0,read,StandardCharsets.UTF_8)):new JSONObject();
             if("OPTIONS".equals(method)){respond(out,204,new JSONObject());return;}
             if("/v1/health".equals(path(target))){respond(out,200,new JSONObject().put("ok",true).put("protocol",1));return;}
-            if(!store.pairingToken().equals(headers.getOrDefault("x-moli-pairing-token",""))){respond(out,401,new JSONObject().put("error","pairing-required"));return;}
+            String suppliedToken=headers.getOrDefault("x-moli-pairing-token",""); if(suppliedToken.isEmpty()) suppliedToken=query(target,"pairingToken");
+            if(!store.pairingToken().equals(suppliedToken)){respond(out,401,new JSONObject().put("error","pairing-required"));return;}
             String scope=query(target,"scopeKey");if(scope.isEmpty())scope=body.optString("scopeKey","");String path=path(target);
             if("POST".equals(method)&&"/v1/wake-request".equals(path)){store.putWakeRequest(scope,body.getJSONObject("request"));respond(out,200,new JSONObject().put("ok",true));}
             else if("GET".equals(method)&&"/v1/wake-request".equals(path))respond(out,200,store.getWakeRequest(scope));
@@ -48,5 +49,5 @@ public final class LocalBridgeServer {
     }
     private static String path(String target){int q=target.indexOf('?');return q<0?target:target.substring(0,q);}
     private static String query(String target,String key){try{int q=target.indexOf('?');if(q<0)return"";for(String pair:target.substring(q+1).split("&")){String[]kv=pair.split("=",2);if(URLDecoder.decode(kv[0],"UTF-8").equals(key))return kv.length>1?URLDecoder.decode(kv[1],"UTF-8"):"";}}catch(Exception ignored){}return"";}
-    private static void respond(OutputStream out,int code,JSONObject body)throws IOException{byte[]bytes=body.toString().getBytes(StandardCharsets.UTF_8);String status=code==200?"OK":code==204?"No Content":code==401?"Unauthorized":code==409?"Conflict":"Not Found";String h="HTTP/1.1 "+code+" "+status+"\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: Content-Type, X-Moli-Pairing-Token\r\nAccess-Control-Allow-Private-Network: true\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nCache-Control: no-store\r\nContent-Length: "+(code==204?0:bytes.length)+"\r\nConnection: close\r\n\r\n";out.write(h.getBytes(StandardCharsets.US_ASCII));if(code!=204)out.write(bytes);out.flush();}
+    private static void respond(OutputStream out,int code,JSONObject body)throws IOException{byte[]bytes=body.toString().getBytes(StandardCharsets.UTF_8);String status=code==200?"OK":code==204?"No Content":code==401?"Unauthorized":code==409?"Conflict":"Not Found";String h="HTTP/1.1 "+code+" "+status+"\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: Content-Type, X-Moli-Pairing-Token\r\nAccess-Control-Allow-Private-Network: true\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Max-Age: 600\r\nCache-Control: no-store\r\nContent-Length: "+(code==204?0:bytes.length)+"\r\nConnection: close\r\n\r\n";out.write(h.getBytes(StandardCharsets.US_ASCII));if(code!=204)out.write(bytes);out.flush();}
 }
