@@ -12,7 +12,6 @@ import { recordLifeLog, listLifeLogs } from '../storage/life-log-store.js';
 import { requestCommunityWake } from './community-wake-service.js';
 import { acquireWebSchedulerLease, releaseWebSchedulerLease } from './scheduler-lease.js';
 import { buildWebWakeRequest } from './wake-snapshot-builder.js';
-import { acquireCompanionWebLease, syncWakeRequestToCompanion } from '../companion/web-handoff.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -95,8 +94,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
     const body = getTavernAssistantTurnState();
     const revisions = getTavernMessageRevisionState();
     const now = Date.now();
-    const companionLease = await acquireCompanionWebLease(scopeKey, now);
-    const wakeLease = companionLease.acquired ? acquireWebSchedulerLease(now) : { acquired: false, lease: companionLease.lease || {} };
+    const wakeLease = acquireWebSchedulerLease(now);
 
     let editedEvent = null;
     if (revisions.available) {
@@ -142,34 +140,6 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         && a.storyAlignedEnabled === true
         && String(a.storyAlignedScopeKey || '') === String(scopeKey)
         && (!a.storyAlignedSourceId || String(a.storyAlignedSourceId) === String(contact?.source?.sourceId || ''));
-      let stagedCompanionWakeRequest = null;
-      if (
-        companionLease.available === true
-        && wakeLease.acquired
-        && eligibleAutoChatContact(contact)
-        && !storyAligned
-        && (a.externalWakeEnabled === true || a.communityWakeEnabled === true)
-      ) {
-        try {
-          stagedCompanionWakeRequest = buildWebWakeRequest({
-            scopeKey,
-            characterId: String(contact.id || ''),
-            wakeType: a.externalWakeEnabled === true ? 'external' : 'community',
-            baseRevision: Number(wakeLease.lease?.epoch || 0),
-            schedule: {
-              externalWakeEnabled: a.externalWakeEnabled === true,
-              communityWakeEnabled: a.communityWakeEnabled === true,
-              intervalMinutes: Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)),
-            },
-            capabilities: {
-              externalMcp: a.externalWakeEnabled === true,
-              communityDiscovery: a.communityWakeEnabled === true,
-            },
-            metadata: { schedulerOwner: 'web', schedulerEpoch: Number(wakeLease.lease?.epoch || 0), companionStaged: true },
-          });
-          void syncWakeRequestToCompanion(stagedCompanionWakeRequest);
-        } catch {}
-      }
       const bodyCount = Math.max(0, Number(body?.count || 0));
       const previousBody = Math.max(0, Number(a.lastBodyAssistantCount || 0));
       const previousCommentaryEvaluationBody = Math.max(0, Number(a.lastCommentaryEvaluationBodyCount || 0));
@@ -244,7 +214,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         && now - Number(a.lastCharacterWakeAt || 0) >= Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)) * 60 * 1000
       ) {
         if (!wakeLease.acquired) continue;
-        const wakeRequest = stagedCompanionWakeRequest || buildWebWakeRequest({
+        const wakeRequest = buildWebWakeRequest({
           scopeKey,
           characterId: String(contact.id || ''),
           wakeType: a.externalWakeEnabled === true ? 'external' : 'community',
@@ -260,7 +230,6 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
           },
           metadata: { schedulerOwner: 'web', schedulerEpoch: Number(wakeLease.lease?.epoch || 0) },
         });
-        if (!stagedCompanionWakeRequest) void syncWakeRequestToCompanion(wakeRequest);
         if (a.externalWakeEnabled === true) {
           mode = 'character-wake';
           socialEvents = pendingSocialEvents;
