@@ -1,7 +1,12 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 
-package_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$script_dir/moli-extension/manifest.json" ]]; then
+  package_dir="$script_dir"
+else
+  package_dir="$(cd -- "$script_dir/.." && pwd)"
+fi
 st_dir="${ST_DIR:-$HOME/SillyTavern}"
 extension_base="$st_dir/public/scripts/extensions/third-party"
 plugin_dir="$st_dir/plugins/moli-server-wake"
@@ -46,7 +51,9 @@ if [[ -z "$api_key" ]]; then
 fi
 
 umask 077
-backup="${extension_dir}.pre-server-wake-$(date +%Y%m%d-%H%M%S)"
+backup_root="$HOME/moli-extension-backups"
+mkdir -p -- "$backup_root"
+backup="$backup_root/$(basename -- "$extension_dir").pre-server-wake-$(date +%Y%m%d-%H%M%S)"
 cp -a -- "$extension_dir" "$backup"
 config_backup="${st_dir}/config.yaml.pre-server-wake-$(date +%Y%m%d-%H%M%S)"
 cp -p -- "$st_dir/config.yaml" "$config_backup"
