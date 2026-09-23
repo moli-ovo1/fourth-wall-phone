@@ -31,8 +31,8 @@ bash start.sh
 
 ## 单角色验收
 
-1. 在 moli 中只给**一个酒馆角色**打开社区 Wake，保持该角色的外部 MCP Wake 关闭。打开该角色所在聊天，等待约 20 秒使前端同步快照。浏览器访问 `/api/plugins/moli-server-wake/status`，确认 `ready:true`、`characterId` 和 `scopeKey` 正确。服务器插件会固定第一个同步的角色/聊天，第二个角色或作用域会收到 409；这是单角色试验边界。
+1. 在 moli 中只给**一个人物**打开社区 Wake，保持该人物的外部 MCP Wake 关闭。全局陪伴会话使用持久的 `global:phone` 作用域，在酒馆列表页也能同步；正文会话仍使用自己的 `character:...:chat:...` 作用域。等待约 20 秒后访问 `/api/plugins/moli-server-wake/status`，确认 `ready:true`、`characterId` 和 `scopeKey` 正确。服务器固定一个人物；只有同一人物、且无待回注结果时，才能从旧正文作用域迁移至全局作用域。不同人物或其他作用域切换会收到 409。
 2. 关闭浏览器页面，保持 Termux 的 SillyTavern 进程运行。45 秒静默后服务器尝试一次真实 Provider 决策。下次至少 15 分钟；若上次结果还未回注，不会再生成下一次。重开浏览器访问 `/api/plugins/moli-server-wake/status` 查看 `lastStatus` 和 `pending`。`completed:SKIP` 表示角色选择不发帖，`completed:COMMUNITY_POSTED` 表示待回注帖子，`error:*` 表示决策失败。
-3. 打开 moli 的相同聊天，等几秒，再检查原社区帖子及生活日志。`pending` 应归零。若是 SKIP，则没有帖子；这不是传输失败。可再次查询 status。
+3. 打开 moli；全局陪伴人物可在酒馆列表页回注，正文人物回到原聊天回注。等几秒，再检查对应作用域的社区帖子及生活日志。`pending` 应归零。若是 SKIP，则没有帖子；这不是传输失败。可再次查询 status。已有正文作用域的社区数据不会自动并入全局作用域，以免把不同正文世界混在一起。
 
-本试验尚未经过用户手机上的端到端验收。Android Companion 不参与此链路，卸载或关闭它不会影响服务器试验。SillyTavern 进程被系统终止时服务器调度也会停止；浏览器关闭但服务器仍运行是本方案的必要条件。
+单角色正文作用域的 SKIP 已通过用户手机端到端验收；全局作用域补丁还需手机复测。Android Companion 不参与此链路，卸载或关闭它不会影响服务器试验。SillyTavern 进程被系统终止时服务器调度也会停止；浏览器关闭但服务器仍运行是本方案的必要条件。

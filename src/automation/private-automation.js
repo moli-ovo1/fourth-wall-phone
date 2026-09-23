@@ -13,7 +13,9 @@ import { requestCommunityWake } from './community-wake-service.js';
 import { acquireWebSchedulerLease, releaseWebSchedulerLease } from './scheduler-lease.js';
 import { buildWebWakeRequest } from './wake-snapshot-builder.js';
 import { acquireCompanionWebLease, syncWakeRequestToCompanion } from '../companion/web-handoff.js';
-import { serverWakeReady, syncServerWakeRequest, recoverServerWakeResults } from '../server-wake/client.js';
+import { getServerWakeStatus, syncServerWakeRequest, recoverServerWakeResults } from '../server-wake/client.js';
+import { GLOBAL_PHONE_SCOPE_KEY } from '../core/global-scope.js';
+import { serverWakeCandidates, chooseServerWakeCandidate } from '../server-wake/scope-selection.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -99,33 +101,41 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
     const body = getTavernAssistantTurnState();
     const revisions = getTavernMessageRevisionState();
     const now = Date.now();
-    const serverAvailable = await serverWakeReady();
+    const serverStatus = await getServerWakeStatus();
+    const serverAvailable = serverStatus.ready === true;
     if (serverAvailable) {
-      try { await recoverServerWakeResults(scopeKey); }
-      catch (error) { console.warn('[moli小手机] Server Wake 结果回放失败', error); }
+      for (const resultScope of new Set([scopeKey, GLOBAL_PHONE_SCOPE_KEY])) {
+        try { await recoverServerWakeResults(resultScope); }
+        catch (error) { console.warn('[moli小手机] Server Wake 结果回放失败', resultScope, error); }
+      }
     }
     const privateConversations = getScopeConversations(scopeKey).filter(x => x?.type === 'private');
     let serverWakeConversationKey = '';
     if (serverAvailable) {
-      for (const conv of privateConversations) {
-        const contact = contacts.find(c => String(c.id) === String(conv.contactId));
-        const a = conv.automation || {};
-        if (!contact || conv.automation?.autoSuspended || running.has(conv.conversationKey || conv.id)
-            || contact.kind !== 'tavern' || a.communityWakeEnabled !== true || a.externalWakeEnabled === true
-            || (a.storyAlignedEnabled === true && String(a.storyAlignedScopeKey || '') === String(scopeKey)
-              && (!a.storyAlignedSourceId || String(a.storyAlignedSourceId) === String(contact?.source?.sourceId || '')))) continue;
-        serverWakeConversationKey = String(conv.conversationKey || conv.id);
-        const cacheKey = `${scopeKey}:${contact.id}`;
-        try {
+      try {
+        const candidates = serverWakeCandidates(scopeKey, privateConversations, contacts)
+          .filter(row => !running.has(row.conversation.conversationKey || row.conversation.id));
+        const selected = chooseServerWakeCandidate(candidates, serverStatus);
+        if (!selected && candidates.length) {
+          throw new Error(serverStatus.characterId
+            ? '服务器已绑定另一位人物或正文；请先核对绑定身份'
+            : '多位人物开启后台社区试验；请只保留一位');
+        }
+        if (selected) {
+          const { contact, conversation: conv, scopeKey: wakeScopeKey, global } = selected;
+          const a = conv.automation || {};
+          serverWakeConversationKey = String(conv.conversationKey || conv.id);
+          const cacheKey = `${wakeScopeKey}:${contact.id}`;
           const prior = serverWakeSnapshots.get(cacheKey);
           if (!prior || now - prior.syncedAt >= 20_000) {
             const request = buildWebWakeRequest({
-              scopeKey, characterId: String(contact.id || ''), wakeType: 'community',
+              scopeKey: wakeScopeKey, characterId: String(contact.id || ''), wakeType: 'community',
               baseRevision: 0,
               schedule: { externalWakeEnabled: false, communityWakeEnabled: true,
                 intervalMinutes: Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)) },
               capabilities: { externalMcp: false, communityDiscovery: true },
-              metadata: { schedulerOwner: 'sillytavern-server', serverCommunityTrial: true },
+              metadata: { schedulerOwner: 'sillytavern-server', serverCommunityTrial: true,
+                scopeMode: global ? 'global' : 'current' },
             });
             if (prior?.wakeId) {
               request.wakeId = prior.wakeId;
@@ -134,16 +144,15 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
             await syncServerWakeRequest(request);
             serverWakeSnapshots.set(cacheKey, { syncedAt: now, wakeId: request.wakeId });
           }
-        } catch (error) {
-          console.warn('[moli小手机] Server Wake 同步失败', error);
-          const message = String(error?.message || error || 'unknown');
-          if (message !== lastServerWakeError || now - lastServerWakeErrorAt >= 60_000) {
-            lastServerWakeError = message;
-            lastServerWakeErrorAt = now;
-            try { window.toastr?.error?.(`社区后台同步失败：${message}`, '', { timeOut: 10000, positionClass: 'toast-top-center' }); } catch {}
-          }
         }
-        break;
+      } catch (error) {
+        console.warn('[moli小手机] Server Wake 同步失败', error);
+        const message = String(error?.message || error || 'unknown');
+        if (message !== lastServerWakeError || now - lastServerWakeErrorAt >= 60_000) {
+          lastServerWakeError = message;
+          lastServerWakeErrorAt = now;
+          try { window.toastr?.error?.(`社区后台同步失败：${message}`, '', { timeOut: 10000, positionClass: 'toast-top-center' }); } catch {}
+        }
       }
     }
     // The server trial must be able to sync while a paired but unreachable

@@ -104,8 +104,18 @@ test('SillyTavern routes accept one owner and acknowledge only delivered results
     const result = plugin._test.makeResult(request(), { action: 'SKIP' }, Date.now());
     plugin._test.getState().pending.push(result);
     assert.equal(invoke('GET', '/results', { query: { scopeKey: 'chat:trial' } }).data.results.length, 1);
+    const globalRequest = request();
+    globalRequest.scopeKey = 'global:phone';
+    globalRequest.identity.scopeKey = 'global:phone';
+    globalRequest.metadata = { scopeMode: 'global' };
+    assert.ok(plugin._test.validRequest(globalRequest));
+    assert.equal(invoke('POST', '/snapshot', { body: globalRequest }).statusCode, 409,
+      'cannot abandon an unacknowledged result while changing scope');
     assert.equal(invoke('POST', '/ack', { body: { scopeKey: 'other', wakeIds: [result.wakeId] } }).data.acknowledged, 0);
     assert.equal(invoke('POST', '/ack', { body: { scopeKey: 'chat:trial', wakeIds: [result.wakeId] } }).data.acknowledged, 1);
+    assert.equal(invoke('POST', '/snapshot', { body: globalRequest }).data.migrated, true);
+    assert.equal(invoke('GET', '/status').data.scopeKey, 'global:phone');
+    assert.equal(invoke('POST', '/snapshot', { body: second }).statusCode, 409);
   } finally {
     await plugin.exit();
     for (const [name, prior] of [['MOLI_WAKE_BASE_URL', previous.base], ['MOLI_WAKE_MODEL', previous.model], ['MOLI_WAKE_API_KEY', previous.key]]) {

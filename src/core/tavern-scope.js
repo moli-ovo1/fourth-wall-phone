@@ -1,3 +1,5 @@
+import { GLOBAL_PHONE_SCOPE_KEY } from './global-scope.js';
+
 function getContext() {
   try {
     const st = window.SillyTavern || window.parent?.SillyTavern;
@@ -64,10 +66,5 @@ export function getCurrentScopeKey() {
     return `character:${segment(characterIdentity)}:chat:${chatId}`;
   }
 
-  const name = clean(
-    ctx?.name2 ?? ctx?.character?.name,
-    'unknown'
-  );
-
-  return `character:${segment(characterIdentity)}:fallback:${segment(name)}`;
+  return GLOBAL_PHONE_SCOPE_KEY;
 }

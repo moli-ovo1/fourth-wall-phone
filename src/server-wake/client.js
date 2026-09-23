@@ -20,8 +20,12 @@ async function call(path, { method = 'GET', body } = {}) {
   return response.json();
 }
 
+export async function getServerWakeStatus() {
+  try { return await call('/status'); } catch { return { ready: false, scopeKey: '', characterId: '' }; }
+}
+
 export async function serverWakeReady() {
-  try { return (await call('/status')).ready === true; } catch { return false; }
+  return (await getServerWakeStatus()).ready === true;
 }
 
 export async function syncServerWakeRequest(request) {

@@ -1,9 +1,9 @@
 import { loadUiState, saveUiState } from '../storage/ui-state.js';
 import { createFloatingBall } from '../ui/floating-ball.js';
-import { createPhonePanel } from '../ui/phone-panel.js?v=server-community-trial-2';
+import { createPhonePanel } from '../ui/phone-panel.js?v=server-community-trial-3';
 import { getCurrentScopeKey } from './tavern-scope.js';
 import { createReviewAutomation } from '../automation/review.js';
-import { createPrivateAutomation } from '../automation/private-automation.js?v=server-community-trial-2';
+import { createPrivateAutomation } from '../automation/private-automation.js?v=server-community-trial-3';
 import { createTavernInjectionBridge } from './tavern-injection.js';
 import { createStoryBridgeStatus } from '../ui/story-bridge-status.js';
 import { initConversationStorage } from '../storage/conversation-db.js';

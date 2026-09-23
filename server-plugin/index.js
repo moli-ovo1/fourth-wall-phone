@@ -141,12 +141,16 @@ async function init(router) {
     const request = req.body;
     if (Buffer.byteLength(JSON.stringify(request || {})) > MAX_BODY_BYTES || !validRequest(request)) return res.status(400).json({ error: 'invalid-community-wake-snapshot' });
     if (!providerReady()) return res.status(503).json({ error: 'provider-not-configured' });
-    if (state.profile && (state.profile.request.scopeKey !== request.scopeKey || state.profile.request.characterId !== request.characterId))
-      return res.status(409).json({ error: 'one-character-mvp' });
+    const previous = state.profile?.request;
+    const changedOwner = previous && (previous.scopeKey !== request.scopeKey || previous.characterId !== request.characterId);
+    const migrateSamePersonToGlobal = changedOwner && previous.characterId === request.characterId
+      && previous.scopeKey !== 'global:phone' && request.scopeKey === 'global:phone'
+      && request.metadata?.scopeMode === 'global' && state.pending.length === 0;
+    if (changedOwner && !migrateSamePersonToGlobal) return res.status(409).json({ error: 'one-character-mvp' });
     state.ownerHandle = owner(req);
     state.profile = { request: clone(request), lastSeenAt: Date.now() };
     persist();
-    res.json({ ok: true });
+    res.json({ ok: true, migrated: Boolean(migrateSamePersonToGlobal) });
   });
   router.get('/results', (req, res) => res.json({ results: state.pending.filter(r => r.scopeKey === value(req.query.scopeKey)) }));
   router.post('/ack', (req, res) => {
