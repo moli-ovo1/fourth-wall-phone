@@ -80,14 +80,22 @@ export async function diagnoseCompanion({ fetchImpl=fetch, timeoutMs=8000 } = {}
     try{health=await formBridge('health',{timeoutMs,stage:'health'});usedFormBridge=true;}catch(fallbackError){return {ok:false,stage:fallbackError.stage||'health',code:fallbackError.code||'COMPANION_NETWORK',message:fallbackError.message};}
   }
   if(health?.ok!==true||Number(health?.protocol)!==1)return {ok:false,stage:'health',code:'COMPANION_HEALTH_FORMAT',health};
+  let optionsFailure;
   if(!usedFormBridge)try {
     const response=await fetchWithTimeout(`${BASE}/health`,{method:'OPTIONS',cache:'no-store',headers:{'Access-Control-Request-Method':'GET','Access-Control-Request-Headers':'content-type,x-moli-pairing-token','Access-Control-Request-Private-Network':'true'}},{fetchImpl,timeoutMs,stage:'options'});
-    if(!response.ok)return {ok:false,stage:'options',code:'COMPANION_OPTIONS_HTTP',status:response.status,health};
-  } catch(error){return {ok:false,stage:error.stage||'options',code:error.code||'COMPANION_NETWORK',message:error.message,health};}
+    if(!response.ok)optionsFailure={stage:'options',code:'COMPANION_OPTIONS_HTTP',status:response.status};
+  } catch(error){optionsFailure={stage:error.stage||'options',code:error.code||'COMPANION_NETWORK',message:error.message};}
+  if(optionsFailure){
+    if(typeof document==='undefined'||typeof window==='undefined')return {ok:false,...optionsFailure,health};
+    try {
+      await formBridge('lease-get',{body:{scopeKey:'__pairing_probe__'},token,timeoutMs,stage:'lease'});
+      return {ok:true,stage:'complete',code:'COMPANION_OK',health,transport:'form'};
+    } catch(error){return {ok:false,stage:error.stage||'lease',code:error.code||'COMPANION_NETWORK',status:error.status,message:error.message,health,optionsFailure};}
+  }
   try {
     if(usedFormBridge)await formBridge('lease-get',{body:{scopeKey:'__pairing_probe__'},token,timeoutMs,stage:'lease'});
     else await call(`/lease${q('__pairing_probe__')}`,{token,fetchImpl,timeoutMs,stage:'lease'});
-    return {ok:true,stage:'complete',code:'COMPANION_OK',health};
+    return {ok:true,stage:'complete',code:'COMPANION_OK',health,transport:usedFormBridge?'form':'fetch'};
   } catch(error){return {ok:false,stage:error.stage||'lease',code:error.code||'COMPANION_NETWORK',status:error.status,message:error.message,health};}
 }
 export async function probeCompanion(options) { return (await diagnoseCompanion(options)).ok; }

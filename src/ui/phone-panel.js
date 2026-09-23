@@ -8912,7 +8912,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     void diagnoseCompanion().then(result => {
       if (!companionStatus) return;
       const messages = {
-        COMPANION_OK: 'Companion Bridge 已发现；health、OPTIONS 与配对认证均正常。',
+        COMPANION_OK: result.transport === 'form' ? 'Companion 已配对；浏览器限制了 OPTIONS，现已通过本机表单通道连接。' : 'Companion Bridge 已发现；health、OPTIONS 与配对认证均正常。',
         COMPANION_TOKEN_MISSING: '尚未填写配对码。',
         COMPANION_TIMEOUT: `${result.stage} 超时：请保持 Companion 在前台，并检查 VPN/浏览器本地网络限制。`,
         COMPANION_NETWORK: result.stage === 'health' ? 'health 网络失败：浏览器无法访问 127.0.0.1:17463。请保持 Companion 前台并关闭 VPN 后重试。' : `${result.stage} 网络失败：health 已响应，但认证请求被浏览器的 CORS/Private Network Access 策略拦截。`,

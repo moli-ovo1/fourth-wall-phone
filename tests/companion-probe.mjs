@@ -6,14 +6,25 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-async function load(token='pairing'){
+async function load(token='pairing',browser={}){
   const context=vm.createContext({AbortController,setTimeout,clearTimeout,URL,console,
-    localStorage:{getItem:()=>token,setItem(){},removeItem(){}}});
+    atob:value=>Buffer.from(value,'base64').toString('binary'),TextDecoder,Uint8Array,
+    localStorage:{getItem:()=>token,setItem(){},removeItem(){}},...browser});
   const module=new vm.SourceTextModule(fs.readFileSync(path.join(root,'src/companion/loopback-transport.js'),'utf8'),{context});
   await module.link(()=>{throw new Error('unexpected import');});await module.evaluate();return module.namespace;
 }
 const response=(status,value)=>({status,ok:status>=200&&status<300,text:async()=>status===204?'':(typeof value==='string'?value:JSON.stringify(value))});
 const sequence=(...values)=>async()=>{const value=values.shift();if(value instanceof Error)throw value;return value;};
+function browserFormBridge(status=200){
+  const calls=[];let onMessage;
+  const window={addEventListener:(_,handler)=>{onMessage=handler;},removeEventListener:()=>{onMessage=undefined;}};
+  const document={body:{append(){}},createElement:tag=>({tag,children:[],appendChild(input){this.children.push(input);},remove(){},submit(){
+    const fields=Object.fromEntries(this.children.map(input=>[input.name,input.value]));calls.push(fields);
+    const payload=Buffer.from(JSON.stringify(status===200?{}:{error:'pairing-required'})).toString('base64url');
+    setTimeout(()=>onMessage({origin:'http://127.0.0.1:17463',data:{moliCompanionForm:1,requestId:fields.requestId,status,payload}}),0);
+  }})};
+  return {window,document,calls};
+}
 
 test('probe distinguishes health network failure',async()=>{
   const api=await load();const result=await api.diagnoseCompanion({fetchImpl:sequence(new TypeError('Failed to fetch'))});
@@ -23,6 +34,19 @@ test('probe distinguishes health network failure',async()=>{
 test('probe distinguishes OPTIONS/PNA failure after healthy bridge',async()=>{
   const api=await load();const result=await api.diagnoseCompanion({fetchImpl:sequence(response(200,{ok:true,protocol:1}),new TypeError('blocked'))});
   assert.equal(result.stage,'options');assert.equal(result.code,'COMPANION_NETWORK');assert.equal(result.health.ok,true);
+});
+
+test('probe uses authenticated form bridge when browser blocks OPTIONS',async()=>{
+  const browser=browserFormBridge();const api=await load('pairing',browser);
+  const result=await api.diagnoseCompanion({fetchImpl:sequence(response(200,{ok:true,protocol:1}),new TypeError('blocked'))});
+  assert.equal(result.ok,true);assert.equal(result.transport,'form');
+  assert.equal(browser.calls.length,1);assert.equal(browser.calls[0].op,'lease-get');assert.equal(browser.calls[0].token,'pairing');
+});
+
+test('form bridge still rejects a bad pairing token after OPTIONS is blocked',async()=>{
+  const browser=browserFormBridge(401);const api=await load('wrong',browser);
+  const result=await api.diagnoseCompanion({fetchImpl:sequence(response(200,{ok:true,protocol:1}),new TypeError('blocked'))});
+  assert.equal(result.ok,false);assert.equal(result.code,'COMPANION_PAIRING_REJECTED');assert.equal(result.status,401);
 });
 
 test('probe distinguishes pairing 401 and invalid lease JSON',async()=>{
