@@ -11,7 +11,7 @@ const MIN_INTERVAL_MS = 15 * 60_000;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 let filePath;
 let timer;
-let state = { ownerHandle: '', profile: null, mcpBinding: null, mcpTransitionFrom: null, mcpConfigFingerprint: '', mcpCredentialFingerprint: '', pending: [], lastRunAt: 0, lastStatus: 'never' };
+let state = { ownerHandle: '', profile: null, mcpBinding: null, mcpTransitionFrom: null, mcpTransitionTargetName: '', mcpConfigFingerprint: '', mcpCredentialFingerprint: '', pending: [], lastRunAt: 0, lastStatus: 'never' };
 let running = false;
 
 const value = x => String(x ?? '').trim();
@@ -60,11 +60,11 @@ function load() {
   try {
     const stored = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     state = { ownerHandle: value(stored.ownerHandle), profile: stored.profile || null, mcpBinding: stored.mcpBinding || null,
-      mcpTransitionFrom: stored.mcpTransitionFrom || null,
+      mcpTransitionFrom: stored.mcpTransitionFrom || null, mcpTransitionTargetName: value(stored.mcpTransitionTargetName),
       mcpConfigFingerprint: value(stored.mcpConfigFingerprint), mcpCredentialFingerprint: value(stored.mcpCredentialFingerprint),
       pending: Array.isArray(stored.pending) ? stored.pending : [],
       lastRunAt: Number(stored.lastRunAt) || 0, lastStatus: value(stored.lastStatus) || 'never' };
-  } catch { state = { ownerHandle: '', profile: null, mcpBinding: null, mcpTransitionFrom: null, mcpConfigFingerprint: '', mcpCredentialFingerprint: '', pending: [], lastRunAt: 0, lastStatus: 'never' }; }
+  } catch { state = { ownerHandle: '', profile: null, mcpBinding: null, mcpTransitionFrom: null, mcpTransitionTargetName: '', mcpConfigFingerprint: '', mcpCredentialFingerprint: '', pending: [], lastRunAt: 0, lastStatus: 'never' }; }
 }
 
 function parseChoice(raw) {
@@ -191,7 +191,7 @@ async function init(router) {
     lastStatus: state.lastStatus, pending: state.pending.length,
     communityWakeEnabled: state.profile?.request?.schedule?.communityWakeEnabled === true,
     externalWakeEnabled: state.profile?.request?.schedule?.externalWakeEnabled === true,
-    mcpBindingReady: mcpWakeAuthorized() }));
+    mcpBindingReady: mcpWakeAuthorized(), mcpTransitionTargetName: state.mcpTransitionTargetName }));
   router.get('/mcp/probe', async (_req, res) => {
     if (!mcpWakeAuthorized()) return res.status(409).json({ ok: false, error: 'mcp-wake-not-authorized' });
     try { return res.json({ ok: true, ...(await mcp.probe()) }); }
@@ -206,6 +206,8 @@ async function init(router) {
     const request = req.body;
     if (Buffer.byteLength(JSON.stringify(request || {})) > MAX_BODY_BYTES || !validRequest(request)) return res.status(400).json({ error: 'invalid-community-wake-snapshot' });
     if (!providerReady()) return res.status(503).json({ error: 'provider-not-configured' });
+    if (state.mcpTransitionTargetName && (value(request.actorName) !== state.mcpTransitionTargetName
+        || request.scopeKey !== 'global:phone')) return res.status(409).json({ error: 'mcp-target-character-required' });
     const previous = state.profile?.request;
     const changedOwner = previous && (previous.scopeKey !== request.scopeKey || previous.characterId !== request.characterId);
     const migrateSamePersonToGlobal = changedOwner && previous.characterId === request.characterId
@@ -228,6 +230,7 @@ async function init(router) {
       state.mcpConfigFingerprint = mcp.configFingerprint();
       state.mcpCredentialFingerprint = mcp.credentialFingerprint();
       state.mcpTransitionFrom = null;
+      state.mcpTransitionTargetName = '';
     }
     state.profile = { request: clone(request), lastSeenAt: Date.now() };
     persist();

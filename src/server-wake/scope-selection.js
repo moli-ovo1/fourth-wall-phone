@@ -30,6 +30,11 @@ export function serverWakeCandidates(activeScopeKey, conversations, contacts, { 
 
 export function chooseServerWakeCandidate(candidates, owner = {}) {
   const rows = Array.isArray(candidates) ? candidates : [];
+  const transitionName = id(owner.mcpTransitionTargetName);
+  if (transitionName) {
+    const matching = rows.filter(row => row.global && id(row.contact.name) === transitionName);
+    return matching.length === 1 ? matching[0] : null;
+  }
   const ownerId = id(owner.characterId);
   const ownerScope = id(owner.scopeKey);
   if (ownerId) {

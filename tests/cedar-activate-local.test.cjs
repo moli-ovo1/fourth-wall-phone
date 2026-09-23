@@ -39,11 +39,14 @@ test('migrates only a quiescent global 程妄 binding and requires new browser i
   const migrated = migrateState(old);
   assert.equal(migrated.mcpBinding, null);
   assert.deepEqual(migrated.mcpTransitionFrom, old.mcpBinding);
+  assert.equal(migrated.mcpTransitionTargetName, '程妄');
   assert.equal(migrated.profile, null);
   assert.equal(migrated.ownerHandle, 'owner');
   assert.equal(old.mcpConfigFingerprint, 'old-config');
   assert.throws(() => migrateState({ ...old, pending: [{ wakeId: 'unacked' }] }), /待回注/);
-  assert.throws(() => migrateState({ ...old, profile: { request: { ...old.profile.request, actorName: '别人' } } }), /不是程妄/);
+  assert.throws(() => migrateState({ ...old, profile: { request: { ...old.profile.request, actorName: '别人' } } }), /既非程妄/);
+  const oldCustom = { ...old, profile: { request: { ...old.profile.request, actorName: '旧人物', characterId: 'custom:old' } } };
+  assert.equal(migrateState(oldCustom).mcpTransitionTargetName, '程妄');
 });
 
 test('writes private backup and token endpoint without preserving guest URL', () => {

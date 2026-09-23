@@ -34,14 +34,19 @@ async function verifyAccount(endpoint, fetchImpl = fetch) {
 }
 
 function migrateState(state) {
-  if (!state?.profile?.request || !state.mcpBinding) throw new Error('服务器尚无旧 MCP 绑定；未切换');
-  if (text(state.profile.request.actorName) !== '程妄') throw new Error('当前服务器人物不是程妄；未切换');
+  if (!state?.profile && state?.mcpTransitionFrom && !state.mcpTransitionTargetName
+      && (!Array.isArray(state.pending) || state.pending.length === 0))
+    return { ...state, mcpTransitionTargetName: '程妄' };
+  if (!state?.profile?.request) throw new Error('服务器尚无原人物快照；未切换');
+  const prior = state.profile.request;
+  if (text(prior.actorName) !== '程妄' && !text(prior.characterId).startsWith('custom:'))
+    throw new Error('旧服务器人物既非程妄也非旧 custom 会话；未切换');
   if (state.profile.request.scopeKey !== 'global:phone') throw new Error('服务器尚未进入全局陪伴作用域；未切换');
   if (!state.profile.request.schedule?.externalWakeEnabled) throw new Error('当前未授权 MCP Wake；未切换');
   if (Array.isArray(state.pending) && state.pending.length) throw new Error('尚有待回注结果；未切换');
   if (state.mcpTransitionFrom) throw new Error('已有未完成的 MCP 切换；请先在 Via 完整刷新');
-  const oldBinding = state.mcpBinding;
-  return { ...state, mcpBinding: null, mcpTransitionFrom: oldBinding,
+  const oldBinding = state.mcpBinding || prior.identity?.bindings?.[0] || null;
+  return { ...state, mcpBinding: null, mcpTransitionFrom: oldBinding, mcpTransitionTargetName: '程妄',
     mcpConfigFingerprint: '', mcpCredentialFingerprint: '',
     profile: null, lastStatus: 'mcp-rebind-awaiting-browser' };
 }

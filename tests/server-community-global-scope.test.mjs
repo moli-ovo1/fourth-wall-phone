@@ -78,3 +78,15 @@ test('community Wake remains server managed while its optional MCP endpoint is u
   conversation.automation.communityWakeEnabled = false;
   assert.equal(selection.serverWakeCandidates('global:phone', [conversation], contacts, { mcpReady: false }).length, 0);
 });
+
+test('explicit Cedar migration chooses only the uniquely named global 程妄 session', async () => {
+  const { selection } = await modules(vm.createContext({ window: {} }));
+  const contacts = [{ id: 'custom:old', name: '小叩', kind: 'custom', customRoleMode: 'global' },
+    { id: 'tavern:cheng', name: '程妄', kind: 'tavern' }];
+  const conversations = contacts.map(contact => ({ type: 'private', contactId: contact.id, scopeMode: 'global',
+    automation: { communityWakeEnabled: true } }));
+  const rows = selection.serverWakeCandidates('global:phone', conversations, contacts);
+  assert.equal(selection.chooseServerWakeCandidate(rows, { mcpTransitionTargetName: '程妄' }).contact.id, 'tavern:cheng');
+  assert.equal(selection.chooseServerWakeCandidate(rows, { mcpTransitionTargetName: '不存在' }), null);
+  assert.equal(selection.chooseServerWakeCandidate([...rows, rows[1]], { mcpTransitionTargetName: '程妄' }), null);
+});

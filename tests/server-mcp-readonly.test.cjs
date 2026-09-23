@@ -134,11 +134,15 @@ test('browser resync accepts read allowlist update but not an MCP address change
     state.mcpConfigFingerprint = '';
     state.mcpCredentialFingerprint = '';
     state.profile = null;
-    assert.equal(invoke('POST', '/snapshot', snapshot).data.error, 'mcp-new-binding-required');
+    state.mcpTransitionTargetName = '程妄';
+    assert.equal(invoke('POST', '/snapshot', snapshot).data.error, 'mcp-target-character-required');
     const fresh = structuredClone(snapshot);
+    fresh.actorName = '程妄';
+    assert.equal(invoke('POST', '/snapshot', fresh).data.error, 'mcp-new-binding-required');
     fresh.identity.bindings[0].revision = '2';
     assert.equal(invoke('POST', '/snapshot', fresh).statusCode, 200);
     assert.equal(invoke('GET', '/status').data.mcpBindingReady, true);
+    assert.equal(invoke('GET', '/status').data.mcpTransitionTargetName, '');
   } finally {
     await plugin.exit();
     for (const [name, prior] of Object.entries(before)) {
