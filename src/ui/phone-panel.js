@@ -124,7 +124,7 @@ import { listCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalend
 import { listMcpServers, getMcpServer, saveMcpServer, deleteMcpServer } from '../storage/mcp-store.js';
 import { testMcpConnection } from '../integrations/mcp-client.js';
 import { resolveMcpBinding, setMcpActorEndpoint } from '../storage/mcp-store.js';
-import { getCompanionPairingToken, setCompanionPairingToken, probeCompanion, provisionCompanionMcpProfile } from '../companion/loopback-transport.js';
+import { getCompanionPairingToken, setCompanionPairingToken, diagnoseCompanion, provisionCompanionMcpProfile } from '../companion/loopback-transport.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -8909,7 +8909,22 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     if (companionTokenInput) companionTokenInput.value = token;
     if (companionStatus) companionStatus.textContent = token ? '正在测试本机 Companion…' : '已清除配对码';
     if (!token) return;
-    void probeCompanion().then(ok => { if (companionStatus) companionStatus.textContent = ok ? 'Companion Bridge 已发现；配对码已保存。' : '没有发现 Companion。请先打开 Android Companion。'; });
+    void diagnoseCompanion().then(result => {
+      if (!companionStatus) return;
+      const messages = {
+        COMPANION_OK: 'Companion Bridge 已发现；health、OPTIONS 与配对认证均正常。',
+        COMPANION_TOKEN_MISSING: '尚未填写配对码。',
+        COMPANION_TIMEOUT: `${result.stage} 超时：请保持 Companion 在前台，并检查 VPN/浏览器本地网络限制。`,
+        COMPANION_NETWORK: result.stage === 'health' ? 'health 网络失败：浏览器无法访问 127.0.0.1:17463。请保持 Companion 前台并关闭 VPN 后重试。' : `${result.stage} 网络失败：health 已响应，但认证请求被浏览器的 CORS/Private Network Access 策略拦截。`,
+        COMPANION_HEALTH_HTTP: `health 返回 HTTP ${result.status}。`,
+        COMPANION_HEALTH_FORMAT: 'health 响应格式错误：未得到 {ok:true, protocol:1}。',
+        COMPANION_RESPONSE_FORMAT: `${result.stage} 响应不是有效 JSON。`,
+        COMPANION_OPTIONS_HTTP: `health 正常，但 OPTIONS 返回 HTTP ${result.status}；请检查 CORS/PNA。`,
+        COMPANION_PAIRING_REJECTED: 'health 与 OPTIONS 正常，但配对认证返回 401：请重新复制 Companion 当前配对码。',
+        COMPANION_HTTP: `health 与 OPTIONS 正常，但 lease 返回 HTTP ${result.status}。`,
+      };
+      companionStatus.textContent = messages[result.code] || `Companion ${result.stage} 检查失败：${result.message || result.code}`;
+    });
   });
 
   panel.querySelector('[data-action="mcp-settings-back"]')?.addEventListener('click', () => show('phone-home'));
