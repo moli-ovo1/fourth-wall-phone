@@ -29,7 +29,7 @@ public final class CompanionDiagnostics {
             out.append("\n  待回收结果: ").append(store.getPendingWakeResultCount(scope));
         }
         out.append("\n\n说明：诊断页不会显示 API Key、MCP Endpoint、Bearer 或自定义 Header。配对码仅在上方单独显示。\n");
-        out.append("当前 Bridge 生命周期仍跟随 Companion 前台界面；这是首轮真机测试前已知限制，不把它伪装成后台常驻服务。");
+        out.append("Bridge“运行中”表示前台 Service 已完成一次真实的 127.0.0.1 health 自检；若外部浏览器仍超时，请检查系统网络隔离或 VPN。");
         return out.toString();
     }
 }

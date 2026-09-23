@@ -20,6 +20,13 @@ public final class LocalBridgeServer {
         Thread t = new Thread(this::loop, "moli-companion-bridge"); t.setDaemon(true); t.start();
     }
     public synchronized void stop() { running=false; try { if(server!=null) server.close(); } catch(Exception ignored){} server=null; }
+    public boolean healthCheck() {
+        try (Socket socket=new Socket()) {
+            socket.connect(new InetSocketAddress("127.0.0.1",PORT),1000);socket.setSoTimeout(1000);
+            OutputStream out=socket.getOutputStream();out.write("GET /v1/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.US_ASCII));out.flush();
+            BufferedReader reader=new BufferedReader(new InputStreamReader(socket.getInputStream(),StandardCharsets.US_ASCII));String first=reader.readLine();return first!=null&&first.contains(" 200 ");
+        } catch(Exception ignored) { return false; }
+    }
     private void loop() { while(running) try { Socket s=server.accept(); new Thread(() -> handle(s), "moli-bridge-client").start(); } catch(Exception e) { if(running) e.printStackTrace(); } }
     private void handle(Socket socket) {
         try (Socket s=socket; InputStream in=s.getInputStream(); OutputStream out=s.getOutputStream()) {
