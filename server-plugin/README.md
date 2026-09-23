@@ -51,3 +51,5 @@ bash ~/delivery-server-community-mcp-v7/apply-termux.sh
 补丁脚本会核对现有扩展和服务器插件，备份要覆盖的文件，再更新社区刷新与只读 MCP 程序；Provider 原配置保留。MCP 地址可在脚本提示时于手机本地输入，暂不使用则直接回车。停止旧 SillyTavern 后运行 `bash ~/start-moli-server-wake.sh`，在 Via 完整刷新。`/api/plugins/moli-server-wake/status` 的 `ready` 表示 Provider 可用，`mcpReady` 表示本机配置了 HTTPS MCP 地址。即使 `mcpReady` 为 false，已开启的社区后台仍应运行。只读 MCP 真机调用及授权回注仍需单独验收。
 
 v8 诊断补丁沿用同一升级脚本；将上述 ZIP 文件名及解压后目录名中的 `v7` 改为 `v8` 即可。状态页增加 `externalWakeEnabled` 和 `mcpBindingReady`，分别表示浏览器是否已同步角色的 MCP Wake 开关、服务器是否持有一致的已授权账号绑定。只有两者为 true 时，才访问 `/api/plugins/moli-server-wake/mcp/probe`：它只连接远程 MCP 并列出已允许的读取工具，不会调用工具。`readToolCount:0` 表示当前没有可供后台试验使用的只读工具；`completed:SKIP` 只表示角色没有选择行动。
+
+v9 合并了 v8 诊断，并修正浏览器筛选顺序：即使已绑定角色当前正在处理任务，也先按绑定身份挑选，再决定本轮是否跳过同步，避免误报“服务器绑定了另一位人物”。真正找不到已绑定会话时，提示会列出当前可调度人物以便定位。已安装 v7 的手机只需安装 v9；无需先安装 v8。

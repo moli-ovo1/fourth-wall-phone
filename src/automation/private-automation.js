@@ -115,15 +115,16 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
     let serverWakeConversationKey = '';
     if (serverAvailable) {
       try {
-        const candidates = serverWakeCandidates(scopeKey, privateConversations, contacts, { mcpReady: serverStatus.mcpReady === true })
-          .filter(row => !running.has(row.conversation.conversationKey || row.conversation.id));
+        const candidates = serverWakeCandidates(scopeKey, privateConversations, contacts, { mcpReady: serverStatus.mcpReady === true });
         const selected = chooseServerWakeCandidate(candidates, serverStatus);
         if (!selected && candidates.length) {
+          const ownerName = contacts.find(row => String(row.id) === String(serverStatus.characterId))?.name || serverStatus.characterId;
+          const candidateNames = [...new Set(candidates.map(row => String(row.contact.name || row.contact.id)))].slice(0, 3).join('、');
           throw new Error(serverStatus.characterId
-            ? '服务器已绑定另一位人物或正文；请先核对绑定身份'
+            ? `服务器仍绑定「${ownerName}」；当前可调度会话是「${candidateNames}」，未找到原绑定的全局陪伴或正文会话`
             : '多位人物开启后台社区试验；请只保留一位');
         }
-        if (selected) {
+        if (selected && !running.has(selected.conversation.conversationKey || selected.conversation.id)) {
           const { contact, conversation: conv, scopeKey: wakeScopeKey, global, serverExternalEnabled } = selected;
           const a = conv.automation || {};
           serverWakeConversationKey = String(conv.conversationKey || conv.id);
