@@ -1,3 +1,4 @@
+import { assertWakeEventIdentity } from './wake-identity.js';
 import { createPublicWebPost, getPublicWebPost, addPublicWebComment } from '../storage/public-web-store.js';
 import { recordLifeLog } from '../storage/life-log-store.js';
 import { recordWorldEvent } from '../storage/world-event-store.js';
@@ -41,6 +42,7 @@ function ensureReply(scopeKey, event) {
  * canonical moli store receives them. Unknown events are rejected, never guessed.
  */
 export async function applyCanonicalWakeEvent(event, result) {
+  assertWakeEventIdentity(event, result);
   const type = text(event?.type).toUpperCase();
   const scopeKey = text(result?.scopeKey);
   if (!scopeKey || !type) throw new Error('Canonical Wake event requires scopeKey and type.');

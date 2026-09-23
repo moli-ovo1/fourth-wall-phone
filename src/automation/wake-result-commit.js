@@ -1,3 +1,4 @@
+import { assertWakeIdentity, assertWakeEventIdentity } from './wake-identity.js';
 import { readJson, writeJson } from '../storage/storage-adapter.js';
 
 const KEY_PREFIX = 'moli-phone:wake-commit-ledger:v1:';
@@ -22,6 +23,7 @@ export function isWakeResultCommitted(scopeKey, wakeId) {
  * The ledger is updated only after every event has been accepted.
  */
 export async function commitWakeResult(result, { applyEvent } = {}) {
+  assertWakeIdentity(result);
   const scopeKey = text(result?.scopeKey);
   const wakeId = text(result?.wakeId);
   if (!scopeKey || !wakeId) throw new Error('Wake commit requires scopeKey and wakeId.');
@@ -33,6 +35,7 @@ export async function commitWakeResult(result, { applyEvent } = {}) {
     ...(Array.isArray(result?.continuityCandidates) ? result.continuityCandidates : []),
     ...(Array.isArray(result?.lifeEvents) ? result.lifeEvents : []),
   ];
+  for (const event of events) assertWakeEventIdentity(event, result);
   let applied = 0;
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index];

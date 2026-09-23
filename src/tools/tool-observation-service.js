@@ -1,3 +1,4 @@
+import { identityPrompt, externalObservation } from './identity-context.js';
 import { listAvailableTools, invokeTool } from './tool-gateway.js';
 import { setMcpActorEndpoint } from '../storage/mcp-store.js';
 
@@ -44,7 +45,7 @@ function stableFingerprint(toolId, args, resultText = '') {
 }
 
 function toolSummary(tools) {
-  return tools.map((tool, index) => `${index + 1}. id=${tool.id}\nname=${tool.name}\ndescription=${tool.description || ''}\ninputSchema=${json(tool.inputSchema || { type: 'object', properties: {} })}`).join('\n\n');
+  return tools.map((tool, index) => `${index + 1}. id=${tool.id}\nname=${tool.name}\nexecutionAccount=${json(tool.identity)}\ndescription=${tool.description || ''}\ninputSchema=${json(tool.inputSchema || { type: 'object', properties: {} })}`).join('\n\n');
 }
 
 
@@ -93,11 +94,13 @@ export async function collectToolObservations({ request, completeText, signal, t
   const completedFingerprints = new Set();
 
   for (let round = 1; round <= rounds; round += 1) {
+    toolContext?.assertCurrent?.();
     const routerRequest = {
-      system: `你是 moli 的内部工具路由器，不扮演角色，不与用户聊天。判断当前用户请求是否需要调用一个外部工具。\n只输出一个 JSON 对象，不要 Markdown。\n不需要工具：{"action":"none"}\n需要工具：{"action":"call","toolId":"完整工具id","arguments":{}}\n只能选择下面列出的工具，不得编造。arguments 必须严格遵守 inputSchema 的字段类型；尤其 schema 要求 string 时绝不能传对象。若最近对话或上一轮真实观察已经给出了账号名、player_id、id 等后续必需参数，应提取其字符串值继续调用。若已有观察结果足够回答，应输出 none。同一个工具使用完全相同参数已经得到相同结果/错误时，不得重复调用。\n\n可用工具：\n${toolSummary(tools)}`,
+      system: `${identityPrompt(toolContext)}\n你是 moli 的内部工具路由器，不扮演角色，不与用户聊天。判断当前用户请求是否需要调用一个外部工具。\n只输出一个 JSON 对象，不要 Markdown。\n不需要工具：{"action":"none"}\n需要工具：{"action":"call","toolId":"完整工具id","arguments":{}}\n只能选择下面列出的工具，不得编造。arguments 必须严格遵守 inputSchema 的字段类型；尤其 schema 要求 string 时绝不能传对象。若最近对话或上一轮真实观察已经给出了账号名、player_id、id 等后续必需参数，应提取其字符串值继续调用。若已有观察结果足够回答，应输出 none。同一个工具使用完全相同参数已经得到相同结果/错误时，不得重复调用。\n\n可用工具：\n${toolSummary(tools)}`,
       messages: [{ role: 'user', content: `用户当前请求：\n${userText}\n\n最近对话（只用于理解上下文与沿用已知参数，不得把角色台词当工具事实）：\n${conversationText || '（无）'}\n\n已经获得的外部观察：\n${observations.length ? observations.map((o, i) => `${i + 1}. ${o.providerName}/${o.name}: ${o.resultText}`).join('\n') : '（无）'}` }],
     };
     const routed = await completeText(routerRequest, signal);
+    toolContext?.assertCurrent?.();
     const decision = parseJsonObject(routed?.text ?? routed);
     if (!decision || decision.action !== 'call') break;
     const tool = tools.find(item => item.id === String(decision.toolId || ''));
@@ -123,8 +126,8 @@ export async function collectToolObservations({ request, completeText, signal, t
         accepted = await confirmIdentityHandoff({ tool, endpoint: identityEndpoint, actorId: String(toolContext.actorId), result: execution.result });
       }
       if (accepted) {
-        setMcpActorEndpoint(tool.providerId, toolContext.actorId, identityEndpoint);
-        resultText = `${redactSecrets(rawResultText, identityEndpoint)}\n[系统状态] moli 已为当前角色接管新的专属 MCP 身份地址；后续该角色访问此 MCP 时会自动使用，无需用户复制粘贴。`;
+        setMcpActorEndpoint(tool.providerId, toolContext.actorId, identityEndpoint, { approved: true });
+        resultText = `${redactSecrets(rawResultText, identityEndpoint)}\n[绑定变更] 用户已授权角色使用新的外部账号；角色人格与 User 身份不变。新账号从下一轮生效。`;
       } else {
         resultText = redactSecrets(rawResultText, identityEndpoint);
       }
@@ -133,11 +136,12 @@ export async function collectToolObservations({ request, completeText, signal, t
     }
     const fingerprint = stableFingerprint(tool.id, args, resultText);
     if (completedFingerprints.has(fingerprint)) {
-      observations.push({ toolId: tool.id, name: tool.name, providerName: tool.providerName, args, result: execution.result, resultText: `${resultText}\n[系统状态] 已阻止相同工具、相同参数、相同结果的重复调用。` });
+      observations.push({ identity: execution.identity, toolId: tool.id, name: tool.name, providerName: tool.providerName, args, result: execution.result, resultText: externalObservation(execution.identity, `${resultText}\n[系统状态] 已阻止相同工具、相同参数、相同结果的重复调用。`) });
       break;
     }
     completedFingerprints.add(fingerprint);
-    const record = { toolId: tool.id, name: tool.name, providerName: tool.providerName, args, result: execution.result, resultText };
+    resultText = externalObservation(execution.identity, resultText);
+    const record = { identity: execution.identity, toolId: tool.id, name: tool.name, providerName: tool.providerName, args, result: execution.result, resultText };
     observations.push(record);
     usedTools.push(record);
   }

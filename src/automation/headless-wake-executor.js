@@ -1,3 +1,4 @@
+import { assertWakeIdentity } from './wake-identity.js';
 import { WAKE_CONTRACT_VERSION } from './wake-contract.js';
 import { adaptWakeExecutionResult } from './wake-result-adapter.js';
 
@@ -8,7 +9,7 @@ function assertPortableRequest(request) {
   if (!request || typeof request !== 'object') throw new TypeError('Headless Wake requires a WakeRequest.');
   if (Number(request.contractVersion) !== WAKE_CONTRACT_VERSION) throw new Error(`Unsupported Wake contract version: ${request.contractVersion}`);
   if (!text(request.wakeId) || !text(request.scopeKey) || !text(request.characterId)) throw new Error('Headless Wake request is missing wakeId/scopeKey/characterId.');
-  return request;
+  return assertWakeIdentity(request, { request: true });
 }
 
 function normalizeObservation(value = {}) {

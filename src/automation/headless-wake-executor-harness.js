@@ -11,7 +11,7 @@ export async function runHeadlessWakeExecutorHarness() {
   });
   const result = await executeHeadlessWake(request, {
     executeExternal: async () => ({ decision: 'MCP', events: [{ type: 'MCP_TOOL_RESULT', payload: { ok: true } }] }),
-    executeCommunity: async () => ({ decision: 'COMMUNITY_POSTED', events: [{ type: 'COMMUNITY_POSTED', payload: { post: { title: 'test', content: 'test' } } }] }),
+    executeCommunity: async () => ({ decision: 'COMMUNITY_POSTED', events: [{ type: 'COMMUNITY_POSTED', payload: { post: { title: 'test', content: 'test', author: { type: 'character', id: 'test-character' } } } }] }),
   });
   const passed = result.wakeId === request.wakeId
     && result.events.length === 2

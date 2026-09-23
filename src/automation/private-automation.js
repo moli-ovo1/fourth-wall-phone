@@ -370,11 +370,11 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         if (wakeToolRecords.length) {
           for (const toolRecord of wakeToolRecords) {
             const safeResult = String(toolRecord?.resultText || '').replace(/https?:\/\/[^\s]+\/ctai[_\/\-]?v?1[_\/\-]?[^\s"']*/gi, '[专属 MCP 身份地址已隐藏]').slice(0, 1800);
-            recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'mcp', title: `使用 ${String(toolRecord?.providerName || 'MCP')} · ${String(toolRecord?.name || 'tool')}`, summary: safeResult || '工具调用成功。', source: String(toolRecord?.providerName || 'MCP'), status: 'success', metadata: { autonomous: true, wakeRunId, toolId: String(toolRecord?.toolId || ''), toolName: String(toolRecord?.name || '') } });
+            recordLifeLog(scopeKey, { actorId: contact.id, actorName: contact.name, kind: 'mcp', title: `使用 ${String(toolRecord?.providerName || 'MCP')} · ${String(toolRecord?.name || 'tool')}`, summary: safeResult || '工具调用成功。', source: String(toolRecord?.providerName || 'MCP'), status: 'success', metadata: { mcpIdentities: [toolRecord.identity], autonomous: true, wakeRunId, toolId: String(toolRecord?.toolId || ''), toolName: String(toolRecord?.name || '') } });
             recordWorldEvent(scopeKey, {
               source: 'mcp.character-wake', actorId: contact.id, action: 'MCP_TOOL_USED', targetContactIds: [contact.id], objectId: String(toolRecord?.toolId || ''),
               content: `你在一次自主醒来中使用了 ${String(toolRecord?.providerName || '外部工具')} / ${String(toolRecord?.name || 'tool')}。${safeResult ? `真实结果：${safeResult}` : ''}`.slice(0, 2200),
-              metadata: { toolId: String(toolRecord?.toolId || ''), toolName: String(toolRecord?.name || ''), providerName: String(toolRecord?.providerName || ''), origin: 'character_wake' }, awareness: 'known',
+              metadata: { mcpIdentities: [toolRecord.identity], toolId: String(toolRecord?.toolId || ''), toolName: String(toolRecord?.name || ''), providerName: String(toolRecord?.providerName || ''), origin: 'character_wake' }, awareness: 'known',
             });
           }
         }

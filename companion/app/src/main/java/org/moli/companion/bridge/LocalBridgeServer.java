@@ -42,7 +42,7 @@ public final class LocalBridgeServer {
             else if("POST".equals(method)&&"/v1/wake-results/ack".equals(path))respond(out,200,new JSONObject().put("acknowledged",store.acknowledgeWakeResults(scope,body.optJSONArray("wakeIds")==null?new JSONArray():body.optJSONArray("wakeIds"))));
             else if("GET".equals(method)&&"/v1/lease".equals(path))respond(out,200,store.getLease(scope));
             else if("POST".equals(method)&&"/v1/lease/cas".equals(path)){JSONObject accepted=store.compareAndSetLease(scope,body.optJSONObject("expected"),body.optJSONObject("replacement"));respond(out,accepted==null?409:200,accepted==null?new JSONObject().put("error","lease-conflict"):accepted);}
-            else if("POST".equals(method)&&"/v1/mcp-profile".equals(path)){mcpProfiles.save(body.getString("actorId"),body.optString("name","MCP"),body.optString("endpoint",""),body.optString("bearer",""),body.optString("headerName",""),body.optString("headerValue",""),body.optJSONObject("headers")==null?"{}":body.optJSONObject("headers").toString(),body.optBoolean("enabled",false),body.optBoolean("allowWrite",false));respond(out,200,new JSONObject().put("ok",true));}
+            else if("POST".equals(method)&&"/v1/mcp-profile".equals(path)){mcpProfiles.save(body);respond(out,200,new JSONObject().put("ok",true));}
             else respond(out,404,new JSONObject().put("error","not-found"));
         } catch(Exception ignored) {}
     }

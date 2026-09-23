@@ -53,7 +53,7 @@ public final class CompanionWakeWorker extends Worker {
                 boolean externalRequested = schedule != null && schedule.optBoolean("externalWakeEnabled", false)
                         && capabilities != null && capabilities.optBoolean("externalMcp", false);
                 McpProfileStore mcpProfiles = new McpProfileStore(getApplicationContext());
-                boolean externalReady = externalRequested && mcpProfiles.configured(template.optString("characterId", ""));
+                boolean externalReady = externalRequested && mcpProfiles.configured(template);
                 if (!communityReady && !externalReady) {
                     store.recordWorkerOpportunity(scopeKey, now, externalRequested ? "mcp-not-configured" : "no-background-capability");
                     continue;

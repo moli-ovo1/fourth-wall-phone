@@ -1,3 +1,4 @@
+import { identityPrompt, externalObservation } from './identity-context.js';
 import { listAvailableTools, invokeTool } from './tool-gateway.js';
 import { setMcpActorEndpoint } from '../storage/mcp-store.js';
 
@@ -30,7 +31,7 @@ function asOpenAiTools(tools) {
     type: 'function',
     function: {
       name: modelToolName(index),
-      description: [tool.providerName, tool.description].filter(Boolean).join('｜').slice(0, 1024),
+      description: [`执行账号=${tool.identity?.accountId}；账号不是角色人格`, tool.providerName, tool.description].filter(Boolean).join('｜').slice(0, 1024),
       parameters: tool.inputSchema && typeof tool.inputSchema === 'object'
         ? tool.inputSchema
         : { type: 'object', properties: {} },
@@ -90,6 +91,7 @@ export async function runToolCalling({
   const rounds = Math.max(1, Math.min(8, Number(maxRounds) || DEFAULT_MAX_ROUNDS));
 
   for (let round = 1; round <= rounds; round += 1) {
+    toolContext?.assertCurrent?.();
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     let completion;
     try {
@@ -100,12 +102,14 @@ export async function runToolCalling({
         signal,
       });
     } catch (error) {
+      if (!history.some(item => item?.type === 'tool') && error?.code === 'MOLI_TOOLS_UNSUPPORTED') throw error;
       const stage = history.some(item => item?.type === 'tool')
         ? '工具结果回传模型阶段'
         : 'AI Tool Calling 请求阶段';
       throw new Error(`${stage}失败：${String(error?.message || error || '未知错误')}`, { cause: error });
     }
     const calls = Array.isArray(completion?.calls) ? completion.calls : [];
+    toolContext?.assertCurrent?.();
     const text = String(completion?.text || '').trim();
 
     history.push({ type: 'model', text, calls, raw: completion?.raw ?? null });
@@ -149,15 +153,17 @@ export async function runToolCalling({
           accepted = await confirmIdentityHandoff({ tool, endpoint: identityEndpoint, actorId: String(toolContext.actorId), result: execution.result });
         }
         if (accepted) {
-          setMcpActorEndpoint(tool.providerId, toolContext.actorId, identityEndpoint);
-          resultText = `${redactSecrets(rawResultText, identityEndpoint)}\n[系统状态] moli 已为当前角色接管新的专属 MCP 身份地址；后续该角色访问此 MCP 时会自动使用，无需用户复制粘贴。`;
+          setMcpActorEndpoint(tool.providerId, toolContext.actorId, identityEndpoint, { approved: true });
+          resultText = `${redactSecrets(rawResultText, identityEndpoint)}\n[绑定变更] 用户已授权角色使用新的外部账号；角色人格与 User 身份不变。新账号从下一轮生效。`;
         } else {
           resultText = redactSecrets(rawResultText, identityEndpoint);
         }
       } else {
         resultText = redactSecrets(rawResultText);
       }
+      resultText = externalObservation(execution.identity, resultText);
       const record = {
+        identity: execution.identity,
         callId: String(call?.id || `${round}:${tool.id}`),
         toolId: tool.id,
         name: tool.name,

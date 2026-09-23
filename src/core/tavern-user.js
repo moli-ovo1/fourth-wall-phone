@@ -45,7 +45,7 @@ export function getTavernUserContext() {
     userPersona?.description, userPersona?.prompt,
     window?.persona_description, window.parent?.persona_description
   );
-  return { name, description };
+  return { name, description, personaId: firstText(persona?.id, userPersona?.id, ctx?.user_avatar, ctx?.userAvatar) }; // Empty means unknown; names are not IDs.
 }
 
 export function replaceUserPlaceholder(value, userName) {

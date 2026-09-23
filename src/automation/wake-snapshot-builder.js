@@ -1,3 +1,4 @@
+import { listCharacterMcpBindings } from '../storage/mcp-store.js';
 import { getContacts } from '../storage/data-store.js';
 import { getCharacterRuntime } from '../storage/character-runtime-store.js';
 import { buildPhoneContext } from '../generation/phone-context-builder.js';
@@ -85,7 +86,7 @@ export function buildWebWakeRequest({
   const posts = listPublicWebPosts(scope, { section: 'recommend' }).slice(0, Math.max(0, Math.min(30, Number(communityLimit) || 12)));
   const communitySettings = getPublicWebSettings(scope);
 
-  return createWakeRequest({
+  const request = createWakeRequest({
     scopeKey: scope,
     characterId: cid,
     actorName: text(contact?.remark || contact?.name || contact?.displayName || cid),
@@ -94,7 +95,7 @@ export function buildWebWakeRequest({
     schedule,
     characterSnapshot: {
       actor: projectCharacter(contact),
-      user: { name: text(user?.name) || 'User', description: clip(user?.description, 6000) },
+      user: { personaId: text(user?.personaId), name: text(user?.name) || 'User', description: clip(user?.description, 6000) },
     },
     continuitySnapshot: {
       phoneContext: clip(phoneContext?.text, 26000),
@@ -113,4 +114,6 @@ export function buildWebWakeRequest({
     capabilities,
     metadata: { ...metadata, snapshotBuiltAt: Date.now(), snapshotSource: 'web-canonical' },
   });
+  request.identity.bindings = listCharacterMcpBindings(cid, { wake: true });
+  return request;
 }

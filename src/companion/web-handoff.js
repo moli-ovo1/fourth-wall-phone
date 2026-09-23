@@ -1,3 +1,4 @@
+import { rememberWakeAuthorization } from './wake-authorization.js';
 import { getCompanionPairingToken, readCompanionLease, compareAndSetCompanionLease, pushWakeRequest } from './loopback-transport.js';
 import { recoverCompanionWakeResults } from './recovery.js';
 import { getWebSchedulerSessionId } from '../automation/scheduler-lease.js';
@@ -22,5 +23,5 @@ export async function acquireCompanionWebLease(scopeKey, now=Date.now()) {
 
 export async function syncWakeRequestToCompanion(request) {
   if (!getCompanionPairingToken()) return {synced:false,reason:'not-paired'};
-  try { await pushWakeRequest(request); return {synced:true}; } catch(error) { return {synced:false,reason:'bridge-unavailable',error}; }
+  try { rememberWakeAuthorization(request); await pushWakeRequest(request); return {synced:true}; } catch(error) { return {synced:false,reason:'bridge-unavailable',error}; }
 }

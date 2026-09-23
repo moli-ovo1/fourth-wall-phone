@@ -8,6 +8,8 @@ import {
 } from '../storage/data-store.js';
 import { getApiSettings, getApiPreset, resolveApiRuntimeConfig } from '../storage/api-settings.js';
 import { generateProviderText, completeProviderWithTools, supportsProviderToolCalling } from '../api/providers/provider-registry.js';
+import { createToolContext, identityPrompt, identityError } from '../tools/identity-context.js';
+import { listCharacterMcpBindings } from '../storage/mcp-store.js';
 import { runToolCalling } from '../tools/tool-calling-service.js';
 import { collectToolObservations, appendObservationsToRequest } from '../tools/tool-observation-service.js';
 import {
@@ -464,7 +466,15 @@ export async function generatePrivateReply({
     if (!(isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false)) onDelta?.(text, text);
     result = { text, raw: null };
   } else if (!isFourthWall && supportsProviderToolCalling(config)) {
-    const toolContext = { actorId: String(contact?.id || ''), origin: String(toolOrigin || 'private_chat') };
+    const toolContext = createToolContext({ contact, user: userContext, scopeKey, conversationKey, origin: toolOrigin || 'private_chat' });
+    toolContext.assertCurrent = () => {
+      const user = getTavernUserContext();
+      if (user.personaId !== userContext.personaId || user.name !== userContext.name || user.description !== userContext.description
+          || String(getCurrentScopeKey() || '') !== currentTavernScopeKey
+          || getConversation(scopeKey, conversationKey)?.contactId !== contact.id) throw identityError('生成期间角色、Persona 或存档发生变化；已停止旧身份调用。');
+    };
+    toolContext.bindingIdentities = listCharacterMcpBindings(contact.id, { wake: toolOrigin === 'character_wake' });
+    request = { ...request, system: `${request.system || ''}\n\n${identityPrompt(toolContext)}` };
     try {
       const toolResult = await runToolCalling({
         request,
@@ -485,7 +495,9 @@ export async function generatePrivateReply({
         onDelta?.(text, text);
         result = { text, raw: null, toolCalling: { mode: 'native', usedTools: toolResult.usedTools, rounds: toolResult.rounds, discoveryErrors: toolResult.discoveryErrors } };
       }
+      toolContext.assertCurrent();
     } catch (nativeError) {
+      if (nativeError?.code !== 'MOLI_TOOLS_UNSUPPORTED') throw nativeError;
       // Compatibility path: some OpenAI-compatible proxies chat normally but return unusable native tool_calls.
       // Route tools with an ordinary text completion, execute via the same permissioned Gateway, then let the
       // normal character generation consume the verified observations.
@@ -501,6 +513,7 @@ export async function generatePrivateReply({
       const observedRequest = appendObservationsToRequest(request, observed.observations);
       try {
         result = await generateProviderText(config, observedRequest, { signal, onDelta });
+        toolContext.assertCurrent();
       } catch (error) {
         throw new Error(`Observation 工具结果回传普通模型失败：${String(error?.message || error || '未知错误')}`, { cause: error });
       }

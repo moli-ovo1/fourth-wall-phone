@@ -123,6 +123,7 @@ import { registerWallSourceProvider, listRegisteredWallSources } from '../storag
 import { listCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalendarEvent } from '../storage/calendar-store.js';
 import { listMcpServers, getMcpServer, saveMcpServer, deleteMcpServer } from '../storage/mcp-store.js';
 import { testMcpConnection } from '../integrations/mcp-client.js';
+import { resolveMcpBinding, setMcpActorEndpoint } from '../storage/mcp-store.js';
 import { getCompanionPairingToken, setCompanionPairingToken, probeCompanion, provisionCompanionMcpProfile } from '../companion/loopback-transport.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
@@ -6933,9 +6934,8 @@ export function createPhonePanel({
             ...commonGenerationOptions,
             regenerateFromMessageId: regenerateMessageId,
             confirmTool: async ({ tool, args }) => requestMcpToolPermission({ tool, args, conversationKey: requestConversationKey }),
-            // account 本身已经通过 MCP App 权限；返回的持久身份只绑定当前角色并自动接管，
-            // 不在聊天中再次弹窗，也不把完整凭证写进角色正文。
-            confirmIdentityHandoff: async () => true,
+            // Capability access does not authorize a new account binding. Ask explicitly.
+            confirmIdentityHandoff: async ({ tool }) => windowRef.confirm?.(`是否授权当前角色从下一轮起使用 ${tool.providerName} 返回的新外部账号？这不会改变角色身份。新地址不继承共享账号的认证头；未确认归属请取消。`) === true,
           });
 
       if (controller.signal.aborted) return;
@@ -8931,7 +8931,14 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     try {
       const server = currentMcpFormServer();
       if (!/^https?:\/\//i.test(server.url)) { toast('MCP 地址必须以 http:// 或 https:// 开头'); return; }
-      const saved = saveMcpServer(server);
+      let saved = saveMcpServer(server);
+      for (const [characterId, endpoint] of Object.entries(saved.actorEndpoints || {})) {
+        if (saved.actorBindings?.[characterId]?.approved && saved.actorBindings[characterId].endpoint === endpoint) continue;
+        const character = getContacts().find(item => String(item.id) === characterId);
+        if (windowRef.confirm?.(`旧 MCP 绑定：是否确认允许角色「${character?.name || characterId}」使用此专属外部账号？账号不是角色人格；专属地址不会继承共享认证头。`) === true) {
+          saved = setMcpActorEndpoint(saved.id, characterId, endpoint, { approved: true });
+        }
+      }
       activeMcpServerId = saved.id;
       updateMcpSettingsSummary();
       toast('MCP 已保存');
@@ -8942,12 +8949,14 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
           ? getContacts().filter(item => saved.access.characterIds?.includes(String(item?.id)))
           : getContacts().filter(item => item && item.kind !== 'group');
         for (const item of targets) {
-          const endpoint = String(saved.actorEndpoints?.[item.id] || saved.url || '').trim();
+          let resolved;
+          try { resolved = resolveMcpBinding(saved, String(item.id)); } catch { continue; }
+          const endpoint = String(resolved.server.url || '').trim();
           if (!endpoint) continue;
-          void provisionCompanionMcpProfile({ actorId:String(item.id), name:saved.name, endpoint,
-            bearer:saved.auth?.type === 'bearer' ? String(saved.auth?.token || '') : '',
-            headerName:saved.auth?.type === 'header' ? String(saved.auth?.headerName || '') : '',
-            headerValue:saved.auth?.type === 'header' ? String(saved.auth?.headerValue || '') : '', headers:saved.headers || {},
+          void provisionCompanionMcpProfile({ actorId:String(item.id), identity:resolved.identity, name:saved.name, endpoint,
+            bearer:resolved.server.auth?.type === 'bearer' ? String(resolved.server.auth?.token || '') : '',
+            headerName:resolved.server.auth?.type === 'header' ? String(resolved.server.auth?.headerName || '') : '',
+            headerValue:resolved.server.auth?.type === 'header' ? String(resolved.server.auth?.headerValue || '') : '', headers:resolved.server.headers || {},
             enabled:saved.enabled !== false, allowWrite:saved.access?.writePolicy !== 'deny' })
             .catch(error => console.warn('[moli Companion] MCP credential provisioning failed', error));
         }

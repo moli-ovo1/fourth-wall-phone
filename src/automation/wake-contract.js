@@ -1,11 +1,12 @@
 /**
- * Companion / Headless Wake contract v1.
+ * Companion / Headless Wake contract v2: explicit identity domains and account provenance.
  *
  * This module deliberately contains no DOM, SillyTavern or storage access.
  * It defines the portable envelope shared by Web scheduling today and a future
  * Companion executor. Secrets (API keys, MCP tokens/endpoints) are forbidden.
  */
-export const WAKE_CONTRACT_VERSION = 1;
+import { assertWakeIdentity, assertWakeEventIdentity } from './wake-identity.js';
+export const WAKE_CONTRACT_VERSION = 2;
 
 const text = value => String(value ?? '').trim();
 const plainObject = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -33,7 +34,7 @@ function assertSecretFree(value, path = 'request') {
 export function createWakeRequest({
   wakeId = '', scopeKey = '', characterId = '', actorName = '', wakeType = 'character',
   baseRevision = 0, requestedAt = Date.now(), schedule = {}, characterSnapshot = {},
-  continuitySnapshot = {}, communitySnapshot = {}, capabilities = {}, metadata = {},
+  continuitySnapshot = {}, communitySnapshot = {}, capabilities = {}, metadata = {}, identity = null,
 } = {}) {
   const request = {
     contractVersion: WAKE_CONTRACT_VERSION,
@@ -52,14 +53,23 @@ export function createWakeRequest({
     metadata: clone(plainObject(metadata)),
   };
   if (!request.scopeKey || !request.characterId) throw new Error('Wake request requires scopeKey and characterId.');
+  request.identity = identity ? clone(identity) : {
+    authorizationId: request.wakeId, scopeKey: request.scopeKey,
+    character: { domain: 'character', id: request.characterId },
+    user: { domain: 'user-persona', id: text(characterSnapshot?.user?.personaId), name: text(characterSnapshot?.user?.name) || 'User' },
+    bindings: [],
+  };
+  assertWakeIdentity(request, { request: true });
   assertSecretFree(request);
   return request;
 }
 
 export function createWakeResult(request, { decision = 'SKIP', status = 'completed', startedAt = Date.now(), completedAt = Date.now(), events = [], continuityCandidates = [], lifeEvents = [], metadata = {} } = {}) {
   const source = plainObject(request);
+  assertWakeIdentity(source, { request: Boolean(source.characterSnapshot) });
   const result = {
     contractVersion: WAKE_CONTRACT_VERSION,
+    identity: clone(source.identity),
     wakeId: text(source.wakeId),
     scopeKey: text(source.scopeKey),
     characterId: text(source.characterId),
@@ -74,6 +84,8 @@ export function createWakeResult(request, { decision = 'SKIP', status = 'complet
     metadata: clone(plainObject(metadata)),
   };
   if (!result.wakeId || !result.scopeKey || !result.characterId) throw new Error('Wake result requires wakeId, scopeKey and characterId.');
+  assertWakeIdentity(result);
+  for (const event of [...result.events, ...result.continuityCandidates, ...result.lifeEvents]) assertWakeEventIdentity(event, result);
   assertSecretFree(result);
   return result;
 }

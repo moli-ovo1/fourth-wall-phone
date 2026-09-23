@@ -142,7 +142,12 @@ export async function completeWithTools(config, request, { tools = [], history =
     }),
     signal,
   });
-  if (!response.ok) throw new Error(await readErrorMessage(response, 'Tool Calling 请求失败'));
+  if (!response.ok) {
+    const message = await readErrorMessage(response, 'Tool Calling 请求失败');
+    const error = new Error(message);
+    if ([400, 404, 422, 501].includes(response.status) && /(?:tools?|tool_choice|function.call).*(?:unsupported|not supported|unknown|unrecognized)|(?:unsupported|not supported|unknown|unrecognized).*(?:tools?|tool_choice|function.call)/i.test(message)) error.code = 'MOLI_TOOLS_UNSUPPORTED';
+    throw error;
+  }
   const data = await response.json();
   const message = data?.choices?.[0]?.message || {};
   const content = Array.isArray(message.content) ? message.content.map(part => part?.text || '').join('') : String(message.content || '');

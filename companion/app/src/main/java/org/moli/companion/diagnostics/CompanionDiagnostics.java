@@ -24,7 +24,7 @@ public final class CompanionDiagnostics {
             String name = request.optString("actorName", actor.isEmpty() ? "未知角色" : actor);
             out.append("\n\n• ").append(name);
             out.append("\n  scope: ").append(scope);
-            out.append("\n  MCP: ").append(mcp.configured(actor) ? "已配置" : "未配置/未授权");
+            out.append("\n  MCP: ").append(mcp.configured(request) ? "已配置" : "未配置/未授权");
             out.append("\n  Worker: ").append(store.getWorkerStatus(scope));
             out.append("\n  待回收结果: ").append(store.getPendingWakeResultCount(scope));
         }

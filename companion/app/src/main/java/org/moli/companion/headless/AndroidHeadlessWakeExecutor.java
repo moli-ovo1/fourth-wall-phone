@@ -28,13 +28,18 @@ public final class AndroidHeadlessWakeExecutor {
             && request.optJSONObject("capabilities") != null
             && request.optJSONObject("capabilities").optBoolean("externalMcp", false);
         boolean externalExecuted = false;
+        boolean externalFailed = false;
         if (external && mcp != null) {
+            try {
             JSONObject x = mcp.execute(request); externalExecuted = true;
             if ("MCP".equals(x.optString("decision", "SKIP"))) {
                 decision = "MCP"; long now = System.currentTimeMillis(); String wakeId=request.getString("wakeId"), actorId=request.getString("characterId"), actorName=request.optString("actorName",actorId);
                 String summary=x.optString("summary","完成了一次外部活动");
-                lifeEvents.put(new JSONObject().put("eventId",wakeId+":mcp-life:0").put("type","LIFE_EVENT").put("payload",new JSONObject().put("actorId",actorId).put("actorName",actorName).put("kind","mcp").put("title","进行了一次外部活动").put("summary",summary).put("source","Android Companion · MCP").put("createdAt",now).put("metadata",new JSONObject().put("toolCallCount",x.optJSONArray("toolCalls")==null?0:x.optJSONArray("toolCalls").length()))));
-                events.put(new JSONObject().put("eventId",wakeId+":mcp-continuity:0").put("type","CONTINUITY_EVENT").put("payload",new JSONObject().put("actorId",actorId).put("actorName",actorName).put("source","mcp.character-wake").put("action","MCP_TOOL_USED").put("content",summary).put("awareness","known").put("createdAt",now)));
+                lifeEvents.put(new JSONObject().put("eventId",wakeId+":mcp-life:0").put("type","LIFE_EVENT").put("payload",new JSONObject().put("actorId",actorId).put("actorName",actorName).put("kind","mcp").put("title","进行了一次外部活动").put("summary",summary).put("source","Android Companion · MCP").put("createdAt",now).put("metadata",new JSONObject().put("mcpIdentities",x.getJSONArray("mcpIdentities")).put("toolCallCount",x.optJSONArray("toolCalls")==null?0:x.optJSONArray("toolCalls").length()))));
+                events.put(new JSONObject().put("eventId",wakeId+":mcp-continuity:0").put("type","CONTINUITY_EVENT").put("payload",new JSONObject().put("actorId",actorId).put("actorName",actorName).put("source","mcp.character-wake").put("action","MCP_TOOL_USED").put("content",summary).put("metadata",new JSONObject().put("mcpIdentities",x.getJSONArray("mcpIdentities"))).put("awareness","known").put("createdAt",now)));
+            }
+            } catch (Exception rejected) {
+                externalFailed = true; // No rejected external observation enters canonical state.
             }
         }
         if (community) {
@@ -45,6 +50,7 @@ public final class AndroidHeadlessWakeExecutor {
             copy(observation.optJSONArray("lifeEvents"), lifeEvents);
         }
         JSONObject result = new JSONObject()
+            .put("identity", new JSONObject(request.getJSONObject("identity").toString()))
             .put("contractVersion", CompanionContracts.CONTRACT_VERSION)
             .put("wakeId", request.getString("wakeId"))
             .put("scopeKey", request.getString("scopeKey"))
@@ -53,7 +59,7 @@ public final class AndroidHeadlessWakeExecutor {
             .put("status", "completed").put("decision", decision)
             .put("startedAt", started).put("completedAt", System.currentTimeMillis())
             .put("events", events).put("continuityCandidates", new JSONArray()).put("lifeEvents", lifeEvents)
-            .put("metadata", new JSONObject().put("executor", "android-headless-v2").put("communityExecuted", community).put("externalExecuted", externalExecuted));
+            .put("metadata", new JSONObject().put("executor", "android-headless-v2").put("communityExecuted", community).put("externalExecuted", externalExecuted).put("externalFailed", externalFailed));
         return CompanionContracts.requireWakeResult(result);
     }
 

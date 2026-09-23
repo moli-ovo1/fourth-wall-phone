@@ -1,5 +1,7 @@
 import { McpHttpClient } from '../integrations/mcp-client.js';
-import { clearMcpActorEndpoint, getMcpServer, listMcpServers } from '../storage/mcp-store.js';
+import { getMcpServer, listMcpServers, resolveMcpBinding, assertCurrentMcpBinding } from '../storage/mcp-store.js';
+
+import { assertToolContext, identityError } from './identity-context.js';
 
 const TOOL_ID_SEPARATOR = '::';
 
@@ -66,35 +68,18 @@ function accessDecision(server, tool, options = {}) {
   return { allowed: true, risk, policy };
 }
 
-function serverForActor(server, options = {}) {
-  const actorId = String(options.actorId || '').trim();
-  const actorUrl = actorId ? String(server?.actorEndpoints?.[actorId] || '').trim() : '';
-  return actorUrl ? { ...server, url: actorUrl } : server;
-}
-
 async function connect(server, options = {}) {
-  const resolved = serverForActor(server, options);
-  const client = new McpHttpClient(resolved, options);
-  try {
-    await client.initialize();
-    return client;
-  } catch (error) {
-    const actorId = String(options.actorId || '').trim();
-    const actorUrl = actorId ? String(server?.actorEndpoints?.[actorId] || '').trim() : '';
-    const baseUrl = String(server?.url || '').trim();
-    // A role-specific identity endpoint must never brick the whole MCP connection.
-    // If that override cannot even initialize, verify the configured public endpoint once.
-    // Only when the public endpoint succeeds do we remove the broken override.
-    if (!actorId || !actorUrl || !baseUrl || actorUrl === baseUrl) throw error;
-    const fallback = new McpHttpClient(server, options);
-    try {
-      await fallback.initialize();
-      clearMcpActorEndpoint(server.id, actorId);
-      return fallback;
-    } catch {
-      throw error;
-    }
+  assertToolContext(options);
+  options.assertCurrent?.();
+  const resolved = resolveMcpBinding(server, options.character.id);
+  const expected = options.bindingIdentities?.find(item => item.serverId === server.id);
+  if (!expected || expected.accountId !== resolved.identity.accountId || expected.revision !== resolved.identity.revision) {
+    throw identityError('本轮 MCP 账号绑定已变化或未确认；请重新发起。');
   }
+  const client = new McpHttpClient(resolved.server, options);
+  client.identity = resolved.identity;
+  await client.initialize(); // Failure stays on this identity. No shared-account retry or deletion.
+  return client;
 }
 
 /**
@@ -110,6 +95,8 @@ export async function listAvailableTools(options = {}) {
   const errors = [];
 
   for (const server of servers) {
+    if ((server.access?.scope === 'characters' && !server.access.characterIds.includes(options.character?.id))
+        || (options.origin === 'character_wake' && !server.access?.allowWake)) continue;
     try {
       const client = await connect(server, options);
       const remoteTools = await client.listTools();
@@ -118,9 +105,10 @@ export async function listAvailableTools(options = {}) {
         if (!normalized) continue;
         const decision = accessDecision(server, remoteTool, options);
         if (!decision.allowed && !(decision.confirmationRequired && options.includeConfirmationRequired === true)) continue;
-        tools.push({ ...normalized, accessDecision: decision });
+        tools.push({ ...normalized, identity: client.identity, accessDecision: decision });
       }
     } catch (error) {
+      if (error?.code === 'MOLI_IDENTITY_MISMATCH') throw error;
       errors.push({
         provider: 'mcp',
         providerId: String(server.id),
@@ -144,10 +132,14 @@ export async function invokeTool(toolId, args = {}, options = {}) {
   if (server.enabled === false) throw new Error('该工具所属的 MCP Server 当前未启用');
   if (!String(server.url || '').trim()) throw new Error('该工具所属的 MCP Server 没有有效地址');
 
+  assertToolContext(options);
+  if ((server.access?.scope === 'characters' && !server.access.characterIds.includes(options.character.id))
+      || (options.origin === 'character_wake' && !server.access?.allowWake)) throw identityError('角色未获授权。');
   let client;
   try {
     client = await connect(server, options);
   } catch (error) {
+    if (error?.code === 'MOLI_IDENTITY_MISMATCH') throw error;
     throw new Error(`MCP 连接/初始化失败 [${server.name || '未命名 MCP'}]：${String(error?.message || error || '未知错误')}`, { cause: error });
   }
   let remoteTools;
@@ -167,11 +159,16 @@ export async function invokeTool(toolId, args = {}, options = {}) {
   }
   let result;
   try {
+    options.assertCurrent?.();
+    assertCurrentMcpBinding(client.identity, { wake: options.origin === 'character_wake' });
     result = await client.callTool(toolName, args && typeof args === 'object' ? args : {});
   } catch (error) {
     throw new Error(`MCP tools/call 失败 [${server.name || '未命名 MCP'} / ${toolName}]：${String(error?.message || error || '未知错误')}`, { cause: error });
   }
+  options.assertCurrent?.();
+  assertCurrentMcpBinding(client.identity, { wake: options.origin === 'character_wake' });
   return {
+    identity: client.identity,
     toolId: makeToolId(server.id, toolName),
     provider: 'mcp',
     providerId: String(server.id),
