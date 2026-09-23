@@ -2,7 +2,7 @@
 
 这是 ZIP42 基线的独立试验。服务器插件在 SillyTavern 的 Node 进程里执行一名角色的社区 POST/SKIP 决策。浏览器关闭后仍可运行；结果先保存在 `plugins/moli-server-wake/data/community-wake-v1.json`，下次打开 moli 时由前端验证身份并写回原社区/生活日志存储。不更改 Story-Aligned 规则，也不把 APK 的账号配置迁入角色快照。
 
-后续只读 MCP 试验需要在同一手机的 Termux 启动环境中额外设置 `MOLI_WAKE_MCP_URL`（HTTPS MCP 地址），可选 `MOLI_WAKE_MCP_BEARER`。两者不得写进浏览器快照或 Git。仅当角色在 moli 中已获 MCP Wake 授权，快照里恰有一个对应账号绑定，且服务端已配置 MCP 地址时，服务器才会考虑只读 MCP 行动。工具必须声明 `annotations.readOnlyHint: true`，或者由机主在 `MOLI_WAKE_MCP_READ_TOOLS` 以逗号分隔的名单里明确列出；`destructiveHint: true` 一律排除。服务端第一次收到快照时锁定该绑定和本地地址指纹；地址或账号变化会拒绝继续执行，以防错号。MCP 结果仍由浏览器按当前绑定核对后回注。
+后续只读 MCP 试验需要在同一手机的 Termux 启动环境中额外设置 `MOLI_WAKE_MCP_URL`（HTTPS MCP 地址），可选 `MOLI_WAKE_MCP_BEARER`。两者不得写进浏览器快照或 Git。仅当角色在 moli 中已获 MCP Wake 授权，快照里恰有一个对应账号绑定，且服务端已配置 MCP 地址时，服务器才会考虑只读 MCP 行动。工具必须声明 `annotations.readOnlyHint: true`，或者由机主在 `MOLI_WAKE_MCP_READ_TOOLS` 以逗号分隔的名单里明确列出；`destructiveHint: true` 一律排除。服务端第一次收到快照时锁定该绑定和本地地址凭据指纹；地址、凭据或账号变化会拒绝继续执行，以防错号。同一地址和凭据下更改本地只读名单，需要重启服务并打开浏览器同步一次快照，才会被接受。MCP 结果仍由浏览器按当前绑定核对后回注。
 
 ## 手机安装
 
@@ -53,3 +53,5 @@ bash ~/delivery-server-community-mcp-v7/apply-termux.sh
 v8 诊断补丁沿用同一升级脚本；将上述 ZIP 文件名及解压后目录名中的 `v7` 改为 `v8` 即可。状态页增加 `externalWakeEnabled` 和 `mcpBindingReady`，分别表示浏览器是否已同步角色的 MCP Wake 开关、服务器是否持有一致的已授权账号绑定。只有两者为 true 时，才访问 `/api/plugins/moli-server-wake/mcp/probe`：它只连接远程 MCP 并列出已允许的读取工具，不会调用工具。`readToolCount:0` 表示当前没有可供后台试验使用的只读工具；`completed:SKIP` 只表示角色没有选择行动。
 
 v9 合并了 v8 诊断，并修正浏览器筛选顺序：即使已绑定角色当前正在处理任务，也先按绑定身份挑选，再决定本轮是否跳过同步，避免误报“服务器绑定了另一位人物”。真正找不到已绑定会话时，提示会列出当前可调度人物以便定位。已安装 v7 的手机只需安装 v9；无需先安装 v8。
+
+v10 增加了本机只读工具名单提示，并允许同一 MCP 地址及凭据在浏览器重新同步后更新名单。CEDAR TOY 的 `list_games` 和 `get_guide` 可明确放行；`play` 和 `account` 不得放入名单。v10 包含 v9 的前端修复，已安装 v9 的手机直接安装 v10 即可；不要将 ZIP 解压进 Git 仓库。安装后重启 SillyTavern，在 Via 完整刷新酒馆列表，打开 `/api/plugins/moli-server-wake/mcp/probe`，应看到 `readToolCount:2`，`readTools` 仅含上述两个工具。该探针不调用游戏工具；真正的后台读取及回注仍需真机验证。

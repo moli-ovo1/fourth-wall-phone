@@ -67,6 +67,76 @@ test('changes to the local read-tool authorization change the MCP fingerprint', 
   }
 });
 
+test('CEDAR read allowlist excludes game actions and account management', () => {
+  const before = process.env.MOLI_WAKE_MCP_READ_TOOLS;
+  try {
+    process.env.MOLI_WAKE_MCP_READ_TOOLS = 'list_games,get_guide';
+    const tools = ['list_games', 'get_guide', 'play', 'account'].map(name => ({ name }));
+    assert.deepEqual(mcp.allowedTools(tools).map(tool => tool.name), ['list_games', 'get_guide']);
+    assert.deepEqual(mcp.allowedTools([{ name: 'list_games', annotations: { destructiveHint: true } }]), []);
+  } finally {
+    if (before === undefined) delete process.env.MOLI_WAKE_MCP_READ_TOOLS;
+    else process.env.MOLI_WAKE_MCP_READ_TOOLS = before;
+  }
+});
+
+test('browser resync accepts read allowlist update but not an MCP address change', async () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'moli-mcp-policy-'));
+  const before = Object.fromEntries(['MOLI_WAKE_BASE_URL', 'MOLI_WAKE_MODEL', 'MOLI_WAKE_API_KEY',
+    'MOLI_WAKE_MCP_URL', 'MOLI_WAKE_MCP_BEARER', 'MOLI_WAKE_MCP_READ_TOOLS']
+    .map(name => [name, process.env[name]]));
+  const routes = {};
+  const router = { use: fn => { routes.middleware = fn; }, get: (name, fn) => { routes[`GET ${name}`] = fn; },
+    post: (name, fn) => { routes[`POST ${name}`] = fn; } };
+  const invoke = (method, name, body = {}) => {
+    const req = { user: { profile: { handle: 'owner' } }, body, query: {} };
+    const res = { statusCode: 200, status(code) { this.statusCode = code; return this; },
+      json(data) { this.data = data; return this; } };
+    routes.middleware(req, res, () => routes[`${method} ${name}`](req, res));
+    return res;
+  };
+  try {
+    process.env.MOLI_WAKE_BASE_URL = 'https://provider.example/v1';
+    process.env.MOLI_WAKE_MODEL = 'test-model';
+    process.env.MOLI_WAKE_API_KEY = 'test-key';
+    process.env.MOLI_WAKE_MCP_URL = 'https://mcp.example.test/account';
+    delete process.env.MOLI_WAKE_MCP_BEARER;
+    delete process.env.MOLI_WAKE_MCP_READ_TOOLS;
+    await plugin.init(router);
+    plugin._test.setFilePath(path.join(dir, 'state.json'));
+    const binding = { domain: 'mcp-account', characterId: 'actor', serverId: 'cedar',
+      accountId: 'one', revision: '1', mode: 'dedicated' };
+    const snapshot = { contractVersion: 2, wakeId: 'wake', scopeKey: 'global:phone', characterId: 'actor',
+      wakeType: 'character', identity: { authorizationId: 'wake', scopeKey: 'global:phone',
+        character: { domain: 'character', id: 'actor' }, user: { domain: 'user-persona', id: 'user' }, bindings: [binding] },
+      characterSnapshot: { actor: { id: 'actor' }, user: { personaId: 'user' } },
+      schedule: { externalWakeEnabled: true, communityWakeEnabled: true },
+      capabilities: { externalMcp: true, communityDiscovery: true } };
+    assert.equal(invoke('POST', '/snapshot', snapshot).statusCode, 200);
+    delete plugin._test.getState().mcpCredentialFingerprint; // v9 state did not persist this field.
+    process.env.MOLI_WAKE_MCP_URL = 'https://other.example.test/account';
+    assert.equal(invoke('POST', '/snapshot', snapshot).statusCode, 409);
+    process.env.MOLI_WAKE_MCP_URL = 'https://mcp.example.test/account';
+    process.env.MOLI_WAKE_MCP_READ_TOOLS = 'list_games,get_guide';
+    assert.equal(invoke('GET', '/status').data.mcpBindingReady, false);
+    assert.equal(invoke('POST', '/snapshot', snapshot).statusCode, 200);
+    assert.equal(invoke('GET', '/status').data.mcpBindingReady, true);
+    process.env.MOLI_WAKE_MCP_READ_TOOLS = 'get_guide';
+    assert.equal(invoke('POST', '/snapshot', snapshot).statusCode, 200);
+    assert.equal(invoke('GET', '/status').data.mcpBindingReady, true);
+    process.env.MOLI_WAKE_MCP_URL = 'https://other.example.test/account';
+    assert.equal(invoke('POST', '/snapshot', snapshot).statusCode, 409);
+    assert.equal(invoke('GET', '/status').data.mcpBindingReady, false);
+  } finally {
+    await plugin.exit();
+    for (const [name, prior] of Object.entries(before)) {
+      if (prior === undefined) delete process.env[name]; else process.env[name] = prior;
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('MCP probe lists eligible read tools without calling a tool', async () => {
   const before = { url: process.env.MOLI_WAKE_MCP_URL, reads: process.env.MOLI_WAKE_MCP_READ_TOOLS };
   process.env.MOLI_WAKE_MCP_URL = 'https://mcp.example.test/account';

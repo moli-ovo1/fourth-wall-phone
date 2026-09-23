@@ -10,10 +10,19 @@ function configured() {
   try { return new URL(raw).protocol === 'https:'; } catch { return false; }
 }
 
-function configFingerprint() {
+function credentialFingerprint() {
   if (!configured()) return '';
-  const readTools = text(process.env.MOLI_WAKE_MCP_READ_TOOLS).split(',').map(text).filter(Boolean).sort().join(',');
-  return crypto.createHash('sha256').update(`${text(process.env[URL_ENV])}\n${text(process.env.MOLI_WAKE_MCP_BEARER)}\n${readTools}`).digest('hex');
+  return crypto.createHash('sha256').update(`${text(process.env[URL_ENV])}\n${text(process.env.MOLI_WAKE_MCP_BEARER)}`).digest('hex');
+}
+
+function fingerprintForReadTools(readTools) {
+  if (!configured()) return '';
+  const normalized = text(readTools).split(',').map(text).filter(Boolean).sort().join(',');
+  return crypto.createHash('sha256').update(`${text(process.env[URL_ENV])}\n${text(process.env.MOLI_WAKE_MCP_BEARER)}\n${normalized}`).digest('hex');
+}
+
+function configFingerprint() {
+  return fingerprintForReadTools(process.env.MOLI_WAKE_MCP_READ_TOOLS);
 }
 
 function sameBinding(left, right) {
@@ -107,5 +116,6 @@ async function probe({ fetchImpl } = {}) {
     readTools: readable.map(tool => text(tool.name).slice(0, 100)) };
 }
 
-module.exports = { configured, configFingerprint, sameBinding, allowedTools, perform, probe,
+module.exports = { configured, credentialFingerprint, configFingerprint,
+  blankReadToolsFingerprint: () => fingerprintForReadTools(''), sameBinding, allowedTools, perform, probe,
   _test: { parsePayload, safeSummary } };
