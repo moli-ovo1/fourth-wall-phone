@@ -104,7 +104,9 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
     const serverStatus = await getServerWakeStatus();
     const serverAvailable = serverStatus.ready === true;
     if (serverAvailable) {
-      for (const resultScope of new Set([scopeKey, GLOBAL_PHONE_SCOPE_KEY])) {
+      // Drain the previous server owner's results before asking the server to
+      // migrate that same person from a chat scope to the global phone scope.
+      for (const resultScope of new Set([scopeKey, GLOBAL_PHONE_SCOPE_KEY, serverStatus.scopeKey].filter(Boolean))) {
         try { await recoverServerWakeResults(resultScope); }
         catch (error) { console.warn('[moli小手机] Server Wake 结果回放失败', resultScope, error); }
       }

@@ -18,7 +18,7 @@ test('server community snapshot syncs before an unreachable Companion lease sett
     listLifeLogs: () => [],
     getTavernAssistantTurnState: () => ({ available: false }),
     getTavernMessageRevisionState: () => ({ available: false }),
-    getServerWakeStatus: async () => ({ ready: true, scopeKey: '', characterId: '' }),
+    getServerWakeStatus: async () => ({ ready: true, scopeKey: 'character:A.png:chat:old', characterId: 'tavern:alice' }),
     serverWakeCandidates: (scopeKey, conversations, contacts) => [{ scopeKey, conversation: conversations[0], contact: contacts[0], global: false }],
     chooseServerWakeCandidate: candidates => candidates[0],
     GLOBAL_PHONE_SCOPE_KEY: 'global:phone',
@@ -41,6 +41,6 @@ test('server community snapshot syncs before an unreachable Companion lease sett
   await module.evaluate();
   module.namespace.createPrivateAutomation({ getScopeKey: () => 'scope-1' });
   await new Promise(resolve => setTimeout(resolve, 20));
-  assert.deepEqual(events, [['recover', 'scope-1'], ['recover', 'global:phone'],
+  assert.deepEqual(events, [['recover', 'scope-1'], ['recover', 'global:phone'], ['recover', 'character:A.png:chat:old'],
     ['snapshot', 'tavern:alice'], ['companion-lease']]);
 });
