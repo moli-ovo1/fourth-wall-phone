@@ -64,6 +64,7 @@ test('provider only classifies explicit unsupported-tools responses as fallback 
   await assert.rejects(run(400,'tools not supported'),err=>err.code==='MOLI_TOOLS_UNSUPPORTED');
   await assert.rejects(run(401,'tools not supported'),err=>!err.code);
   await assert.rejects(run(400,'invalid tools arguments'),err=>!err.code);
+  await assert.rejects(provider.completeWithTools({apiKey:'fake',model:'test'},{},{fetchImpl:async()=>({ok:true,status:200,json:async()=>({choices:[{message:{content:'',tool_calls:[]}}]})})}),err=>err.code==='MOLI_TOOLS_UNSUPPORTED');
 });
 
 test('explicitly authorized shared account works without changing Character; read-only server is discoverable',async()=>{

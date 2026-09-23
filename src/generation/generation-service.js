@@ -509,15 +509,16 @@ export async function generatePrivateReply({
         confirmIdentityHandoff,
         completeText: (routerRequest, routerSignal) => generateProviderText(config, routerRequest, { signal: routerSignal }),
       });
-      if (!observed.observations.length) throw nativeError;
-      const observedRequest = appendObservationsToRequest(request, observed.observations);
+      const observedRequest = observed.observations.length
+        ? appendObservationsToRequest(request, observed.observations)
+        : request;
       try {
         result = await generateProviderText(config, observedRequest, { signal, onDelta });
         toolContext.assertCurrent();
       } catch (error) {
         throw new Error(`Observation 工具结果回传普通模型失败：${String(error?.message || error || '未知错误')}`, { cause: error });
       }
-      result.toolCalling = { mode: 'observation-fallback', usedTools: observed.usedTools, nativeError: String(nativeError?.message || nativeError || ''), discoveryErrors: observed.discoveryErrors };
+      result.toolCalling = { mode: observed.observations.length ? 'observation-fallback' : 'ordinary-fallback', usedTools: observed.usedTools, nativeError: String(nativeError?.message || nativeError || ''), discoveryErrors: observed.discoveryErrors };
     }
   } else {
     try {

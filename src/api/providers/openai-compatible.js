@@ -156,6 +156,12 @@ export async function completeWithTools(config, request, { tools = [], history =
     name: String(call?.function?.name || ''),
     arguments: String(call?.function?.arguments || '{}'),
   }));
-  if (!content.trim() && !calls.length) throw new Error('Tool Calling 接口返回了空结果');
+  if (!content.trim() && !calls.length) {
+    const error = new Error('Tool Calling 接口返回了空结果');
+    // Several OpenAI-compatible proxies accept the tools fields but silently drop them.
+    // No tool has executed at this point, so the ordinary-completion compatibility path is safe.
+    error.code = 'MOLI_TOOLS_UNSUPPORTED';
+    throw error;
+  }
   return { text: content.trim(), calls, raw: data };
 }
