@@ -43,12 +43,15 @@ function migrateState(state) {
     throw new Error('旧服务器人物既非程妄也非旧 custom 会话；未切换');
   if (state.profile.request.scopeKey !== 'global:phone') throw new Error('服务器尚未进入全局陪伴作用域；未切换');
   if (!state.profile.request.schedule?.externalWakeEnabled) throw new Error('当前未授权 MCP Wake；未切换');
-  if (Array.isArray(state.pending) && state.pending.length) throw new Error('尚有待回注结果；未切换');
+  const pending = Array.isArray(state.pending) ? state.pending : [];
+  if (pending.length && (!text(prior.characterId).startsWith('custom:')
+      || pending.some(result => result?.characterId !== prior.characterId || result?.scopeKey !== prior.scopeKey)))
+    throw new Error('待回注结果不全属于旧 custom 会话；未切换');
   if (state.mcpTransitionFrom) throw new Error('已有未完成的 MCP 切换；请先在 Via 完整刷新');
   const oldBinding = state.mcpBinding || prior.identity?.bindings?.[0] || null;
   return { ...state, mcpBinding: null, mcpTransitionFrom: oldBinding, mcpTransitionTargetName: '程妄',
-    mcpConfigFingerprint: '', mcpCredentialFingerprint: '',
-    profile: null, lastStatus: 'mcp-rebind-awaiting-browser' };
+    mcpConfigFingerprint: '', mcpCredentialFingerprint: '', pending: [],
+    profile: null, lastStatus: pending.length ? `mcp-rebind-archived-old-results:${pending.length}` : 'mcp-rebind-awaiting-browser' };
 }
 
 function writeActivation({ endpoint, envFile, stateFile, pluginFile }) {
@@ -71,7 +74,7 @@ function writeActivation({ endpoint, envFile, stateFile, pluginFile }) {
   fs.writeFileSync(stateTemp, JSON.stringify(next), { mode: 0o600 });
   fs.renameSync(envTemp, envFile);
   fs.renameSync(stateTemp, stateFile);
-  return backupDir;
+  return { backupDir, archivedPending: Array.isArray(current.pending) ? current.pending.length : 0 };
 }
 
 async function serverRunning(fetchImpl = fetch) {
@@ -93,10 +96,10 @@ async function activate({ home = os.homedir(), fetchImpl = fetch } = {}) {
   if (await serverRunning(fetchImpl)) throw new Error('酒馆仍在运行；先在启动它的 Termux 窗口按 Ctrl+C');
   const envFile = path.join(home, '.moli-server-wake.env');
   const pluginDir = path.join(home, 'SillyTavern', 'plugins', 'moli-server-wake');
-  const backupDir = writeActivation({ endpoint, envFile,
+  const outcome = writeActivation({ endpoint, envFile,
     stateFile: path.join(pluginDir, 'data', 'community-wake-v1.json'),
     pluginFile: path.join(pluginDir, 'index.js') });
-  return { backupDir };
+  return outcome;
 }
 
 async function prepare({ home = os.homedir(), fetchImpl = fetch } = {}) {
@@ -118,6 +121,7 @@ async function main() {
     } else {
       const result = await activate();
       process.stdout.write(`已核对程妄_moli并切换手机本地服务器配置；备份目录：${result.backupDir}\n`);
+      if (result.archivedPending) process.stdout.write(`已将 ${result.archivedPending} 条旧会话结果保存在备份中，未归入程妄。\n`);
       process.stdout.write('现在启动酒馆，并在 Via 完整刷新，让新的 MCP 绑定同步。\n');
     }
   } catch (error) {

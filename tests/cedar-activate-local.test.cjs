@@ -47,6 +47,12 @@ test('migrates only a quiescent global 程妄 binding and requires new browser i
   assert.throws(() => migrateState({ ...old, profile: { request: { ...old.profile.request, actorName: '别人' } } }), /既非程妄/);
   const oldCustom = { ...old, profile: { request: { ...old.profile.request, actorName: '旧人物', characterId: 'custom:old' } } };
   assert.equal(migrateState(oldCustom).mcpTransitionTargetName, '程妄');
+  const staleResult = { characterId: 'custom:old', scopeKey: 'global:phone', wakeId: 'old-wake' };
+  const archived = migrateState({ ...oldCustom, pending: [staleResult] });
+  assert.deepEqual(archived.pending, []);
+  assert.equal(archived.lastStatus, 'mcp-rebind-archived-old-results:1');
+  assert.deepEqual(oldCustom.pending, []);
+  assert.throws(() => migrateState({ ...oldCustom, pending: [{ ...staleResult, characterId: 'other' }] }), /不全属于旧 custom/);
 });
 
 test('writes private backup and token endpoint without preserving guest URL', () => {
@@ -59,14 +65,18 @@ test('writes private backup and token endpoint without preserving guest URL', ()
     const pluginFile = path.join(pluginDir, 'index.js');
     fs.writeFileSync(envFile, 'export MOLI_WAKE_MCP_URL=https://toy.cedarstar.org/guest\nexport MOLI_WAKE_MCP_READ_TOOLS=list_games,get_guide\n');
     fs.writeFileSync(pluginFile, 'mcp-new-binding-required');
-    fs.writeFileSync(stateFile, JSON.stringify({ mcpBinding: { accountId: 'old' }, pending: [],
-      profile: { request: { actorName: '程妄', scopeKey: 'global:phone', schedule: { externalWakeEnabled: true } } } }));
-    const backup = writeActivation({ endpoint: 'https://toy.cedarstar.org/local-test-token-1234567890', envFile, stateFile, pluginFile });
+    fs.writeFileSync(stateFile, JSON.stringify({ mcpBinding: { accountId: 'old' },
+      pending: [{ characterId: 'custom:old', scopeKey: 'global:phone', wakeId: 'old-wake' }],
+      profile: { request: { actorName: '旧人物', characterId: 'custom:old', scopeKey: 'global:phone', schedule: { externalWakeEnabled: true } } } }));
+    const { backupDir, archivedPending } = writeActivation({ endpoint: 'https://toy.cedarstar.org/local-test-token-1234567890', envFile, stateFile, pluginFile });
     const updated = fs.readFileSync(envFile, 'utf8');
     assert.match(updated, /local-test-token-1234567890/);
     assert.doesNotMatch(updated, /guest/);
     assert.match(updated, /list_games,get_guide/);
     assert.equal(JSON.parse(fs.readFileSync(stateFile, 'utf8')).mcpBinding, null);
-    assert.match(fs.readFileSync(path.join(backup, 'moli-server-wake.env'), 'utf8'), /guest/);
+    assert.match(fs.readFileSync(path.join(backupDir, 'moli-server-wake.env'), 'utf8'), /guest/);
+    assert.equal(archivedPending, 1);
+    assert.equal(JSON.parse(fs.readFileSync(stateFile, 'utf8')).pending.length, 0);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(backupDir, 'community-wake-v1.json'), 'utf8')).pending[0].wakeId, 'old-wake');
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
