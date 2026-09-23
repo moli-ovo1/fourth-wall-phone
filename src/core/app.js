@@ -15,14 +15,9 @@ import {
   ensureBuiltins,
 } from '../storage/data-store.js';
 
-const GLOBAL_APP_INSTANCE_KEY = '__moliPhoneAppInstance';
 let appInstance = null;
 
 export async function initApp() {
-  // app.js is imported with a build query string. A version bump creates a new ES-module
-  // instance, so a module-local singleton cannot see/destroy the previous build. Keep the
-  // authoritative app instance on window to make hot extension updates idempotent.
-  try { window[GLOBAL_APP_INSTANCE_KEY]?.destroy?.(); } catch (error) { console.warn('[moli小手机] destroy previous global app instance failed', error); }
   appInstance?.destroy?.();
 
   const cleanup = cleanupLegacyTemporaryScopeStorage();
@@ -173,6 +168,5 @@ export async function initApp() {
     },
   };
 
-  try { window[GLOBAL_APP_INSTANCE_KEY] = appInstance; } catch {}
   return appInstance;
 }

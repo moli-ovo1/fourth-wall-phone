@@ -1,5 +1,5 @@
 const EMERGENCY_HANDLE_ID = 'moli-phone-handle';
-const MOLI_BUILD_VERSION = '0.6.71';
+const MOLI_BUILD_VERSION = '0.6.31';
 
 function ensureBootstrapLauncher() {
   const existing = document.getElementById(EMERGENCY_HANDLE_ID);

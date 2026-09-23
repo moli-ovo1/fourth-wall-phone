@@ -171,11 +171,6 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
       : {};
     conversation.automation = {
       autoChatEnabled: typeof automation.autoChatEnabled === 'boolean' ? automation.autoChatEnabled : true,
-      characterWakeEnabled: Boolean(automation.characterWakeEnabled),
-      externalWakeEnabled: typeof automation.externalWakeEnabled === 'boolean' ? automation.externalWakeEnabled : Boolean(automation.characterWakeEnabled),
-      communityWakeEnabled: typeof automation.communityWakeEnabled === 'boolean' ? automation.communityWakeEnabled : Boolean(automation.characterWakeEnabled),
-      characterWakeIntervalMinutes: Math.max(15, Math.min(720, Number.isFinite(Number(automation.characterWakeIntervalMinutes)) ? Math.round(Number(automation.characterWakeIntervalMinutes)) : 60)),
-      lastCharacterWakeAt: Math.max(0, Number(automation.lastCharacterWakeAt || 0)),
       storyAlignedEnabled: Boolean(automation.storyAlignedEnabled),
       storyAlignedSourceId: String(automation.storyAlignedSourceId || ''),
       storyAlignedScopeKey: String(automation.storyAlignedScopeKey || ''),
@@ -1671,10 +1666,6 @@ export function updatePrivateConversationSettings(
     replyBubbleRange,
     autoChatEnabled,
     autoChatProbability,
-    characterWakeEnabled,
-    externalWakeEnabled,
-    communityWakeEnabled,
-    characterWakeIntervalMinutes,
     storyAlignedEnabled,
     storyAlignedSourceId,
     storyAlignedScopeKey,
@@ -1748,15 +1739,6 @@ export function updatePrivateConversationSettings(
 
   if (autoChatEnabled !== undefined) {
     conversation.automation.autoChatEnabled = Boolean(autoChatEnabled);
-  }
-  if (characterWakeEnabled !== undefined) conversation.automation.characterWakeEnabled = Boolean(characterWakeEnabled);
-  if (externalWakeEnabled !== undefined) conversation.automation.externalWakeEnabled = Boolean(externalWakeEnabled);
-  if (communityWakeEnabled !== undefined) conversation.automation.communityWakeEnabled = Boolean(communityWakeEnabled);
-  conversation.automation.characterWakeEnabled = Boolean(conversation.automation.externalWakeEnabled || conversation.automation.communityWakeEnabled);
-  if (characterWakeIntervalMinutes !== undefined) {
-    const value = Number(characterWakeIntervalMinutes);
-    if (!Number.isFinite(value)) throw new Error('Character Wake 间隔必须是数字');
-    conversation.automation.characterWakeIntervalMinutes = Math.max(15, Math.min(720, Math.round(value)));
   }
   if (storyAlignedEnabled !== undefined) {
     conversation.automation.storyAlignedEnabled = Boolean(storyAlignedEnabled);

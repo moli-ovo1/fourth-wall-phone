@@ -1,8 +1,6 @@
 import { getStudioPromptSettings, saveStudioPromptSettings, resetStudioPrompt } from '../storage/studio-prompt-store.js';
 import { getLargeStorageStats } from '../storage/large-storage.js';
 import { readRaw, writeRaw } from '../storage/storage-adapter.js';
-import { listLifeLogs, recordLifeLog } from '../storage/life-log-store.js';
-import { registerCommunityWakeExecutor } from '../automation/community-wake-service.js';
 import {
   getContacts,
   getConversation,
@@ -121,8 +119,6 @@ import { buildPhoneContext } from '../generation/phone-context-builder.js';
 import { getPrivatePhoneTraces, settlePrivatePhoneTraceRefresh } from '../storage/private-phone-trace-store.js';
 import { registerWallSourceProvider, listRegisteredWallSources } from '../storage/wall-source-registry.js';
 import { listCalendarEvents, addCalendarEvent, updateCalendarEvent, removeCalendarEvent } from '../storage/calendar-store.js';
-import { listMcpServers, getMcpServer, saveMcpServer, deleteMcpServer } from '../storage/mcp-store.js';
-import { testMcpConnection } from '../integrations/mcp-client.js';
 
 const COMMUNITY_SHARE_ICON = `<svg class="moli-community-share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 11.1 20.2 4.2l-5.1 15.6-3.6-6.1-7.7-2.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m11.5 13.7 8.7-9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
 
@@ -212,14 +208,6 @@ export function createPhonePanel({
           <button class="moli-app-icon" data-action="settings" aria-label="打开设置">
             <span class="moli-app-icon-tile moli-settings-app-tile"><img class="moli-app-icon-image" src="${APP_ICON_URLS.settings}" alt="" /></span>
             <small>设置</small>
-          </button>
-          <button class="moli-app-icon" data-action="open-mcp" aria-label="打开 MCP">
-            <span class="moli-app-icon-tile moli-mcp-app-tile">MCP</span>
-            <small>MCP</small>
-          </button>
-          <button class="moli-app-icon" data-action="open-life" aria-label="打开他的生活">
-            <span class="moli-app-icon-tile moli-life-app-tile">迹</span>
-            <small>他的生活</small>
           </button>
           <button class="moli-app-icon" data-action="open-his-phone" aria-label="打开他的手机">
             <span class="moli-app-icon-tile moli-his-phone-app-tile">他</span>
@@ -691,77 +679,6 @@ export function createPhonePanel({
         <div class="moli-settings-note">
           当前聊天模式统一为线上即时通讯。预设负责所有联系人共用的线上聊天行为；联系人自身的人格与资料仍由联系人配置提供。
         </div>
-      </main>
-    </section>
-
-    <section class="moli-page" data-page="life-log">
-      <header class="moli-nav">
-        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="life-back" aria-label="返回">‹</button></div>
-        <div class="moli-nav-title">他的生活</div><div class="moli-nav-side right"></div>
-      </header>
-      <main class="moli-life-log">
-        <div class="moli-life-filter" data-life-filter></div>
-        <div class="moli-life-list" data-life-list></div>
-      </main>
-    </section>
-
-    <section class="moli-page" data-page="mcp-settings">
-      <header class="moli-nav">
-        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="mcp-settings-back" aria-label="返回">‹</button></div>
-        <div class="moli-nav-title">MCP 中心</div>
-        <div class="moli-nav-side right"><button class="moli-icon-btn" data-action="mcp-add" aria-label="添加 MCP">＋</button></div>
-      </header>
-      <main class="moli-mcp-settings">
-        <div class="moli-settings-note">连接远程 HTTP/HTTPS MCP Server，并集中管理角色范围、Character Wake 与工具调用权限。聊天过程中不会弹出 MCP 工具确认框。</div>
-        <div class="moli-mcp-server-list" data-mcp-server-list></div>
-      </main>
-    </section>
-
-    <section class="moli-page" data-page="mcp-editor">
-      <header class="moli-nav">
-        <div class="moli-nav-side"><button class="moli-icon-btn moli-back" data-action="mcp-editor-back" aria-label="返回">‹</button></div>
-        <div class="moli-nav-title" data-mcp-editor-title>添加 MCP</div>
-        <div class="moli-nav-side right"></div>
-      </header>
-      <main class="moli-api-settings moli-api-clone-layout moli-mcp-editor">
-        <section class="moli-api-section">
-          <div class="moli-api-section-title">服务器</div>
-          <label class="moli-api-label"><span>名称</span><input class="moli-api-input" data-mcp-name type="text" maxlength="80" placeholder="例如：我的搜索 MCP"></label>
-          <label class="moli-api-label"><span>远程 MCP 地址</span><input class="moli-api-input" data-mcp-url type="url" placeholder="https://example.com/mcp"></label>
-          <label class="moli-api-check-row moli-mcp-enabled-row"><input type="checkbox" data-mcp-enabled checked><span>启用这个 MCP</span></label>
-        </section>
-        <section class="moli-api-section">
-          <div class="moli-api-section-title">认证</div>
-          <select class="moli-api-select" data-mcp-auth-type>
-            <option value="none">无认证</option>
-            <option value="bearer">Bearer Token</option>
-            <option value="header">自定义 Header</option>
-          </select>
-          <div data-mcp-bearer hidden><label class="moli-api-label"><span>Bearer Token</span><div class="moli-api-password-row"><input class="moli-api-input" data-mcp-token type="password" autocomplete="off"><button type="button" class="moli-api-mini-btn" data-action="mcp-toggle-token">显示</button></div></label></div>
-          <div data-mcp-header hidden>
-            <label class="moli-api-label"><span>Header 名称</span><input class="moli-api-input" data-mcp-header-name type="text" placeholder="X-API-Key"></label>
-            <label class="moli-api-label"><span>Header 值</span><div class="moli-api-password-row"><input class="moli-api-input" data-mcp-header-value type="password" autocomplete="off"><button type="button" class="moli-api-mini-btn" data-action="mcp-toggle-header">显示</button></div></label>
-          </div>
-          <div class="moli-api-hint">密钥只保存在当前 moli 用户的本地配置中，不会写进项目仓库。</div>
-        </section>
-        <section class="moli-api-section">
-          <div class="moli-api-section-title">角色与安全权限</div>
-          <label class="moli-api-label"><span>可使用范围</span><select class="moli-api-select" data-mcp-scope><option value="global">所有角色</option><option value="characters">仅指定角色</option></select></label>
-          <div data-mcp-character-scope hidden><div class="moli-api-hint">选择允许使用这个 MCP 的联系人：</div><div class="moli-mcp-character-list" data-mcp-character-list></div></div>
-          <label class="moli-api-check-row"><input type="checkbox" data-mcp-allow-wake><span>允许 Character Wake 使用</span></label>
-          <label class="moli-api-label"><span>读取型工具</span><select class="moli-api-select" data-mcp-read-policy><option value="allow">自动允许</option><option value="deny">禁止</option></select></label>
-          <label class="moli-api-label"><span>写入 / 未声明工具</span><select class="moli-api-select" data-mcp-write-policy><option value="allow">自动允许</option><option value="deny">禁止</option></select></label>
-          <div class="moli-api-hint">只有 MCP 明确标记 readOnlyHint 的工具才按“读取型”处理；未声明类型默认按写入能力处理。权限在这里预先决定，角色聊天时不再临时弹窗。</div>
-        </section>
-        <section class="moli-api-section">
-          <div class="moli-api-section-title">连接测试</div>
-          <div class="moli-api-actions"><button type="button" class="moli-secondary-btn" data-action="mcp-test">测试连接</button><button type="button" class="moli-primary-btn" data-action="mcp-save">保存</button></div>
-          <div class="moli-api-status" data-mcp-status></div>
-          <div class="moli-mcp-tools" data-mcp-tools hidden></div>
-        </section>
-        <section class="moli-api-section moli-mcp-danger" data-mcp-delete-section hidden>
-          <button type="button" class="moli-secondary-btn moli-danger-inline" data-action="mcp-delete">删除这个 MCP</button>
-        </section>
       </main>
     </section>
 
@@ -1562,28 +1479,6 @@ export function createPhonePanel({
   const messageSearchInput = panel.querySelector('[data-message-search-input]');
   const messageSearchResults = panel.querySelector('[data-message-search-results]');
   const apiSettingsSummary = panel.querySelector('[data-api-settings-summary]');
-  const mcpSettingsSummary = panel.querySelector('[data-mcp-settings-summary]');
-  const mcpServerList = panel.querySelector('[data-mcp-server-list]');
-  const mcpEditorTitle = panel.querySelector('[data-mcp-editor-title]');
-  const mcpName = panel.querySelector('[data-mcp-name]');
-  const mcpUrl = panel.querySelector('[data-mcp-url]');
-  const mcpEnabled = panel.querySelector('[data-mcp-enabled]');
-  const mcpAuthType = panel.querySelector('[data-mcp-auth-type]');
-  const mcpBearer = panel.querySelector('[data-mcp-bearer]');
-  const mcpToken = panel.querySelector('[data-mcp-token]');
-  const mcpHeader = panel.querySelector('[data-mcp-header]');
-  const mcpHeaderName = panel.querySelector('[data-mcp-header-name]');
-  const mcpHeaderValue = panel.querySelector('[data-mcp-header-value]');
-  const mcpStatus = panel.querySelector('[data-mcp-status]');
-  const mcpTools = panel.querySelector('[data-mcp-tools]');
-  const mcpDeleteSection = panel.querySelector('[data-mcp-delete-section]');
-  const mcpScope = panel.querySelector('[data-mcp-scope]');
-  const mcpCharacterScope = panel.querySelector('[data-mcp-character-scope]');
-  const mcpCharacterList = panel.querySelector('[data-mcp-character-list]');
-  const mcpAllowWake = panel.querySelector('[data-mcp-allow-wake]');
-  const mcpReadPolicy = panel.querySelector('[data-mcp-read-policy]');
-  const mcpWritePolicy = panel.querySelector('[data-mcp-write-policy]');
-  let activeMcpServerId = '';
   const apiPreset = panel.querySelector('[data-api-preset]');
   const apiSource = panel.querySelector('[data-api-source]');
   const apiCustomSettings = panel.querySelector('[data-api-custom-settings]');
@@ -2319,124 +2214,6 @@ export function createPhonePanel({
       if (item) return displayName(item);
     }
     return conversationDisplayTitle(conversation) || '联系人';
-  }
-
-  function updateMcpSettingsSummary() {
-    if (!mcpSettingsSummary) return;
-    const servers = listMcpServers();
-    const enabled = servers.filter(item => item.enabled !== false).length;
-    mcpSettingsSummary.textContent = servers.length ? `${servers.length} 个连接 · ${enabled} 个启用` : '尚未添加 MCP';
-  }
-
-  function renderMcpServers() {
-    updateMcpSettingsSummary();
-    if (!mcpServerList) return;
-    const servers = listMcpServers();
-    if (!servers.length) {
-      mcpServerList.innerHTML = '<div class="moli-mcp-empty">还没有 MCP。点击右上角 ＋ 添加一个远程 MCP Server。</div>';
-      return;
-    }
-    mcpServerList.innerHTML = servers.map(item => `
-      <button type="button" class="moli-mcp-server-card" data-mcp-open="${escapeHtml(item.id)}">
-        <span class="moli-mcp-server-main"><strong>${escapeHtml(item.name || '未命名 MCP')}</strong><small>${escapeHtml(item.url || '未填写地址')}</small></span>
-        <span class="moli-mcp-server-state ${item.enabled !== false ? 'is-on' : ''}">${item.enabled !== false ? '已启用' : '已停用'}</span>
-        <b>›</b>
-      </button>`).join('');
-  }
-
-  function syncMcpAuthForm() {
-    const type = mcpAuthType?.value || 'none';
-    if (mcpBearer) mcpBearer.hidden = type !== 'bearer';
-    if (mcpHeader) mcpHeader.hidden = type !== 'header';
-  }
-
-  function syncMcpScopeForm(selectedIds = null) {
-    if (mcpCharacterScope) mcpCharacterScope.hidden = (mcpScope?.value || 'global') !== 'characters';
-    if (!mcpCharacterList) return;
-    const selected = new Set(Array.isArray(selectedIds) ? selectedIds.map(String) : [...mcpCharacterList.querySelectorAll('input:checked')].map(x => String(x.value)));
-    const contacts = getContacts().filter(item => item && item.kind !== 'group');
-    mcpCharacterList.innerHTML = contacts.length ? contacts.map(item => `<label class="moli-api-check-row"><input type="checkbox" value="${escapeHtml(item.id)}" ${selected.has(String(item.id)) ? 'checked' : ''}><span>${escapeHtml(displayName(item))}</span></label>`).join('') : '<div class="moli-api-hint">暂无可选择联系人。</div>';
-  }
-
-  function setMcpStatus(text = '', kind = '') {
-    if (!mcpStatus) return;
-    mcpStatus.textContent = text;
-    mcpStatus.dataset.kind = kind;
-  }
-
-  function renderMcpTools(tools = []) {
-    if (!mcpTools) return;
-    const rows = Array.isArray(tools) ? tools : [];
-    mcpTools.hidden = !rows.length;
-    mcpTools.innerHTML = rows.length ? `<div class="moli-api-section-title">发现 ${rows.length} 个工具</div>${rows.map(tool => `<div class="moli-mcp-tool"><strong>${escapeHtml(tool?.name || '未命名工具')}</strong>${tool?.description ? `<small>${escapeHtml(tool.description)}</small>` : ''}</div>`).join('')}` : '';
-  }
-
-  function currentMcpFormServer() {
-    const existing = activeMcpServerId ? getMcpServer(activeMcpServerId) : null;
-    return {
-      ...(existing || {}),
-      ...(activeMcpServerId ? { id: activeMcpServerId } : {}),
-      name: mcpName?.value?.trim() || '未命名 MCP',
-      url: mcpUrl?.value?.trim() || '',
-      enabled: Boolean(mcpEnabled?.checked),
-      access: {
-        scope: mcpScope?.value === 'characters' ? 'characters' : 'global',
-        characterIds: [...(mcpCharacterList?.querySelectorAll('input:checked') || [])].map(x => String(x.value)),
-        allowWake: Boolean(mcpAllowWake?.checked),
-        readPolicy: mcpReadPolicy?.value || 'allow',
-        writePolicy: mcpWritePolicy?.value || 'confirm',
-      },
-      auth: {
-        type: mcpAuthType?.value || 'none',
-        token: mcpToken?.value || '',
-        headerName: mcpHeaderName?.value?.trim() || 'X-API-Key',
-        headerValue: mcpHeaderValue?.value || '',
-      },
-    };
-  }
-
-  function openMcpEditor(id = '') {
-    activeMcpServerId = String(id || '');
-    const item = activeMcpServerId ? getMcpServer(activeMcpServerId) : null;
-    if (mcpEditorTitle) mcpEditorTitle.textContent = item ? '编辑 MCP' : '添加 MCP';
-    if (mcpName) mcpName.value = item?.name || '';
-    if (mcpUrl) mcpUrl.value = item?.url || '';
-    if (mcpEnabled) mcpEnabled.checked = item?.enabled !== false;
-    if (mcpAuthType) mcpAuthType.value = item?.auth?.type || 'none';
-    if (mcpToken) { mcpToken.value = item?.auth?.token || ''; mcpToken.type = 'password'; }
-    if (mcpHeaderName) mcpHeaderName.value = item?.auth?.headerName || 'X-API-Key';
-    if (mcpHeaderValue) { mcpHeaderValue.value = item?.auth?.headerValue || ''; mcpHeaderValue.type = 'password'; }
-    if (mcpDeleteSection) mcpDeleteSection.hidden = !item;
-    if (mcpScope) mcpScope.value = item?.access?.scope === 'characters' ? 'characters' : 'global';
-    if (mcpAllowWake) mcpAllowWake.checked = item?.access?.allowWake === true;
-    if (mcpReadPolicy) mcpReadPolicy.value = item?.access?.readPolicy || 'allow';
-    if (mcpWritePolicy) mcpWritePolicy.value = item?.access?.writePolicy || 'confirm';
-    syncMcpScopeForm(item?.access?.characterIds || []);
-    syncMcpAuthForm();
-    setMcpStatus('');
-    renderMcpTools([]);
-    show('mcp-editor');
-  }
-
-  async function testCurrentMcp() {
-    const server = currentMcpFormServer();
-    setMcpStatus('正在连接 MCP Server…', 'loading');
-    renderMcpTools([]);
-    const button = panel.querySelector('[data-action="mcp-test"]');
-    if (button) button.disabled = true;
-    try {
-      const result = await testMcpConnection(server);
-      const serverName = result?.serverInfo?.name ? ` · ${result.serverInfo.name}` : '';
-      setMcpStatus(`连接成功${serverName} · 发现 ${result.tools.length} 个工具`, 'success');
-      renderMcpTools(result.tools);
-    } catch (error) {
-      console.error('[moli小手机] MCP connection test failed', error);
-      const message = String(error?.message || error || '未知错误');
-      const corsHint = /fetch|network|failed/i.test(message) ? '\n如果地址本身可用，可能是浏览器 CORS 限制；后续代理层会专门处理。' : '';
-      setMcpStatus(`连接失败：${message}${corsHint}`, 'error');
-    } finally {
-      if (button) button.disabled = false;
-    }
   }
 
   function apiSourceLabel(source) {
@@ -3408,10 +3185,6 @@ export function createPhonePanel({
           <div class="moli-compact-range-row moli-setting-line"><span>回复气泡条数</span><label><input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.min)||1)}" data-info-bubble-min> — <input type="number" min="1" max="12" value="${Math.max(1, Number(quickRange.max)||3)}" data-info-bubble-max></label></div>
           ${storyAlignedEligible ? `<label class="moli-switch-row moli-setting-line"><span>贴合正文的私聊 <small>实验</small></span><input type="checkbox" data-story-aligned-enabled ${conversation.automation?.storyAlignedEnabled === true ? 'checked' : ''}></label><div class="moli-setting-note">开启后，这个联系人视为当前正文中的同一个人；正文进展和他自己的手机经历共同决定是否私聊。此模式不受下方“主动私聊”开关与比例限制，关闭即可完整回到原机制。</div>` : ''}
           <label class="moli-inline-slider-row"><span><input type="checkbox" data-auto-chat-enabled ${conversation.automation?.autoChatEnabled ? 'checked' : ''}>主动私聊</span><div><input type="range" min="0" max="100" step="1" data-auto-chat-probability value="${Number(conversation.automation?.autoChatProbability ?? 30)}"><small data-auto-chat-value>${Number(conversation.automation?.autoChatProbability ?? 30)}%</small></div></label>
-          <label class="moli-switch-row moli-setting-line"><span>外部生活（MCP） <small>酒馆运行时</small></span><input type="checkbox" data-external-wake-enabled ${conversation.automation?.externalWakeEnabled === true ? 'checked' : ''}></label>
-          <label class="moli-switch-row moli-setting-line"><span>自主逛社区 <small>酒馆运行时</small></span><input type="checkbox" data-community-wake-enabled ${conversation.automation?.communityWakeEnabled === true ? 'checked' : ''}></label>
-          <label class="moli-compact-number-row moli-setting-line"><span>自主生活间隔（分钟）</span><input type="number" min="15" max="720" step="15" value="${Number(conversation.automation?.characterWakeIntervalMinutes ?? 60)}" data-character-wake-interval></label>
-          <div class="moli-setting-note">两个开关彼此独立并共享同一间隔：外部生活只允许角色自主使用已授权的 MCP；自主逛社区只调用现有 Community Discovery。关闭酒馆后都不会后台运行。</div>
           <label class="moli-switch-row moli-setting-line"><span>允许社区触发主动私聊</span><input type="checkbox" data-community-private-enabled ${conversation.automation?.communityPrivateEnabled !== false ? 'checked' : ''}></label>
           <label class="moli-inline-slider-row"><span><input type="checkbox" data-commentary-enabled ${conversation.automation?.commentaryEnabled ? 'checked' : ''}>吐槽正文</span><div><input type="range" min="0" max="100" step="1" data-commentary-probability value="${Number(conversation.automation?.commentaryProbability ?? 30)}"><small data-commentary-value>${Number(conversation.automation?.commentaryProbability ?? 30)}%</small></div></label>
           <button type="button" class="moli-info-save-button" data-action="save-all-private-settings">保存设置</button>
@@ -3508,9 +3281,6 @@ export function createPhonePanel({
       replyBubbleRange:{min,max},
       title:chatInfo.querySelector('[data-info-chat-title]')?.value||'',
       autoChatEnabled:Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked), autoChatProbability,
-      externalWakeEnabled:Boolean(chatInfo.querySelector('[data-external-wake-enabled]')?.checked),
-      communityWakeEnabled:Boolean(chatInfo.querySelector('[data-community-wake-enabled]')?.checked),
-      characterWakeIntervalMinutes:Math.max(15,Math.min(720,Number(chatInfo.querySelector('[data-character-wake-interval]')?.value)||60)),
       storyAlignedEnabled: storyAlignedEligible ? Boolean(chatInfo.querySelector('[data-story-aligned-enabled]')?.checked) : false,
       storyAlignedSourceId: storyAlignedEligible && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(item?.source?.sourceId || '') : '',
       storyAlignedScopeKey: storyAlignedEligible && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(getScopeKey?.() || '') : '',
@@ -3545,9 +3315,6 @@ export function createPhonePanel({
         updatePrivateConversationSettings(scopeKey, currentContactId, {
           autoChatEnabled: Boolean(chatInfo.querySelector('[data-auto-chat-enabled]')?.checked),
           autoChatProbability,
-          externalWakeEnabled: Boolean(chatInfo.querySelector('[data-external-wake-enabled]')?.checked),
-          communityWakeEnabled: Boolean(chatInfo.querySelector('[data-community-wake-enabled]')?.checked),
-          characterWakeIntervalMinutes: Math.max(15, Math.min(720, Number(chatInfo.querySelector('[data-character-wake-interval]')?.value) || 60)),
           storyAlignedEnabled: storyAlignedEligibility(conversation, item, scopeKey) ? Boolean(chatInfo.querySelector('[data-story-aligned-enabled]')?.checked) : false,
           storyAlignedSourceId: storyAlignedEligibility(conversation, item, scopeKey) && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(item?.source?.sourceId || '') : '',
           storyAlignedScopeKey: storyAlignedEligibility(conversation, item, scopeKey) && chatInfo.querySelector('[data-story-aligned-enabled]')?.checked ? String(scopeKey) : '',
@@ -4653,43 +4420,6 @@ export function createPhonePanel({
     if(String(choice).trim()==='5'){if(windowRef.confirm?.(`删除日程“${row.title}”？`))removeCalendarEvent(scopeKey,id);}else{const map={'1':'done','2':'cancelled','3':'missed','4':'scheduled'};const status=map[String(choice).trim()];if(!status)return;updateCalendarEvent(scopeKey,id,{status});} renderCalendar();
   }
 
-  let lifeActorFilter = '';
-  function renderLifeLog(){
-    const scopeKey=getScopeKey?.();
-    const contacts=getContacts().filter(x=>x&&!String(x.id||'').startsWith('builtin:'));
-    const filter=panel.querySelector('[data-life-filter]'); const list=panel.querySelector('[data-life-list]'); if(!filter||!list)return;
-    filter.innerHTML=`<button class="${!lifeActorFilter?'active':''}" data-life-actor="">全部</button>`+contacts.map(c=>`<button class="${lifeActorFilter===String(c.id)?'active':''}" data-life-actor="${escapeHtml(c.id)}">${escapeHtml(c.name||'角色')}</button>`).join('');
-    filter.querySelectorAll('[data-life-actor]').forEach(btn=>btn.addEventListener('click',()=>{lifeActorFilter=String(btn.dataset.lifeActor||'');renderLifeLog();}));
-    const rows=listLifeLogs(scopeKey,{actorId:lifeActorFilter,limit:300,autonomousOnly:true});
-    if(!rows.length){list.innerHTML='<div class="moli-life-empty">这里还没有自主生活记录。<br><small>Character Wake、MCP 外部活动和自主社区动态会自动出现在这里。</small></div>';return;}
-    const fmt=t=>{const d=new Date(Number(t)||Date.now());return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
-    const cleanToolSummary=value=>{
-      let text=String(value||'').trim();
-      try {
-        const outer=JSON.parse(text);
-        const first=Array.isArray(outer?.content)?outer.content.find(x=>x?.type==='text'&&x?.text):null;
-        if(first?.text){ text=String(first.text); try{const inner=JSON.parse(text); text=String(inner?.text||inner?.message||inner?.result||text);}catch{} }
-      } catch {}
-      return text.replace(/\\n/g,'\n').replace(/\\"/g,'"').replace(/\s+/g,' ').trim().slice(0,520);
-    };
-    const grouped=[]; const byRun=new Map();
-    for(const r of rows){
-      const runId=String(r?.metadata?.wakeRunId||'');
-      if(!runId){ grouped.push({type:'single',rows:[r],at:r.createdAt}); continue; }
-      let g=byRun.get(runId); if(!g){g={type:'wake',rows:[],at:r.createdAt};byRun.set(runId,g);grouped.push(g);} g.rows.push(r); g.at=Math.max(g.at,Number(r.createdAt||0));
-    }
-    grouped.sort((a,b)=>b.at-a.at);
-    list.innerHTML=grouped.map(g=>{
-      if(g.type==='single'){const r=g.rows[0];return `<article class="moli-life-card"><div class="moli-life-head"><b>${escapeHtml(r.actorName||'角色')}</b><time>${fmt(r.createdAt)}</time></div><strong>${escapeHtml(r.title||'活动')}</strong>${r.summary?`<p>${escapeHtml(r.summary)}</p>`:''}<small>${escapeHtml(r.source||'自主活动')}</small></article>`;}
-      const ordered=[...g.rows].sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
-      const start=ordered.find(r=>r?.metadata?.phase==='start'); const end=ordered.find(r=>r?.metadata?.phase==='end'); const tools=ordered.filter(r=>r.kind==='mcp'); const actor=end?.actorName||start?.actorName||ordered[0]?.actorName||'角色';
-      let title='有了一点自己的时间', summary='闲下来了一会儿，看看有没有什么想做的。', source='自主活动';
-      if(end&&tools.length){title='出去转了一圈'; const providers=[...new Set(tools.map(r=>r.source).filter(Boolean))]; const details=tools.map(r=>cleanToolSummary(r.summary)).filter(Boolean); summary=`${actor}自己去了${providers.length?` ${providers.join('、')}`:'外面'}。${details.length?` ${details.join('；')}`:''}`; source=providers.join(' · ')||'MCP 自主活动';}
-      else if(end){title='今天没有出去';summary='想了想，最后还是决定待着。';}
-      return `<article class="moli-life-card"><div class="moli-life-head"><b>${escapeHtml(actor)}</b><time>${fmt(g.at)}</time></div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(summary)}</p><small>${escapeHtml(source)}</small></article>`;
-    }).join('');
-  }
-
   const show = name => {
     if (addMenu) addMenu.hidden = true;
     hideMessageMenu();
@@ -4714,7 +4444,6 @@ export function createPhonePanel({
     if (name === 'injection-composer') renderInjectionComposer();
     if (name === 'his-phone') renderHisPhone();
     if (name === 'calendar') renderCalendar();
-    if (name === 'life-log') renderLifeLog();
 
     if (name === 'chat') {
       applyCurrentChatWallpaper();
@@ -4772,11 +4501,6 @@ export function createPhonePanel({
 
     if (name === 'settings') {
       updateApiSettingsSummary();
-      updateMcpSettingsSummary();
-    }
-
-    if (name === 'mcp-settings') {
-      renderMcpServers();
     }
 
     if (name === 'api-settings') {
@@ -6861,10 +6585,6 @@ export function createPhonePanel({
       return;
     }
 
-    // MCP permissions are configured ahead of time in the MCP app.
-    // Normal chat must never interrupt roleplay with a permission dialog.
-    const requestMcpToolPermission = async () => true;
-
     const conversation = currentConversation();
     const scopeKey = conversationRuntimeScopeKey(conversation);
     if (!conversation) {
@@ -6925,10 +6645,6 @@ export function createPhonePanel({
         : await generatePrivateReply({
             ...commonGenerationOptions,
             regenerateFromMessageId: regenerateMessageId,
-            confirmTool: async ({ tool, args }) => requestMcpToolPermission({ tool, args, conversationKey: requestConversationKey }),
-            // account 本身已经通过 MCP App 权限；返回的持久身份只绑定当前角色并自动接管，
-            // 不在聊天中再次弹窗，也不把完整凭证写进角色正文。
-            confirmIdentityHandoff: async () => true,
           });
 
       if (controller.signal.aborted) return;
@@ -8390,23 +8106,21 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     if (!post || !ids.length) return null;
     return recordWorldEvent(scopeKey,{source:`community.${post.section||'unknown'}`,actorId:'system',action:'POST_SNAPSHOT_KNOWN',targetContactIds:ids,objectId:String(post.id||''),content:`你已经看过截至当时的这篇${sourceLabel(post)}内容。\n${communityPostKnowledgeText(post,snapshotAt)}`,metadata:{postId:String(post.id||''),snapshotAt:Number(snapshotAt||Date.now()),knowledgeScope:'post_snapshot',reason},awareness:'known',dedupeKey:`community-post-snapshot:${post.id}:${ids.sort().join(',')}:${Number(snapshotAt||0)}`});
   };
-  const settleCommunityDiscovery = async (posts, settings = getPublicWebSettings(getScopeKey?.()), { actorIds = [], autonomousWake = false } = {}) => {
+  const settleCommunityDiscovery = async (posts, settings = getPublicWebSettings(getScopeKey?.())) => {
     const scopeKey=getScopeKey?.(); const rows=(Array.isArray(posts)?posts:[]).filter(Boolean); if(!scopeKey||!rows.length)return [];
     try{
-      const result=await generateCommunityDiscoveryRefresh({scopeKey,posts:rows,fixedPersonasCommunityEnabled:Boolean(settings?.fixedPersonasCommunityEnabled),actorIds});
+      const result=await generateCommunityDiscoveryRefresh({scopeKey,posts:rows,fixedPersonasCommunityEnabled:Boolean(settings?.fixedPersonasCommunityEnabled)});
       const byId=new Map(rows.map(post=>[String(post.id||''),post]));
       for(const actor of result?.actors||[]){
         const target=getContacts().find(x=>String(x.id)===String(actor.actorId)); if(!target)continue;
         const viewed=(actor.viewedPostIds||[]).map(id=>byId.get(String(id))).filter(Boolean);
         const viewedEventByPostId=new Map();
         for(const post of viewed){const event=recordCommunityPostSnapshotAwareness(scopeKey,post,[actor.actorId],'autonomous-browse',Date.now());if(event?.id)viewedEventByPostId.set(String(post.id||''),event);}
-        if(autonomousWake&&viewed.length) recordLifeLog(scopeKey,{actorId:target.id,actorName:displayName(target),kind:'community-browse',title:'逛了逛社区',summary:`自己看了 ${viewed.length} 篇帖子。`,source:'社区',metadata:{autonomous:true,communityWake:true,postIds:viewed.map(post=>String(post.id||''))}});
         const actionPost=byId.get(String(actor.actionPostId||''));
         if(actionPost&&viewed.some(p=>String(p.id)===String(actionPost.id))){
           const mode=String(actor.publicAction||'SKIP').toUpperCase(); const text=String(actor.publicContent||'').trim();
           if((mode==='REPLY_REAL'||mode==='REPLY_ANONYMOUS')&&text){
             commitCharacterCommunityReply({scopeKey,post:actionPost,target,decision:mode,content:text,alias:String(actor.publicAlias||''),replyToCommentId:String(actor.replyToCommentId||''),answerId:String(actor.answerId||''),action:mode==='REPLY_ANONYMOUS'?'AUTONOMOUS_REPLY_ANONYMOUS':'AUTONOMOUS_REPLY_REAL',reason:'autonomous-participation'});
-            if(autonomousWake) recordLifeLog(scopeKey,{actorId:target.id,actorName:displayName(target),kind:'community-reply',title:mode==='REPLY_ANONYMOUS'?'用小号回了一条帖子':'在社区回了一条帖子',summary:`${sourceLabel(actionPost)} · ${String(actionPost.title||actionPost.content||'').trim().slice(0,80)}\n${text.slice(0,300)}`,source:'社区',metadata:{autonomous:true,communityWake:true,postId:String(actionPost.id||''),anonymous:mode==='REPLY_ANONYMOUS'}});
           }
         }
         const privateConv=getScopeConversations(scopeKey).filter(c=>c?.type==='private'&&String(c.contactId||'')===String(target.id)).sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0];
@@ -8426,7 +8140,7 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
         const section=['tianya','xiaohongshu','zhihu','weibo'].includes(String(item.section||''))?String(item.section):'weibo';
         const anonymous=Boolean(item.anonymous); const author=anonymous?{type:'contact',id:target.id,name:String(item.alias||'小号用户').trim()||'小号用户',anonymous:true,knownIdentityId:target.id,identityKnownBy:[target.id]}:{type:'contact',id:target.id,name:displayName(target),anonymous:false};
         const created=createPublicWebPost(scopeKey,{section,type:section==='zhihu'?'question':section==='xiaohongshu'?'note':section==='weibo'?'weibo':'thread',author,title:String(item.title||'').trim()||String(item.content||'').trim().slice(0,36),content:String(item.content||'').trim(),tags:Array.isArray(item.tags)?item.tags:[],extra:section==='weibo'?{weiboLane:'实时',autonomousCharacterPost:true}:section==='xiaohongshu'?{imagePrompt:String(item.imagePrompt||''),imageText:String(item.imageText||''),autonomousCharacterPost:true}:{autonomousCharacterPost:true}});
-        if(created){const postEvent=recordWorldEvent(scopeKey,{source:`community.${section}`,actorId:target.id,action:'CHARACTER_POSTED',targetContactIds:[target.id],objectId:String(created.id||''),content:`你${anonymous?'使用小号':'实名'}在${sourceLabel(created)}主动发帖：“${String(created.title||created.content||'').slice(0,500)}”`,metadata:{postId:String(created.id||''),decision:'PROACTIVE_POST',anonymousAlias:anonymous?String(item.alias||'小号用户').trim()||'小号用户':''},awareness:'known'});recordCommunityPostSnapshotAwareness(scopeKey,created,[target.id],'autonomous-post',Date.now());if(anonymous)rememberAnonymousIdentity(scopeKey,{surface:`community.${section}`,alias:String(item.alias||'小号用户').trim()||'小号用户',realContactId:target.id,knownBy:[target.id],evidenceEventId:postEvent?.id});if(autonomousWake)recordLifeLog(scopeKey,{actorId:target.id,actorName:displayName(target),kind:'community-post',title:anonymous?'用小号发了一篇帖子':'自己发了一篇帖子',summary:`${sourceLabel(created)} · ${String(created.title||'').trim().slice(0,100)}${created.content?`\n${String(created.content).trim().slice(0,360)}`:''}`,source:'社区',metadata:{autonomous:true,communityWake:true,postId:String(created.id||''),section,anonymous}});}
+        if(created){const postEvent=recordWorldEvent(scopeKey,{source:`community.${section}`,actorId:target.id,action:'CHARACTER_POSTED',targetContactIds:[target.id],objectId:String(created.id||''),content:`你${anonymous?'使用小号':'实名'}在${sourceLabel(created)}主动发帖：“${String(created.title||created.content||'').slice(0,500)}”`,metadata:{postId:String(created.id||''),decision:'PROACTIVE_POST',anonymousAlias:anonymous?String(item.alias||'小号用户').trim()||'小号用户':''},awareness:'known'});recordCommunityPostSnapshotAwareness(scopeKey,created,[target.id],'autonomous-post',Date.now());if(anonymous)rememberAnonymousIdentity(scopeKey,{surface:`community.${section}`,alias:String(item.alias||'小号用户').trim()||'小号用户',realContactId:target.id,knownBy:[target.id],evidenceEventId:postEvent?.id});}
       }
       return result?.actors||[];
     }catch(error){console.error('[moli小手机] community autonomous discovery failed:',error);return [];}
@@ -8478,28 +8192,19 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     button.setAttribute('aria-busy', 'true');
     try {
       const result = await generateContactMoment({ scopeKey, contactId: item.id });
-      const createdMoments = [];
-      if (result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') {
-        const posts = Array.isArray(result?.posts) && result.posts.length
-          ? result.posts.slice(0, 3)
-          : (result?.content ? [{ content: result.content, onlyUserVisible: result.onlyUserVisible, createdAt: result.createdAt }] : []);
-        for (const post of posts) {
-          if (!String(post?.content || '').trim()) continue;
-          createdMoments.push(createProfileMoment(scopeKey, item.id, {
-            author: { id: item.id, name: actorName, type: 'contact' },
-            content: String(post.content).trim(),
-            visibility: post.onlyUserVisible ? {mode:'only',contactIds:['user']} : {mode:'public',contactIds:[]},
-            createdAt: Number(post.createdAt || Date.now()),
-          }));
-        }
+      let createdMoment = null;
+      if ((result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') && result?.content) {
+        createdMoment = createProfileMoment(scopeKey, item.id, {
+          author: { id: item.id, name: actorName, type: 'contact' },
+          content: result.content,
+          visibility: result.onlyUserVisible ? {mode:'only',contactIds:['user']} : {mode:'public',contactIds:[]},
+          createdAt: result.createdAt,
+        });
       }
-      const createdMoment = createdMoments[0] || null;
       const validNpcKeys = new Set((result?.npcSources || []).map(source => String(source?.key || '')));
       for (const interaction of result?.interactions || []) {
         const rawTargetId = String(interaction?.targetMomentId || '');
-        const newMatch = rawTargetId.match(/^__NEW(?:_(\d+))?__$/);
-        const newIndex = newMatch ? Math.max(0, Number(newMatch[1] || 1) - 1) : -1;
-        const targetId = newMatch ? String(createdMoments[newIndex]?.id || '') : rawTargetId;
+        const targetId = rawTargetId === '__NEW__' ? String(createdMoment?.id || '') : rawTargetId;
         if (!targetId) continue;
         let socialActor = null;
         if (interaction.actorType === 'contact' && String(interaction.actorId || '') === String(item.id)) {
@@ -8541,22 +8246,9 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
           incrementConversationUnread(scopeKey, conversationKey, result.privateMessages.length);
         }
       }
-      if ((result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') && createdMoments.length) {
-        const countText = createdMoments.length === 1 ? '一条' : `${createdMoments.length} 条`;
-        setProfileMomentStatus(scopeKey, item.id, { message: `发现 ${actorName} 的${countText}近期朋友圈`, note: '', kind: 'post' });
-        toast(`发现 ${actorName} 的${countText}近期朋友圈`);
-        // 说明书约定：私聊中“有几率”收到当前角色的朋友圈更新提醒。这里只生成系统提醒，不触发额外 API。
-        if (Math.random() < 0.35) {
-          const privateConversation = getScopeConversations(scopeKey)
-            .filter(entry => entry?.type === 'private' && String(entry.contactId || '') === String(item.id))
-            .sort((a,b)=>Number(b.updatedAt||0)-Number(a.updatedAt||0))[0] || ensureConversation(scopeKey, item.id);
-          const conversationKey = String(privateConversation?.conversationKey || privateConversation?.id || item.id);
-          appendMessage(scopeKey, conversationKey, 'system', `${actorName}的朋友圈有新动态`, {
-            source: 'profile-moment-update-reminder', messageType: 'moment-event',
-            momentEvent: { contactId: item.id, momentIds: createdMoments.map(moment => moment.id) },
-          });
-          if (conversationKey !== String(currentConversation()?.conversationKey || currentConversation()?.id || '')) incrementConversationUnread(scopeKey, conversationKey, 1);
-        }
+      if (result?.action === 'POST' || result?.action === 'POST+PRIVATE_CHAT') {
+        setProfileMomentStatus(scopeKey, item.id, { message: `发现 ${actorName} 的一条近期朋友圈`, note: '', kind: 'post' });
+        toast(`发现 ${actorName} 的一条近期朋友圈`);
       } else {
         setProfileMomentStatus(scopeKey, item.id, { message: `${actorName} 最近没有新的朋友圈`, note: result?.statusNote || '这会儿没什么想公开发的。', kind: 'skip' });
         toast(`${actorName} 最近没有新的朋友圈`);
@@ -8892,44 +8584,6 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
 
   // 非阻塞后台检查；失败不影响手机初始化。
   checkExtensionUpdateAvailability();
-
-  panel.querySelector('[data-action="mcp-settings"]')?.addEventListener('click', () => show('mcp-settings'));
-  panel.querySelector('[data-action="mcp-settings-back"]')?.addEventListener('click', () => show('phone-home'));
-  panel.querySelector('[data-action="open-mcp"]')?.addEventListener('click', () => show('mcp-settings'));
-  panel.querySelector('[data-action="open-life"]')?.addEventListener('click', () => show('life-log'));
-  panel.querySelector('[data-action="life-back"]')?.addEventListener('click', () => show('phone-home'));
-  panel.querySelector('[data-action="mcp-editor-back"]')?.addEventListener('click', () => show('mcp-settings'));
-  panel.querySelector('[data-action="mcp-add"]')?.addEventListener('click', () => openMcpEditor());
-  mcpServerList?.addEventListener('click', event => {
-    const button = event.target.closest?.('[data-mcp-open]');
-    if (button) openMcpEditor(button.dataset.mcpOpen);
-  });
-  mcpAuthType?.addEventListener('change', syncMcpAuthForm);
-  mcpScope?.addEventListener('change', () => syncMcpScopeForm());
-  panel.querySelector('[data-action="mcp-toggle-token"]')?.addEventListener('click', event => toggleSecret(mcpToken, event.currentTarget));
-  panel.querySelector('[data-action="mcp-toggle-header"]')?.addEventListener('click', event => toggleSecret(mcpHeaderValue, event.currentTarget));
-  panel.querySelector('[data-action="mcp-test"]')?.addEventListener('click', () => { void testCurrentMcp(); });
-  panel.querySelector('[data-action="mcp-save"]')?.addEventListener('click', () => {
-    try {
-      const server = currentMcpFormServer();
-      if (!/^https?:\/\//i.test(server.url)) { toast('MCP 地址必须以 http:// 或 https:// 开头'); return; }
-      const saved = saveMcpServer(server);
-      activeMcpServerId = saved.id;
-      updateMcpSettingsSummary();
-      toast('MCP 已保存');
-      show('mcp-settings');
-    } catch (error) { toast(error?.message || '保存 MCP 失败'); }
-  });
-  panel.querySelector('[data-action="mcp-delete"]')?.addEventListener('click', () => {
-    if (!activeMcpServerId) return;
-    const item = getMcpServer(activeMcpServerId);
-    if (!(windowRef.confirm?.(`删除 MCP“${item?.name || '未命名 MCP'}”？`) ?? true)) return;
-    deleteMcpServer(activeMcpServerId);
-    activeMcpServerId = '';
-    updateMcpSettingsSummary();
-    toast('MCP 已删除');
-    show('mcp-settings');
-  });
 
   panel.querySelector('[data-action="settings-home"]')?.addEventListener('click', () => show('phone-home'));
   panel.querySelector('[data-action="prompt-settings"]')?.addEventListener('click', () => show('prompt-settings'));
@@ -9719,18 +9373,6 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   };
   windowRef.addEventListener('moli:generation-state', externalGenerationState);
 
-  const communityWakeRunning = new Set();
-  const unregisterCommunityWakeExecutor = registerCommunityWakeExecutor(async detail => {
-    const scopeKey=getScopeKey?.(); const actorId=String(detail?.actorId||'');
-    if(!scopeKey||String(detail?.scopeKey||'')!==String(scopeKey)||!actorId)return { status:'ignored', reason:'scope-or-actor-mismatch' };
-    const lock=`${scopeKey}:${actorId}`; if(communityWakeRunning.has(lock))return { status:'ignored', reason:'already-running' };
-    const posts=listPublicWebPosts(scopeKey,{section:'recommend'}).slice(0,12); if(!posts.length)return { status:'skipped', reason:'no-posts' };
-    communityWakeRunning.add(lock);
-    try{const actors=await settleCommunityDiscovery(posts,getPublicWebSettings(scopeKey),{actorIds:[actorId],autonomousWake:true});renderPublicWeb();renderLifeLog();return { status:'completed', actors };}
-    catch(error){console.error('[moli小手机] community wake failed:',error);return { status:'failed', error:String(error?.message||error||'unknown') };}
-    finally{communityWakeRunning.delete(lock);}
-  });
-
   const externalGenerationError = event => {
     const detail = event?.detail || {};
     if (detail.scopeKey && detail.scopeKey !== getScopeKey?.()) return;
@@ -9776,7 +9418,6 @@ open(handleElement) {
 
     destroy() {
       windowRef.removeEventListener('moli:conversation-updated', externalConversationUpdate);
-      unregisterCommunityWakeExecutor?.();
       windowRef.removeEventListener('moli:generation-state', externalGenerationState);
       windowRef.removeEventListener('moli:generation-error', externalGenerationError);
       panel.remove();

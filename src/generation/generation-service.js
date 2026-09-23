@@ -7,8 +7,7 @@ import {
   getScopeConversations,
 } from '../storage/data-store.js';
 import { getApiSettings, getApiPreset, resolveApiRuntimeConfig } from '../storage/api-settings.js';
-import { generateProviderText, completeProviderWithTools, supportsProviderToolCalling } from '../api/providers/provider-registry.js';
-import { runToolCalling } from '../tools/tool-calling-service.js';
+import { generateProviderText } from '../api/providers/provider-registry.js';
 import {
   getTavernCharacterSnapshot,
   getTavernCharacterForContact,
@@ -262,9 +261,6 @@ export async function generatePrivateReply({
   allowNoPendingUser = false,
   fourthWallCommentary = null,
   regenerateFromMessageId = '',
-  confirmTool = null,
-  confirmIdentityHandoff = null,
-  toolOrigin = 'private_chat',
 } = {}) {
   if (!scopeKey || !conversationKey) {
     throw new Error('当前会话不可用');
@@ -462,33 +458,8 @@ export async function generatePrivateReply({
     if (!text) throw new Error('酒馆当前 API 返回了空回复');
     if (!(isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false)) onDelta?.(text, text);
     result = { text, raw: null };
-  } else if (!isFourthWall && supportsProviderToolCalling(config)) {
-    const toolContext = { actorId: String(contact?.id || ''), origin: String(toolOrigin || 'private_chat') };
-    const toolResult = await runToolCalling({
-      request,
-      signal,
-      toolContext,
-      confirmTool,
-      confirmIdentityHandoff,
-      adapter: {
-        complete: ({ request: toolRequest, tools, history, signal: toolSignal }) =>
-          completeProviderWithTools(config, toolRequest, { tools, history, signal: toolSignal }),
-      },
-    });
-    if (toolResult.skipped === 'no-tools') {
-      result = await generateProviderText(config, request, { signal, onDelta });
-    } else {
-      const text = String(toolResult.text || '').trim();
-      if (!text) throw new Error('工具调用完成后模型没有返回最终回复');
-      onDelta?.(text, text);
-      result = { text, raw: null, toolCalling: { mode: 'native', usedTools: toolResult.usedTools, rounds: toolResult.rounds, discoveryErrors: toolResult.discoveryErrors } };
-    }
   } else {
-    try {
-      result = await generateProviderText(config, request, { signal, onDelta: isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false ? undefined : onDelta });
-    } catch (error) {
-      throw new Error(`普通模型生成请求失败：${String(error?.message || error || '未知错误')}`, { cause: error });
-    }
+    result = await generateProviderText(config, request, { signal, onDelta: isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false ? undefined : onDelta });
   }
 
   if (momentEventIds.length) markMomentChatEventsDelivered(scopeKey, contact.id, momentEventIds);
@@ -1323,12 +1294,6 @@ function parseMomentRefreshDecision(rawText = '') {
     if (action === 'POST+私聊' || action === 'POST+CHAT') action = 'POST+PRIVATE_CHAT';
     if (!['SKIP', 'POST', 'PRIVATE_CHAT', 'POST+PRIVATE_CHAT'].includes(action)) action = 'SKIP';
     const content = String(value?.content || '').trim();
-    const rawPosts = Array.isArray(value?.posts) ? value.posts : (content ? [{ content, ageMinutes: value?.ageMinutes, onlyUserVisible: value?.onlyUserVisible }] : []);
-    const posts = rawPosts.slice(0, 3).map(item => ({
-      content: String(item?.content || '').trim().slice(0, 2000),
-      ageMinutes: Math.max(0, Math.min(2880, Number(item?.ageMinutes) || 0)),
-      onlyUserVisible: Boolean(item?.onlyUserVisible),
-    })).filter(item => item.content);
     const rawPrivate = Array.isArray(value?.privateMessages) ? value.privateMessages : (value?.privateChat ? [value.privateChat] : []);
     const privateMessages = rawPrivate.map(item => String(item || '').trim()).filter(Boolean).slice(0, 3);
     const ageMinutes = Math.max(0, Math.min(2880, Number(value?.ageMinutes) || 0));
@@ -1345,9 +1310,9 @@ function parseMomentRefreshDecision(rawText = '') {
       content: String(item?.content || '').trim().slice(0, 500),
       replyToId: String(item?.replyToId || '').trim(),
     })).filter(item => item.targetMomentId && item.action) : [];
-    if ((action === 'POST' || action === 'POST+PRIVATE_CHAT') && !posts.length) action = action === 'POST+PRIVATE_CHAT' && privateMessages.length ? 'PRIVATE_CHAT' : 'SKIP';
-    if ((action === 'PRIVATE_CHAT' || action === 'POST+PRIVATE_CHAT') && !privateMessages.length) action = action === 'POST+PRIVATE_CHAT' && posts.length ? 'POST' : 'SKIP';
-    return { action, content: posts[0]?.content || '', posts, ageMinutes, statusNote, onlyUserVisible: posts[0]?.onlyUserVisible || false, interactions, privateMessages };
+    if ((action === 'POST' || action === 'POST+PRIVATE_CHAT') && !content) action = action === 'POST+PRIVATE_CHAT' && privateMessages.length ? 'PRIVATE_CHAT' : 'SKIP';
+    if ((action === 'PRIVATE_CHAT' || action === 'POST+PRIVATE_CHAT') && !privateMessages.length) action = action === 'POST+PRIVATE_CHAT' && content ? 'POST' : 'SKIP';
+    return { action, content: content.slice(0, 2000), ageMinutes, statusNote, onlyUserVisible: action === 'POST' || action === 'POST+PRIVATE_CHAT' ? onlyUserVisible : false, interactions, privateMessages };
   } catch {
     return fallback;
   }
@@ -1523,7 +1488,6 @@ ${personaParts}
 
 ` : ''}【原则】
 - 朋友圈是这个角色自己的社交表达，不是给用户的聊天回复，也不是剧情摘要。
-- 每次刷新允许自然出现 0~3 条新动态；不要为了凑数量硬发，0 条完全合法。若有多条，它们应像角色一段时间内自然积累的不同动态，而不是把同一件事拆成三条。
 - 若角色只想让 User 一个人看到本条，可令 onlyUserVisible=true；这是角色自己的可见范围选择，不要求使用。
 - 可以很日常、零碎、含蓄、带角色自己的习惯；不要为了“有内容”强编重大事件。
 - 可以来自最近聊天/群聊/角色世界的余波，但不要无脑公开私聊原文或他人秘密。
@@ -1572,8 +1536,8 @@ ${replaceUserPlaceholder(getBuiltinPersonaPrompt('builtin:writer'), getTavernUse
 ${replaceUserPlaceholder(getBuiltinPersonaPrompt('builtin:guide'), getTavernUserContext().name)}
 
 ${proactiveEnabled ? '' : '【硬边界】主动私聊当前关闭：action 不得为 PRIVATE_CHAT / POST+PRIVATE_CHAT，privateMessages 必须为空。\n\n'}请只返回一个 JSON：
-{"action":"SKIP|POST|PRIVATE_CHAT|POST+PRIVATE_CHAT","posts":[{"content":"朋友圈正文","ageMinutes":0,"onlyUserVisible":false}],"privateMessages":["仅主动私聊时填写，1~3条真实手机气泡；主动私聊关闭时必须为空"],"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；互动本轮第1/2/3条新动态可填 __NEW__ / __NEW_2__ / __NEW_3__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论时填写；DELETE_COMMENT 时作为 deletionReason","replyToId":"可选，回复某条评论 id"}]}。
-posts 必须是 0~3 条；没有自然发帖动机时返回空数组。ageMinutes 范围 0~2880。interactions 可以为空。`;
+{"action":"SKIP|POST|PRIVATE_CHAT|POST+PRIVATE_CHAT","content":"POST 时填写朋友圈正文，否则空字符串","privateMessages":["仅主动私聊时填写，1~3条真实手机气泡；主动私聊关闭时必须为空"],"ageMinutes":0,"onlyUserVisible":false,"statusNote":"SKIP 时尤其需要；8~30字左右的此刻状态切片","interactions":[{"targetMomentId":"已有 momentId；若要互动本轮新发动态则填 __NEW__","actorType":"contact|writer|guide|npc","actorId":"内置/角色 id；npc 可留空","actorName":"显示名","npcSourceKey":"npc 时必须填写","action":"LIKE|COMMENT|BOTH|DELETE_COMMENT","commentId":"删除评论时填写","content":"评论时填写；DELETE_COMMENT 时作为 deletionReason","replyToId":"可选，回复某条评论 id"}]}。
+ageMinutes 范围 0~2880。interactions 可以为空。`;
 
   const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal });
   const text = String(result?.text || '').trim();
@@ -1586,8 +1550,7 @@ posts 必须是 0~3 条；没有自然发帖动机时返回空数组。ageMinute
   if (pendingMomentEventIds.length) markMomentChatEventsDelivered(scopeKey, contact.id, pendingMomentEventIds);
   return {
     ...decision,
-    posts: (decision.posts || []).map(post => ({ ...post, createdAt: Date.now() - Number(post.ageMinutes || 0) * 60 * 1000 })),
-    createdAt: decision.action === 'POST' && decision.posts?.[0] ? Date.now() - Number(decision.posts[0].ageMinutes || 0) * 60 * 1000 : 0,
+    createdAt: decision.action === 'POST' ? Date.now() - decision.ageMinutes * 60 * 1000 : 0,
     npcSources,
   };
 }
@@ -1647,18 +1610,17 @@ export async function generatePublicMomentsRefresh({ scopeKey, crossContactInter
  * what a character actually happened to browse during this refresh. It does not
  * force a reply and does not turn backend-visible posts into character knowledge.
  */
-export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], fixedPersonasCommunityEnabled = false, actorIds = [], signal } = {}) {
+export async function generateCommunityDiscoveryRefresh({ scopeKey, posts = [], fixedPersonasCommunityEnabled = false, signal } = {}) {
   if (!scopeKey) throw new Error('当前社区不可用');
   const visiblePosts = (Array.isArray(posts) ? posts : []).filter(post => post?.id).slice(-12);
   if (!visiblePosts.length) return { actors: [], proactivePosts: [] };
 
-  const requestedActorIds = new Set((Array.isArray(actorIds) ? actorIds : [actorIds]).map(String).filter(Boolean));
-  const candidates = [...communityWorldContacts(scopeKey)].filter(contact => !requestedActorIds.size || requestedActorIds.has(String(contact.id || '')));
+  const candidates = [...communityWorldContacts(scopeKey)];
   if (fixedPersonasCommunityEnabled) {
     const byId = new Map(getContacts().map(item => [String(item.id || ''), item]));
     for (const id of ['builtin:guide', 'builtin:meta', 'builtin:writer']) {
       const contact = byId.get(id);
-      if (contact && (!requestedActorIds.size || requestedActorIds.has(id)) && !candidates.some(item => String(item.id || '') === id)) candidates.push(hydratedContact(contact));
+      if (contact && !candidates.some(item => String(item.id || '') === id)) candidates.push(hydratedContact(contact));
     }
   }
   if (!candidates.length) return { actors: [], proactivePosts: [] };
