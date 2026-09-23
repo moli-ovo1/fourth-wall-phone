@@ -1,3 +1,9 @@
+## moli316 / v0.6.69 — Companion loopback diagnostics + extension cache refresh
+- Companion 配对测试改为分层诊断：先检查公开 `/v1/health`，再检查配对/Lease；不再把 health、401、CORS/PNA/超时统一显示为“没有发现 Companion”。
+- Loopback Bridge 同时接受 header 与 loopback query pairing token；Web GET 采用 simple request，POST 使用 `text/plain` JSON，减少移动 WebView 不必要的 CORS preflight，同时保留 Android PNA OPTIONS 响应。
+- 根入口 build version 对齐 manifest v0.6.69，强制刷新 moli 主模块缓存，避免宿主继续执行旧入口模块。
+- 不改变 Character Wake / Community / Story-Aligned / World Event / Awareness 语义。
+
 ## moli302 / v0.6.55 — Community Wake +「他的生活」社区动态
 - Character Wake 现在同时可给当前角色一次 Community Discovery 机会；User 不刷新社区也能发生自主浏览、回复与主动发帖。
 - 复用既有 Community Discovery/匿名身份/World Event/社区落库链，不另造第二套社区 AI。
