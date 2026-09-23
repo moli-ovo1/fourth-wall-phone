@@ -12,7 +12,8 @@ function configured() {
 
 function configFingerprint() {
   if (!configured()) return '';
-  return crypto.createHash('sha256').update(`${text(process.env[URL_ENV])}\n${text(process.env.MOLI_WAKE_MCP_BEARER)}`).digest('hex');
+  const readTools = text(process.env.MOLI_WAKE_MCP_READ_TOOLS).split(',').map(text).filter(Boolean).sort().join(',');
+  return crypto.createHash('sha256').update(`${text(process.env[URL_ENV])}\n${text(process.env.MOLI_WAKE_MCP_BEARER)}\n${readTools}`).digest('hex');
 }
 
 function sameBinding(left, right) {

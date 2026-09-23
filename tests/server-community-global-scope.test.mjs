@@ -64,3 +64,17 @@ test('global companion keeps one owner across character switches and never selec
   const listCandidates = selection.serverWakeCandidates('global:phone', [globalLin], contacts);
   assert.equal(selection.chooseServerWakeCandidate(listCandidates, {}).contact.id, 'custom:lin');
 });
+
+test('community Wake remains server managed while its optional MCP endpoint is unavailable', async () => {
+  const { selection } = await modules(vm.createContext({ window: {} }));
+  const contacts = [{ id: 'tavern:cheng', kind: 'tavern' }];
+  const conversation = { type: 'private', contactId: 'tavern:cheng', scopeMode: 'global',
+    automation: { communityWakeEnabled: true, externalWakeEnabled: true } };
+  const offline = selection.serverWakeCandidates('global:phone', [conversation], contacts, { mcpReady: false });
+  assert.equal(offline.length, 1);
+  assert.equal(offline[0].serverExternalEnabled, false);
+  const online = selection.serverWakeCandidates('global:phone', [conversation], contacts, { mcpReady: true });
+  assert.equal(online[0].serverExternalEnabled, true);
+  conversation.automation.communityWakeEnabled = false;
+  assert.equal(selection.serverWakeCandidates('global:phone', [conversation], contacts, { mcpReady: false }).length, 0);
+});

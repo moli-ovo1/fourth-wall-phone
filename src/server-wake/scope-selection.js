@@ -9,8 +9,8 @@ export function serverWakeCandidates(activeScopeKey, conversations, contacts, { 
   for (const conversation of conversations || []) {
     if (conversation?.type !== 'private' || conversation?.automation?.autoSuspended) continue;
     const automation = conversation.automation || {};
-    if ((automation.communityWakeEnabled !== true && automation.externalWakeEnabled !== true)
-        || (automation.externalWakeEnabled === true && !mcpReady)
+    const serverExternalEnabled = automation.externalWakeEnabled === true && mcpReady;
+    if ((!serverExternalEnabled && automation.communityWakeEnabled !== true)
         || automation.storyAlignedEnabled === true) continue;
     const contact = byId.get(id(conversation.contactId));
     if (!contact) continue;
@@ -21,7 +21,7 @@ export function serverWakeCandidates(activeScopeKey, conversations, contacts, { 
         || activeScopeKey === GLOBAL_PHONE_SCOPE_KEY) continue;
     const scopeKey = global ? GLOBAL_PHONE_SCOPE_KEY : activeScopeKey;
     const key = `${scopeKey}\u0000${id(contact.id)}`;
-    const candidate = { scopeKey, contact, conversation, global };
+    const candidate = { scopeKey, contact, conversation, global, serverExternalEnabled };
     const previous = unique.get(key);
     if (!previous || Number(conversation.updatedAt || 0) > Number(previous.conversation.updatedAt || 0)) unique.set(key, candidate);
   }

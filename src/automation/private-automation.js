@@ -124,18 +124,18 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
             : '多位人物开启后台社区试验；请只保留一位');
         }
         if (selected) {
-          const { contact, conversation: conv, scopeKey: wakeScopeKey, global } = selected;
+          const { contact, conversation: conv, scopeKey: wakeScopeKey, global, serverExternalEnabled } = selected;
           const a = conv.automation || {};
           serverWakeConversationKey = String(conv.conversationKey || conv.id);
           const cacheKey = `${wakeScopeKey}:${contact.id}`;
           const prior = serverWakeSnapshots.get(cacheKey);
           if (!prior || now - prior.syncedAt >= 20_000) {
             const request = buildWebWakeRequest({
-              scopeKey: wakeScopeKey, characterId: String(contact.id || ''), wakeType: a.externalWakeEnabled === true ? 'character' : 'community',
+              scopeKey: wakeScopeKey, characterId: String(contact.id || ''), wakeType: serverExternalEnabled ? 'character' : 'community',
               baseRevision: 0,
-              schedule: { externalWakeEnabled: a.externalWakeEnabled === true, communityWakeEnabled: a.communityWakeEnabled === true,
+              schedule: { externalWakeEnabled: serverExternalEnabled, communityWakeEnabled: a.communityWakeEnabled === true,
                 intervalMinutes: Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)) },
-              capabilities: { externalMcp: a.externalWakeEnabled === true, communityDiscovery: a.communityWakeEnabled === true },
+              capabilities: { externalMcp: serverExternalEnabled, communityDiscovery: a.communityWakeEnabled === true },
               metadata: { schedulerOwner: 'sillytavern-server', serverCommunityTrial: true,
                 scopeMode: global ? 'global' : 'current' },
             });

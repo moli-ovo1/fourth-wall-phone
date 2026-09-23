@@ -53,6 +53,20 @@ test('a requested write tool is rejected even when returned by the server', asyn
   assert.equal(mcp.sameBinding({ domain: 'mcp-account', accountId: 'old' }, { domain: 'mcp-account', accountId: 'new' }), false);
 });
 
+test('changes to the local read-tool authorization change the MCP fingerprint', () => {
+  const before = { url: process.env.MOLI_WAKE_MCP_URL, reads: process.env.MOLI_WAKE_MCP_READ_TOOLS };
+  try {
+    process.env.MOLI_WAKE_MCP_URL = 'https://mcp.example.test/account';
+    process.env.MOLI_WAKE_MCP_READ_TOOLS = 'read_news';
+    const first = mcp.configFingerprint();
+    process.env.MOLI_WAKE_MCP_READ_TOOLS = 'read_news,read_mail';
+    assert.notEqual(mcp.configFingerprint(), first);
+  } finally {
+    if (before.url === undefined) delete process.env.MOLI_WAKE_MCP_URL; else process.env.MOLI_WAKE_MCP_URL = before.url;
+    if (before.reads === undefined) delete process.env.MOLI_WAKE_MCP_READ_TOOLS; else process.env.MOLI_WAKE_MCP_READ_TOOLS = before.reads;
+  }
+});
+
 test('server accepts an external Wake only with one bound account and local HTTPS MCP configuration', () => {
   const prior = process.env.MOLI_WAKE_MCP_URL;
   const binding = { domain: 'mcp-account', characterId: 'actor', serverId: 'cedar', accountId: 'one', revision: '1', mode: 'dedicated' };
