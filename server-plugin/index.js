@@ -41,6 +41,13 @@ function validRequest(r) {
     && (r.schedule?.externalWakeEnabled !== true || (mcp.configured() && i.bindings.length === 1));
 }
 
+function mcpWakeAuthorized() {
+  const request = state.profile?.request;
+  return request?.schedule?.externalWakeEnabled === true && request.identity?.bindings?.length === 1
+    && mcp.sameBinding(request.identity.bindings[0], state.mcpBinding)
+    && Boolean(state.mcpConfigFingerprint) && state.mcpConfigFingerprint === mcp.configFingerprint();
+}
+
 function persist() {
   if (!filePath) return;
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -179,7 +186,20 @@ async function init(router) {
   });
   router.get('/status', (_req, res) => res.json({ ready: providerReady(), mcpReady: mcp.configured(), scopeKey: state.profile?.request?.scopeKey || '',
     characterId: state.profile?.request?.characterId || '', lastRunAt: state.lastRunAt,
-    lastStatus: state.lastStatus, pending: state.pending.length }));
+    lastStatus: state.lastStatus, pending: state.pending.length,
+    communityWakeEnabled: state.profile?.request?.schedule?.communityWakeEnabled === true,
+    externalWakeEnabled: state.profile?.request?.schedule?.externalWakeEnabled === true,
+    mcpBindingReady: mcpWakeAuthorized() }));
+  router.get('/mcp/probe', async (_req, res) => {
+    if (!mcpWakeAuthorized()) return res.status(409).json({ ok: false, error: 'mcp-wake-not-authorized' });
+    try { return res.json({ ok: true, ...(await mcp.probe()) }); }
+    catch (error) {
+      const message = value(error?.message);
+      const code = /^mcp-http-\d{3}$/.test(message) ? message
+        : error?.name === 'AbortError' ? 'mcp-timeout' : 'mcp-connection-failed';
+      return res.status(502).json({ ok: false, error: code });
+    }
+  });
   router.post('/snapshot', (req, res) => {
     const request = req.body;
     if (Buffer.byteLength(JSON.stringify(request || {})) > MAX_BODY_BYTES || !validRequest(request)) return res.status(400).json({ error: 'invalid-community-wake-snapshot' });

@@ -99,4 +99,13 @@ async function perform({ binding, choose, fetchImpl } = {}) {
   return { action: 'MCP_READ', toolName: tool.name, summary: safeSummary(result) || '工具已返回结果。' };
 }
 
-module.exports = { configured, configFingerprint, sameBinding, allowedTools, perform, _test: { parsePayload, safeSummary } };
+async function probe({ fetchImpl } = {}) {
+  const client = await connect({ fetchImpl });
+  const listed = await client.listTools();
+  const readable = allowedTools(listed);
+  return { toolCount: listed.length, readToolCount: readable.length,
+    readTools: readable.map(tool => text(tool.name).slice(0, 100)) };
+}
+
+module.exports = { configured, configFingerprint, sameBinding, allowedTools, perform, probe,
+  _test: { parsePayload, safeSummary } };

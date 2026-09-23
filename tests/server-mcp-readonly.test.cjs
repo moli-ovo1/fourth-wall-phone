@@ -67,6 +67,32 @@ test('changes to the local read-tool authorization change the MCP fingerprint', 
   }
 });
 
+test('MCP probe lists eligible read tools without calling a tool', async () => {
+  const before = { url: process.env.MOLI_WAKE_MCP_URL, reads: process.env.MOLI_WAKE_MCP_READ_TOOLS };
+  process.env.MOLI_WAKE_MCP_URL = 'https://mcp.example.test/account';
+  delete process.env.MOLI_WAKE_MCP_READ_TOOLS;
+  const methods = [];
+  try {
+    const fetchImpl = async (_url, options) => {
+      const message = JSON.parse(options.body);
+      methods.push(message.method);
+      const result = message.method === 'tools/list' ? { tools: [
+        { name: 'read_news', annotations: { readOnlyHint: true } },
+        { name: 'publish_post', annotations: { readOnlyHint: false } },
+      ] } : { protocolVersion: '2025-03-26' };
+      return { ok: true, status: message.method === 'notifications/initialized' ? 202 : 200,
+        headers: { get: key => key.toLowerCase() === 'content-type' ? 'application/json' : null },
+        text: async () => JSON.stringify({ jsonrpc: '2.0', id: message.id, result }) };
+    };
+    assert.deepEqual(await mcp.probe({ fetchImpl }),
+      { toolCount: 2, readToolCount: 1, readTools: ['read_news'] });
+    assert.deepEqual(methods, ['initialize', 'notifications/initialized', 'tools/list']);
+  } finally {
+    if (before.url === undefined) delete process.env.MOLI_WAKE_MCP_URL; else process.env.MOLI_WAKE_MCP_URL = before.url;
+    if (before.reads === undefined) delete process.env.MOLI_WAKE_MCP_READ_TOOLS; else process.env.MOLI_WAKE_MCP_READ_TOOLS = before.reads;
+  }
+});
+
 test('server accepts an external Wake only with one bound account and local HTTPS MCP configuration', () => {
   const prior = process.env.MOLI_WAKE_MCP_URL;
   const binding = { domain: 'mcp-account', characterId: 'actor', serverId: 'cedar', accountId: 'one', revision: '1', mode: 'dedicated' };

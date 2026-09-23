@@ -97,6 +97,9 @@ test('SillyTavern routes accept one owner and acknowledge only delivered results
     await plugin.init(router);
     plugin._test.setFilePath(path.join(dir, 'state.json'));
     assert.equal(invoke('POST', '/snapshot', { body: request() }).data.ok, true);
+    assert.equal(invoke('GET', '/status').data.externalWakeEnabled, false);
+    assert.equal(invoke('GET', '/status').data.mcpBindingReady, false);
+    assert.equal(invoke('GET', '/mcp/probe').statusCode, 409);
     assert.equal(invoke('GET', '/status', { handle: 'other' }).statusCode, 403);
     const second = request(); second.characterId = 'character:eve'; second.characterSnapshot.actor.id = 'character:eve';
     second.identity.character.id = 'character:eve';
