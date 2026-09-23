@@ -4,9 +4,19 @@
 
 ## 手机安装
 
-前端安装本分支的 `manifest.json`、`index.js`、`src/`、`assets/`、`style.css` 到现有 moli 扩展目录；服务器端把本目录的 `index.js`、`package.json` 复制到 `$ST_DIR/plugins/moli-server-wake/`。不要复制此目录的 `data/`，升级时也保留现有 `data/`。在 `$ST_DIR/config.yaml` 设置 `enableServerPlugins: true`。修改后完整重启 SillyTavern，仅刷新网页不足以装载服务器插件。
+安装包根目录的 `install-termux.sh` 会备份现有 moli 前端、复制前端与服务器插件文件、启用 `enableServerPlugins`，并在 Termux 本地提示输入 Provider 地址、模型和 API Key。它不会自动终止或重启 SillyTavern。不要复制本目录的 `data/`，升级时也保留现有 `data/`。完整重启 SillyTavern 才会装载服务器插件，仅刷新网页不足以装载。
 
-在启动 SillyTavern 的同一个 Termux 会话中设置 Provider 环境变量：
+把 ZIP 放到手机的“下载”目录后，在 Termux 运行：
+
+```sh
+cd ~
+unzip -o ~/storage/downloads/moli-server-community-mvp-v1.zip -d moli-server-community-mvp-v1
+bash ~/moli-server-community-mvp-v1/install-termux.sh
+```
+
+如果 `~/storage/downloads` 不存在，先运行 `termux-setup-storage` 并允许文件访问。若提示找不到 `unzip`，运行 `pkg install unzip`。安装脚本完成后停止旧 SillyTavern，再运行 `bash ~/start-moli-server-wake.sh`。
+
+安装脚本创建了仅 Termux 用户可读的 `~/.moli-server-wake.env` 和启动脚本。若不使用安装脚本，也可在启动 SillyTavern 的同一个 Termux 会话中手动设置 Provider 环境变量：
 
 ```sh
 export MOLI_WAKE_BASE_URL='https://api.yuyanjia.top/v1'
