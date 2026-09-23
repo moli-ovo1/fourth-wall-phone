@@ -13,6 +13,7 @@ import { requestCommunityWake } from './community-wake-service.js';
 import { acquireWebSchedulerLease, releaseWebSchedulerLease } from './scheduler-lease.js';
 import { buildWebWakeRequest } from './wake-snapshot-builder.js';
 import { acquireCompanionWebLease, syncWakeRequestToCompanion } from '../companion/web-handoff.js';
+import { serverWakeReady, syncServerWakeRequest, recoverServerWakeResults } from '../server-wake/client.js';
 
 const POLL_MS = 5000;
 const AUTO_CHAT_OPPORTUNITY_MS = 5 * 60 * 1000;
@@ -78,6 +79,7 @@ function parseBehaviorDecision(rawText = '', { allowPost = true, allowPrivate = 
 export function createPrivateAutomation({ getScopeKey } = {}) {
   let timer = null; let destroyed = false; let lastOpportunityAt = 0;
   const revisionSnapshots = new Map();
+  const serverWakeSnapshots = new Map();
   const tick = async () => {
     if (destroyed) return;
     const scopeKey = getScopeKey?.(); if (!scopeKey) return;
@@ -97,6 +99,12 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
     const now = Date.now();
     const companionLease = await acquireCompanionWebLease(scopeKey, now);
     const wakeLease = companionLease.acquired ? acquireWebSchedulerLease(now) : { acquired: false, lease: companionLease.lease || {} };
+    const serverAvailable = await serverWakeReady();
+    if (serverAvailable) {
+      try { await recoverServerWakeResults(scopeKey); }
+      catch (error) { console.warn('[moli小手机] Server Wake 结果回放失败', error); }
+    }
+    let serverWakeSelected = false;
 
     let editedEvent = null;
     if (revisions.available) {
@@ -142,8 +150,38 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
         && a.storyAlignedEnabled === true
         && String(a.storyAlignedScopeKey || '') === String(scopeKey)
         && (!a.storyAlignedSourceId || String(a.storyAlignedSourceId) === String(contact?.source?.sourceId || ''));
+      let serverManagedCommunityWake = false;
+      if (serverAvailable && !serverWakeSelected && contact.kind === 'tavern' && !storyAligned
+          && a.communityWakeEnabled === true && a.externalWakeEnabled !== true) {
+        serverWakeSelected = true;
+        serverManagedCommunityWake = true;
+        const cacheKey = `${scopeKey}:${contact.id}`;
+        try {
+          const prior = serverWakeSnapshots.get(cacheKey);
+          if (!prior || now - prior.syncedAt >= 20_000) {
+            const request = buildWebWakeRequest({
+              scopeKey, characterId: String(contact.id || ''), wakeType: 'community',
+              baseRevision: Number(wakeLease.lease?.epoch || 0),
+              schedule: { externalWakeEnabled: false, communityWakeEnabled: true,
+                intervalMinutes: Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)) },
+              capabilities: { externalMcp: false, communityDiscovery: true },
+              metadata: { schedulerOwner: 'sillytavern-server', serverCommunityTrial: true },
+            });
+            if (prior?.wakeId) {
+              request.wakeId = prior.wakeId;
+              request.identity.authorizationId = prior.wakeId;
+            }
+            await syncServerWakeRequest(request);
+            serverWakeSnapshots.set(cacheKey, { syncedAt: now, wakeId: request.wakeId });
+          }
+        } catch (error) {
+          console.warn('[moli小手机] Server Wake 同步或回放失败', error);
+        }
+      }
       let stagedCompanionWakeRequest = null;
       if (
+        !serverManagedCommunityWake
+        &&
         companionLease.available === true
         && wakeLease.acquired
         && eligibleAutoChatContact(contact)
@@ -240,6 +278,7 @@ export function createPrivateAutomation({ getScopeKey } = {}) {
       } else if (
         eligibleAutoChatContact(contact)
         && !storyAligned
+        && !serverManagedCommunityWake
         && (a.externalWakeEnabled === true || a.communityWakeEnabled === true)
         && now - Number(a.lastCharacterWakeAt || 0) >= Math.max(15, Math.min(720, Number(a.characterWakeIntervalMinutes) || 60)) * 60 * 1000
       ) {
