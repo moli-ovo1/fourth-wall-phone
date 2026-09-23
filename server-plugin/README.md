@@ -38,3 +38,14 @@ bash start.sh
 3. 打开 moli；全局陪伴人物可在酒馆列表页回注，正文人物回到原聊天回注。等几秒，再检查对应作用域的社区帖子及生活日志。`pending` 应归零。若是 SKIP，则没有帖子；这不是传输失败。可再次查询 status。已有正文作用域的社区数据不会自动并入全局作用域，以免把不同正文世界混在一起。
 
 单角色正文作用域的 SKIP 与全局作用域的 POST/SKIP 已通过用户手机端到端验收。只读 MCP 路径目前只通过本地模拟测试，尚未完成真机 MCP 调用。Android Companion 不参与服务器试验链路。SillyTavern 进程被系统终止时服务器调度也会停止；浏览器关闭但服务器仍运行是本方案的必要条件。
+
+## 已安装旧版的升级补丁
+
+仓库中的前端、服务器插件和测试是正式源码；`delivery-server-community-mcp-v7.zip` 是从这些源码生成的手机交付包，不需要把 ZIP 解压进 Git 仓库。已按上面的步骤安装过社区试验版时，将 v7 ZIP 放到手机“下载”目录，在 Termux 中运行：
+
+```sh
+unzip -o ~/storage/downloads/delivery-server-community-mcp-v7.zip -d ~
+bash ~/delivery-server-community-mcp-v7/apply-termux.sh
+```
+
+补丁脚本会核对现有扩展和服务器插件，备份要覆盖的文件，再更新社区刷新与只读 MCP 程序；Provider 原配置保留。MCP 地址可在脚本提示时于手机本地输入，暂不使用则直接回车。停止旧 SillyTavern 后运行 `bash ~/start-moli-server-wake.sh`，在 Via 完整刷新。`/api/plugins/moli-server-wake/status` 的 `ready` 表示 Provider 可用，`mcpReady` 表示本机配置了 HTTPS MCP 地址。即使 `mcpReady` 为 false，已开启的社区后台仍应运行。只读 MCP 真机调用及授权回注仍需单独验收。
