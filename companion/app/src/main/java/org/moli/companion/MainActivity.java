@@ -1,6 +1,9 @@
 package org.moli.companion;
 
 import android.app.Activity;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -14,6 +17,7 @@ import org.moli.companion.wake.CompanionWakeScheduler;
 public final class MainActivity extends Activity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        requestNotificationPermission();
         BridgeForegroundService.start(this);
         CompanionWakeScheduler.ensureScheduled(getApplicationContext());
         BridgeStore store = new BridgeStore(getApplicationContext());
@@ -22,8 +26,8 @@ public final class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(48,48,48,48);
         TextView status = new TextView(this); status.setGravity(Gravity.CENTER_HORIZONTAL);
         Runnable refreshBridgeStatus = () -> {
-            if (BridgeForegroundService.bridgeRunning()) status.setText("moli Companion 0.1.7\n\n本机 Bridge 前台服务已启动 · 17463\n\n配对码：\n" + store.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）");
-            else status.setText("moli Companion 0.1.7\n\nBridge 正在启动。若几秒后仍无法访问，请点刷新诊断。\n" + BridgeForegroundService.bridgeError() + "\n\n配对码：\n" + store.pairingToken());
+            if (BridgeForegroundService.bridgeRunning()) status.setText("moli Companion 0.1.8\n\n本机 Bridge 前台服务已启动 · 17463\n\n配对码：\n" + store.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）");
+            else status.setText("moli Companion 0.1.8\n\nBridge 正在启动。若几秒后仍无法访问，请点刷新诊断。\n" + BridgeForegroundService.bridgeError() + "\n\n配对码：\n" + store.pairingToken());
         };
         refreshBridgeStatus.run();
         status.postDelayed(refreshBridgeStatus, 500);
@@ -45,5 +49,11 @@ public final class MainActivity extends Activity {
         refresh.run();
 
         ScrollView scroll = new ScrollView(this); scroll.addView(box); setContentView(scroll);
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 17463);
+        }
     }
 }
