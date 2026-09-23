@@ -1911,6 +1911,9 @@ export async function generatePublicWebRefresh({ scopeKey, ghostStoriesEnabled =
   if (nativeRoster) context = [context, nativeRoster].filter(Boolean).join('\n\n');
   const communityEchoes=listCommunityEchoes(scopeKey,{limit:2});
   if(communityEchoes.length){context=[context,`【近期社区余波】\n以下旧帖已经留下了可继续发酵的公开痕迹。它们只是本轮可用素材，不要求逐条续写；若自然合适，可让本轮约1~2条新内容从旁观者、媒体、网友或相关人物角度继续讨论其公开后果。不要复刻旧帖。\n${communityEchoes.map(x=>`- ${x.summary}${x.userParticipation?`；User 已参与 ${x.userParticipation} 次`:''}`).join('\n')}`].filter(Boolean).join('\n\n');}
+  const eligibleSections=section==='recommend' ? new Set((Array.isArray(recommendSources)&&recommendSources.length?recommendSources:['tianya','xiaohongshu','zhihu','custom']).flatMap(x=>x==='custom'?['custom']:x)) : new Set([section]);
+  const characterPosts=listPublicWebPosts(scopeKey).filter(p=>eligibleSections.has(p.section)&&p.author?.type==='character'&&!p.extra?.initialEcologySettled&&!(p.comments||[]).length&&!(p.extra?.answers||[]).length).slice(0,4);
+  if(characterPosts.length){context=[context,`【本次刷新同时补齐角色旧帖的初始互动】\n下面是已经真实发布、保存在当前社区范围内的角色帖子。它们不是新帖，不能在 posts 中重新生成。请在 characterPostEcology 中按原 postId 给每一帖补自然的首次公开互动：天涯/小红书/微博/自创社区使用 comments（约 3~8 条，允许不同立场和少量回复）；知乎问题使用 answers（约 2~4 个立场不同的回答，每个回答可附评论）。评论者只知道帖子公开内容和其本人合理可知的信息。\n${characterPosts.map(p=>`- postId=${p.id}；section=${p.section}；作者=${p.author?.name||'角色'}；标题=${String(p.title||'').slice(0,140)}；正文=${String(p.content||'').slice(0,900)}`).join('\n')}`].filter(Boolean).join('\n\n');}
   if(section==='weibo'){
     const pendingUserPosts=listPublicWebPosts(scopeKey,{section:'weibo'}).filter(p=>p.author?.type==='user'&&!p.extra?.initialEcologySettled).slice(-4);
     context=[context,`【本次微博整站刷新】
@@ -2020,7 +2023,8 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
     : section === 'xiaohongshu'
         ? `返回：{"posts":[{"section":"xiaohongshu","type":"note","author":"昵称","authorId":"可选稳定id","imageDescription":"图片实际呈现的内容","imageText":"图片里出现的文字","title":"图片下方的笔记标题","content":"点进详情后的正文，可为空","tags":["自然话题"],"comments":[{"author":"网友","content":"评论","replyTo":"可选，被回复评论的序号或昵称；允许回复主评论或此前任意子回复"}]}]}。生成 6~8 条；每篇笔记按热度生成初始互动：普通约5~8条、活跃约8~12条、热门或争议约12~18条，混合顶层评论与下级回复。不要 markdown。`
         : `返回：{"posts":[{"section":"zhihu","type":"question","author":"题主昵称","authorId":"可选","title":"问题标题","content":"问题补充，可为空","answers":[{"author":"回答者昵称","authorId":"可选","content":"回答正文","upvotes":0,"comments":[{"author":"评论者","content":"评论"}]}]}]}。生成 6~8 个问题；每题按热度形成约5~18条初始互动，由风格明显不同的独立回答与回答下评论共同构成，不要求全部都是回答。不要 markdown。`;
-  const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【当前可参考的故事上下文】\n${context}\n\n${schema}`;
+  const ecologySchema=characterPosts.length?'\n另外在同一个 JSON 根对象中返回 "characterPostEcology":[{"postId":"仅填写上面提供的角色旧帖 id","comments":[{"author":"网友昵称","authorId":"可选稳定 id","content":"评论","replyToCommentId":"可选，回复本批前一条评论时填写其 1-based 序号"}],"answers":[{"author":"知乎回答者","authorId":"可选稳定 id","content":"回答","comments":[{"author":"网友","content":"回答下的评论"}]}]}]。仅知乎使用 answers，其他社区只使用 comments；不要重复角色帖子。':' ';
+  const user = `当前时间：${new Date().toString()}\n当前用户称呼：${userName}\n\n【当前可参考的故事上下文】\n${context}\n\n${schema}${ecologySchema}`;
   const result = await runGeneration(config, { system, messages: [{ role: 'user', content: user }] }, { signal, timeoutMs: 120000 });
   const text = String(result?.text || '').trim();
   let parsedEnvelope={}; try{const raw=String(text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');parsedEnvelope=JSON.parse(raw);}catch{try{const m=String(text||'').match(/\{[\s\S]*\}/);parsedEnvelope=m?JSON.parse(m[0]):{};}catch{parsedEnvelope={};}}
@@ -2034,6 +2038,8 @@ AI、API、Prompt、代码、SillyTavern、插件、模型、世界书、角色�
   if(section==='weibo'){for(const post of posts){const dm=String(post.extra?.privateMessage||'').trim();const id=String(post.author?.id||post.author?.name||'').trim();const name=String(post.author?.name||id).trim();if(dm&&id&&name){saveWeiboMessagePeer(scopeKey,{id,name});addWeiboPrivateMessage(scopeKey,id,{role:'account',content:dm});}}}
   if(section==='weibo'&&!String(weiboQuery||'').trim())updateWeiboSupertopicStates(scopeKey,posts);
   if(section==='weibo'){posts.hotTopics=(Array.isArray(parsedEnvelope?.hotTopics)?parsedEnvelope.hotTopics:[]).map(String).filter(Boolean).slice(0,8);posts.userPostComments=Array.isArray(parsedEnvelope?.userPostComments)?parsedEnvelope.userPostComments.slice(0,4):[];const actorMap=new Map(listNetworkActors(scopeKey).map(x=>[String(x.id),x]));for(const action of (Array.isArray(parsedEnvelope?.actorActions)?parsedEnvelope.actorActions:[]).slice(0,6)){const actor=actorMap.get(String(action?.actorId||''));const kind=String(action?.action||'SKIP').toUpperCase();const content=String(action?.content||'').trim();if(!actor||!content||kind==='SKIP')continue;const publicId=String(actor.publicIds?.[0]||actor.name||actor.id);if(kind==='PRIVATE'){saveWeiboMessagePeer(scopeKey,{id:publicId,name:actor.name||publicId,profile:actor.profile||''});addWeiboPrivateMessage(scopeKey,publicId,{role:'account',content});}else if(kind==='PUBLIC'){posts.push({id:`web_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,section:'weibo',type:'weibo',author:{type:'internet_actor',id:publicId,name:actor.name||publicId,networkActorId:actor.id},title:'',content,media:[],tags:[],comments:[],createdAt:Date.now(),extra:{weiboLane:'实时',proactiveNetworkActor:true}});}}}
+  const characterIds=new Set(characterPosts.map(p=>String(p.id)));
+  posts.characterPostEcology=(Array.isArray(parsedEnvelope?.characterPostEcology)?parsedEnvelope.characterPostEcology:[]).filter(x=>characterIds.has(String(x?.postId||''))).slice(0,characterPosts.length);
   if(communityEchoes.length)markCommunityEchoesConsumed(scopeKey,communityEchoes.map(x=>x.id));
   return posts;
 }
