@@ -1,6 +1,8 @@
 const BASE = 'http://127.0.0.1:17463/v1';
+const SERVER_BASE = '/api/plugins/moli-companion';
 const TOKEN_KEY = 'moli-phone:companion-pairing-token:v1';
 const text = value => String(value ?? '').trim();
+let serverBridgeInstalled;
 
 function bridgeError(code, stage, message, detail = {}) {
   return Object.assign(new Error(message), { code, stage, ...detail });
@@ -50,15 +52,57 @@ function formBridge(op,{body={},token=getCompanionPairingToken(),timeoutMs=8000,
 export function getCompanionPairingToken() { try { return text(localStorage.getItem(TOKEN_KEY)); } catch { return ''; } }
 export function setCompanionPairingToken(value) { try { const v=text(value); if(v) localStorage.setItem(TOKEN_KEY,v); else localStorage.removeItem(TOKEN_KEY); return v; } catch { return ''; } }
 
+function sameOriginRequest(method, path, { headers={}, body, timeoutMs=8000, stage='server' }={}) {
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open(method,path,true);xhr.timeout=timeoutMs;
+    for(const [name,value] of Object.entries(headers))xhr.setRequestHeader(name,value);
+    xhr.onload=()=>{
+      let value;
+      try { value=xhr.responseText ? JSON.parse(xhr.responseText) : null; }
+      catch { value=null; }
+      resolve({status:xhr.status,ok:xhr.status>=200&&xhr.status<300,value});
+    };
+    xhr.onerror=()=>reject(bridgeError('COMPANION_NETWORK',stage,`${stage} same-origin request failed`));
+    xhr.ontimeout=()=>reject(bridgeError('COMPANION_TIMEOUT',stage,`${stage} same-origin request timed out`));
+    xhr.send(body===undefined?null:JSON.stringify(body));
+  });
+}
+
+async function serverHealth(timeoutMs) {
+  if(typeof XMLHttpRequest==='undefined')return null;
+  const response=await sameOriginRequest('GET',`${SERVER_BASE}/health`,{timeoutMs,stage:'server-health'});
+  serverBridgeInstalled=response.status!==404;
+  return serverBridgeInstalled?response:null;
+}
+
+async function callServer(operation,body,token,timeoutMs,stage) {
+  if(serverBridgeInstalled===undefined)await serverHealth(timeoutMs);
+  if(!serverBridgeInstalled)return {available:false};
+  const csrf=await sameOriginRequest('GET','/csrf-token',{timeoutMs,stage:'csrf'});
+  if(!csrf.ok||!csrf.value?.token)throw bridgeError('COMPANION_SERVER_HTTP','csrf','SillyTavern CSRF token unavailable',{status:csrf.status});
+  const response=await sameOriginRequest('POST',`${SERVER_BASE}/call`,{
+    timeoutMs,stage,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.value.token,'X-Moli-Pairing-Token':token},
+    body:{operation,body},
+  });
+  if(!response.ok)throw bridgeError(response.status===401?'COMPANION_PAIRING_REJECTED':'COMPANION_SERVER_HTTP',stage,response.value?.error||`SillyTavern bridge HTTP ${response.status}`,{status:response.status});
+  const upstreamStatus=Number(response.value?.status);
+  if(!Number.isInteger(upstreamStatus)||!response.value?.body||typeof response.value.body!=='object')throw bridgeError('COMPANION_RESPONSE_FORMAT',stage,'SillyTavern bridge returned an invalid response');
+  if(upstreamStatus>=400)throw bridgeError(upstreamStatus===401?'COMPANION_PAIRING_REJECTED':'COMPANION_HTTP',stage,response.value.body.error||`Companion bridge HTTP ${upstreamStatus}`,{status:upstreamStatus});
+  return {available:true,value:response.value.body};
+}
+
 async function call(path, { method='GET', body, token=getCompanionPairingToken(), timeoutMs=8000, fetchImpl=fetch, stage='lease' } = {}) {
   if (!token) throw new Error('Companion pairing token is not configured.');
+  const route=path.split('?')[0],scopeKey=new URLSearchParams(path.split('?')[1]||'').get('scopeKey')||body?.scopeKey||'';
+  const operations={ 'GET /lease':'lease-get','POST /lease/cas':'lease-cas','POST /wake-request':'wake-request-post','GET /wake-results':'wake-results-get','POST /wake-results/ack':'wake-results-ack','POST /mcp-profile':'mcp-profile-post' };
+  const op=operations[`${method} ${route}`];
+  if(op){const viaServer=await callServer(op,{...(body||{}),scopeKey},token,timeoutMs,stage);if(viaServer.available)return viaServer.value;}
   let response;
   try { response = await fetchWithTimeout(`${BASE}${path}`, { method, cache:'no-store', headers:{ 'Content-Type':'application/json', 'X-Moli-Pairing-Token':token }, body:body===undefined?undefined:JSON.stringify(body) }, { fetchImpl, timeoutMs, stage }); }
   catch(error){
     if(typeof document==='undefined')throw error;
-    const route=path.split('?')[0],scopeKey=new URLSearchParams(path.split('?')[1]||'').get('scopeKey')||body?.scopeKey||'';
-    const operations={ 'GET /lease':'lease-get','POST /lease/cas':'lease-cas','POST /wake-request':'wake-request-post','GET /wake-results':'wake-results-get','POST /wake-results/ack':'wake-results-ack','POST /mcp-profile':'mcp-profile-post' };
-    const op=operations[`${method} ${route}`];if(!op)throw error;
+    if(!op)throw error;
     return formBridge(op,{body:{...(body||{}),scopeKey},token,timeoutMs,stage});
   }
   const value = await readJsonResponse(response, stage);
@@ -69,6 +113,16 @@ const q = scopeKey => `?scopeKey=${encodeURIComponent(text(scopeKey))}`;
 export async function diagnoseCompanion({ fetchImpl=fetch, timeoutMs=8000 } = {}) {
   const token=getCompanionPairingToken();
   if(!token)return {ok:false,stage:'configuration',code:'COMPANION_TOKEN_MISSING'};
+  try {
+    const viaServer=await serverHealth(timeoutMs);
+    if(viaServer){
+      if(!viaServer.ok)return {ok:false,stage:'server-health',code:viaServer.status===504?'COMPANION_TIMEOUT':'COMPANION_SERVER_HTTP',status:viaServer.status,transport:'server'};
+      const health=viaServer.value;
+      if(health?.ok!==true||Number(health?.protocol)!==1)return {ok:false,stage:'server-health',code:'COMPANION_HEALTH_FORMAT',health,transport:'server'};
+      try {await callServer('lease-get',{scopeKey:'__pairing_probe__'},token,timeoutMs,'lease');return {ok:true,stage:'complete',code:'COMPANION_OK',health,transport:'server'};}
+      catch(error){return {ok:false,stage:error.stage||'lease',code:error.code||'COMPANION_NETWORK',status:error.status,message:error.message,health,transport:'server'};}
+    }
+  } catch(error){return {ok:false,stage:error.stage||'server-health',code:error.code||'COMPANION_NETWORK',message:error.message,transport:'server'};}
   let health,usedFormBridge=false;
   try {
     const response=await fetchWithTimeout(`${BASE}/health`,{method:'GET',cache:'no-store',headers:{Accept:'application/json'}},{fetchImpl,timeoutMs,stage:'health'});

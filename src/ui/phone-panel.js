@@ -8912,16 +8912,17 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
     void diagnoseCompanion().then(result => {
       if (!companionStatus) return;
       const messages = {
-        COMPANION_OK: result.transport === 'form' ? 'Companion 已配对；浏览器限制了 OPTIONS，现已通过本机表单通道连接。' : 'Companion Bridge 已发现；health、OPTIONS 与配对认证均正常。',
+        COMPANION_OK: result.transport === 'server' ? 'Companion 已配对；现通过 SillyTavern 本机服务器连接。' : result.transport === 'form' ? 'Companion 已配对；浏览器限制了 OPTIONS，现已通过本机表单通道连接。' : 'Companion Bridge 已发现；health、OPTIONS 与配对认证均正常。',
         COMPANION_TOKEN_MISSING: '尚未填写配对码。',
-        COMPANION_TIMEOUT: `${result.stage} 超时：请保持 Companion 在前台，并检查 VPN/浏览器本地网络限制。`,
-        COMPANION_NETWORK: result.stage === 'health' ? 'health 网络失败：浏览器无法访问 127.0.0.1:17463。请保持 Companion 前台并关闭 VPN 后重试。' : `${result.stage} 网络失败：health 已响应，但认证请求被浏览器的 CORS/Private Network Access 策略拦截。`,
+        COMPANION_TIMEOUT: result.transport === 'server' ? 'SillyTavern 服务器访问 Companion 超时；请在 Companion 中重启 Bridge 并检查 health 自检。' : `${result.stage} 超时：请保持 Companion 在前台，并检查 VPN/浏览器本地网络限制。`,
+        COMPANION_NETWORK: result.transport === 'server' ? '浏览器无法访问 SillyTavern 的 Companion 服务器插件；请确认酒馆仍在运行。' : result.stage === 'health' ? 'health 网络失败：浏览器无法访问 127.0.0.1:17463。请保持 Companion 前台并关闭 VPN 后重试。' : `${result.stage} 网络失败：health 已响应，但认证请求被浏览器的 CORS/Private Network Access 策略拦截。`,
         COMPANION_HEALTH_HTTP: `health 返回 HTTP ${result.status}。`,
         COMPANION_HEALTH_FORMAT: 'health 响应格式错误：未得到 {ok:true, protocol:1}。',
         COMPANION_RESPONSE_FORMAT: `${result.stage} 响应不是有效 JSON。`,
         COMPANION_OPTIONS_HTTP: `health 正常，但 OPTIONS 返回 HTTP ${result.status}；请检查 CORS/PNA。`,
-        COMPANION_PAIRING_REJECTED: 'health 与 OPTIONS 正常，但配对认证返回 401：请重新复制 Companion 当前配对码。',
+        COMPANION_PAIRING_REJECTED: 'Companion 配对认证返回 401：请重新复制当前配对码。',
         COMPANION_HTTP: `health 与 OPTIONS 正常，但 lease 返回 HTTP ${result.status}。`,
+        COMPANION_SERVER_HTTP: `SillyTavern 服务器连接失败（HTTP ${result.status || '?'}）；请检查 moli 服务器插件是否已启动，以及 Companion 的 health 自检。`,
       };
       companionStatus.textContent = messages[result.code] || `Companion ${result.stage} 检查失败：${result.message || result.code}`;
     });

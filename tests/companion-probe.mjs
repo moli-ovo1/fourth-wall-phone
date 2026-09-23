@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 async function load(token='pairing',browser={}){
-  const context=vm.createContext({AbortController,setTimeout,clearTimeout,URL,console,
+  const context=vm.createContext({AbortController,setTimeout,clearTimeout,URL,URLSearchParams,console,
+    fetch:()=>{throw new Error('unexpected browser fetch');},
     atob:value=>Buffer.from(value,'base64').toString('binary'),TextDecoder,Uint8Array,
     localStorage:{getItem:()=>token,setItem(){},removeItem(){}},...browser});
   const module=new vm.SourceTextModule(fs.readFileSync(path.join(root,'src/companion/loopback-transport.js'),'utf8'),{context});
@@ -25,6 +26,57 @@ function browserFormBridge(status=200){
   }})};
   return {window,document,calls};
 }
+function sameOriginServer(responses){
+  const calls=[];
+  class XMLHttpRequest {
+    open(method,path){this.method=method;this.path=path;this.headers={};}
+    setRequestHeader(name,value){this.headers[name]=value;}
+    send(body){
+      calls.push({method:this.method,path:this.path,headers:this.headers,body});
+      const next=responses.shift();this.status=next.status;this.responseText=JSON.stringify(next.body);
+      setTimeout(()=>this.onload(),0);
+    }
+  }
+  return {XMLHttpRequest,calls};
+}
+
+test('same-origin server bridge probes health and pairing without browser loopback fetch',async()=>{
+  const browser=sameOriginServer([
+    {status:200,body:{ok:true,protocol:1}},
+    {status:200,body:{token:'csrf'}},
+    {status:200,body:{status:200,body:{}}},
+  ]);
+  const api=await load('pairing',browser);
+  const result=await api.diagnoseCompanion({fetchImpl:()=>{throw new Error('browser loopback must not be used');}});
+  assert.equal(result.ok,true);assert.equal(result.transport,'server');
+  assert.deepEqual(browser.calls.map(call=>call.path),['/api/plugins/moli-companion/health','/csrf-token','/api/plugins/moli-companion/call']);
+  assert.equal(browser.calls[2].headers['X-Moli-Pairing-Token'],'pairing');
+  assert.equal(browser.calls[2].headers['X-CSRF-Token'],'csrf');
+});
+
+test('same-origin server bridge preserves Companion pairing rejection',async()=>{
+  const browser=sameOriginServer([
+    {status:200,body:{ok:true,protocol:1}},
+    {status:200,body:{token:'csrf'}},
+    {status:200,body:{status:401,body:{error:'pairing-required'}}},
+  ]);
+  const api=await load('wrong',browser);
+  const result=await api.diagnoseCompanion({fetchImpl:()=>{throw new Error('browser loopback must not be used');}});
+  assert.equal(result.ok,false);assert.equal(result.code,'COMPANION_PAIRING_REJECTED');assert.equal(result.status,401);
+});
+
+test('lease operations use the same-origin server bridge',async()=>{
+  const browser=sameOriginServer([
+    {status:200,body:{ok:true,protocol:1}},
+    {status:200,body:{token:'csrf'}},
+    {status:200,body:{status:200,body:{owner:'companion'}}},
+  ]);
+  const api=await load('pairing',browser);
+  const result=await api.readCompanionLease('character:1');
+  assert.equal(result.owner,'companion');
+  assert.equal(JSON.parse(browser.calls[2].body).operation,'lease-get');
+  assert.equal(JSON.parse(browser.calls[2].body).body.scopeKey,'character:1');
+});
 
 test('probe distinguishes health network failure',async()=>{
   const api=await load();const result=await api.diagnoseCompanion({fetchImpl:sequence(new TypeError('Failed to fetch'))});
