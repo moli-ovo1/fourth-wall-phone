@@ -12,7 +12,7 @@ function transportFailure(error, stage) {
   return bridgeError('COMPANION_NETWORK', stage, String(error?.message || error || 'network failed'));
 }
 
-async function fetchWithTimeout(url, options, { fetchImpl = fetch, timeoutMs = 1800, stage = 'request' } = {}) {
+async function fetchWithTimeout(url, options, { fetchImpl = fetch, timeoutMs = 8000, stage = 'request' } = {}) {
   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeoutMs);
   try { return await fetchImpl(url, { ...options, signal: controller.signal }); }
   catch (error) { throw transportFailure(error, stage); }
@@ -38,7 +38,7 @@ async function call(path, { method='GET', body, token=getCompanionPairingToken()
   return value;
 }
 const q = scopeKey => `?scopeKey=${encodeURIComponent(text(scopeKey))}`;
-export async function diagnoseCompanion({ fetchImpl=fetch, timeoutMs=1800 } = {}) {
+export async function diagnoseCompanion({ fetchImpl=fetch, timeoutMs=8000 } = {}) {
   const token=getCompanionPairingToken();
   if(!token)return {ok:false,stage:'configuration',code:'COMPANION_TOKEN_MISSING'};
   let health;

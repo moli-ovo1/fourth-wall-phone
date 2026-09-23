@@ -2,6 +2,8 @@ package org.moli.companion;
 
 import android.app.Activity;
 import android.Manifest;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -26,12 +28,19 @@ public final class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(48,48,48,48);
         TextView status = new TextView(this); status.setGravity(Gravity.CENTER_HORIZONTAL);
         Runnable refreshBridgeStatus = () -> {
-            if (BridgeForegroundService.bridgeRunning()) status.setText("moli Companion 0.1.8\n\n本机 Bridge 前台服务已启动 · 17463\n\n配对码：\n" + store.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）");
-            else status.setText("moli Companion 0.1.8\n\nBridge 正在启动。若几秒后仍无法访问，请点刷新诊断。\n" + BridgeForegroundService.bridgeError() + "\n\n配对码：\n" + store.pairingToken());
+            if (BridgeForegroundService.bridgeRunning()) status.setText("moli Companion 0.1.9\n\n本机 Bridge 前台服务已启动 · 17463\n\n配对码：\n" + store.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）");
+            else status.setText("moli Companion 0.1.9\n\nBridge 正在启动。若几秒后仍无法访问，请点刷新诊断。\n" + BridgeForegroundService.bridgeError() + "\n\n配对码：\n" + store.pairingToken());
         };
         refreshBridgeStatus.run();
         status.postDelayed(refreshBridgeStatus, 500);
         box.addView(status);
+        Button copyPairingCode = new Button(this); copyPairingCode.setText("复制配对码");
+        copyPairingCode.setOnClickListener(v -> {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(ClipData.newPlainText("moli Companion 配对码", store.pairingToken()));
+            Toast.makeText(this, "配对码已复制", Toast.LENGTH_SHORT).show();
+        });
+        box.addView(copyPairingCode);
 
         TextView title = new TextView(this); title.setText("\n后台 AI Provider（OpenAI-compatible）"); box.addView(title);
         EditText base = new EditText(this); base.setHint("Base URL，例如 https://api.openai.com/v1"); base.setText(provider.baseUrl()); box.addView(base);
@@ -44,7 +53,7 @@ public final class MainActivity extends Activity {
         TextView diagTitle = new TextView(this); diagTitle.setText("\n真机诊断"); box.addView(diagTitle);
         TextView diagnostics = new TextView(this); box.addView(diagnostics);
         Runnable refresh = () -> diagnostics.setText(CompanionDiagnostics.render(getApplicationContext(), BridgeForegroundService.bridgeRunning()));
-        Button refreshButton = new Button(this); refreshButton.setText("刷新诊断"); refreshButton.setOnClickListener(v -> { refreshBridgeStatus.run(); refresh.run(); }); box.addView(refreshButton);
+        Button refreshButton = new Button(this); refreshButton.setText("刷新诊断"); refreshButton.setOnClickListener(v -> { BridgeForegroundService.start(this); status.postDelayed(refreshBridgeStatus, 300); status.postDelayed(refresh, 300); }); box.addView(refreshButton);
         Button runNow = new Button(this); runNow.setText("请求一次后台 Wake 测试"); runNow.setOnClickListener(v -> { CompanionWakeScheduler.runDiagnosticNow(getApplicationContext()); Toast.makeText(this,"已交给 WorkManager；稍后点“刷新诊断”查看结果",Toast.LENGTH_LONG).show(); }); box.addView(runNow);
         refresh.run();
 
