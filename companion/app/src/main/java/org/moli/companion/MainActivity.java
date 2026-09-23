@@ -5,7 +5,6 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
 import android.widget.*;
-import org.moli.companion.bridge.LocalBridgeServer;
 import org.moli.companion.bridge.BridgeStore;
 import org.moli.companion.diagnostics.CompanionDiagnostics;
 import org.moli.companion.provider.ProviderSettings;
@@ -13,20 +12,21 @@ import org.moli.companion.wake.CompanionWakeScheduler;
 
 /** Foreground setup + diagnostics shell. Canonical character state remains in moli Web. */
 public final class MainActivity extends Activity {
-    private LocalBridgeServer bridge; private boolean bridgeRunning;
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        BridgeForegroundService.start(this);
         CompanionWakeScheduler.ensureScheduled(getApplicationContext());
         BridgeStore store = new BridgeStore(getApplicationContext());
         ProviderSettings provider = new ProviderSettings(getApplicationContext());
-        CompanionApplication app = (CompanionApplication) getApplication();
-        bridge = app.bridge();
-        bridgeRunning = app.bridgeRunning();
 
         LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(48,48,48,48);
         TextView status = new TextView(this); status.setGravity(Gravity.CENTER_HORIZONTAL);
-        if (bridgeRunning) status.setText("moli Companion\n\n本机 Bridge 已启动 · 17463\n\n配对码：\n" + bridge.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）");
-        else status.setText("moli Companion\n\nBridge 启动失败：\n" + app.bridgeError());
+        Runnable refreshBridgeStatus = () -> {
+            if (BridgeForegroundService.bridgeRunning()) status.setText("moli Companion 0.1.7\n\n本机 Bridge 前台服务已启动 · 17463\n\n配对码：\n" + store.pairingToken() + "\n\n后台调度：已启用（约每 15 分钟一次机会）");
+            else status.setText("moli Companion 0.1.7\n\nBridge 正在启动。若几秒后仍无法访问，请点刷新诊断。\n" + BridgeForegroundService.bridgeError() + "\n\n配对码：\n" + store.pairingToken());
+        };
+        refreshBridgeStatus.run();
+        status.postDelayed(refreshBridgeStatus, 500);
         box.addView(status);
 
         TextView title = new TextView(this); title.setText("\n后台 AI Provider（OpenAI-compatible）"); box.addView(title);
@@ -39,8 +39,8 @@ public final class MainActivity extends Activity {
 
         TextView diagTitle = new TextView(this); diagTitle.setText("\n真机诊断"); box.addView(diagTitle);
         TextView diagnostics = new TextView(this); box.addView(diagnostics);
-        Runnable refresh = () -> diagnostics.setText(CompanionDiagnostics.render(getApplicationContext(), bridgeRunning));
-        Button refreshButton = new Button(this); refreshButton.setText("刷新诊断"); refreshButton.setOnClickListener(v -> refresh.run()); box.addView(refreshButton);
+        Runnable refresh = () -> diagnostics.setText(CompanionDiagnostics.render(getApplicationContext(), BridgeForegroundService.bridgeRunning()));
+        Button refreshButton = new Button(this); refreshButton.setText("刷新诊断"); refreshButton.setOnClickListener(v -> { refreshBridgeStatus.run(); refresh.run(); }); box.addView(refreshButton);
         Button runNow = new Button(this); runNow.setText("请求一次后台 Wake 测试"); runNow.setOnClickListener(v -> { CompanionWakeScheduler.runDiagnosticNow(getApplicationContext()); Toast.makeText(this,"已交给 WorkManager；稍后点“刷新诊断”查看结果",Toast.LENGTH_LONG).show(); }); box.addView(runNow);
         refresh.run();
 
