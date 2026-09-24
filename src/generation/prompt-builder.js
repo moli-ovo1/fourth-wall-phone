@@ -1,3 +1,5 @@
+import { cleanMemoryView, policyForConversation } from '../memory-engine/conversation-state.js';
+import { planConversation } from '../memory-engine/window.js';
 import { buildGlobalPresetPrompt, buildOnlinePresetPrompt } from '../storage/prompt-settings.js';
 import { getBuiltinPersonaPrompt } from '../prompts/builtin-personas.js';
 import { getActivatedProfileEntries } from './profile-entry-service.js';
@@ -238,6 +240,7 @@ export function buildPrivateGenerationRequest({
   longTermMemoryText = '',
   longTermMemoryCoverage = null,
   phoneMemory = null,
+  memoryWindow = null,
   momentsContext = '',
   historyLimit = 60,
   fourthWallCharacterName = '',
@@ -264,9 +267,16 @@ export function buildPrivateGenerationRequest({
   const prompt = contact.kind === 'builtin'
     ? (Object.prototype.hasOwnProperty.call(contact, 'prompt') ? replaceUserPlaceholder(clean(contact.prompt), tavernUserName) : clean(builtinDefaultPrompt))
     : clean(contact.prompt);
-  const messages = Array.isArray(conversation.messages)
-    ? conversation.messages
-    : [];
+  const rawMessages = Array.isArray(conversation.messages) ? conversation.messages : [];
+  const memoryView = cleanMemoryView(conversation, conversation.boundScopeKey || '');
+  if (memoryWindow && memoryWindow.epoch !== memoryView.snapshot.epoch) throw new Error('历史已变化，请重试生成');
+  const windowPlan = isFourthWall ? null : (memoryWindow || planConversation(rawMessages, { policy: policyForConversation(conversation), coveredIds: memoryView.coveredIds }));
+  if (windowPlan?.action === 'blocked' || windowPlan?.mustWaitBeforeSend) throw new Error('窗口外原文需要先完成整理；请重试或手动重新整理');
+  const selected = new Set(windowPlan ? (windowPlan.messageIds || [...windowPlan.activeIds, ...windowPlan.bridgeIds]) : rawMessages.map(m => m.id));
+  const messages = rawMessages.filter(m => selected.has(m.id));
+  const activePaths = new Set(messages.map(m => '/messages/' + String(m.id).replace(/~/g, '~0').replace(/\//g, '~1') + '/content'));
+  const usable = memoryView.nodes.filter(n => !n.inputs.some(i => i.kind === 'source' && activePaths.has(i.sourceRef.path)));
+  phoneMemory = { recent: usable.filter(n => !n.longTerm).map(n => ({ content: n.text })), longTermSummary: usable.filter(n => n.longTerm).map(n => n.text).join('\n\n') };
 
   if (!pendingUserCount(messages) && !fourthWallCommentary && !allowNoPendingUser && !(isFourthWall && fourthWallAllowNoPendingUser)) {
     throw new Error('没有等待回复的新消息');
@@ -356,7 +366,7 @@ export function buildPrivateGenerationRequest({
 
   if (['custom', 'tavern'].includes(contact.kind) && Array.isArray(contact.profileEntries)) {
     const profileScanText = [
-      ...messages.slice(-Math.max(12, Number(historyLimit || 0))).map(messageText),
+      ...messages.map(messageText),
       ...(Array.isArray(recentBody?.messages) ? recentBody.messages.map(messageText) : []),
       clean(phoneMemory?.longTermSummary),
       ...(Array.isArray(phoneMemory?.recent) ? phoneMemory.recent.slice(-4).map(item => clean(item?.content)) : []),
@@ -431,7 +441,6 @@ export function buildPrivateGenerationRequest({
   }
 
   const history = messages
-    .slice(-Math.max(1, Number(historyLimit) || 60))
     .map(message => ({
       role: message.role === 'user' ? 'user' : 'assistant',
       content: messageText(message),

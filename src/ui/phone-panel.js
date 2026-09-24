@@ -1,3 +1,4 @@
+import { clearConversationSummaries } from '../storage/data-store.js';
 import { getStudioPromptSettings, saveStudioPromptSettings, resetStudioPrompt } from '../storage/studio-prompt-store.js';
 import { getLargeStorageStats } from '../storage/large-storage.js';
 import { readRaw, writeRaw } from '../storage/storage-adapter.js';
@@ -95,7 +96,7 @@ import {
   generatePrivatePhoneTraceRefresh,
 } from '../generation/generation-service.js';
 import { beginGenerationTask, endGenerationTask, getGenerationTask, abortGenerationTask, isGenerationActive, setGenerationError, clearGenerationError, getGenerationError } from '../core/generation-runtime.js';
-import { maybeAutoCompactConversationMemory } from '../generation/memory-service.js';
+import { maybeAutoCompactConversationMemory, prepareConversationMemory } from '../generation/memory-service.js';
 import { parseGeneratedMessages, parseGeneratedMessageActions, previewGeneratedMessages, parseFourthWallResponse, previewFourthWallResponse } from '../generation/message-parser.js';
 import { getPromptSettings, savePromptSettings, createCustomPromptBlock, deleteCustomPromptBlock, restoreDefaultPromptSettings, listPromptPresets, getActivePromptPresetId, selectPromptPreset, createPromptPreset, renamePromptPreset, deletePromptPreset } from '../storage/prompt-settings.js';
 import { extensionTypes } from '../../../../../extensions.js';
@@ -1192,11 +1193,12 @@ export function createPhonePanel({
         <div class="moli-nav-side right"></div>
       </header>
       <main class="moli-settings-list moli-contact-subpage">
-        <div class="moli-settings-note">这里集中管理当前 Conversation 的手机记忆与正文长期剧情记忆。当前原始聊天优先于近期记忆，近期记忆优先于长期总结。</div>
-        <div class="moli-settings-note" data-phone-memory-auto-status>自动压缩尚未运行。累计 100 个完整 AI 交互轮次后生成一段近期记忆。</div>
-        <label class="moli-form-field"><span>近期记忆</span><textarea rows="10" data-phone-recent-memory placeholder="每段记忆之间空一行。可直接编辑或删除。"></textarea></label>
+        <div class="moli-settings-note">本会话摘要由有效原消息整理而来。编辑或删除原消息会使依赖摘要停用并重建；清除摘要不会删除原消息。下方正文记忆与 NPC 认知仍是独立来源。</div>
+        <div class="moli-settings-note" data-phone-memory-auto-status>自动压缩尚未运行。私聊近期目标 50 完整轮；窗口外累计 20 轮或 4k Token 后整理。</div>
+        <label class="moli-form-field"><span>近期记忆</span><textarea rows="10" data-phone-recent-memory placeholder="摘要根据当前有效原文生成；修正内容请编辑原消息。"></textarea></label>
         <div class="moli-api-hint">自动压缩按完整 AI 交互轮次计数：同一轮里用户多气泡 + 角色多气泡仍只算 1 轮；只有整轮离开最近聊天窗口后才参与累计。</div>
-        <label class="moli-form-field"><span>长期总结</span><textarea rows="10" data-phone-long-memory placeholder="当前手机聊天的长期关系与历史总结。可直接编辑或清空。"></textarea></label>
+        <label class="moli-form-field"><span>长期总结</span><textarea rows="10" data-phone-long-memory placeholder="由有效原文整理的长期摘要。"></textarea></label>
+        <div data-conversation-summary-actions><button type="button" class="moli-secondary-btn" data-action="contact-summary-clear">清除本会话摘要</button><button type="button" class="moli-primary-btn" data-action="contact-summary-rebuild">手动重新整理</button><div class="moli-api-hint">清摘要不删除原消息，也不等于角色遗忘。下次生成可能根据原文重新整理。旧版无来源摘要停止使用，保留原始备份供追溯。</div></div>
         <div class="moli-source-section" data-npc-awareness-section hidden>
           <div class="moli-source-section-title">NPC认知</div>
           <div class="moli-source-section-note">这是该NPC在所属正文World中当前真正知道/经历的内容，以及会影响其现实的重大世界变化。AI会自动整理；如果过滤错误，你可以直接修改。保存后，后台生成读取的就是你修正后的版本。后续新正文仍可在此基础上追加新的认知变化。</div>
@@ -1339,14 +1341,14 @@ export function createPhonePanel({
           <div class="moli-settings-note" data-fourth-wall-archive-status>正在读取归档状态…</div>
           <label class="moli-form-field">
             <span>皮下长期记忆</span>
-            <textarea rows="10" data-fourth-wall-memory-text placeholder="# 皮下人设&#10;...&#10;&#10;# 长期记忆&#10;..."></textarea>
-            <small>每个 Session 独立。小白X式归档会用“旧记忆 + 离开活动上下文的旧聊天”生成一份完整替代记忆。</small>
+            <textarea rows="10" data-fourth-wall-memory-text readonly placeholder="# 皮下人设&#10;...&#10;&#10;# 长期记忆&#10;..."></textarea>
+            <small>每个 Session 独立。整理只使用当前有效原文，并保存来源和版本。编辑或删除原文后，受影响摘要立即停用，下次生成前重建。</small>
           </label>
           <div class="moli-fourth-wall-memory-actions">
             <button type="button" class="moli-secondary-btn" data-action="fourth-wall-context-refresh">刷新统计</button>
-            <button type="button" class="moli-secondary-btn" data-action="fourth-wall-memory-save">保存记忆</button>
-            <button type="button" class="moli-primary-btn" data-action="fourth-wall-memory-summarize">立即总结</button>
-            <button type="button" class="moli-secondary-btn moli-fourth-wall-memory-clear" data-action="fourth-wall-memory-clear">清空记忆</button>
+            <span class="moli-api-hint">修正摘要内容请编辑原消息；摘要只读。</span>
+            <button type="button" class="moli-primary-btn" data-action="fourth-wall-memory-summarize">手动重新整理</button>
+            <button type="button" class="moli-secondary-btn moli-fourth-wall-memory-clear" data-action="fourth-wall-memory-clear">清除本会话摘要</button>
           </div>
           <div class="moli-settings-note">自动整理阈值 128k，硬上限 158k；自动整理失败不会推进归档游标。统计使用 SillyTavern 当前 tokenizer。</div>
         </section>
@@ -2166,8 +2168,8 @@ export function createPhonePanel({
       });
       const conversationKey = conversation.key || conversation.id || conversation.contactId;
       const memory = getConversationMemory(scopeKey, conversationKey);
-      (Array.isArray(memory?.recent)?memory.recent:[]).forEach((entry,index)=>{const text=String(entry?.content||'').trim();if(text)sources.push({id:`memory:${conversationKey}:recent:${entry?.id||index}`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`近期记忆：${text.replace(/\s+/g,' ').slice(0,72)}${text.length>72?'…':''}`,build:()=>`【手机关系记忆 · ${title} · 近期】\n${injectionConversationHeader(conversation)}\n记忆摘要：${text}`});});
-      const longText=String(memory?.longTermSummary||'').trim(); if(longText)sources.push({id:`memory:${conversationKey}:long`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`长期记忆：${longText.replace(/\s+/g,' ').slice(0,72)}${longText.length>72?'…':''}`,build:()=>`【手机关系记忆 · ${title} · 长期】\n${injectionConversationHeader(conversation)}\n记忆摘要：${longText}`});
+      (Array.isArray(memory?.recent)?memory.recent:[]).forEach((entry,index)=>{const text=String(entry?.content||'').trim();if(text)sources.push({id:`memory:${conversationKey}:recent:${entry?.id||index}`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`近期记忆：${text.replace(/\s+/g,' ').slice(0,72)}${text.length>72?'…':''}`,build:()=>{const live=getConversationMemory(scopeKey,conversationKey)?.recent?.find(x=>x.id===entry.id);return live?`【手机关系记忆 · ${title} · 近期】\n${injectionConversationHeader(conversation)}\n记忆摘要：${live.content}`:'';}});});
+      const longText=String(memory?.longTermSummary||'').trim(); if(longText)sources.push({id:`memory:${conversationKey}:long`,app:'wechat',appLabel:'微信',section:conversationType,sectionLabel:conversationType==='group'?'群聊':'私聊',owner:title,kind:'memory',group:`微信 · ${conversationType==='group'?'群聊':'私聊'} · ${title}`,label:`长期记忆：${longText.replace(/\s+/g,' ').slice(0,72)}${longText.length>72?'…':''}`,build:()=>{const live=getConversationMemory(scopeKey,conversationKey)?.longTermSummary;return live?`【手机关系记忆 · ${title} · 长期】\n${injectionConversationHeader(conversation)}\n记忆摘要：${live}`:'';}});
     });
     listPublicMoments(scopeKey).slice(0,40).forEach(item=>{const author=momentActorName(item.author),preview=String(item.content||'').replace(/\s+/g,' ').slice(0,72);sources.push({id:`moment:public:${item.id}`,app:'wechat',appLabel:'微信',section:'moments',sectionLabel:'朋友圈',owner:'User 公共朋友圈',group:'微信 · 朋友圈 · User 公共朋友圈',kind:'moment',label:`${author}：${preview}${String(item.content||'').length>72?'…':''}`,build:()=>`【微信朋友圈 · 公开动态】\n知识归属：以下内容公开存在于这条朋友圈及其互动中，但公开存在不等于所有角色都已经看过。只有实际可见且在剧情中看过、参与过或被告知的人物，才能据此获得具体知识。\n${injectionMomentText(item)}`});});
     getContacts().forEach(item=>{const cid=String(item?.id||'');if(!cid)return;const owner=canonicalContactName(item);listProfileMoments(scopeKey,cid).slice(0,20).forEach(moment=>{const author=momentActorName(moment.author),preview=String(moment.content||'').replace(/\s+/g,' ').slice(0,72);sources.push({id:`moment:profile:${cid}:${moment.id}`,app:'wechat',appLabel:'微信',section:'moments',sectionLabel:'朋友圈',owner,group:`微信 · 朋友圈 · ${owner}`,kind:'moment',label:`${author}：${preview}${String(moment.content||'').length>72?'…':''}`,build:()=>`【微信朋友圈 · ${owner}相关记录】\n知识归属：这是与 ${owner} 对应的朋友圈记录。只有在该记录中实际可见、看过、参与过或后来被告知的人物，才能据此获得具体知识；其他朋友圈中的互动不能因此自动成为 ${owner} 或其他角色的已知事实。\n${injectionMomentText(moment)}`});});});
@@ -2763,13 +2765,11 @@ export function createPhonePanel({
     }
 
     const confirmed = windowRef.confirm?.(
-      `确定清空这段聊天记录吗？\n\n将删除当前会话中的 ${count} 条消息。下一步可以选择“保留记忆”或“聊天和记忆全部清除”。`
+      `确定清空这段聊天记录吗？\n\n将删除当前会话中的 ${count} 条消息。依赖这些原文的本会话摘要也会清除；不影响其他独立来源。`
     ) ?? true;
     if (!confirmed) return;
 
-    const clearMemory = windowRef.confirm?.(
-      '是否同时清空手机记忆？\n\n确定＝聊天和记忆全部清除\n取消＝只清聊天，保留现有记忆'
-    ) ?? false;
+    const clearMemory = true;
 
     try {
       if (conversation.type === 'private' && String(conversation.contactId || '') === 'builtin:meta') {
@@ -2827,7 +2827,7 @@ export function createPhonePanel({
     if (quoteDraftText) quoteDraftText.textContent = '';
     updateMultiSelectUi();
 
-    toast(clearMemory ? '聊天和记忆已全部清除' : '聊天已清空，记忆已保留');
+    toast('本会话原消息及其摘要已清除');
     show('chat');
   }
 
@@ -2840,6 +2840,10 @@ export function createPhonePanel({
       return;
     }
     const memory = getConversationMemory(scopeKey, currentContactId) || { recent: [], longTermSummary: '', longTermByMode: {} };
+    if (phoneRecentMemoryInput) phoneRecentMemoryInput.readOnly = conversation.type === 'private';
+    if (phoneLongMemoryInput) phoneLongMemoryInput.readOnly = conversation.type === 'private';
+    const actions = panel.querySelector('[data-conversation-summary-actions]');
+    if (actions) actions.hidden = conversation.type !== 'private';
     const groupMode = conversation.type === 'group' ? (conversation.groupMode === 'role-chat' ? 'role-chat' : 'reading') : '';
     const visibleRecent = conversation.type === 'group'
       ? (memory.recent || []).filter(item => groupMode === 'reading' ? (!item?.sourceMode || item.sourceMode === 'reading') : item?.sourceMode === 'role-chat')
@@ -2869,7 +2873,7 @@ export function createPhonePanel({
       const condensed = memory.lastCondensedAt ? new Date(memory.lastCondensedAt).toLocaleString() : '尚未运行';
       const summarized = memory.lastSummarizedAt ? new Date(memory.lastSummarizedAt).toLocaleString() : '尚未沉淀';
       phoneMemoryAutoStatus.textContent = memory.needsReview
-        ? `⚠ ${memory.needsReviewReason || '聊天历史已修改，已有记忆需要核对'}`
+        ? '⚠ 原文已变化，受影响摘要已停用；下次生成或手动整理时重建'
         : `${modeLabel}自动近期记忆 ${autoCount} 段 · 上次压缩：${condensed} · 上次长期沉淀：${summarized}${memory.lastAutoError ? ` · 最近失败：${memory.lastAutoError}` : ''}`;
       phoneMemoryAutoStatus.classList.toggle('is-warning', Boolean(memory.needsReview));
     }
@@ -2900,15 +2904,6 @@ export function createPhonePanel({
       updateConversationMemory(scopeKey, currentContactId, {
         recent: [...preserved, ...editedRecent],
         longTermByMode,
-        needsReview: false,
-        needsReviewAt: 0,
-        needsReviewReason: '',
-        needsReviewMessageId: '',
-      });
-    } else {
-      updateConversationMemory(scopeKey, currentContactId, {
-        recent: editedRecent,
-        longTermSummary: phoneLongMemoryInput?.value || '',
         needsReview: false,
         needsReviewAt: 0,
         needsReviewReason: '',
@@ -2972,6 +2967,8 @@ export function createPhonePanel({
     }
 
     if (conversationRecentLimit) {
+      conversationRecentLimit.disabled = conversation.type === 'private';
+      conversationRecentLimit.title = conversation.type === 'private' ? '普通私聊由 Memory Policy 管理：目标 50 完整轮；皮下保留长上下文' : '';
       const value = Number(conversation.recentChatLimit);
       conversationRecentLimit.value = Number.isFinite(value)
         ? String(Math.max(10, Math.min(9999, Math.round(value))))
@@ -3117,21 +3114,10 @@ export function createPhonePanel({
     }
   }
 
-  function saveFourthWallMemory() {
-    const scopeKey = getScopeKey?.();
-    if (!scopeKey || !currentContactId) return;
-    updateFourthWallSessionState(scopeKey, currentContactId, {
-      memory: fourthWallMemoryText?.value || '',
-      lastSummaryError: '',
-    });
-    toast('皮下长期记忆已保存');
-    void refreshFourthWallContextStats();
-  }
-
   function clearFourthWallMemory() {
     const scopeKey = getScopeKey?.();
     if (!scopeKey || !currentContactId) return;
-    if (!windowRef.confirm?.('清空皮下记忆？聊天原文仍保留，已归档的内容不会自动重新送入上下文。')) return;
+    if (!windowRef.confirm?.('清除本会话皮下摘要？原消息保留并恢复作为有效历史读取；后续仍可能再次整理。这不等于角色遗忘。')) return;
     updateFourthWallSessionState(scopeKey, currentContactId, { memory: '', lastSummaryError: '' });
     if (fourthWallMemoryText) fourthWallMemoryText.value = '';
     toast('皮下记忆已清空');
@@ -3158,9 +3144,6 @@ export function createPhonePanel({
       contextButton.textContent = '总结中 · 取消';
     }
     try {
-      if (panel.querySelector('[data-page="fourth-wall-settings"]')?.classList.contains('active')) {
-        saveFourthWallMemory();
-      }
       toast('正在整理较早皮下聊天…');
       await summarizeFourthWallMemory({
         scopeKey,
@@ -3182,8 +3165,8 @@ export function createPhonePanel({
       await refreshFourthWallContextStats();
     } finally {
       if (fourthWallSummaryController === controller) fourthWallSummaryController = null;
-      if (settingsButton) settingsButton.textContent = '立即总结';
-      if (contextButton) contextButton.textContent = '立即总结';
+      if (settingsButton) settingsButton.textContent = '手动重新整理';
+      if (contextButton) contextButton.textContent = '手动重新整理';
     }
   }
 
@@ -5797,7 +5780,7 @@ export function createPhonePanel({
         const index = (conversation.messages || []).findIndex(item => String(item?.id || '') === String(messageId));
         const archivedCount = Number(conversation.fourthWallSession?.archivedCount || 0);
         if (index >= 0 && index < archivedCount) {
-          const ok = windowRef.confirm?.('这条消息已经归档，修改原文不会改写记忆；需要同步更正时请编辑皮下记忆。继续修改？') ?? true;
+          const ok = windowRef.confirm?.('编辑此原消息后，依赖它的摘要会立即停用，并按剩余有效原文重新整理。继续修改？') ?? true;
           if (!ok) return;
         }
       }
@@ -5824,7 +5807,7 @@ export function createPhonePanel({
       const index = (conversation?.messages || []).findIndex(item => String(item?.id || '') === String(messageId));
       const archivedCount = Number(conversation?.fourthWallSession?.archivedCount || 0);
       const archivedHint = isFourthWall && index >= 0 && index < archivedCount
-        ? '这条消息已经归档；删除原文不会修改皮下记忆，需要遗忘的内容请在记忆中删除。\n'
+        ? '删除此原消息后，依赖它的摘要立即停用，并根据剩余原文重建；所有来源消失则清除摘要。\n'
         : '';
       const confirmed = windowRef.confirm?.(`${archivedHint}确定删除这条消息吗？`) ?? true;
       if (!confirmed) return;
@@ -5988,6 +5971,7 @@ export function createPhonePanel({
   }
 
   function markPhoneMemoryReviewForMutation(scopeKey, conversationKey, conversation, messageId, actionLabel) {
+    if (conversation?.type === 'private') return false; // The owner invalidates exact dependencies atomically.
     if (!conversation || !messageId || !messageTouchesCondensedPhoneMemory(scopeKey, conversationKey, conversation, messageId)) return false;
     try {
       return markConversationMemoryNeedsReview(scopeKey, conversationKey, {
@@ -9318,7 +9302,6 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   customProfileEntryList?.addEventListener('click', event => { const button = event.target?.closest?.('[data-profile-entry-delete]'); if (button) button.closest('[data-profile-entry]')?.remove(); });
   customProfileEntryList?.addEventListener('change', event => { const mode = event.target?.closest?.('[data-profile-entry-mode]'); if (!mode) return; const row = mode.closest('[data-profile-entry]'); const keywords = row?.querySelector('[data-profile-entry-keywords]'); if (keywords) keywords.hidden = mode.value !== 'keywords'; });
 
-  panel.querySelector('[data-action="fourth-wall-memory-save"]')?.addEventListener('click', saveFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-clear"]')?.addEventListener('click', clearFourthWallMemory);
   panel.querySelector('[data-action="fourth-wall-memory-summarize"]')?.addEventListener('click', () => void summarizeFourthWallMemoryNow());
   panel.querySelector('[data-action="dismiss-chat-error"]')?.addEventListener('click', dismissCurrentGenerationError);
@@ -9363,6 +9346,19 @@ ${continuity?`【你自己的手机经历/认知】\n${continuity}\n`:''}${item.
   panel.querySelector('[data-action="contact-memory-back"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-memory-cancel"]')?.addEventListener('click', () => show('info'));
   panel.querySelector('[data-action="contact-memory-save"]')?.addEventListener('click', savePhoneMemorySettings);
+  panel.querySelector('[data-action="contact-summary-clear"]')?.addEventListener('click', () => {
+    const scopeKey = getScopeKey?.(); if (!scopeKey || !currentContactId) return;
+    if (!windowRef.confirm?.('清除本会话摘要？原消息保留，下次生成可能重新整理。这不等于删除全部历史或角色遗忘。')) return;
+    clearConversationSummaries(scopeKey, currentContactId); renderPhoneMemorySettings(); toast('本会话摘要已清除，原消息保留');
+  });
+  panel.querySelector('[data-action="contact-summary-rebuild"]')?.addEventListener('click', async event => {
+    const scopeKey = getScopeKey?.(), conversationKey = currentContactId;
+    if (!scopeKey || !conversationKey || generationController || isGenerationActive(scopeKey, conversationKey)) { toast('请先停止当前生成'); return; }
+    const button = event.currentTarget; button.disabled = true;
+    try { await prepareConversationMemory({ scopeKey, conversationKey, manual: true }); toast('已按当前有效原文整理，近期窗口保持原文'); renderPhoneMemorySettings(); }
+    catch (error) { toast(error?.message || '整理失败，未发布新摘要'); }
+    finally { button.disabled = false; }
+  });
 
   contactApiEnabled?.addEventListener('change', syncContactApiUi);
 

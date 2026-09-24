@@ -1,3 +1,6 @@
+import { prepareConversationMemory } from './memory-service.js';
+import { assertMemoryEpoch, assertMemorySources, regenerationMemoryWindow } from './conversation-memory-runtime.js';
+import { getMemoryEngineSnapshot } from '../storage/data-store.js';
 import { getStudioPrompt } from '../storage/studio-prompt-store.js';
 import { getContext as getTavernContext } from '../../../../../extensions.js';
 import {
@@ -22,7 +25,7 @@ import {
   getRecentTavernBody,
 } from '../core/tavern-context.js';
 import { buildPrivateGenerationRequest } from './prompt-builder.js';
-import { prepareFourthWallContext, getFourthWallContextStats } from './fourth-wall-context-service.js';
+import { prepareFourthWallContext, getFourthWallContextStats, countFourthWallRequestTokens, FOURTH_WALL_CONTEXT_LIMIT } from './fourth-wall-context-service.js';
 import { resolveFourthWallPrefillCompatibility } from './fourth-wall-prefill.js';
 import { getActivatedTavernWorldBook, getActivatedCustomWorldBook } from '../core/tavern-worldbook.js';
 import { getBaiBaiLongTermMemory } from '../integrations/baibai-memory.js';
@@ -278,6 +281,7 @@ export async function generatePrivateReply({
     throw new Error('当前版本先接通私聊生成，群聊生成将在轻编排层接入');
   }
 
+  const initialMemorySources = getMemoryEngineSnapshot(scopeKey, conversationKey).sources;
   let requestConversation = conversation;
   if (regenerateFromMessageId) {
     const targetIndex = (conversation.messages || []).findIndex(
@@ -409,10 +413,18 @@ export async function generatePrivateReply({
 
   const continuityQuery = (requestConversation.messages || []).slice(-6).map(message => String(message?.content || '')).join('\n');
 
-  const buildRequest = () => {
-    const currentConversation = regenerateFromMessageId
+  assertMemorySources(scopeKey, conversationKey, initialMemorySources);
+  let memoryWindow = !isFourthWall ? await prepareConversationMemory({ scopeKey, conversationKey, config, signal }) : null;
+  if (regenerateFromMessageId) {
+    const ids = new Set(requestConversation.messages.map(m => m.id));
+    const fresh = getConversation(scopeKey, conversationKey);
+    requestConversation = { ...fresh, messages: fresh.messages.filter(m => ids.has(m.id)) };
+    if (!isFourthWall) memoryWindow = await regenerationMemoryWindow(requestConversation, scopeKey);
+  }
+  const buildRequest = (overrideConversation = null) => {
+    const currentConversation = overrideConversation || (regenerateFromMessageId
       ? requestConversation
-      : (getConversation(scopeKey, conversationKey) || conversation);
+      : (getConversation(scopeKey, conversationKey) || conversation));
     return buildPrivateGenerationRequest({
       contact,
       conversation: resolveCommunityForwardEntries(scopeKey, currentConversation),
@@ -422,6 +434,7 @@ export async function generatePrivateReply({
       longTermMemoryText: baiBaiMemory?.text || '',
       longTermMemoryCoverage: baiBaiMemory?.coverage || null,
       phoneMemory: getConversationMemory(scopeKey, conversationKey),
+      memoryWindow,
       momentsContext: freshMomentContext + buildPhoneContext(scopeKey, contact.id, { query: continuityQuery, currentConversationKey: conversationKey, userName: userContext.name || 'User' }).text,
       historyLimit: currentConversation.recentChatLimit || 100,
       fourthWallCharacterName: currentTavernCharacter?.name || '',
@@ -434,7 +447,7 @@ export async function generatePrivateReply({
     });
   };
 
-  let request = isFourthWall
+  let request = isFourthWall && !regenerateFromMessageId
     ? await prepareFourthWallContext({
         scopeKey,
         conversationKey,
@@ -444,14 +457,18 @@ export async function generatePrivateReply({
       })
     : buildRequest();
 
+  if (isFourthWall && regenerateFromMessageId && await countFourthWallRequestTokens(request) > FOURTH_WALL_CONTEXT_LIMIT) throw new Error('重答上下文超过 158k，请选择更近期的回复');
+  assertMemoryEpoch(scopeKey, conversationKey, isFourthWall && !regenerateFromMessageId ? getMemoryEngineSnapshot(scopeKey, conversationKey).epoch : (memoryWindow?.epoch ?? requestConversation.fourthWallSession.engine.epoch));
+
   if (String(automationInstruction || '').trim() && !fourthWallCommentary) {
     request.messages = [...(request.messages || []), { role: 'user', content: String(automationInstruction).trim() }];
   }
 
+  const requestMemoryEpoch = getMemoryEngineSnapshot(scopeKey, conversationKey).epoch;
   let result;
   if (config.source === 'tavern') {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const prompt = (Array.isArray(effectiveRequest?.messages) ? effectiveRequest.messages : [])
+    const prompt = (Array.isArray(request?.messages) ? request.messages : [])
       .map(item => `${item?.role === 'assistant' ? 'Assistant' : 'User'}: ${String(item?.content || '')}`)
       .join('\n\n');
     const generateRaw = getTavernContext?.()?.generateRaw;
@@ -460,7 +477,7 @@ export async function generatePrivateReply({
     }
     const text = String(await generateRaw({
       prompt,
-      systemPrompt: String(effectiveRequest?.system || ''),
+      systemPrompt: String(request?.system || ''),
     }) || '').trim();
     if (!text) throw new Error('酒馆当前 API 返回了空回复');
     if (!(isFourthWall && (contact.fourthWallChatSettingsInitialized ? contact.fourthWallChatSettings : (conversation.fourthWall || contact.fourthWallChatSettings))?.stream === false)) onDelta?.(text, text);
@@ -468,6 +485,7 @@ export async function generatePrivateReply({
   } else if (!isFourthWall && supportsProviderToolCalling(config)) {
     const toolContext = createToolContext({ contact, user: userContext, scopeKey, conversationKey, origin: toolOrigin || 'private_chat' });
     toolContext.assertCurrent = () => {
+      assertMemoryEpoch(scopeKey, conversationKey, requestMemoryEpoch);
       const user = getTavernUserContext();
       if (user.personaId !== userContext.personaId || user.name !== userContext.name || user.description !== userContext.description
           || String(getCurrentScopeKey() || '') !== currentTavernScopeKey
@@ -528,6 +546,7 @@ export async function generatePrivateReply({
     }
   }
 
+  assertMemoryEpoch(scopeKey, conversationKey, requestMemoryEpoch);
   if (momentEventIds.length) markMomentChatEventsDelivered(scopeKey, contact.id, momentEventIds);
 
   return {
@@ -574,8 +593,8 @@ function fourthWallRuntime(scopeKey, conversationKey) {
   const momentEventIds = pendingMomentEvents.map(event => event.id);
   const freshMomentContext = pendingMomentEvents.length ? `【自上次同步后新发生的朋友圈变化】\n这些是新鲜事件，只在本次作为新变化强调；你已经知道它们，可以自主决定是否主动提起，不要求必须回应。\n${pendingMomentEvents.map(event=>`- ${event.content}${event.momentId ? `（momentId=${event.momentId}）` : ''}`).join('\n')}\n\n` : '';
 
-  const buildRequest = () => {
-    const currentConversation = getConversation(scopeKey, conversationKey) || conversation;
+  const buildRequest = (overrideConversation = null) => {
+    const currentConversation = overrideConversation || getConversation(scopeKey, conversationKey) || conversation;
     return buildPrivateGenerationRequest({
       contact,
       conversation: currentConversation,

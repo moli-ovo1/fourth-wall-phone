@@ -1,3 +1,5 @@
+import { ensureMemoryState, synchronizeMemory, cleanMemoryView, conversationSnapshot, clearOwnedSummaries, mirrorMemory, memoryOwnerState, candidateWithCoverage } from '../memory-engine/conversation-state.js';
+import { domainKey, clone } from '../memory-engine/contract.js';
 import { isPersistentScopeKey } from './scope-policy.js';
 import { listKeys, readJson, writeJson } from './storage-adapter.js';
 import { getGlobalConversationSnapshot, saveGlobalConversationSnapshot } from './conversation-db.js';
@@ -83,6 +85,7 @@ function normalizeFourthWallContactSettings(contact) {
 function normalizeConversationMemory(memoryValue) {
   const memory = memoryValue && typeof memoryValue === 'object' ? memoryValue : {};
   return {
+    engine: memory.engine ? clone(memory.engine) : undefined,
     recent: Array.isArray(memory.recent)
       ? memory.recent.map(item => ({
           id: String(item?.id || `memory:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`),
@@ -120,6 +123,7 @@ function normalizeConversationMemory(memoryValue) {
 function normalizeFourthWallSessionState(value) {
   const source = value && typeof value === 'object' ? value : {};
   return {
+    engine: source.engine ? clone(source.engine) : undefined,
     memory: String(source.memory || '').trim(),
     archivedCount: Math.max(0, Number.isFinite(Number(source.archivedCount)) ? Math.round(Number(source.archivedCount)) : 0),
     lastContextTokens: Math.max(0, Number.isFinite(Number(source.lastContextTokens)) ? Math.round(Number(source.lastContextTokens)) : 0),
@@ -224,18 +228,8 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     if (String(conversation.contactId || '') === 'builtin:meta') {
       conversation.fourthWall = normalizeFourthWallSettings(conversation.fourthWall);
       conversation.fourthWallSession = normalizeFourthWallSessionState(conversation.fourthWallSession);
-      if (!conversation.fourthWallSession.legacyMemoryMigrated) {
-        if (!conversation.fourthWallSession.memory) {
-          const legacyParts = [
-            String(conversation.memory?.longTermSummary || '').trim(),
-            ...(Array.isArray(conversation.memory?.recent)
-              ? conversation.memory.recent.map(item => String(item?.content || '').trim()).filter(Boolean)
-              : []),
-          ].filter(Boolean);
-          if (legacyParts.length) conversation.fourthWallSession.memory = legacyParts.join('\n\n');
-        }
-        conversation.fourthWallSession.legacyMemoryMigrated = true;
-      }
+      // Never copy ordinary summary text into the fourth-wall domain.
+      conversation.fourthWallSession.legacyMemoryMigrated = true;
       conversation.fourthWallSession.archivedCount = Math.min(
         conversation.fourthWallSession.archivedCount,
         conversation.messages.length
@@ -278,6 +272,7 @@ function applyConversationDefaults(conversation, { scopeKey = '' } = {}) {
     };
   }
 
+  if (conversation.type === 'private') ensureMemoryState(conversation);
   return conversation;
 }
 
@@ -534,6 +529,10 @@ export function loadScope(scopeKey) {
 
 function saveScope(scopeKey, data) {
   const migrated = migrateScopeData(data);
+  for (const [id, c] of Object.entries(migrated.conversations || {})) {
+    if (!['private', 'group'].includes(c.type)) continue;
+    c.conversationKey = id; applyConversationDefaults(c, { scopeKey }); if (c.type === 'private') synchronizeMemory(c, scopeKey);
+  }
   if (!isPersistentScopeKey(scopeKey)) {
     transientScopes.set(String(scopeKey || ''), migrated);
     return;
@@ -586,6 +585,10 @@ function locateStoredScopeConversation(conversationKey) {
 }
 
 function saveGlobalConversationStore(data) {
+  for (const [id, c] of Object.entries(data?.conversations || {})) {
+    if (!['private', 'group'].includes(c.type)) continue;
+    c.conversationKey = id; applyConversationDefaults(c); if (c.type === 'private') synchronizeMemory(c, '');
+  }
   saveGlobalConversationSnapshot({
     schemaVersion: 1,
     conversations:
@@ -1581,7 +1584,7 @@ export function clearFourthWallSession(scopeKey, conversationKey, { clearMemory 
   conversation.messages = [];
   conversation.unreadCount = 0;
   conversation.fourthWallSession.archivedCount = 0;
-  if (clearMemory) conversation.fourthWallSession.memory = '';
+  if (clearMemory) clearOwnedSummaries(conversation, scopeKey);
   conversation.updatedAt = Date.now();
   saveLocatedConversation(scopeKey, located);
   return true;
@@ -1809,11 +1812,12 @@ export function updatePrivateConversationSettings(
 
 
 
-export function getFourthWallSessionState(scopeKey, conversationKey) {
+export function getFourthWallSessionState(scopeKey, conversationKey, { raw = false } = {}) {
   const conversation = getConversation(scopeKey, conversationKey);
   if (!conversation || conversation.type !== 'private' || String(conversation.contactId || '') !== 'builtin:meta') return null;
   applyConversationDefaults(conversation, { scopeKey });
-  return { ...conversation.fourthWallSession };
+  const view = cleanMemoryView(conversation, scopeKey);
+  return raw ? { ...conversation.fourthWallSession } : { ...conversation.fourthWallSession, memory: view.memory, archivedCount: view.coveredIds.length, needsReview: view.dirtyIds.length > 0 };
 }
 
 export function updateFourthWallSessionState(scopeKey, conversationKey, patch = {}) {
@@ -1827,16 +1831,21 @@ export function updateFourthWallSessionState(scopeKey, conversationKey, patch = 
   const next = normalizeFourthWallSessionState({ ...current, ...(patch && typeof patch === 'object' ? patch : {}) });
   next.archivedCount = Math.min(next.archivedCount, conversation.messages.length);
   conversation.fourthWallSession = next;
+  if (Object.hasOwn(patch, 'memory')) {
+    const state = ensureMemoryState(conversation); state.epoch++;
+    if (!String(patch.memory || '').trim()) clearOwnedSummaries(conversation, scopeKey);
+    else for (const n of state.nodes) if (n.state !== 'deleted') { n.state = 'dirty'; n.generation++; }
+  }
   conversation.updatedAt = Date.now();
   saveLocatedConversation(scopeKey, located);
   return { ...next };
 }
 
-export function getConversationMemory(scopeKey, conversationKey) {
+export function getConversationMemory(scopeKey, conversationKey, { raw = false } = {}) {
   const conversation = getConversation(scopeKey, conversationKey);
   if (!conversation || !['private', 'group'].includes(conversation.type)) return null;
   applyConversationDefaults(conversation, { scopeKey });
-  return {
+  const original = {
     recent: conversation.memory.recent.map(item => ({ ...item })),
     longTermSummary: String(conversation.memory.longTermSummary || ''),
     longTermByMode: {
@@ -1856,6 +1865,15 @@ export function getConversationMemory(scopeKey, conversationKey) {
     needsReviewReason: String(conversation.memory.needsReviewReason || ''),
     needsReviewMessageId: String(conversation.memory.needsReviewMessageId || ''),
   };
+  if (raw || conversation.type === 'group') return original;
+  if (conversation.contactId === 'builtin:meta') return { ...original, recent: [], longTermSummary: '', longTermByMode: { reading: '', roleChat: '' } };
+  const view = cleanMemoryView(conversation, scopeKey);
+  return { ...original, recent: view.recent, longTermSummary: view.longTermSummary,
+    longTermByMode: conversation.type === 'group' ? {
+      reading: cleanMemoryView({ ...conversation, groupMode: 'reading' }, scopeKey).longTermSummary,
+      roleChat: cleanMemoryView({ ...conversation, groupMode: 'role-chat' }, scopeKey).longTermSummary,
+    } : { reading: '', roleChat: '' },
+    needsReview: view.dirtyIds.length > 0 || view.blockedIds.length > 0, engineEpoch: view.snapshot.epoch };
 }
 
 export function updateConversationMemory(scopeKey, conversationKey, {
@@ -1914,6 +1932,11 @@ export function updateConversationMemory(scopeKey, conversationKey, {
   if (needsReviewReason !== undefined) conversation.memory.needsReviewReason = String(needsReviewReason || '');
   if (needsReviewMessageId !== undefined) conversation.memory.needsReviewMessageId = String(needsReviewMessageId || '');
 
+  if (conversation.type === 'private' && (recent !== undefined || longTermSummary !== undefined || longTermByMode !== undefined)) {
+    const state = ensureMemoryState(conversation); state.epoch++;
+    if (Array.isArray(recent) && !recent.length && longTermSummary === '') clearOwnedSummaries(conversation, scopeKey);
+    else if (state.nodes.length) { for (const n of state.nodes) if (n.state !== 'deleted') { n.state = 'dirty'; n.generation++; } }
+  }
   conversation.updatedAt = Date.now();
   saveLocatedConversation(scopeKey, located);
   return getConversationMemory(scopeKey, conversationKey);
@@ -1945,6 +1968,45 @@ export function clearConversationMemoryNeedsReview(scopeKey, conversationKey) {
     needsReviewMessageId: '',
   });
   return true;
+}
+
+export function getMemoryEngineSnapshot(scopeKey, conversationKey) {
+  const conversation = getConversation(scopeKey, conversationKey);
+  if (!conversation) throw new Error('会话已删除');
+  return conversationSnapshot(conversation, scopeKey);
+}
+
+// No await between validation and publication: one existing-owner write, no second store.
+export function commitMemoryEngine(scopeKey, conversationKey, ticket, { longTerm = false, replaceIds = [] } = {}) {
+  const located = locateConversation(scopeKey, conversationKey);
+  if (!located) return false;
+  const c = located.conversation, snapshot = conversationSnapshot(c, scopeKey);
+  if (domainKey(snapshot.domain) !== domainKey(ticket.domain) || snapshot.epoch !== ticket.expectedEpoch) return false;
+  const state = ensureMemoryState(c), old = state.nodes.find(n => n.id === ticket.targetId);
+  if (ticket.expectedTarget ? !old || old.generation !== ticket.expectedTarget.generation || old.outputRevision !== ticket.expectedTarget.outputRevision : old) return false;
+  const sources = new Map(snapshot.sources.map(s => [JSON.stringify([s.sourceRef.store, s.sourceRef.storageScopeKey, s.sourceRef.entityId, s.sourceRef.path]), s]));
+  if (!ticket.inputSet.every(i => { const s = sources.get(i.key); return s && s.revision === i.revision && s.generation === i.generation && s.status === 'active'; })) return false;
+  if (ticket.candidate.state !== 'deleted' && !candidateWithCoverage(snapshot, ticket.candidate)) return false;
+  const replacement = clone(ticket.candidate); replacement.longTerm = longTerm || old?.longTerm === true;
+  // Existing nodes become tombstones, not an alternate authority. Candidate has flattened lineage.
+  for (const n of state.nodes) if (replaceIds.includes(n.id) && n.id !== replacement.id) { n.state = 'deleted'; n.text = ''; n.generation++; }
+  state.nodes = [...state.nodes.filter(n => n.id !== replacement.id), replacement];
+  state.epoch++; state.sequence++; mirrorMemory(c, scopeKey);
+  const owner = memoryOwnerState(c); owner.lastAutoError = ''; owner.lastSummaryError = '';
+  owner.lastSummarizedAt = Date.now(); owner.lastSummaryAt = Date.now();
+  c.updatedAt = Date.now(); saveLocatedConversation(scopeKey, located); return true;
+}
+
+export function clearConversationSummaries(scopeKey, conversationKey) {
+  const located = locateConversation(scopeKey, conversationKey); if (!located) return false;
+  clearOwnedSummaries(located.conversation, scopeKey); saveLocatedConversation(scopeKey, located); return true;
+}
+
+export function setConversationMemoryPolicy(scopeKey, conversationKey, windowMode) {
+  if (!['turns', 'legacy-messages'].includes(windowMode)) throw new Error('未知原文窗口策略');
+  const located = locateConversation(scopeKey, conversationKey); if (!located) return false;
+  const state = ensureMemoryState(located.conversation); state.policy = { windowMode }; state.epoch++;
+  saveLocatedConversation(scopeKey, located); return true;
 }
 
 export function replaceRecentConversationMemories(scopeKey, conversationKey, contents = []) {
@@ -2084,4 +2146,21 @@ export function updatePrivateAutomationRuntime(scopeKey, conversationKey, patch 
   conversation.updatedAt = Date.now();
   saveLocatedConversation(scopeKey, located);
   return conversation.automation;
+}
+
+// Retire only this owner's derived nodes, never original messages or other applications.
+export function retireMemoryNodes(scopeKey, conversationKey, ids, expectedEpoch) {
+  const located = locateConversation(scopeKey, conversationKey); if (!located) return false;
+  const state = ensureMemoryState(located.conversation);
+  if (state.epoch !== expectedEpoch) return false;
+  for (const node of state.nodes) if (ids.includes(node.id)) { node.state = 'deleted'; node.text = ''; node.generation++; }
+  state.epoch++; mirrorMemory(located.conversation, scopeKey); saveLocatedConversation(scopeKey, located); return true;
+}
+
+export function synchronizeConversationMemory(scopeKey, conversationKey) {
+  const located = locateConversation(scopeKey, conversationKey);
+  if (!located || located.conversation.type !== 'private') throw new Error('私聊不存在');
+  const state = ensureMemoryState(located.conversation), before = JSON.stringify(state);
+  synchronizeMemory(located.conversation, located.scopeKey);
+  if (JSON.stringify(state) !== before) saveLocatedConversation(scopeKey, located);
 }
